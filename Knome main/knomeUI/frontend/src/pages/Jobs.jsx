@@ -80,42 +80,35 @@ const normalizeJobUrl = (url) => {
     const defaultJobs = [
         {
             id: 1,
-            title: 'Senior Principal Product Designer',
-            department: 'Product & Design',
-            team: 'Product Experience',
-            location: 'Remote / NYC',
-            posted: '2 days ago',
-            closes: 'Oct 30, 2026',
-            skills: ['Design Systems', 'Strategy', 'Figma'],
+            title: 'Software Engineer - React & Node.js (Test)',
+            department: 'Engineering',
+            team: 'Engineering Team',
+            location: 'Bhopal, Madhya Pradesh',
+            experience: '2 - 5 Years',
+            employmentType: 'Full-Time',
+            positionCount: 2,
+            posted: '7/13/2026',
+            closes: 'Dec 31, 2026',
+            skills: ['react', 'node', 'express'],
             isFeatured: true,
             isExpired: false,
-            link: 'https://workday.example.com/apply/1'
+            link: 'https://counselling-1.mponline.demo.gov.in:3001/careers/job/a7b2ab65-0c3f-44a6-bf2d-4abcb2572278'
         },
         {
             id: 2,
-            title: 'Full Stack Engineer (.NET Core & React)',
+            title: 'Junior Software Developer',
             department: 'Engineering',
-            team: 'Infrastructure & DevTools',
-            location: 'Bhopal, MP (Hybrid)',
-            posted: '4 days ago',
-            closes: 'Nov 15, 2026',
-            skills: ['React', 'ASP.NET Core', 'SQL Server', 'YARP'],
-            isFeatured: false,
-            isExpired: false,
-            link: 'https://workday.example.com/apply/2'
-        },
-        {
-            id: 3,
-            title: 'Product Marketing Manager',
-            department: 'Marketing',
-            team: 'Growth & Acquisition',
+            team: 'Engineering Team',
             location: 'Bhopal, MP',
-            posted: '1 week ago',
-            closes: 'Nov 05, 2026',
-            skills: ['Go-to-Market', 'Analytics', 'Copywriting'],
+            experience: '2 - 4 Years',
+            employmentType: 'FullTime',
+            positionCount: 2,
+            posted: 'Active',
+            closes: 'Dec 31, 2026',
+            skills: ['Reactjs', 'Nodejs', 'sql', 'mernstack'],
             isFeatured: false,
             isExpired: false,
-            link: 'https://workday.example.com/apply/3'
+            link: 'https://counselling-1.mponline.demo.gov.in:3001/careers/job/bcc7ec9a-dc29-4a73-8150-5e9af4ce5812'
         }
     ];
 
