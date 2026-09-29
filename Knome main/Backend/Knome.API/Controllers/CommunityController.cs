@@ -204,4 +204,28 @@ public class CommunityController : KnomeControllerBase
         var statusMsg = dto.IsPinned ? "pinned" : "unpinned";
         return Ok(ApiResponse<CommunityPostItemDto>.SuccessResponse(200, $"Post {statusMsg} successfully.", post));
     }
+
+    [HttpGet("{communityId:int}/files")]
+    [ProducesResponseType(typeof(ApiResponse<List<CommunityFileDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCommunityFiles(int communityId)
+    {
+        var files = await _communityService.GetCommunityFilesAsync(communityId, GetCurrentUserId());
+        return Ok(ApiResponse<List<CommunityFileDto>>.SuccessResponse(200, "Community files retrieved successfully.", files));
+    }
+
+    [HttpPost("{communityId:int}/files")]
+    [ProducesResponseType(typeof(ApiResponse<CommunityFileDto>), StatusCodes.Status201Created)]
+    public async Task<IActionResult> AddCommunityFile(int communityId, [FromBody] CommunityFileDto dto)
+    {
+        var file = await _communityService.AddCommunityFileAsync(communityId, GetCurrentUserId(), dto);
+        return CreatedAtAction(nameof(GetCommunityFiles), new { communityId }, ApiResponse<CommunityFileDto>.SuccessResponse(201, "Community file uploaded successfully.", file));
+    }
+
+    [HttpDelete("{communityId:int}/files/{fileId}")]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeleteCommunityFile(int communityId, string fileId)
+    {
+        await _communityService.DeleteCommunityFileAsync(communityId, fileId, GetCurrentUserId());
+        return Ok(ApiResponse.SuccessResponse(200, "Community file deleted successfully."));
+    }
 }

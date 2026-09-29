@@ -143,11 +143,11 @@ public class LocalFileStorageService : IFileStorageService
 
         string[] allowedMediaExtensions = mediaType?.ToLowerInvariant() switch
         {
-            "image" => new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" },
-            "video" => new[] { ".mp4", ".mov", ".avi", ".webm", ".mkv" },
-            "audio" or "podcast" => new[] { ".mp3", ".wav", ".aac", ".ogg", ".m4a", ".webm", ".flac" },
-            "doc" or "document" => new[] { ".pdf", ".doc", ".docx", ".txt", ".xls", ".xlsx", ".ppt", ".pptx", ".zip" },
-            _ => new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".mov", ".avi", ".webm", ".mkv", ".mp3", ".wav", ".aac", ".ogg", ".m4a", ".webm", ".flac", ".pdf", ".doc", ".docx", ".txt", ".xls", ".xlsx", ".ppt", ".pptx", ".zip" }
+            "image" => new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico", ".tiff" },
+            "video" => new[] { ".mp4", ".mov", ".avi", ".webm", ".mkv", ".m4v", ".flv", ".wmv" },
+            "audio" or "podcast" => new[] { ".mp3", ".wav", ".aac", ".ogg", ".m4a", ".webm", ".flac", ".wma" },
+            "doc" or "document" => new[] { ".pdf", ".doc", ".docx", ".txt", ".xls", ".xlsx", ".csv", ".ppt", ".pptx", ".zip", ".rar", ".7z", ".tar", ".gz", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp", ".mp4", ".webm", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".aac", ".json", ".xml", ".sql", ".cs", ".js", ".py" },
+            _ => new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico", ".tiff", ".mp4", ".mov", ".avi", ".webm", ".mkv", ".m4v", ".flv", ".wmv", ".mp3", ".wav", ".aac", ".ogg", ".m4a", ".webm", ".flac", ".wma", ".pdf", ".doc", ".docx", ".txt", ".xls", ".xlsx", ".csv", ".ppt", ".pptx", ".zip", ".rar", ".7z", ".tar", ".gz", ".json", ".xml", ".sql", ".cs", ".js", ".py" }
         };
 
         if (!allowedMediaExtensions.Contains(extension))

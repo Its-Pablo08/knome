@@ -39,4 +39,9 @@ public interface ICommunityService
     Task<List<CommunityPostItemDto>> GetCommunityPostsAsync(int communityId, int pageNumber, int pageSize, int currentUserId);
     Task<CommunityPostItemDto> CreateCommunityPostAsync(int communityId, int currentUserId, CreateCommunityPostDto dto);
     Task<CommunityPostItemDto> PinPostAsync(int communityId, long postId, int currentUserId, PinCommunityPostDto dto);
+
+    // Files & Documents
+    Task<List<CommunityFileDto>> GetCommunityFilesAsync(int communityId, int currentUserId);
+    Task<CommunityFileDto> AddCommunityFileAsync(int communityId, int currentUserId, CommunityFileDto dto);
+    Task DeleteCommunityFileAsync(int communityId, string fileId, int currentUserId);
 }

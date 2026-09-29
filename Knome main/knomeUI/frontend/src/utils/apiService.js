@@ -304,6 +304,9 @@ export const communitiesApi = {
     approve: (id) => apiClient.post(`/Communities/${id}/approve`),
     reject: (id, reason = '') => apiClient.post(`/Communities/${id}/reject`, { reason }),
     addMembers: (communityId, data) => apiClient.post(`/Communities/${communityId}/members`, data),
+    getFiles: (communityId) => apiClient.get(`/Communities/${communityId}/files`),
+    uploadFile: (communityId, fileData) => apiClient.post(`/Communities/${communityId}/files`, fileData),
+    deleteFile: (communityId, fileId) => apiClient.delete(`/Communities/${communityId}/files/${fileId}`),
 };
 
 /** Helper to resolve high-res cover banner & avatar photo for enterprise communities */

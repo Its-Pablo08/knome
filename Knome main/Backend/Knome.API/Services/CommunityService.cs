@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using AutoMapper;
 using Knome.API.Common;
@@ -12,6 +14,8 @@ using Knome.API.Interfaces;
 using Knome.API.Models;
 using Knome.API.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Knome.API.Services;
 
@@ -25,6 +29,9 @@ public class CommunityService : ICommunityService
     private readonly INotificationService _notificationService;
     private readonly IPostRepository _postRepo;
     private readonly IKarmaService _karmaService;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<CommunityService>? _logger;
+    private static readonly object _commFilesLock = new();
 
     public CommunityService(
         ICommunityRepository repo,
@@ -34,7 +41,9 @@ public class CommunityService : ICommunityService
         ISuspensionGuard suspensionGuard,
         INotificationService notificationService,
         IPostRepository postRepo,
-        IKarmaService karmaService)
+        IKarmaService karmaService,
+        IConfiguration configuration,
+        ILogger<CommunityService>? logger = null)
     {
         _repo = repo;
         _interactionService = interactionService;
@@ -44,6 +53,8 @@ public class CommunityService : ICommunityService
         _notificationService = notificationService;
         _postRepo = postRepo;
         _karmaService = karmaService;
+        _configuration = configuration;
+        _logger = logger;
     }
 
     private async Task CheckIsAdminOrSysAdminAsync(int communityId, int currentUserId)
@@ -954,5 +965,124 @@ public class CommunityService : ICommunityService
             IsPinned = communityPost.IsPinned,
             EngagementSummary = summary
         };
+    }
+
+    // --- Files & Documents ---
+    private string GetCommunityFilesDirectory()
+    {
+        var basePath = _configuration["StorageSettings:BasePath"];
+        if (string.IsNullOrWhiteSpace(basePath) || !Directory.Exists(basePath))
+        {
+            basePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        }
+        var dir = Path.Combine(basePath, "uploads", "community_files");
+        if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private string GetCommunityFilesPath(int communityId)
+    {
+        return Path.Combine(GetCommunityFilesDirectory(), $"community_{communityId}_files.json");
+    }
+
+    public async Task<List<CommunityFileDto>> GetCommunityFilesAsync(int communityId, int currentUserId)
+    {
+        var comm = await _repo.GetCommunityByIdAnyStatusAsync(communityId);
+        if (comm != null)
+        {
+            await CheckCanViewCommunityAsync(communityId, currentUserId, comm);
+        }
+
+        var filePath = GetCommunityFilesPath(communityId);
+        if (!File.Exists(filePath))
+        {
+            return new List<CommunityFileDto>();
+        }
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(filePath);
+            var list = JsonSerializer.Deserialize<List<CommunityFileDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<CommunityFileDto>();
+            return list;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Failed reading community files for community {CommunityId}", communityId);
+            return new List<CommunityFileDto>();
+        }
+    }
+
+    public async Task<CommunityFileDto> AddCommunityFileAsync(int communityId, int currentUserId, CommunityFileDto dto)
+    {
+        await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
+        var comm = await _repo.GetCommunityByIdAnyStatusAsync(communityId);
+        if (comm != null)
+        {
+            await CheckCanViewCommunityAsync(communityId, currentUserId, comm);
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Id))
+        {
+            dto.Id = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+        }
+
+        var uploader = await _db.Users.FindAsync(currentUserId);
+        if (string.IsNullOrWhiteSpace(dto.UploadedBy))
+        {
+            dto.UploadedBy = uploader?.FullName ?? "Community Member";
+        }
+        dto.UploadedByUserId = currentUserId;
+        dto.UploadedAt ??= KnomeTime.Now;
+
+        var filePath = GetCommunityFilesPath(communityId);
+        lock (_commFilesLock)
+        {
+            var list = new List<CommunityFileDto>();
+            if (File.Exists(filePath))
+            {
+                try
+                {
+                    var json = File.ReadAllText(filePath);
+                    list = JsonSerializer.Deserialize<List<CommunityFileDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<CommunityFileDto>();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed parsing existing community files for community {CommunityId}", communityId);
+                }
+            }
+
+            // Remove any duplicates by ID
+            list.RemoveAll(f => f.Id == dto.Id);
+            list.Insert(0, dto);
+
+            var updatedJson = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(filePath, updatedJson);
+        }
+
+        return dto;
+    }
+
+    public async Task DeleteCommunityFileAsync(int communityId, string fileId, int currentUserId)
+    {
+        var filePath = GetCommunityFilesPath(communityId);
+        lock (_commFilesLock)
+        {
+            if (File.Exists(filePath))
+            {
+                try
+                {
+                    var json = File.ReadAllText(filePath);
+                    var list = JsonSerializer.Deserialize<List<CommunityFileDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<CommunityFileDto>();
+                    var filtered = list.Where(f => f.Id != fileId).ToList();
+                    var updatedJson = JsonSerializer.Serialize(filtered, new JsonSerializerOptions { WriteIndented = true });
+                    File.WriteAllText(filePath, updatedJson);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed deleting community file {FileId} for community {CommunityId}", fileId, communityId);
+                }
+            }
+        }
+        await Task.CompletedTask;
     }
 }
