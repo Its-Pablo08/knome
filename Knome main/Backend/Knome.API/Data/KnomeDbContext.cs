@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Knome.API.Models;
 using Microsoft.EntityFrameworkCore;
