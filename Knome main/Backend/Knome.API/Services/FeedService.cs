@@ -80,7 +80,7 @@ public class FeedService : IFeedService
                     AuthorFullName = p.AuthorUser?.FullName ?? "Unknown",
                     AuthorDesignation = p.AuthorUser?.Designation,
                     AuthorProfilePhotoUrl = p.AuthorUser?.ProfilePhotoUrl,
-                    PublishedDate = p.CreatedDate,
+                    PublishedDate = p.PublishedDate ?? p.CreatedDate,
                     AudienceType = p.AudienceType
                 });
             }
@@ -242,7 +242,7 @@ public class FeedService : IFeedService
                 AuthorFullName = p.AuthorUser?.FullName ?? "Unknown",
                 AuthorDesignation = p.AuthorUser?.Designation,
                 AuthorProfilePhotoUrl = p.AuthorUser?.ProfilePhotoUrl,
-                PublishedDate = p.CreatedDate,
+                PublishedDate = p.PublishedDate ?? p.CreatedDate,
                 AudienceType = p.AudienceType,
                 EngagementSummary = summary,
                 HotScore = score

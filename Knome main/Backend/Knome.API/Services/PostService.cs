@@ -124,13 +124,13 @@ public class PostService : IPostService
         DateTime? scheduledDate = null;
         if (dto.Status == PostStatuses.Scheduled && dto.ScheduledDate.HasValue)
         {
-            scheduledDate = dto.ScheduledDate.Value;
+            scheduledDate = KnomeTime.ToIst(dto.ScheduledDate.Value);
         }
 
         // Check if scheduled time has already arrived or is past (comparing IST timestamps)
         var isAlreadyDue = scheduledDate.HasValue && scheduledDate.Value <= KnomeTime.Now;
         var finalStatus = isAlreadyDue ? PostStatuses.Published : (string.IsNullOrEmpty(dto.Status) ? PostStatuses.Published : dto.Status);
-        var publishedDate = finalStatus == PostStatuses.Published ? (scheduledDate ?? KnomeTime.Now) : (DateTime?)null;
+        var publishedDate = finalStatus == PostStatuses.Published ? (isAlreadyDue ? scheduledDate : KnomeTime.Now) : (DateTime?)null;
 
         var post = new Post
         {
@@ -288,23 +288,25 @@ public class PostService : IPostService
 
         if (dto.Status == PostStatuses.Scheduled && dto.ScheduledDate.HasValue)
         {
-            var isAlreadyDue = dto.ScheduledDate.Value <= KnomeTime.Now;
+            var istScheduledDate = KnomeTime.ToIst(dto.ScheduledDate.Value);
+            var isAlreadyDue = istScheduledDate <= KnomeTime.Now;
             if (isAlreadyDue)
             {
                 post.Status = PostStatuses.Published;
-                post.ScheduledDate = dto.ScheduledDate;
-                post.PublishedDate = dto.ScheduledDate ?? KnomeTime.Now;
+                post.ScheduledDate = istScheduledDate;
+                post.PublishedDate = istScheduledDate;
             }
             else
             {
                 post.Status = PostStatuses.Scheduled;
-                post.ScheduledDate = dto.ScheduledDate;
+                post.ScheduledDate = istScheduledDate;
+                post.PublishedDate = null;
             }
         }
         else
         {
             post.Status = dto.Status;
-            post.ScheduledDate = dto.ScheduledDate;
+            post.ScheduledDate = KnomeTime.ToIst(dto.ScheduledDate);
             if (dto.Status == PostStatuses.Published && post.PublishedDate == null)
                 post.PublishedDate = KnomeTime.Now;
         }

@@ -26,17 +26,13 @@ const normalizeJobUrl = (url) => {
         setIsLoading(true);
         try {
             // 1. First priority: Live HRMS Server Jobs API
-            let source = 'Live HRMS Server API (counselling-1:5110)';
             let jobList = await jobsApi.getLiveServerJobs();
 
             // 2. Fall back to local Knome database if live API returns empty
             if (!jobList || jobList.length === 0) {
-                source = 'Knome Backend Database API (/api/Jobs)';
                 const data = await jobsApi.getAll();
                 jobList = Array.isArray(data) ? data : (data?.items || []);
             }
-
-            console.log(`%c[Jobs Source] Loaded ${jobList?.length || 0} openings from: ${source}`, 'color: #0d9488; font-weight: bold; font-size: 13px;');
 
             if (jobList && jobList.length > 0) {
                 const mapped = jobList.map((j, idx) => {

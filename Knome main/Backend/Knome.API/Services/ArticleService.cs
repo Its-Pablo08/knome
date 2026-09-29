@@ -131,12 +131,12 @@ public class ArticleService : IArticleService
         DateTime? scheduledDate = null;
         if (dto.Status == ArticleStatuses.Scheduled && dto.ScheduledDate.HasValue)
         {
-            scheduledDate = dto.ScheduledDate.Value;
+            scheduledDate = KnomeTime.ToIst(dto.ScheduledDate.Value);
         }
 
         var isAlreadyDue = scheduledDate.HasValue && scheduledDate.Value <= KnomeTime.Now;
         var finalStatus = isAlreadyDue ? ArticleStatuses.Published : (string.IsNullOrEmpty(dto.Status) ? ArticleStatuses.Published : dto.Status);
-        var publishedDate = finalStatus == ArticleStatuses.Published ? (scheduledDate ?? KnomeTime.Now) : (DateTime?)null;
+        var publishedDate = finalStatus == ArticleStatuses.Published ? (isAlreadyDue ? scheduledDate : KnomeTime.Now) : (DateTime?)null;
 
         var article = new Article
         {
@@ -204,23 +204,25 @@ public class ArticleService : IArticleService
 
         if (dto.Status == ArticleStatuses.Scheduled && dto.ScheduledDate.HasValue)
         {
-            var isAlreadyDue = dto.ScheduledDate.Value <= KnomeTime.Now;
+            var istScheduledDate = KnomeTime.ToIst(dto.ScheduledDate.Value);
+            var isAlreadyDue = istScheduledDate <= KnomeTime.Now;
             if (isAlreadyDue)
             {
                 article.Status = ArticleStatuses.Published;
-                article.ScheduledDate = dto.ScheduledDate;
-                article.PublishedDate = dto.ScheduledDate ?? KnomeTime.Now;
+                article.ScheduledDate = istScheduledDate;
+                article.PublishedDate = istScheduledDate;
             }
             else
             {
                 article.Status = ArticleStatuses.Scheduled;
-                article.ScheduledDate = dto.ScheduledDate;
+                article.ScheduledDate = istScheduledDate;
+                article.PublishedDate = null;
             }
         }
         else
         {
             article.Status = dto.Status;
-            article.ScheduledDate = dto.ScheduledDate;
+            article.ScheduledDate = KnomeTime.ToIst(dto.ScheduledDate);
             if (dto.Status == ArticleStatuses.Published && article.PublishedDate == null)
                 article.PublishedDate = KnomeTime.Now;
         }

@@ -98,6 +98,8 @@ export default function Dashboard() {
         else setGreeting('Good Evening');
     }, []);
 
+    const currentUserIdStr = String(currentUser?.userId || currentUser?.id || '');
+
     const loadPosts = async (filterType = activeFilter) => {
         setIsLoading(true);
         try {
@@ -116,7 +118,6 @@ export default function Dashboard() {
                 });
             } catch (_) {}
 
-            const currentUserIdStr = String(currentUser?.userId || currentUser?.id || '');
             const postsAndArticlesOnly = mapped.filter(item => {
                 const itemIdStr = String(item.id || item.contentId || item.postId || '');
                 if (deletedIds.includes(itemIdStr)) return false;
@@ -167,6 +168,15 @@ export default function Dashboard() {
                     if (deletedIds.includes(itemIdStr)) return false;
                     const type = (item.type || item.contentType || '').toLowerCase();
                     if (type === 'video' || type === 'podcast') return false;
+
+                    // Scheduled publication privacy: future scheduled posts visible to author only
+                    if (item.status === 'Scheduled' && item.scheduledDate) {
+                        const schedTime = new Date(item.scheduledDate).getTime();
+                        if (schedTime > Date.now()) {
+                            const authorIdStr = String(item.author?.id || item.authorId || item.userId || '');
+                            return authorIdStr === currentUserIdStr;
+                        }
+                    }
                     return true;
                 });
                 setPosts(postsAndArticlesOnly);
