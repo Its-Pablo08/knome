@@ -8,7 +8,7 @@ import CommentsSection from '../components/video/CommentsSection';
 import ArticleShareModal from '../components/modals/ArticleShareModal';
 import { getVideos, getPlaylists, savePlaylist, deletePlaylist, importYouTubePlaylist } from '../utils/videoService';
 
-import { savedContentApi, getPersonalizedRecommendations, resolveMediaUrl, videosApi } from '../utils/apiService';
+import { savedContentApi, getPersonalizedRecommendations, resolveMediaUrl, videosApi, interactionsApi } from '../utils/apiService';
 import { useScrollLoading } from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
@@ -456,7 +456,8 @@ export default function Videos() {
     // Sync engagement state when activeVideo changes
     useEffect(() => {
         if (!activeVideo) return;
-        setLiked(localStorage.getItem(`knome_liked_video_${activeVideo.id}`) === 'true');
+        const initialLiked = activeVideo.isLiked ?? (localStorage.getItem(`knome_liked_video_${activeVideo.id}`) === 'true');
+        setLiked(initialLiked);
         setDisliked(localStorage.getItem(`knome_disliked_video_${activeVideo.id}`) === 'true');
         const authorKey = activeVideo.authorId ? `user_${activeVideo.authorId}` : `author_${activeVideo.author}`;
         setIsFollowing(localStorage.getItem(`knome_following_${authorKey}`) === 'true');
@@ -484,6 +485,22 @@ export default function Videos() {
                     }
                 })
                 .catch(() => {});
+
+            // Load live reaction summary and liked status from API
+            interactionsApi.getSummary('Video', activeVideo.id)
+                .then(res => {
+                    const summary = res?.data ?? res;
+                    if (summary?.reactionSummary) {
+                        const rSum = summary.reactionSummary;
+                        const count = rSum.likeCount ?? rSum.totalCount ?? 0;
+                        setLikesCount(count);
+                        const isReactionLike = rSum.currentUserReactionType === 'Like';
+                        setLiked(isReactionLike);
+                        localStorage.setItem(`knome_video_likes_${activeVideo.id}`, count.toString());
+                        localStorage.setItem(`knome_liked_video_${activeVideo.id}`, isReactionLike ? 'true' : 'false');
+                    }
+                })
+                .catch(() => {});
         } else {
             if (!hasViewedLocally) {
                 localStorage.setItem(userViewKey, 'true');
@@ -503,20 +520,43 @@ export default function Videos() {
         setSelectedUserIds([]);
     }, [activeVideo]);
 
+    // Real-time listener for reaction updates broadcast over SignalR
+    useEffect(() => {
+        const handleReactionUpdated = (e) => {
+            const detail = e.detail;
+            if (!detail || !activeVideo) return;
+            if (detail.contentType === 'Video' && String(detail.contentId) === String(activeVideo.id)) {
+                if (typeof detail.totalLikes === 'number') {
+                    setLikesCount(detail.totalLikes);
+                } else if (detail.reactionsSummary?.totalCount !== undefined) {
+                    setLikesCount(detail.reactionsSummary.likeCount ?? detail.reactionsSummary.totalCount);
+                }
+            }
+        };
+        window.addEventListener('knome:reaction-updated', handleReactionUpdated);
+        return () => window.removeEventListener('knome:reaction-updated', handleReactionUpdated);
+    }, [activeVideo]);
+
     const handleSelectVideo = (v) => {
         setActiveVideo(v);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleLike = () => {
-        const uploaderAuthorId = activeVideo?.authorId;
+    const handleLike = async () => {
+        if (!activeVideo) return;
+        const uploaderAuthorId = activeVideo?.uploaderUserId || activeVideo?.authorId;
         const isSelf = uploaderAuthorId && String(uploaderAuthorId) === String(currentUser?.id || currentUser?.userId);
-        if (!liked) {
-            setLiked(true);
-            const newCount = likesCount + 1;
-            setLikesCount(newCount);
-            localStorage.setItem(`knome_liked_video_${activeVideo.id}`, 'true');
-            localStorage.setItem(`knome_video_likes_${activeVideo.id}`, newCount.toString());
+        const nextLiked = !liked;
+        const prevCount = likesCount;
+        const newCount = nextLiked ? likesCount + 1 : Math.max(0, likesCount - 1);
+
+        // Optimistic UI update
+        setLiked(nextLiked);
+        setLikesCount(newCount);
+        localStorage.setItem(`knome_liked_video_${activeVideo.id}`, nextLiked ? 'true' : 'false');
+        localStorage.setItem(`knome_video_likes_${activeVideo.id}`, newCount.toString());
+
+        if (nextLiked) {
             if (disliked) {
                 setDisliked(false);
                 localStorage.removeItem(`knome_disliked_video_${activeVideo.id}`);
@@ -526,11 +566,31 @@ export default function Videos() {
             }
             showToast(`Liked video! ${!isSelf ? '+1 Karma awarded to ' + (activeVideo.author || 'creator') : ''}`);
         } else {
-            setLiked(false);
-            const newCount = Math.max(0, likesCount - 1);
-            setLikesCount(newCount);
             localStorage.removeItem(`knome_liked_video_${activeVideo.id}`);
-            localStorage.setItem(`knome_video_likes_${activeVideo.id}`, newCount.toString());
+        }
+
+        // Call backend API for persistence, karma & real-time notification
+        if (/^\d+$/.test(String(activeVideo.id))) {
+            try {
+                const res = await interactionsApi.toggleReaction('Video', activeVideo.id, { reactionType: 'Like' });
+                const summary = res?.data ?? res;
+                if (summary && summary.totalCount !== undefined) {
+                    const finalCount = summary.likeCount ?? summary.totalCount;
+                    setLikesCount(finalCount);
+                    const serverLiked = summary.currentUserReactionType === 'Like';
+                    setLiked(serverLiked);
+                    localStorage.setItem(`knome_video_likes_${activeVideo.id}`, finalCount.toString());
+                    localStorage.setItem(`knome_liked_video_${activeVideo.id}`, serverLiked ? 'true' : 'false');
+                }
+            } catch (err) {
+                console.error('Failed to toggle video like on server:', err);
+                // Revert on failure
+                setLiked(!nextLiked);
+                setLikesCount(prevCount);
+                localStorage.setItem(`knome_liked_video_${activeVideo.id}`, (!nextLiked) ? 'true' : 'false');
+                localStorage.setItem(`knome_video_likes_${activeVideo.id}`, prevCount.toString());
+                showToast('Failed to update like. Please try again.', 'error');
+            }
         }
     };
 
@@ -1152,7 +1212,7 @@ export default function Videos() {
                             <CommentsSection
                                 videoId={activeVideo.id}
                                 currentUser={currentUser}
-                                authorId={activeVideo.authorId}
+                                authorId={activeVideo.uploaderUserId || activeVideo.authorId}
                                 awardRuleKarma={awardRuleKarma}
                             />
                         </div>

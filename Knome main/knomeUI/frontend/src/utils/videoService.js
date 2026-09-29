@@ -163,16 +163,19 @@ export async function getVideos() {
                     thumbnail: (v.thumbnailUrl || v.thumbnail) ? resolveMediaUrl(v.thumbnailUrl || v.thumbnail) : 'https://images.unsplash.com/photo-1540317580384-e5d43616b9aa?auto=format&fit=crop&q=90&w=1600&h=900',
                     duration: v.fileSizeMb ? `${v.fileSizeMb} MB` : 'Video Session',
                     views: v.viewCount > 1000 ? (v.viewCount / 1000).toFixed(1) + 'k' : (v.viewCount || 0).toString(),
-                    likes: v.engagementSummary?.totalReactions || 0,
+                    likes: v.engagementSummary?.reactionSummary?.likeCount ?? v.engagementSummary?.reactionSummary?.totalCount ?? v.engagementSummary?.totalReactions ?? 0,
+                    isLiked: v.engagementSummary?.reactionSummary?.currentUserReactionType === 'Like',
                     category,
                     date: new Date(v.uploadedDate || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                     author: resolvedAuthor.author,
                     authorId: resolvedAuthor.authorId,
+                    uploaderUserId: v.uploaderUserId,
                     authorAvatar: resolvedAuthor.authorAvatar,
                     authorDesignation: resolvedAuthor.authorDesignation,
                     tags: v.tags || ['Video'],
                     sourceUrl: srcUrl,
-                    sourceType: v.sourceType || 'LocalUpload'
+                    sourceType: v.sourceType || 'LocalUpload',
+                    engagementSummary: v.engagementSummary
                 });
             });
         }

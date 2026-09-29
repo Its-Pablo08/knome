@@ -381,10 +381,25 @@ export const DEFAULT_ENTERPRISE_COMMUNITIES = [];
 export const interactionsApi = {
     getSummary: (type, id) => apiClient.get(`/interactions/${type}/${id}/summary`),
     getComments: (type, id) => apiClient.get(`/interactions/${type}/${id}/comments`),
-    addComment: (type, id, commentText, parentCommentId = null) => apiClient.post(`/interactions/${type}/${id}/comments`, { commentText, parentCommentId }),
+    addComment: (type, id, commentTextOrObj, parentCommentId = null) => {
+        const body = (typeof commentTextOrObj === 'object' && commentTextOrObj !== null)
+            ? commentTextOrObj
+            : { commentText: commentTextOrObj, parentCommentId };
+        return apiClient.post(`/interactions/${type}/${id}/comments`, body);
+    },
+    updateComment: (commentId, dataOrText) => {
+        const body = typeof dataOrText === 'string' ? { commentText: dataOrText } : dataOrText;
+        return apiClient.put(`/interactions/comments/${commentId}`, body);
+    },
+    deleteComment: (commentId) => apiClient.delete(`/interactions/comments/${commentId}`),
     getReactions: (type, id) => apiClient.get(`/interactions/${type}/${id}/reactions`),
     getReactionsList: (type, id) => apiClient.get(`/interactions/${type}/${id}/reactions/list`),
-    toggleReaction: (type, id, reactionType) => apiClient.post(`/interactions/${type}/${id}/react`, { reactionType }),
+    toggleReaction: (type, id, reactionTypeOrObj) => {
+        const body = (typeof reactionTypeOrObj === 'object' && reactionTypeOrObj !== null)
+            ? reactionTypeOrObj
+            : { reactionType: reactionTypeOrObj || 'Like' };
+        return apiClient.post(`/interactions/${type}/${id}/react`, body);
+    },
     toggleBookmark: (type, id) => apiClient.post(`/interactions/${type}/${id}/bookmark`),
     shareContent: (type, id, sharedToType, targetId = null) => apiClient.post(`/interactions/${type}/${id}/share`, { sharedToType, targetId, sharedToId: targetId }),
     reportContent: (type, id, data) => apiClient.post(`/interactions/${type}/${id}/report`, data),

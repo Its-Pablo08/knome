@@ -104,8 +104,20 @@ public class NotificationRepository : INotificationRepository
             .Where(p => p.UserId == userId)
             .ToListAsync();
 
-        _db.NotificationPreferences.RemoveRange(existing);
-        _db.NotificationPreferences.AddRange(preferences);
+        foreach (var pref in preferences)
+        {
+            var match = existing.FirstOrDefault(e => e.EventType.Equals(pref.EventType, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                match.BellEnabled = pref.BellEnabled;
+                match.EmailEnabled = pref.EmailEnabled;
+            }
+            else
+            {
+                pref.UserId = userId;
+                await _db.NotificationPreferences.AddAsync(pref);
+            }
+        }
         await _db.SaveChangesAsync();
     }
 

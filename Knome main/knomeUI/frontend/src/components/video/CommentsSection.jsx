@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { resolveMediaUrl } from '../../utils/apiService';
+import { resolveMediaUrl, interactionsApi } from '../../utils/apiService';
 import { checkRestrictedContent } from '../../utils/restrictedWords';
 import { useToast } from '../contexts/ToastContext';
 
@@ -125,7 +125,7 @@ function renderCommentText(text) {
     });
 }
 
-function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComment, onAddChildReply, depth = 0 }) {
+function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComment, onAddReply, onLikeComment, onEditComment, depth = 0 }) {
     const [showReplies, setShowReplies] = useState(false);
     const [showReplyInput, setShowReplyInput] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -141,14 +141,18 @@ function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComme
     }, []);
 
     const handleLike = () => {
-        const wasLiked = comment.likedByMe;
-        const wasDisliked = comment.dislikedByMe;
-        onUpdateComment(comment.id, {
-            likes: wasLiked ? comment.likes - 1 : comment.likes + 1,
-            dislikes: wasDisliked ? comment.dislikes - 1 : comment.dislikes,
-            likedByMe: !wasLiked,
-            dislikedByMe: false,
-        });
+        if (onLikeComment) {
+            onLikeComment(comment.id);
+        } else {
+            const wasLiked = comment.likedByMe;
+            const wasDisliked = comment.dislikedByMe;
+            onUpdateComment(comment.id, {
+                likes: wasLiked ? comment.likes - 1 : comment.likes + 1,
+                dislikes: wasDisliked ? comment.dislikes - 1 : comment.dislikes,
+                likedByMe: !wasLiked,
+                dislikedByMe: false,
+            });
+        }
     };
 
     const handleDislike = () => {
@@ -163,22 +167,22 @@ function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComme
     };
 
     const handleReplySubmit = (text) => {
-        const reply = {
-            id: `reply_${Date.now()}_${Math.random()}`,
-            text,
-            author: currentUser?.name || 'You',
-            authorId: currentUser?.id || currentUser?.userId,
-            avatar: currentUser?.avatar || null,
-            createdAt: new Date().toISOString(),
-            likes: 0,
-            dislikes: 0,
-            likedByMe: false,
-            dislikedByMe: false,
-            replies: [],
-        };
-        if (onAddChildReply) {
-            onAddChildReply(reply);
+        if (onAddReply) {
+            onAddReply(comment.id, text);
         } else {
+            const reply = {
+                id: `reply_${Date.now()}_${Math.random()}`,
+                text,
+                author: currentUser?.name || 'You',
+                authorId: currentUser?.id || currentUser?.userId,
+                avatar: currentUser?.avatar || null,
+                createdAt: new Date().toISOString(),
+                likes: 0,
+                dislikes: 0,
+                likedByMe: false,
+                dislikedByMe: false,
+                replies: [],
+            };
             onUpdateComment(comment.id, {
                 replies: [...(comment.replies || []), reply],
             });
@@ -188,7 +192,11 @@ function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComme
     };
 
     const handleEditSave = (text) => {
-        onUpdateComment(comment.id, { text, edited: true });
+        if (onEditComment) {
+            onEditComment(comment.id, text);
+        } else {
+            onUpdateComment(comment.id, { text, edited: true });
+        }
         setIsEditing(false);
     };
 
@@ -308,20 +316,11 @@ function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComme
                                         comment={r}
                                         currentUser={currentUser}
                                         videoId={videoId}
-                                        onUpdateComment={(rId, patch) => {
-                                            const updatedReplies = (comment.replies || []).map(rep =>
-                                                rep.id === rId ? { ...rep, ...patch } : rep
-                                            );
-                                            onUpdateComment(comment.id, { replies: updatedReplies });
-                                        }}
-                                        onDeleteComment={(rId) => {
-                                            const updatedReplies = (comment.replies || []).filter(rep => rep.id !== rId);
-                                            onUpdateComment(comment.id, { replies: updatedReplies });
-                                        }}
-                                        onAddChildReply={(newReply) => {
-                                            const updatedReplies = [...(comment.replies || []), newReply];
-                                            onUpdateComment(comment.id, { replies: updatedReplies });
-                                        }}
+                                        onUpdateComment={onUpdateComment}
+                                        onDeleteComment={onDeleteComment}
+                                        onAddReply={onAddReply}
+                                        onLikeComment={onLikeComment}
+                                        onEditComment={onEditComment}
                                         depth={depth + 1}
                                     />
                                 ))}
@@ -337,6 +336,22 @@ function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComme
 
 // ── Main CommentsSection ──────────────────────────────────────────────────────
 
+const normalizeComment = (c) => ({
+    id: c.commentId || c.id,
+    text: c.commentText || c.text || '',
+    author: c.authorFullName || c.author || 'User',
+    authorId: c.userId || c.authorId,
+    avatar: c.authorProfilePhotoUrl || c.avatar,
+    designation: c.authorDesignation || c.designation,
+    createdAt: c.createdDate || c.createdAt || new Date().toISOString(),
+    likes: c.likesCount ?? c.likes ?? 0,
+    dislikes: c.dislikes ?? 0,
+    likedByMe: c.isLiked ?? c.likedByMe ?? false,
+    dislikedByMe: c.dislikedByMe ?? false,
+    edited: c.edited ?? false,
+    replies: Array.isArray(c.replies) ? c.replies.map(normalizeComment) : []
+});
+
 const STORAGE_KEY = (videoId) => `knome_yt_comments_v2_${videoId}`;
 
 export default function CommentsSection({ videoId, currentUser, authorId, awardRuleKarma }) {
@@ -344,23 +359,45 @@ export default function CommentsSection({ videoId, currentUser, authorId, awardR
     const [sortBy, setSortBy] = useState('top'); // 'top' | 'newest'
     const [showSortMenu, setShowSortMenu] = useState(false);
     const [visibleCount, setVisibleCount] = useState(20);
+    const [isLoading, setIsLoading] = useState(false);
     const sortMenuRef = useRef(null);
 
     // ── Persistence ───────────────────────────────────────────────────────────
-    const loadComments = useCallback(() => {
-        try {
-            return JSON.parse(localStorage.getItem(STORAGE_KEY(videoId)) || '[]');
-        } catch { return []; }
-    }, [videoId]);
-
     const saveComments = useCallback((data) => {
         try {
             localStorage.setItem(STORAGE_KEY(videoId), JSON.stringify(data));
         } catch { }
     }, [videoId]);
 
+    const loadComments = useCallback(async () => {
+        const local = (() => {
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY(videoId)) || '[]');
+            } catch { return []; }
+        })();
+
+        if (/^\d+$/.test(String(videoId))) {
+            setIsLoading(true);
+            try {
+                const res = await interactionsApi.getComments('Video', videoId);
+                const data = res?.data ?? res ?? [];
+                if (Array.isArray(data)) {
+                    const normalized = data.map(normalizeComment);
+                    setComments(normalized);
+                    saveComments(normalized);
+                    setIsLoading(false);
+                    return;
+                }
+            } catch (err) {
+                console.error('Failed to load video comments from API:', err);
+            }
+            setIsLoading(false);
+        }
+        setComments(local.map(normalizeComment));
+    }, [videoId, saveComments]);
+
     useEffect(() => {
-        setComments(loadComments());
+        loadComments();
         setVisibleCount(20);
         setSortBy('top');
     }, [videoId, loadComments]);
@@ -370,6 +407,17 @@ export default function CommentsSection({ videoId, currentUser, authorId, awardR
         document.addEventListener('mousedown', fn);
         return () => document.removeEventListener('mousedown', fn);
     }, []);
+
+    // Listen to real-time comment updates broadcast over SignalR
+    useEffect(() => {
+        const handleCommentUpdated = (e) => {
+            if (e.detail?.contentType === 'Video' && String(e.detail?.contentId) === String(videoId)) {
+                loadComments();
+            }
+        };
+        window.addEventListener('knome:comment-updated', handleCommentUpdated);
+        return () => window.removeEventListener('knome:comment-updated', handleCommentUpdated);
+    }, [videoId, loadComments]);
 
     // ── Sorted ────────────────────────────────────────────────────────────────
     const sorted = [...comments].sort((a, b) => {
@@ -381,14 +429,15 @@ export default function CommentsSection({ videoId, currentUser, authorId, awardR
         return new Date(b.createdAt) - new Date(a.createdAt);
     });
 
-    // ── Add comment ───────────────────────────────────────────────────────────
-    const handleAddComment = (text) => {
-        const newC = {
-            id: `c_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    // ── Add top-level comment ─────────────────────────────────────────────────
+    const handleAddComment = async (text) => {
+        const tempId = `c_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const optimisticComment = {
+            id: tempId,
             text,
-            author: currentUser?.name || 'You',
+            author: currentUser?.name || currentUser?.fullName || 'You',
             authorId: currentUser?.id || currentUser?.userId,
-            avatar: currentUser?.avatar || null,
+            avatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
             createdAt: new Date().toISOString(),
             likes: 0,
             dislikes: 0,
@@ -397,25 +446,200 @@ export default function CommentsSection({ videoId, currentUser, authorId, awardR
             edited: false,
             replies: [],
         };
-        const updated = [newC, ...comments];
+        const updated = [optimisticComment, ...comments];
         setComments(updated);
         saveComments(updated);
+
         if (awardRuleKarma && authorId) awardRuleKarma(authorId, 'COMMENT_RECEIVED');
+
+        if (/^\d+$/.test(String(videoId))) {
+            try {
+                const res = await interactionsApi.addComment('Video', videoId, { commentText: text, parentCommentId: null });
+                const serverComment = res?.data ?? res;
+                if (serverComment && (serverComment.commentId || serverComment.id)) {
+                    const normalized = normalizeComment(serverComment);
+                    setComments(prev => {
+                        const replaced = prev.map(c => c.id === tempId ? normalized : c);
+                        saveComments(replaced);
+                        return replaced;
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to post video comment to backend:', err);
+            }
+        }
     };
 
-    // ── Update comment (patch) ────────────────────────────────────────────────
-    const handleUpdateComment = useCallback((id, patch) => {
+    // ── Add reply ─────────────────────────────────────────────────────────────
+    const handleAddReply = async (parentCommentId, text) => {
+        const tempReplyId = `reply_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const optimisticReply = {
+            id: tempReplyId,
+            text,
+            author: currentUser?.name || currentUser?.fullName || 'You',
+            authorId: currentUser?.id || currentUser?.userId,
+            avatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
+            createdAt: new Date().toISOString(),
+            likes: 0,
+            dislikes: 0,
+            likedByMe: false,
+            dislikedByMe: false,
+            replies: [],
+        };
+
+        const addReplyRecursive = (list) => {
+            return list.map(item => {
+                if (String(item.id) === String(parentCommentId)) {
+                    return { ...item, replies: [...(item.replies || []), optimisticReply] };
+                }
+                if (item.replies?.length > 0) {
+                    return { ...item, replies: addReplyRecursive(item.replies) };
+                }
+                return item;
+            });
+        };
+
         setComments(prev => {
-            const updated = prev.map(c => c.id === id ? { ...c, ...patch } : c);
-            saveComments(updated);
-            return updated;
+            const next = addReplyRecursive(prev);
+            saveComments(next);
+            return next;
         });
-    }, [saveComments]);
+
+        if (/^\d+$/.test(String(videoId))) {
+            try {
+                const targetParentId = /^\d+$/.test(String(parentCommentId)) ? Number(parentCommentId) : null;
+                const res = await interactionsApi.addComment('Video', videoId, { commentText: text, parentCommentId: targetParentId });
+                const serverReply = res?.data ?? res;
+                if (serverReply && (serverReply.commentId || serverReply.id)) {
+                    const normalized = normalizeComment(serverReply);
+                    const replaceReplyRecursive = (list) => {
+                        return list.map(item => {
+                            if (String(item.id) === String(tempReplyId)) {
+                                return normalized;
+                            }
+                            if (item.replies?.length > 0) {
+                                return { ...item, replies: replaceReplyRecursive(item.replies) };
+                            }
+                            return item;
+                        });
+                    };
+                    setComments(prev => {
+                        const replaced = replaceReplyRecursive(prev);
+                        saveComments(replaced);
+                        return replaced;
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to post video reply to backend:', err);
+            }
+        }
+    };
+
+    // ── Edit comment ──────────────────────────────────────────────────────────
+    const handleEditComment = async (commentId, newText) => {
+        const updateTextRecursive = (list) => {
+            return list.map(item => {
+                if (String(item.id) === String(commentId)) {
+                    return { ...item, text: newText, edited: true };
+                }
+                if (item.replies?.length > 0) {
+                    return { ...item, replies: updateTextRecursive(item.replies) };
+                }
+                return item;
+            });
+        };
+
+        setComments(prev => {
+            const next = updateTextRecursive(prev);
+            saveComments(next);
+            return next;
+        });
+
+        if (/^\d+$/.test(String(commentId))) {
+            try {
+                await interactionsApi.updateComment(commentId, newText);
+            } catch (err) {
+                console.error('Failed to update comment on backend:', err);
+            }
+        }
+    };
 
     // ── Delete comment ────────────────────────────────────────────────────────
-    const handleDeleteComment = useCallback((id) => {
+    const handleDeleteComment = async (commentId) => {
+        const removeRecursive = (list) => {
+            return list
+                .filter(item => String(item.id) !== String(commentId))
+                .map(item => ({
+                    ...item,
+                    replies: item.replies?.length > 0 ? removeRecursive(item.replies) : []
+                }));
+        };
+
         setComments(prev => {
-            const updated = prev.filter(c => c.id !== id);
+            const next = removeRecursive(prev);
+            saveComments(next);
+            return next;
+        });
+
+        if (/^\d+$/.test(String(commentId))) {
+            try {
+                await interactionsApi.deleteComment(commentId);
+            } catch (err) {
+                console.error('Failed to delete comment on backend:', err);
+            }
+        }
+    };
+
+    // ── Like comment ──────────────────────────────────────────────────────────
+    const handleLikeComment = async (commentId) => {
+        const updateLikeRecursive = (list) => {
+            return list.map(item => {
+                if (String(item.id) === String(commentId)) {
+                    const wasLiked = item.likedByMe;
+                    return {
+                        ...item,
+                        likedByMe: !wasLiked,
+                        dislikedByMe: false,
+                        likes: wasLiked ? Math.max(0, item.likes - 1) : item.likes + 1,
+                    };
+                }
+                if (item.replies?.length > 0) {
+                    return { ...item, replies: updateLikeRecursive(item.replies) };
+                }
+                return item;
+            });
+        };
+
+        setComments(prev => {
+            const next = updateLikeRecursive(prev);
+            saveComments(next);
+            return next;
+        });
+
+        if (/^\d+$/.test(String(commentId))) {
+            try {
+                await interactionsApi.toggleReaction('Comment', commentId, 'Like');
+            } catch (err) {
+                console.error('Failed to toggle comment reaction on backend:', err);
+            }
+        }
+    };
+
+    // ── Update comment fallback (patch) ───────────────────────────────────────
+    const handleUpdateComment = useCallback((id, patch) => {
+        setComments(prev => {
+            const updateRecursive = (list) => {
+                return list.map(item => {
+                    if (String(item.id) === String(id)) {
+                        return { ...item, ...patch };
+                    }
+                    if (item.replies?.length > 0) {
+                        return { ...item, replies: updateRecursive(item.replies) };
+                    }
+                    return item;
+                });
+            };
+            const updated = updateRecursive(prev);
             saveComments(updated);
             return updated;
         });
@@ -472,7 +696,11 @@ export default function CommentsSection({ videoId, currentUser, authorId, awardR
             </div>
 
             {/* Comment List */}
-            {sorted.length === 0 ? (
+            {isLoading && comments.length === 0 ? (
+                <div className="py-12 flex justify-center items-center">
+                    <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+            ) : sorted.length === 0 ? (
                 <div className="py-12 text-center">
                     <span className="material-symbols-outlined text-[40px] text-slate-300 dark:text-slate-600 mb-2 block">chat_bubble_outline</span>
                     <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No comments yet</p>
@@ -488,6 +716,9 @@ export default function CommentsSection({ videoId, currentUser, authorId, awardR
                             videoId={videoId}
                             onUpdateComment={handleUpdateComment}
                             onDeleteComment={handleDeleteComment}
+                            onAddReply={handleAddReply}
+                            onLikeComment={handleLikeComment}
+                            onEditComment={handleEditComment}
                         />
                     ))}
 
