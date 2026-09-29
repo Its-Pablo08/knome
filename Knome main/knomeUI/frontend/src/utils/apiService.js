@@ -654,6 +654,32 @@ export const jobsApi = {
     /** GET /Jobs */
     getAll: () => apiClient.get('/Jobs'),
 
+    /** GET Live Jobs from central HRMS Integration API */
+    getLiveServerJobs: async () => {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3500);
+            const res = await fetch('http://counselling-1.mponline.demo.gov.in:5110/api/v1/job-postings/integration/list', {
+                method: 'GET',
+                headers: {
+                    'X-Client-Id': 'mpo-hrms-Client',
+                    'X-Client-Secret': 'hrms-super-secret-key-12345'
+                },
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (res.ok) {
+                const json = await res.json();
+                if (json?.success && Array.isArray(json.data)) {
+                    return json.data;
+                }
+            }
+        } catch (e) {
+            console.warn('Could not fetch from live HRMS server API, falling back to local database:', e);
+        }
+        return null;
+    },
+
     /** GET /Jobs/{id} */
     getById: (id) => apiClient.get(`/Jobs/${id}`),
 

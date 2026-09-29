@@ -11,10 +11,13 @@ export default function Jobs() {
     const filters = ['All Roles', 'Engineering', 'Product & Design', 'Marketing', 'Product'];
 
 const normalizeJobUrl = (url) => {
-    if (!url || typeof url !== 'string') return 'https://ats.mponline.gov.in';
+    if (!url || typeof url !== 'string') return 'https://counselling-1.mponline.demo.gov.in:3001/careers';
     const trimmed = url.trim();
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
         return trimmed;
+    }
+    if (trimmed.startsWith('/')) {
+        return `https://counselling-1.mponline.demo.gov.in:3001${trimmed}`;
     }
     return `https://${trimmed}`;
 };
@@ -22,22 +25,41 @@ const normalizeJobUrl = (url) => {
     const fetchJobsFromDb = async () => {
         setIsLoading(true);
         try {
-            const data = await jobsApi.getAll();
-            const items = Array.isArray(data) ? data : (data?.items || []);
-            if (items.length > 0) {
-                const mapped = items.map(j => ({
-                    id: j.jobId || j.id,
-                    title: j.title,
-                    department: j.departmentName || j.department || 'Engineering',
-                    team: j.departmentName || 'Product Team',
-                    location: j.location || 'Bhopal, MP',
-                    posted: new Date(j.postedDate || j.createdDate || Date.now()).toLocaleDateString(),
-                    closes: j.closingDate ? new Date(j.closingDate).toLocaleDateString() : (j.expiryDate ? new Date(j.expiryDate).toLocaleDateString() : 'Dec 31, 2026'),
-                    skills: j.skillsRequired ? j.skillsRequired.split(',').map(s => s.trim()) : (j.requirements ? j.requirements.split(',').map(s => s.trim()) : ['Design Systems', 'Backend']),
-                    isFeatured: j.isFeatured || false,
-                    isExpired: j.isExpired || false,
-                    link: normalizeJobUrl(j.applicationLink || j.applicationUrl)
-                }));
+            // 1. First priority: Live HRMS Server Jobs API
+            let jobList = await jobsApi.getLiveServerJobs();
+
+            // 2. Fall back to local Knome database if live API returns empty
+            if (!jobList || jobList.length === 0) {
+                const data = await jobsApi.getAll();
+                jobList = Array.isArray(data) ? data : (data?.items || []);
+            }
+
+            if (jobList && jobList.length > 0) {
+                const mapped = jobList.map((j, idx) => {
+                    const rawSkills = j.requiredSkills || j.skillsRequired || j.requirements || '';
+                    const skillsList = Array.isArray(rawSkills)
+                        ? rawSkills
+                        : (typeof rawSkills === 'string' && rawSkills.trim()
+                            ? rawSkills.split(',').map(s => s.trim()).filter(Boolean)
+                            : []);
+
+                    return {
+                        id: j.jobId || j.id || `job-${idx}`,
+                        title: j.jobName || j.title || 'Software Developer',
+                        department: j.departmentName || j.department || 'Engineering',
+                        team: j.departmentName || 'Engineering Team',
+                        location: (j.location && j.location.trim()) ? j.location.trim() : 'Bhopal, MP',
+                        experience: j.experience || null,
+                        employmentType: j.employmentType || null,
+                        positionCount: j.postionCount || j.positionCount || null,
+                        posted: (j.postedDate || j.createdDate) ? new Date(j.postedDate || j.createdDate).toLocaleDateString() : 'Active',
+                        closes: j.closingDate ? new Date(j.closingDate).toLocaleDateString() : (j.expiryDate ? new Date(j.expiryDate).toLocaleDateString() : 'Dec 31, 2026'),
+                        skills: skillsList.length > 0 ? skillsList : ['React', 'Node.js', 'Express'],
+                        isFeatured: j.isFeatured || false,
+                        isExpired: j.isExpired || false,
+                        link: normalizeJobUrl(j.url || j.applicationLink || j.applicationUrl)
+                    };
+                });
                 setJobs(mapped);
             } else {
                 // Fallback default set if database is empty initially
@@ -177,11 +199,37 @@ const normalizeJobUrl = (url) => {
                                             )}
                                         </div>
 
-                                        <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400 mb-4">
+                                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-4">
                                             <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-[14px]">location_on</span>
                                                 {job.location}
                                             </span>
+                                            {job.experience && (
+                                                <>
+                                                    <span>•</span>
+                                                    <span className="flex items-center gap-1 font-medium text-slate-600 dark:text-slate-300">
+                                                        <span className="material-symbols-outlined text-[14px]">work_history</span>
+                                                        {job.experience}
+                                                    </span>
+                                                </>
+                                            )}
+                                            {job.employmentType && (
+                                                <>
+                                                    <span>•</span>
+                                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400">
+                                                        {job.employmentType}
+                                                    </span>
+                                                </>
+                                            )}
+                                            {job.positionCount && (
+                                                <>
+                                                    <span>•</span>
+                                                    <span className="flex items-center gap-1 text-slate-600 dark:text-slate-300 font-medium">
+                                                        <span className="material-symbols-outlined text-[14px]">group</span>
+                                                        {job.positionCount} {job.positionCount === 1 ? 'Opening' : 'Openings'}
+                                                    </span>
+                                                </>
+                                            )}
                                             <span>•</span>
                                             <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-[14px]">schedule</span>
