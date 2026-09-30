@@ -7,6 +7,7 @@ namespace Knome.API.Interfaces;
 public interface ICommunityService
 {
     // Discovery & Details
+    Task<List<Knome.API.DTOs.Categories.CategoryDto>> GetCommunityCategoriesAsync();
     Task<CommunityDto> GetCommunityAsync(int communityId, int currentUserId);
     Task<List<CommunityDto>> GetCommunitiesAsync(int? categoryId, string? type, string? search, int pageNumber, int pageSize, int currentUserId);
     Task<List<CommunityDto>> GetMyCommunitiesAsync(int currentUserId);

@@ -252,6 +252,32 @@ export default function CommunityView() {
     const [newFaqA, setNewFaqA] = useState('');
     const [isSavingRulesFaq, setIsSavingRulesFaq] = useState(false);
 
+    // Community Category & Metadata Settings State
+    const [selectedCategory, setSelectedCategory] = useState('Technology');
+    const [isSavingCategory, setIsSavingCategory] = useState(false);
+    const [availableCategories, setAvailableCategories] = useState([
+        { id: 1, name: 'Technology' },
+        { id: 1016, name: 'Product & Design' },
+        { id: 1017, name: 'Culture & HR' },
+        { id: 1018, name: 'Operations' },
+        { id: 1019, name: 'Finance' },
+        { id: 1020, name: 'Marketing' },
+        { id: 12, name: 'Leadership' },
+        { id: 1014, name: 'General' },
+        { id: 7, name: 'Engineering' }
+    ]);
+
+    useEffect(() => {
+        communitiesApi.getCategories()
+            .then(res => {
+                const list = res?.data !== undefined ? res.data : res;
+                if (Array.isArray(list) && list.length > 0) {
+                    setAvailableCategories(list);
+                }
+            })
+            .catch(() => {});
+    }, []);
+
     // Files & Media State
     const [filesList, setFilesList] = useState([]);
     const [fileCategoryFilter, setFileCategoryFilter] = useState('All');
@@ -1247,6 +1273,9 @@ export default function CommunityView() {
             const commIdNum = Number(community?.id || communityId);
             if (!isNaN(commIdNum) && commIdNum > 0) {
                 await communitiesApi.approve(commIdNum);
+                if (Array.isArray(community?.invitedUserIds) && community.invitedUserIds.length > 0) {
+                    await communitiesApi.addMembers(commIdNum, community.invitedUserIds).catch(() => {});
+                }
             }
 
             try {
@@ -1392,9 +1421,22 @@ export default function CommunityView() {
                     status: 'Approved',
                     profilePhotoUrl: commData.creatorAvatar || null
                 };
-                const rawList = (Array.isArray(rawMembers) && rawMembers.length > 0 
-                    ? rawMembers 
-                    : (localMembersApi.length > 0 ? localMembersApi : [defaultCreator]))
+
+                // Merge members from backend and local storage so invited users are never lost
+                const memberMap = new Map();
+                (Array.isArray(rawMembers) ? rawMembers : []).forEach(m => {
+                    const key = String(m?.userId || m?.id || '');
+                    if (key) memberMap.set(key, m);
+                });
+                (Array.isArray(localMembersApi) ? localMembersApi : []).forEach(m => {
+                    const key = String(m?.userId || m?.id || '');
+                    if (key && !memberMap.has(key)) memberMap.set(key, m);
+                });
+                if (memberMap.size === 0) {
+                    memberMap.set(String(defaultCreator.userId), defaultCreator);
+                }
+
+                const rawList = Array.from(memberMap.values())
                     .filter(m => {
                         const uid = String(m?.userId || m?.id || '').toLowerCase();
                         const empId = String(m?.employeeId || m?.empId || '').toLowerCase();
@@ -1404,11 +1446,14 @@ export default function CommunityView() {
                 let resolvedMembers = deduplicateMembers(rawList, contextUsers);
                 localStorage.setItem(savedMembersKey, JSON.stringify(resolvedMembers));
 
+                const resolvedCategory = commData.categoryName || localMatch?.category || 'Technology';
+                setSelectedCategory(resolvedCategory);
+
                 setCommunity({
                     id: commData.communityId,
                     name: commData.name,
                     type: commData.communityType || 'Public',
-                    category: commData.categoryName || 'Technology',
+                    category: resolvedCategory,
                     membersCount: resolvedMembers.length > 0 ? resolvedMembers.length : (commData.membersCount || 1),
                     adminContact: commData.createdByUserName || 'Admin',
                     banner: localMatch?.banner || localMatch?.bannerUrl || resolveMediaUrl(commData.bannerUrl || commData.bannerImageUrl) || imgs.banner,
@@ -1419,7 +1464,8 @@ export default function CommunityView() {
                     isActive: commData.isActive,
                     approvalStatus: commData.approvalStatus || (commData.isActive ? 'Approved' : 'Pending'),
                     createdByUserId: commData.createdByUserId,
-                    createdDate: commData.createdDate
+                    createdDate: commData.createdDate,
+                    invitedUserIds: localMatch?.invitedUserIds || commData.invitedUserIds || []
                 });
 
                 const userJoinedList = JSON.parse(localStorage.getItem(`knome_joined_communities_${currentUser?.id || 'guest'}`) || '[]');
@@ -2706,6 +2752,52 @@ export default function CommunityView() {
             showToast('Failed to save rules and FAQ.', 'error');
         } finally {
             setIsSavingRulesFaq(false);
+        }
+    };
+
+    const handleSaveCategory = async () => {
+        setIsSavingCategory(true);
+        try {
+            const commIdNum = Number(community?.id || communityId);
+            const matchedCat = availableCategories.find(c => (c.name || '').toLowerCase() === selectedCategory.toLowerCase());
+            const catId = matchedCat?.categoryId || matchedCat?.id || 1;
+
+            if (!isNaN(commIdNum) && commIdNum > 0 && commIdNum < 1000000000) {
+                await communitiesApi.update(commIdNum, {
+                    name: community?.name,
+                    description: community?.description,
+                    bannerUrl: community?.banner,
+                    thumbnailUrl: community?.thumbnail,
+                    categoryId: catId,
+                    categoryName: selectedCategory,
+                    rules: Array.isArray(community?.rules) ? community.rules.join('\n') : (community?.rules || ''),
+                    faq: typeof community?.faq === 'string' ? community.faq : JSON.stringify(community?.faq || [])
+                });
+            }
+
+            // Update in local storage
+            const customComms = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
+            const updatedCustom = customComms.map(c => {
+                if (String(c.id) === String(commIdNum)) {
+                    return { ...c, category: selectedCategory, categoryId: catId };
+                }
+                return c;
+            });
+            localStorage.setItem('knome_custom_communities', JSON.stringify(updatedCustom));
+
+            setCommunity(prev => ({
+                ...prev,
+                category: selectedCategory,
+                categoryId: catId
+            }));
+
+            showToast(`✅ Community category updated to "${selectedCategory}"!`, 'success');
+            window.dispatchEvent(new CustomEvent('community-created'));
+        } catch (err) {
+            console.error('Failed to update community category:', err);
+            showToast('Failed to update category.', 'error');
+        } finally {
+            setIsSavingCategory(false);
         }
     };
 
@@ -5361,6 +5453,57 @@ export default function CommunityView() {
                                                 </button>
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Manage Community Category & Details (FR-CM-01) */}
+                            <div className="glass bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                                <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-purple-50/40 dark:bg-purple-950/20 flex items-center justify-between gap-4 flex-wrap">
+                                    <div>
+                                        <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-purple-500">category</span>
+                                            Community Category & Classification
+                                        </h3>
+                                        <p className="text-[12px] text-slate-500 mt-1">Change the official primary category for this community space.</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveCategory}
+                                        disabled={isSavingCategory}
+                                        className="px-5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-500/20 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                                    >
+                                        {isSavingCategory ? (
+                                            <>
+                                                <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                                                Saving...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="material-symbols-outlined text-[16px]">save</span>
+                                                Update Category
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                                <div className="p-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Primary Category</label>
+                                        <select
+                                            value={selectedCategory}
+                                            onChange={(e) => setSelectedCategory(e.target.value)}
+                                            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                                        >
+                                            {availableCategories.map(cat => (
+                                                <option key={cat.categoryId || cat.id || cat.name} value={cat.name}>{cat.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col justify-end">
+                                        <span className="text-xs text-slate-400 mb-1">Current Active Badge:</span>
+                                        <span className="px-3 py-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800 rounded-xl text-xs font-black uppercase tracking-wider inline-block text-center">
+                                            {community?.category || 'Technology'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>

@@ -779,6 +779,9 @@ export default function AdminConsole() {
 
         try {
             await communitiesApi.approve(comm.id);
+            if (Array.isArray(comm.invitedUserIds) && comm.invitedUserIds.length > 0) {
+                await communitiesApi.addMembers(comm.id, comm.invitedUserIds).catch(() => {});
+            }
         } catch (apiErr) {
             console.warn('Backend community approve failed, continuing with fallback:', apiErr);
         }

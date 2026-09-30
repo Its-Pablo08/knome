@@ -22,6 +22,15 @@ public class CommunityController : KnomeControllerBase
         _communityService = communityService;
     }
 
+    [HttpGet("categories")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<List<Knome.API.DTOs.Categories.CategoryDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCommunityCategories()
+    {
+        var categories = await _communityService.GetCommunityCategoriesAsync();
+        return Ok(ApiResponse<List<Knome.API.DTOs.Categories.CategoryDto>>.SuccessResponse(200, "Community categories retrieved successfully.", categories));
+    }
+
     [HttpGet("check-name")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CheckName([FromQuery] string? name = null, [FromQuery] int? excludeId = null)

@@ -34,8 +34,30 @@ export default function Communities() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState('All');
     const [filterCategory, setFilterCategory] = useState('All');
+    const [availableCategories, setAvailableCategories] = useState([
+        { id: 1, name: 'Technology' },
+        { id: 1016, name: 'Product & Design' },
+        { id: 1017, name: 'Culture & HR' },
+        { id: 1018, name: 'Operations' },
+        { id: 1019, name: 'Finance' },
+        { id: 1020, name: 'Marketing' },
+        { id: 12, name: 'Leadership' },
+        { id: 1014, name: 'General' },
+        { id: 7, name: 'Engineering' }
+    ]);
     const [approvalSuccessMsg, setApprovalSuccessMsg] = useState('');
     const [successPopup, setSuccessPopup] = useState(null);
+
+    React.useEffect(() => {
+        communitiesApi.getCategories()
+            .then(res => {
+                const list = res?.data !== undefined ? res.data : res;
+                if (Array.isArray(list) && list.length > 0) {
+                    setAvailableCategories(list);
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     const isHRorAdmin = ['SYSADM', 'HRADM', 'CADM', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
         ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'HR MANAGER', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
@@ -518,6 +540,9 @@ export default function Communities() {
 
         try {
             await communitiesApi.approve(comm.id);
+            if (Array.isArray(comm.invitedUserIds) && comm.invitedUserIds.length > 0) {
+                await communitiesApi.addMembers(comm.id, comm.invitedUserIds).catch(() => {});
+            }
         } catch (apiErr) {
             console.warn('Backend community approve failed, continuing with fallback:', apiErr);
         }
@@ -766,7 +791,17 @@ export default function Communities() {
             if (formatCommunityType(c.type) !== normalizedFilter) return false;
         }
         // Category filter
-        if (filterCategory !== 'All' && c.category && c.category !== filterCategory) return false;
+        if (filterCategory !== 'All') {
+            const commCat = (c.category || c.categoryName || '').toLowerCase().trim();
+            const targetCat = filterCategory.toLowerCase().trim();
+            const matches = commCat === targetCat || 
+                (targetCat.includes('design') && commCat.includes('design')) ||
+                (targetCat.includes('product') && commCat.includes('product')) ||
+                (targetCat.includes('culture') && commCat.includes('culture')) ||
+                (targetCat.includes('hr') && commCat.includes('hr')) ||
+                (targetCat.includes('tech') && commCat.includes('tech'));
+            if (!matches) return false;
+        }
         // Search filter
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase().trim();
@@ -1047,13 +1082,9 @@ export default function Communities() {
                                 className="shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-sm outline-none text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 font-medium cursor-pointer"
                             >
                                 <option value="All">All Categories</option>
-                                <option>Technology</option>
-                                <option>Product &amp; Design</option>
-                                <option>Culture &amp; HR</option>
-                                <option>Operations</option>
-                                <option>Finance</option>
-                                <option>Marketing</option>
-                                <option>Leadership</option>
+                                {availableCategories.map(cat => (
+                                    <option key={cat.categoryId || cat.id || cat.name} value={cat.name}>{cat.name}</option>
+                                ))}
                             </select>
 
                             {/* Result count */}
