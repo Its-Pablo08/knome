@@ -721,6 +721,23 @@ export const UserProvider = ({ children }) => {
             const existingToken = localStorage.getItem('knome_jwt');
             const savedEmployeeId = localStorage.getItem('knome_employeeId');
 
+            // If user was auto-logged into Aarav (EMP001) due to the bug, purge storage and log out
+            if (savedEmployeeId === 'EMP001' && !sessionStorage.getItem('knome_intended_emp001')) {
+                console.info('[Auth] Clearing unwanted auto-login session for EMP001 (Aarav)...');
+                localStorage.removeItem('knome_jwt');
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('userProfile');
+                localStorage.removeItem('knome_refresh');
+                localStorage.removeItem('knome_employeeId');
+                sessionStorage.removeItem('knome_auth_pwd');
+                apiClient.clearCache();
+                setCurrentUser(null);
+                setIsAuthenticated(false);
+                setIsAuthLoading(false);
+                window.location.replace('/login');
+                return;
+            }
+
             if (savedEmployeeId) {
                 let localUser = usersList.find(u => 
                     u.employeeId?.toUpperCase() === savedEmployeeId.toUpperCase() ||
@@ -890,6 +907,9 @@ export const UserProvider = ({ children }) => {
         let normalizedId = employeeId?.trim()?.toUpperCase() || 'MP0108';
         if (normalizedId === 'MPO101') normalizedId = 'MP0108';
         if (normalizedId === 'MPO664') normalizedId = 'MP0664';
+        if (normalizedId === 'EMP001') {
+            sessionStorage.setItem('knome_intended_emp001', 'true');
+        }
 
         let localUser = usersList.find(u => 
             u.employeeId?.toUpperCase() === normalizedId ||
@@ -979,11 +999,16 @@ export const UserProvider = ({ children }) => {
         localStorage.removeItem('userProfile');
         localStorage.removeItem('knome_refresh');
         localStorage.removeItem('knome_employeeId');
+        sessionStorage.removeItem('knome_auth_pwd');
+        sessionStorage.removeItem('knome_sso_return_url');
+        sessionStorage.removeItem('knome_intended_emp001');
+
+        apiClient.clearCache();
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setIsLoggingOut(false);
 
         if (customRedirectUrl === false) {
-            setCurrentUser(null);
-            setIsAuthenticated(false);
-            setIsLoggingOut(false);
             if (typeof window !== 'undefined') {
                 sessionStorage.removeItem('knome_logging_out');
             }
@@ -1026,6 +1051,9 @@ export const UserProvider = ({ children }) => {
             return;
         }
         localStorage.setItem('knome_employeeId', user.employeeId);
+        if (user?.employeeId?.toUpperCase() === 'EMP001') {
+            sessionStorage.setItem('knome_intended_emp001', 'true');
+        }
         try {
             await authenticateUser(user);
         } catch (err) {
