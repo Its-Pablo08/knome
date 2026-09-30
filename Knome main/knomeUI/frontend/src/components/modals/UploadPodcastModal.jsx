@@ -11,6 +11,11 @@ const ALLOWED_EXTENSIONS = ['.mp3', '.wav', '.aac', '.ogg', '.m4a', '.webm', '.f
 export default function UploadPodcastModal({ isOpen, onClose }) {
     const { currentUser } = useUser();
     const { addToast } = useToast();
+    const isCurrentUserAdmin = ['SYSADM'].includes(currentUser?.role) ||
+        currentUser?.roleCode === 'SYSADM' ||
+        ['System Administrator', 'System Admin'].includes(currentUser?.roleName) ||
+        currentUser?.role === 'System Administrator' ||
+        currentUser?.role === 'System Admin';
 
     const [tab, setTab] = useState('upload');
     const [isRecording, setIsRecording] = useState(false);
@@ -312,7 +317,16 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
                 coverImageUrl = defaultCovers[categoryName] || defaultCovers.General;
             }
 
-            const currentAuthorId = currentUser?.id || currentUser?.userId;
+            const rawAuthorId = currentUser?.userId ?? currentUser?.id;
+            let numericAuthorId = null;
+            if (typeof rawAuthorId === 'number' && Number.isInteger(rawAuthorId) && rawAuthorId > 0) {
+                numericAuthorId = rawAuthorId;
+            } else if (typeof rawAuthorId === 'string' && /^\d+$/.test(rawAuthorId.trim())) {
+                const parsed = parseInt(rawAuthorId.trim(), 10);
+                if (parsed > 0) numericAuthorId = parsed;
+            }
+
+            const currentAuthorId = numericAuthorId || rawAuthorId;
             const durationSecs = parseDuration(duration) || recordingTimeRef.current || 1;
             const calculatedFileSizeMb = Math.max(1, Math.min(100, Math.ceil((audioFile?.size || 1024 * 1024) / (1024 * 1024))));
 
@@ -326,14 +340,75 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
                 categoryName: categoryName || 'General',
                 categoryId: null,
                 fileSizeMb: calculatedFileSizeMb,
-                uploaderUserId: currentAuthorId
+                uploaderUserId: numericAuthorId
             };
 
-            const createdRes = await podcastsApi.create(podcastData);
-            const createdPodcast = createdRes?.data || createdRes;
+            if (isCurrentUserAdmin) {
+                const createdRes = await podcastsApi.create(podcastData);
+                const createdPodcast = createdRes?.data || createdRes;
 
-            addToast("Podcast episode published successfully!", 'success');
-            window.dispatchEvent(new CustomEvent('podcast-published', { detail: { newPodcast: createdPodcast } }));
+                addToast("Podcast episode published successfully!", 'success');
+                window.dispatchEvent(new CustomEvent('podcast-published', { detail: { newPodcast: createdPodcast } }));
+            } else {
+                const authorName = currentUser?.fullName || currentUser?.name || 'Employee';
+                const authorAvatar = currentUser?.profilePhotoUrl || currentUser?.avatar || null;
+                const formattedDuration = duration || formatTime(durationSecs) || '00:00';
+
+                const pendingItem = {
+                    id: `pending_podcast_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                    mediaType: 'Podcast',
+                    title: title.trim(),
+                    description: description.trim(),
+                    thumbnail: coverImageUrl,
+                    audioUrl: audioUrl,
+                    duration: formattedDuration,
+                    category: categoryName || 'General',
+                    authorName: authorName,
+                    authorId: numericAuthorId || currentAuthorId,
+                    authorAvatar: authorAvatar,
+                    submittedDate: new Date().toISOString(),
+                    status: 'PendingApproval',
+                    podcastData: {
+                        ...podcastData,
+                        uploaderUserId: numericAuthorId || currentAuthorId
+                    },
+                    dto: {
+                        ...podcastData,
+                        uploaderUserId: numericAuthorId || currentAuthorId
+                    }
+                };
+
+                try {
+                    await mediaApi.addPendingApproval(pendingItem);
+                } catch (apiErr) {
+                    console.warn("Backend media pending submission fallback:", apiErr);
+                }
+
+                const existingPending = JSON.parse(localStorage.getItem('knome_pending_media_approvals') || '[]');
+                localStorage.setItem('knome_pending_media_approvals', JSON.stringify([pendingItem, ...existingPending]));
+                window.dispatchEvent(new CustomEvent('pending-media-updated', { detail: pendingItem }));
+
+                const adminNotif = {
+                    id: `notif_approval_${Date.now()}`,
+                    type: 'media_approval',
+                    category: 'System',
+                    text: `${authorName} uploaded podcast "${title.trim()}" awaiting your admin approval.`,
+                    senderName: authorName,
+                    senderAvatar: authorAvatar,
+                    senderUserId: numericAuthorId || currentAuthorId,
+                    createdDate: new Date().toISOString(),
+                    createdAt: new Date().toISOString(),
+                    targetUserId: 'admin',
+                    targetUrl: '/admin-console',
+                    unread: true,
+                    mediaType: 'Podcast',
+                    pendingId: pendingItem.id
+                };
+                const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
+                localStorage.setItem('knome_notifications', JSON.stringify([adminNotif, ...existingNotifs]));
+
+                addToast(`Podcast "${title.trim()}" submitted successfully! It has been sent to the Admin for approval before going live.`, 'success');
+            }
             
             setIsUploading(false);
             onClose();

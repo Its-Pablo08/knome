@@ -54,7 +54,13 @@ public static class ApplicationBuilderExtensions
             {
                 FileProvider = new PhysicalFileProvider(customStoragePath),
                 RequestPath = string.Empty,
-                ServeUnknownFileTypes = true
+                ServeUnknownFileTypes = true,
+                OnPrepareResponse = ctx =>
+                {
+                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
+                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Headers", "*");
+                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+                }
             });
         }
 
@@ -66,7 +72,13 @@ public static class ApplicationBuilderExtensions
             {
                 FileProvider = new PhysicalFileProvider(archiveStoragePath),
                 RequestPath = string.Empty,
-                ServeUnknownFileTypes = true
+                ServeUnknownFileTypes = true,
+                OnPrepareResponse = ctx =>
+                {
+                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
+                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Headers", "*");
+                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+                }
             });
         }
 
@@ -77,7 +89,13 @@ public static class ApplicationBuilderExtensions
         {
             FileProvider = new PhysicalFileProvider(wwwroot),
             RequestPath = string.Empty,
-            ServeUnknownFileTypes = true // allow .mp4, .mp3, .docx etc.
+            ServeUnknownFileTypes = true, // allow .mp4, .mp3, .docx etc.
+            OnPrepareResponse = ctx =>
+            {
+                ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
+                ctx.Context.Response.Headers.Append("Access-Control-Allow-Headers", "*");
+                ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+            }
         });
 
         // F-023: Rate Limiting

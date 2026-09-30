@@ -986,12 +986,15 @@ export default function AdminConsole() {
                 };
                 await apiClient.post('/videos', postDto).catch(() => {});
                 window.dispatchEvent(new CustomEvent('video-published'));
-            } else if (mediaItem.mediaType === 'Podcast' && mediaItem.podcastData) {
+            } else if (mediaItem.mediaType === 'Podcast' && (mediaItem.podcastData || mediaItem.dto)) {
+                const payload = mediaItem.podcastData || mediaItem.dto;
                 const postPodcast = {
-                    ...mediaItem.podcastData,
-                    uploaderUserId: targetAuthorId
+                    ...payload,
+                    uploaderUserId: numericAuthorId || targetAuthorId
                 };
-                await podcastsApi.create(postPodcast).catch(() => {});
+                await podcastsApi.create(postPodcast).catch((err) => {
+                    console.error("Failed to approve and publish podcast:", err);
+                });
                 window.dispatchEvent(new CustomEvent('podcast-published'));
             } else if (mediaItem.mediaType === 'Series' && mediaItem.seriesData) {
                 if (Array.isArray(mediaItem.customVideos)) {
@@ -1122,11 +1125,24 @@ export default function AdminConsole() {
                             : null;
                     const postDto = { ...m.dto, uploaderUserId: numericAuthorId };
                     await apiClient.post('/videos', postDto).catch(() => {});
+                } else if (m.mediaType === 'Podcast' && (m.podcastData || m.dto)) {
+                    const payload = m.podcastData || m.dto;
+                    const rawAuthorId = m.authorId || payload?.uploaderUserId;
+                    const numericAuthorId = (typeof rawAuthorId === 'number' && Number.isInteger(rawAuthorId) && rawAuthorId > 0)
+                        ? rawAuthorId
+                        : (typeof rawAuthorId === 'string' && /^\d+$/.test(rawAuthorId.trim()))
+                            ? parseInt(rawAuthorId.trim(), 10)
+                            : null;
+                    const postPodcast = { ...payload, uploaderUserId: numericAuthorId || rawAuthorId };
+                    await podcastsApi.create(postPodcast).catch((err) => {
+                        console.error("Failed to batch approve podcast:", err);
+                    });
                 }
                 await mediaApi.removePendingApproval(m.id).catch(() => {});
             } catch (e) {}
         }
         window.dispatchEvent(new CustomEvent('video-published'));
+        window.dispatchEvent(new CustomEvent('podcast-published'));
 
         showToast(`Successfully batch-approved all ${count} pending media submission${count === 1 ? '' : 's'}.`);
         setAuditTrail(prev => [

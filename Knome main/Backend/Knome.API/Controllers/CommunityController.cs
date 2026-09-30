@@ -221,11 +221,23 @@ public class CommunityController : KnomeControllerBase
         return CreatedAtAction(nameof(GetCommunityFiles), new { communityId }, ApiResponse<CommunityFileDto>.SuccessResponse(201, "Community file uploaded successfully.", file));
     }
 
-    [HttpDelete("{communityId:int}/files/{fileId}")]
+    [HttpDelete("{communityId:int}/files/{**fileId}")]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteCommunityFile(int communityId, string fileId)
     {
         await _communityService.DeleteCommunityFileAsync(communityId, fileId, GetCurrentUserId());
+        return Ok(ApiResponse.SuccessResponse(200, "Community file deleted successfully."));
+    }
+
+    [HttpDelete("{communityId:int}/files")]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeleteCommunityFileByQuery(int communityId, [FromQuery] string? id, [FromQuery] string? name)
+    {
+        var targetId = !string.IsNullOrWhiteSpace(id) ? id : name;
+        if (string.IsNullOrWhiteSpace(targetId))
+            throw new BadRequestException("File identifier is required.");
+            
+        await _communityService.DeleteCommunityFileAsync(communityId, targetId, GetCurrentUserId());
         return Ok(ApiResponse.SuccessResponse(200, "Community file deleted successfully."));
     }
 }

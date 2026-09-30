@@ -71,6 +71,18 @@ public class ExceptionHandlingMiddleware
                 ApiConstants.Messages.ValidationError,
                 valEx.Errors.Select(e => e.ErrorMessage).ToList()
             ),
+            InvalidOperationException invOpEx when invOpEx.Message.Contains("transient failure", StringComparison.OrdinalIgnoreCase)
+                                                || invOpEx.Message.Contains("EnableRetryOnFailure", StringComparison.OrdinalIgnoreCase)
+                                                || invOpEx.InnerException is Microsoft.Data.SqlClient.SqlException => (
+                StatusCodes.Status503ServiceUnavailable,
+                "The database is temporarily busy or reconnecting. Please retry shortly.",
+                null
+            ),
+            Microsoft.Data.SqlClient.SqlException => (
+                StatusCodes.Status503ServiceUnavailable,
+                "A database error occurred. Please try again later.",
+                null
+            ),
             InvalidOperationException invOpEx => (
                 StatusCodes.Status400BadRequest,
                 invOpEx.Message,

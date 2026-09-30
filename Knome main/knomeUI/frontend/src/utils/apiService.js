@@ -306,7 +306,7 @@ export const communitiesApi = {
     addMembers: (communityId, data) => apiClient.post(`/Communities/${communityId}/members`, data),
     getFiles: (communityId) => apiClient.get(`/Communities/${communityId}/files`),
     uploadFile: (communityId, fileData) => apiClient.post(`/Communities/${communityId}/files`, fileData),
-    deleteFile: (communityId, fileId) => apiClient.delete(`/Communities/${communityId}/files/${fileId}`),
+    deleteFile: (communityId, fileId) => apiClient.delete(`/Communities/${communityId}/files/${encodeURIComponent(fileId)}`),
 };
 
 /** Helper to resolve high-res cover banner & avatar photo for enterprise communities */
@@ -717,55 +717,53 @@ export const jobsApi = {
 export const mediaApi = {
     upload: (file, type) => mediaApi.uploadFile(file, type),
     /** POST /media/upload */
-    uploadFile: (file, type, onProgress) => {
-        return new Promise((resolve, reject) => {
-            const formData = new FormData();
-            formData.append('file', file);
-            if (type) formData.append('type', type);
+    uploadFile: async (file, type, onProgress) => {
+        try {
+            const res = await apiClient.uploadFile('/media/upload', file, type || 'doc');
+            return res;
+        } catch (fetchErr) {
+            console.warn('apiClient.uploadFile fallback to XHR:', fetchErr);
+            return new Promise((resolve, reject) => {
+                const formData = new FormData();
+                formData.append('file', file);
+                if (type) formData.append('type', type);
 
-            const host = (typeof window !== 'undefined' && window.location && window.location.hostname) ? window.location.hostname : 'localhost';
-            const protocol = (typeof window !== 'undefined' && window.location && window.location.protocol === 'https:') ? 'https:' : 'http:';
-            const uploadBase = apiClient.getBaseUrl ? apiClient.getBaseUrl() : `${protocol}//${host}:5096/api`;
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', `${uploadBase}/media/upload`, true);
-            
-            const token = localStorage.getItem('knome_jwt');
-            if (token) {
-                xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-            }
+                const host = (typeof window !== 'undefined' && window.location && window.location.hostname) ? window.location.hostname : 'localhost';
+                const uploadBase = apiClient.getBaseUrl ? apiClient.getBaseUrl() : `http://${host}:5096/api`;
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', `${uploadBase}/media/upload`, true);
+                
+                const token = localStorage.getItem('knome_jwt');
+                if (token) {
+                    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                }
 
-            if (onProgress && xhr.upload) {
-                xhr.upload.onprogress = (e) => {
-                    if (e.lengthComputable) {
-                        const percentComplete = Math.round((e.loaded / e.total) * 100);
-                        onProgress(percentComplete);
+                if (onProgress && xhr.upload) {
+                    xhr.upload.onprogress = (e) => {
+                        if (e.lengthComputable) {
+                            const percentComplete = Math.round((e.loaded / e.total) * 100);
+                            onProgress(percentComplete);
+                        }
+                    };
+                }
+
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const json = JSON.parse(xhr.responseText);
+                            resolve(json.data || json);
+                        } catch (err) {
+                            reject(new Error('Invalid JSON response'));
+                        }
+                    } else {
+                        reject(fetchErr || new Error(`Failed to upload file: ${xhr.statusText}`));
                     }
                 };
-            }
 
-            xhr.onload = () => {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    try {
-                        const json = JSON.parse(xhr.responseText);
-                        resolve(json.data);
-                    } catch (err) {
-                        reject(new Error('Invalid JSON response'));
-                    }
-                } else {
-                    let errMsg = xhr.statusText;
-                    try {
-                        const errJson = JSON.parse(xhr.responseText);
-                        errMsg = errJson.message || errJson.title || errJson.error || xhr.statusText;
-                    } catch (_) {
-                        if (xhr.responseText) errMsg = xhr.responseText;
-                    }
-                    reject(new Error(`Failed to upload file: ${errMsg}`));
-                }
-            };
-
-            xhr.onerror = () => reject(new Error('Network error during upload'));
-            xhr.send(formData);
-        });
+                xhr.onerror = () => reject(fetchErr || new Error('Network error during upload'));
+                xhr.send(formData);
+            });
+        }
     },
 
     /** GET /api/media/pending */

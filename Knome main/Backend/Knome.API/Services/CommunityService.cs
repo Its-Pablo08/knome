@@ -996,7 +996,16 @@ public class CommunityService : ICommunityService
         var filePath = GetCommunityFilesPath(communityId);
         if (!File.Exists(filePath))
         {
-            return new List<CommunityFileDto>();
+            var localCommDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "community_files");
+            var localFilePath = Path.Combine(localCommDir, $"community_{communityId}_files.json");
+            if (File.Exists(localFilePath))
+            {
+                filePath = localFilePath;
+            }
+            else
+            {
+                return new List<CommunityFileDto>();
+            }
         }
 
         try
@@ -1116,30 +1125,61 @@ public class CommunityService : ICommunityService
 
     public async Task DeleteCommunityFileAsync(int communityId, string fileId, int currentUserId)
     {
-        var filePath = GetCommunityFilesPath(communityId);
+        var paths = new List<string> { GetCommunityFilesPath(communityId) };
+        var localCommDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "community_files");
+        var localFilePath = Path.Combine(localCommDir, $"community_{communityId}_files.json");
+        if (!paths.Contains(localFilePath, StringComparer.OrdinalIgnoreCase))
+        {
+            paths.Add(localFilePath);
+        }
+
+        var decodedFileId = Uri.UnescapeDataString(fileId ?? string.Empty).Trim();
+
         lock (_commFilesLock)
         {
-            if (File.Exists(filePath))
+            foreach (var filePath in paths)
             {
-                try
+                if (File.Exists(filePath))
                 {
-                    var json = File.ReadAllText(filePath);
-                    var list = JsonSerializer.Deserialize<List<CommunityFileDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<CommunityFileDto>();
-                    var filtered = list.Where(f => !string.Equals(f.Id?.Trim(), fileId?.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
-                    var updatedJson = JsonSerializer.Serialize(filtered, new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(filePath, updatedJson);
-
-                    // Also mirror to local wwwroot
-                    var localCommDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "community_files");
-                    var localFilePath = Path.Combine(localCommDir, $"community_{communityId}_files.json");
-                    if (filePath != localFilePath && File.Exists(localFilePath))
+                    try
                     {
-                        try { File.WriteAllText(localFilePath, updatedJson); } catch {}
+                        var json = File.ReadAllText(filePath);
+                        var list = JsonSerializer.Deserialize<List<CommunityFileDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<CommunityFileDto>();
+                        
+                        var matching = list.Where(f => 
+                            string.Equals(f.Id?.Trim(), fileId?.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(f.Id?.Trim(), decodedFileId, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(f.Name?.Trim(), fileId?.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(f.Name?.Trim(), decodedFileId, StringComparison.OrdinalIgnoreCase)
+                        ).ToList();
+
+                        foreach (var m in matching)
+                        {
+                            if (!string.IsNullOrWhiteSpace(m.Url) && m.Url.StartsWith("/uploads/"))
+                            {
+                                try
+                                {
+                                    var relPath = m.Url.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+                                    var diskPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relPath);
+                                    if (File.Exists(diskPath)) File.Delete(diskPath);
+                                }
+                                catch { }
+                            }
+                        }
+
+                        var filtered = list.Where(f => 
+                            !string.Equals(f.Id?.Trim(), fileId?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                            !string.Equals(f.Id?.Trim(), decodedFileId, StringComparison.OrdinalIgnoreCase) &&
+                            !string.Equals(f.Name?.Trim(), fileId?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                            !string.Equals(f.Name?.Trim(), decodedFileId, StringComparison.OrdinalIgnoreCase)
+                        ).ToList();
+                        var updatedJson = JsonSerializer.Serialize(filtered, new JsonSerializerOptions { WriteIndented = true });
+                        File.WriteAllText(filePath, updatedJson);
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "Failed deleting community file {FileId} for community {CommunityId}", fileId, communityId);
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Failed deleting community file {FileId} for community {CommunityId} in {Path}", fileId, communityId, filePath);
+                    }
                 }
             }
         }

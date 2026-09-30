@@ -726,7 +726,9 @@ export default function Navbar() {
             let apiNotifs = [];
             if (Array.isArray(res)) {
                 apiNotifs = res.map(mapNotificationItem);
-            } else if (res?.items) {
+            } else if (Array.isArray(res?.data)) {
+                apiNotifs = res.data.map(mapNotificationItem);
+            } else if (res?.items && Array.isArray(res.items)) {
                 apiNotifs = res.items.map(mapNotificationItem);
             }
             // Merge local community invite notifications + local video/generic notifications
@@ -738,8 +740,7 @@ export default function Navbar() {
             const combined = [...freshCommunity, ...freshGeneric, ...apiNotifs];
             setAllNotifs(sortNotifsDescending(combined));
         } catch (error) {
-            console.warn('Notifications fetch deferred:', error?.message || error);
-            // Fallback: show all local notifs sorted newest first
+            // Fallback: show all local notifs sorted newest first without polluting console
             setAllNotifs(sortNotifsDescending([...getLocalCommunityNotifs(), ...getLocalGenericNotifs()]));
         }
     };

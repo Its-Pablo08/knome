@@ -64,7 +64,15 @@ public static class ServiceCollectionExtensions
     private static void AddDatabase(IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection");
-        services.AddDbContext<KnomeDbContext>(options => options.UseSqlServer(connectionString));
+        services.AddDbContext<KnomeDbContext>(options =>
+            options.UseSqlServer(connectionString, sqlOptions =>
+            {
+                sqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(30),
+                    errorNumbersToAdd: null);
+                sqlOptions.CommandTimeout(60);
+            }));
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
     }
 

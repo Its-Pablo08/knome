@@ -265,6 +265,7 @@ export default function CommunityView() {
     const [isUploadingFile, setIsUploadingFile] = useState(false);
     const [previewModalFile, setPreviewModalFile] = useState(null);
     const [activePdfBlobUrl, setActivePdfBlobUrl] = useState(null);
+    const [activeFilePreviewUrl, setActiveFilePreviewUrl] = useState(null);
     const [previewZoom, setPreviewZoom] = useState(1);
     const [previewTab, setPreviewTab] = useState('viewer'); // 'viewer' | 'summary'
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -771,6 +772,26 @@ export default function CommunityView() {
         });
     };
 
+    const deleteFileBlobFromIndexedDb = (fileId) => {
+        return new Promise((resolve) => {
+            if (!fileId) return resolve(false);
+            try {
+                const request = indexedDB.open('KnomeCommunityFilesDB', 1);
+                request.onsuccess = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('files')) return resolve(false);
+                    const tx = db.transaction('files', 'readwrite');
+                    tx.objectStore('files').delete(String(fileId));
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = () => resolve(false);
+                };
+                request.onerror = () => resolve(false);
+            } catch {
+                resolve(false);
+            }
+        });
+    };
+
     useEffect(() => {
         let isMounted = true;
         let createdBlobUrl = null;
@@ -790,21 +811,37 @@ export default function CommunityView() {
         const loadPreviewUrl = async () => {
             if (!previewModalFile) {
                 setActivePdfBlobUrl(null);
+                setActiveFilePreviewUrl(null);
                 return;
             }
             
-            let rawUrl = previewModalFile.url;
+            let rawUrl = previewModalFile.url || previewModalFile.Url || previewModalFile.fileUrl;
 
             // Try to load exact uploaded file from IndexedDB first
-            const idbUrl = await getFileBlobFromIndexedDb(previewModalFile.id);
-            if (idbUrl) {
-                rawUrl = idbUrl;
+            if (previewModalFile.id) {
+                try {
+                    const idbUrl = await getFileBlobFromIndexedDb(previewModalFile.id);
+                    if (idbUrl) {
+                        rawUrl = idbUrl;
+                    }
+                } catch (_) {}
             }
 
             if (isMounted) {
-                const blobUrl = getPdfBlobUrl(rawUrl || SAMPLE_PDF_DATA_URL);
-                createdBlobUrl = blobUrl;
-                setActivePdfBlobUrl(blobUrl);
+                const ext = (previewModalFile.extension || previewModalFile.name?.split('.').pop() || '').toLowerCase().trim();
+                const isPdf = ext === 'pdf' || previewModalFile.name?.toLowerCase().endsWith('.pdf');
+                
+                let resolvedUrl = rawUrl;
+                if (isPdf) {
+                    const blobUrl = getPdfBlobUrl(rawUrl || SAMPLE_PDF_DATA_URL);
+                    createdBlobUrl = blobUrl;
+                    setActivePdfBlobUrl(blobUrl);
+                    resolvedUrl = blobUrl;
+                } else if (rawUrl && rawUrl !== '#') {
+                    resolvedUrl = resolveMediaUrl(rawUrl);
+                }
+
+                setActiveFilePreviewUrl(resolvedUrl);
             }
         };
 
@@ -823,19 +860,20 @@ export default function CommunityView() {
 
     // Smart AI File Type & Category Auto-Detector
     const detectFileTypeAndCategory = (file) => {
-        if (!file || !file.name) return { category: 'Document', ext: 'pdf' };
+        if (!file) return { category: 'Document', ext: 'pdf' };
         
-        const nameParts = file.name.split('.');
-        const ext = nameParts.length > 1 ? nameParts.pop().toLowerCase() : '';
-        const mimeType = (file.type || '').toLowerCase();
+        const fileName = typeof file === 'string' ? file : (file.name || '');
+        const nameParts = fileName.split('.');
+        const ext = nameParts.length > 1 ? nameParts.pop().toLowerCase().trim() : '';
+        const mimeType = ((typeof file === 'object' && file.type) || '').toLowerCase();
 
         // 1. Image
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'tiff', 'ico'].includes(ext) || mimeType.startsWith('image/')) {
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'tiff', 'ico', 'avif'].includes(ext) || mimeType.startsWith('image/')) {
             return { category: 'Image', ext: ext || 'png' };
         }
 
-        // 2. Audio
-        if (['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma'].includes(ext) || mimeType.startsWith('audio/')) {
+        // 2. Audio (Automatic detection for MP3, WAV, AAC, FLAC, OGG, M4A, etc.)
+        if (['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma', 'opus', 'weba', 'm4p'].includes(ext) || mimeType.startsWith('audio/')) {
             return { category: 'Audio', ext: ext || 'mp3' };
         }
 
@@ -849,13 +887,13 @@ export default function CommunityView() {
     };
 
     const getFileFormatConfig = (file) => {
-        const ext = (file?.extension || (file?.name ? file.name.split('.').pop() : '') || '').toLowerCase();
+        const ext = (file?.extension || (file?.name ? file.name.split('.').pop() : '') || '').toLowerCase().trim();
         const cat = file?.category || 'Document';
 
-        if (cat === 'Audio' || ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma'].includes(ext)) {
+        if (cat === 'Audio' || ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma', 'opus', 'weba', 'm4p'].includes(ext)) {
             return {
                 badge: (ext || 'MP3').toUpperCase(),
-                label: 'Digital Audio',
+                label: 'Digital Audio Track',
                 icon: 'audiotrack',
                 color: 'text-violet-600 dark:text-violet-400',
                 border: 'border-violet-200 dark:border-violet-800/60',
@@ -988,37 +1026,45 @@ export default function CommunityView() {
         setIsUploadingFile(true);
         try {
             const detected = detectFileTypeAndCategory(selectedUploadFile);
-            const fileCategory = uploadFileCategory || detected.category;
-            const fileExt = detected.ext;
+            const isAudioExt = detected.category === 'Audio' || ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma', 'opus', 'weba', 'm4p'].includes(detected.ext);
+            const fileCategory = isAudioExt ? 'Audio' : (uploadFileCategory || detected.category);
+            const fileExt = detected.ext || (isAudioExt ? 'mp3' : 'doc');
 
             const rawSizeBytes = selectedUploadFile?.size || 45000;
             const formattedSize = rawSizeBytes > 1048576 
                 ? `${(rawSizeBytes / 1048576).toFixed(1)} MB` 
                 : `${Math.round(rawSizeBytes / 1024)} KB`;
 
+            const fileId = Date.now();
             let backendFileUrl = null;
+
             if (selectedUploadFile instanceof File) {
+                const uploadMediaType = fileCategory === 'Image' ? 'image' : (fileCategory === 'Audio' ? 'audio' : (fileCategory === 'Video' ? 'video' : 'doc'));
                 try {
-                    const uploadMediaType = detected.category === 'Image' ? 'image' : (detected.category === 'Audio' ? 'audio' : (detected.category === 'Video' ? 'video' : 'doc'));
-                    const uploadResult = await mediaApi.uploadFile(selectedUploadFile, uploadMediaType);
+                    const uploadResult = await apiClient.uploadFile('/media/upload', selectedUploadFile, uploadMediaType);
                     backendFileUrl = uploadResult?.url || uploadResult?.fileUrl || uploadResult?.data?.url;
                 } catch (upErr) {
-                    console.warn('Backend file upload fallback to local:', upErr);
+                    console.warn('apiClient.uploadFile failed, trying mediaApi fallback:', upErr);
+                    try {
+                        const uploadResult = await mediaApi.uploadFile(selectedUploadFile, uploadMediaType);
+                        backendFileUrl = uploadResult?.url || uploadResult?.fileUrl || uploadResult?.data?.url;
+                    } catch (fbErr) {
+                        console.warn('Backend file upload fallback to local:', fbErr);
+                    }
                 }
             }
 
             let fileDataUrl = null;
             if (selectedUploadFile && !backendFileUrl) {
-                // Only create dataUrl for small files to prevent browser freezing
+                // Only create dataUrl for offline/fallback small files
                 if (selectedUploadFile.size < 4 * 1024 * 1024) {
                     fileDataUrl = await readFileAsDataUrl(selectedUploadFile);
                 }
             }
 
-            const fileId = Date.now();
             const finalUrl = backendFileUrl ? resolveMediaUrl(backendFileUrl) : (fileDataUrl || '#');
 
-            // Save blob to IndexedDB only if local dataUrl was needed
+            // Save blob to IndexedDB only if local dataUrl fallback was needed
             if (fileDataUrl) {
                 await saveFileBlobToIndexedDb(fileId, fileDataUrl);
             }
@@ -1031,7 +1077,7 @@ export default function CommunityView() {
                 category: fileCategory,
                 extension: fileExt,
                 size: formattedSize,
-                uploadedBy: currentUser?.name || currentUser?.fullName || 'Member',
+                uploadedBy: currentUser?.fullName || currentUser?.name || 'Member',
                 uploadedByUserId: currentUser?.id || currentUser?.userId || null,
                 uploadedAt: new Date().toISOString(),
                 url: backendFileUrl || finalUrl, // Keep exact URL in memory state
@@ -1072,6 +1118,18 @@ export default function CommunityView() {
         }
     };
 
+    const canDeleteFile = (file) => {
+        if (isAdmin || isCreator) return true;
+        if (!currentUser || !file) return false;
+        const currentId = String(currentUser.id ?? currentUser.userId ?? '');
+        const currentName = String(currentUser.fullName || currentUser.name || '').toLowerCase().trim();
+        const uploaderId = String(file.uploadedByUserId ?? file.UploadedByUserId ?? file.uploaderId ?? '');
+        const uploaderName = String(file.uploadedBy || file.UploadedBy || '').toLowerCase().trim();
+        if (currentId && uploaderId && currentId === uploaderId) return true;
+        if (currentName && uploaderName && (currentName === uploaderName || currentName.includes(uploaderName) || uploaderName.includes(currentName))) return true;
+        return false;
+    };
+
     const handleDeleteFile = async (fileId, fileName) => {
         const ok = await confirm({
             title: 'Delete Community File',
@@ -1089,11 +1147,18 @@ export default function CommunityView() {
         } catch (delErr) {
             console.warn('Backend file deletion fallback:', delErr);
         }
-        const updated = filesList.filter(f => String(f.id).trim() !== String(fileId).trim());
+        try {
+            await deleteFileBlobFromIndexedDb(fileId);
+        } catch (_) {}
+
+        const updated = filesList.filter(f => String(f.id).trim() !== String(fileId).trim() && (!fileName || f.name !== fileName));
         setFilesList(updated);
         safeSetStorage(savedFilesKey, updated);
+        if (previewModalFile && (String(previewModalFile.id) === String(fileId) || previewModalFile.name === fileName)) {
+            setPreviewModalFile(null);
+        }
         window.dispatchEvent(new CustomEvent('community-files-updated', { detail: { communityId: targetId } }));
-        showToast(`Deleted ${fileName || 'file'}`, 'info');
+        showToast(`Deleted ${fileName || 'file'} successfully`, 'info');
     };
 
     // Community Creator check
@@ -1617,15 +1682,15 @@ export default function CommunityView() {
             const localFiles = JSON.parse(localStorage.getItem(savedFilesKey) || '[]');
 
             // Prioritize backend files from server if available so all users see uploaded files!
-            const rawApiFiles = Array.isArray(apiFiles) ? apiFiles : (Array.isArray(apiFiles?.data) ? apiFiles.data : []);
+            const hasServerFiles = apiFiles !== null && apiFiles !== undefined;
+            const rawApiFiles = Array.isArray(apiFiles) ? apiFiles : (Array.isArray(apiFiles?.data) ? apiFiles.data : null);
             let combinedSource = localFiles;
-            if (rawApiFiles.length > 0) {
-                const map = new Map();
-                rawApiFiles.forEach(f => {
+            if (hasServerFiles && rawApiFiles !== null) {
+                combinedSource = rawApiFiles.map(f => {
                     const ext = (f.extension || f.Extension || (f.name || f.Name || '').split('.').pop() || '').toLowerCase();
                     let cat = f.category || f.Category || 'Document';
                     if (['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma'].includes(ext)) cat = 'Audio';
-                    const fileObj = {
+                    return {
                         id: String(f.id || f.Id || Date.now()),
                         name: f.name || f.Name || 'Document',
                         category: cat,
@@ -1637,15 +1702,7 @@ export default function CommunityView() {
                         url: f.url || f.Url || '#',
                         downloadCount: f.downloadCount || f.DownloadCount || 0
                     };
-                    map.set(String(fileObj.id).trim(), fileObj);
                 });
-                localFiles.forEach(f => {
-                    const fid = String(f.id).trim();
-                    if (!map.has(fid) && f.url && (f.url.startsWith('http') || f.url.startsWith('/uploads'))) {
-                        map.set(fid, f);
-                    }
-                });
-                combinedSource = Array.from(map.values());
             }
 
             // Rehydrate files: if IndexedDB has the blob, restore it; otherwise ensure valid PDF URL
@@ -3122,29 +3179,90 @@ export default function CommunityView() {
     // ─────────────────────────────────────────
     const handleOpenFile = async (file) => {
         if (!file) return;
-        let fileUrl = file.url;
-        if (file.hasIndexedDb || file.id) {
-            try {
-                const idbBlob = await getFileBlobFromIndexedDb(file.id);
-                if (idbBlob) fileUrl = idbBlob;
-            } catch (_) {}
-        }
-        const resolved = resolveMediaUrl(fileUrl);
-        if (!resolved || resolved === '#') {
-            showToast('File URL is not available.', 'warning');
-            return;
-        }
-        window.open(resolved, '_blank', 'noopener,noreferrer');
+        setPreviewModalFile(file);
     };
 
-    const handleDownloadFile = (file) => {
-        handleOpenFile(file);
+    const handleDownloadFile = async (e, file) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (!file) return;
+        try {
+            showToast(`Preparing download for ${file.name || 'file'}...`, 'info');
+            let fileUrl = file.url || file.Url || file.fileUrl;
+            if (file.hasIndexedDb || file.id) {
+                try {
+                    const idbBlob = await getFileBlobFromIndexedDb(file.id);
+                    if (idbBlob) fileUrl = idbBlob;
+                } catch (_) {}
+            }
+            let resolved = fileUrl ? resolveMediaUrl(fileUrl) : null;
+            if (!resolved || resolved === '#') {
+                if (file.extension === 'pdf' || file.name?.toLowerCase().endsWith('.pdf')) {
+                    resolved = SAMPLE_PDF_DATA_URL;
+                } else {
+                    showToast('File download URL is not available.', 'warning');
+                    return;
+                }
+            }
+
+            // For local data/blob URLs, trigger direct download anchor
+            if (resolved.startsWith('data:') || resolved.startsWith('blob:')) {
+                const link = document.createElement('a');
+                link.href = resolved;
+                link.download = file.name || 'download';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showToast(`Downloaded ${file.name}`, 'success');
+                return;
+            }
+
+            // Fetch as blob to guarantee cross-origin file download with correct file name
+            try {
+                const resp = await fetch(resolved, { mode: 'cors' });
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    const blobUrl = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = file.name || 'download';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
+                    showToast(`Downloaded ${file.name}`, 'success');
+                    return;
+                }
+            } catch (fetchErr) {
+                console.warn('Direct blob fetch failed, falling back to direct anchor download:', fetchErr);
+            }
+
+            // Fallback: direct anchor with download attribute
+            const link = document.createElement('a');
+            link.href = resolved;
+            link.download = file.name || 'download';
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast(`Downloaded ${file.name}`, 'success');
+        } catch (err) {
+            console.error('Download error:', err);
+            showToast('Failed to download file.', 'error');
+        }
     };
 
     const fileCategoryCounts = useMemo(() => {
-        const counts = { All: filesList.length, Document: 0, Image: 0, Video: 0 };
+        const counts = { All: filesList.length, Document: 0, Image: 0, Video: 0, Audio: 0 };
         filesList.forEach(f => {
-            if (f.category === 'Image') {
+            const ext = (f.extension || (f.name ? f.name.split('.').pop() : '') || '').toLowerCase();
+            const isAudio = f.category === 'Audio' || ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma'].includes(ext);
+            if (isAudio) {
+                counts.Audio++;
+            } else if (f.category === 'Image') {
                 counts.Image++;
             } else if (f.category === 'Video') {
                 counts.Video++;
@@ -3177,8 +3295,18 @@ export default function CommunityView() {
 
     const filteredFiles = useMemo(() => {
         let list = filesList.filter(f => {
-            const matchesCat = fileCategoryFilter === 'All' || 
-                (fileCategoryFilter === 'Document' ? (f.category === 'Document' || f.category === 'Archive' || f.category === 'Code') : f.category === fileCategoryFilter);
+            const ext = (f.extension || (f.name ? f.name.split('.').pop() : '') || '').toLowerCase();
+            const isAudio = f.category === 'Audio' || ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma'].includes(ext);
+            let matchesCat = true;
+            if (fileCategoryFilter === 'Audio') {
+                matchesCat = isAudio;
+            } else if (fileCategoryFilter === 'Video') {
+                matchesCat = (f.category === 'Video' || ['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi'].includes(ext)) && !isAudio;
+            } else if (fileCategoryFilter === 'Image') {
+                matchesCat = f.category === 'Image' || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+            } else if (fileCategoryFilter === 'Document') {
+                matchesCat = !isAudio && f.category !== 'Video' && f.category !== 'Image';
+            }
             const q = fileSearchQuery.trim().toLowerCase();
             const matchesQuery = !q || 
                 (f.name && f.name.toLowerCase().includes(q)) || 
@@ -4614,6 +4742,7 @@ export default function CommunityView() {
                                             { id: 'Document', label: 'Documents', icon: 'description', count: fileCategoryCounts.Document },
                                             { id: 'Image', label: 'Images', icon: 'image', count: fileCategoryCounts.Image },
                                             { id: 'Video', label: 'Videos', icon: 'movie', count: fileCategoryCounts.Video },
+                                            { id: 'Audio', label: 'Audio', icon: 'audiotrack', count: fileCategoryCounts.Audio },
                                         ].map(cat => {
                                             const isSelected = fileCategoryFilter === cat.id;
                                             return (
@@ -4756,22 +4885,22 @@ export default function CommunityView() {
                                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                                             {filteredFiles.slice(0, visibleFileCount).map(file => {
                                                 const cfg = getFileFormatConfig(file);
+                                                const isAudioFile = file.category === 'Audio' || ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma'].includes(file.extension?.toLowerCase());
                                                 const isVideoFile = file.category === 'Video' || ['mp4', 'webm', 'mov'].includes(file.extension?.toLowerCase());
                                                 return (
                                                     <tr key={file.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors group">
                                                         <td className="py-3.5 px-4">
                                                             <div className="flex items-center gap-3">
-                                                                <div onClick={() => handleOpenFile(file)} className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${cfg.bg} ${cfg.border} ${cfg.color} cursor-pointer hover:opacity-80 transition-opacity`} title="Open File">
+                                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${cfg.bg} ${cfg.border} ${cfg.color}`} title={cfg.label}>
                                                                     <span className="material-symbols-outlined text-[22px]">{cfg.icon}</span>
                                                                 </div>
                                                                 <div className="min-w-0">
-                                                                    <button 
-                                                                        onClick={() => handleOpenFile(file)}
-                                                                        className="font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate max-w-xs sm:max-w-md block text-left text-sm cursor-pointer"
+                                                                    <span 
+                                                                        className="font-bold text-slate-900 dark:text-white truncate max-w-xs sm:max-w-md block text-left text-sm select-text"
                                                                         title={file.name}
                                                                     >
                                                                         <HighlightText text={file.name} query={fileSearchQuery} />
-                                                                    </button>
+                                                                    </span>
                                                                     <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
                                                                         <span className={`px-1.5 py-0.2 rounded font-bold uppercase text-[9px] ${cfg.badgeBg}`}>{cfg.badge}</span>
                                                                         <span>•</span>
@@ -4804,38 +4933,28 @@ export default function CommunityView() {
                                                         </td>
                                                         <td className="py-3.5 px-4 text-right">
                                                             <div className="flex items-center justify-end gap-1">
-                                                                {isVideoFile && (
-                                                                    <button
-                                                                        onClick={() => handleOpenFile(file)}
-                                                                        className="px-2.5 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all flex items-center gap-1 cursor-pointer"
-                                                                        title="Play Video Media"
-                                                                    >
-                                                                        <span className="material-symbols-outlined text-[16px]">play_circle</span>
-                                                                        <span className="hidden xl:inline">Play</span>
-                                                                    </button>
-                                                                )}
                                                                 <button
-                                                                    onClick={() => handleOpenFile(file)}
+                                                                    onClick={() => setPreviewModalFile(file)}
                                                                     className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition-colors cursor-pointer"
-                                                                    title="Open File"
+                                                                    title="View File"
                                                                 >
                                                                     <span className="material-symbols-outlined text-[18px]">visibility</span>
                                                                 </button>
-                                                                {file.url && (
-                                                                    <a
-                                                                        href={resolveMediaUrl(file.url)}
-                                                                        download={file.name}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
+                                                                {(file.url || file.Url || file.fileUrl || file.id) && (
+                                                                    <button
+                                                                        onClick={(e) => handleDownloadFile(e, file)}
                                                                         className="p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition-colors cursor-pointer"
                                                                         title="Download File"
                                                                     >
                                                                         <span className="material-symbols-outlined text-[18px]">download</span>
-                                                                    </a>
+                                                                    </button>
                                                                 )}
-                                                                {(isAdmin || String(file.uploadedBy) === String(currentUser?.name)) && (
+                                                                {canDeleteFile(file) && (
                                                                     <button
-                                                                        onClick={() => handleDeleteFile(file.id, file.name)}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleDeleteFile(file.id, file.name);
+                                                                        }}
                                                                         className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
                                                                         title="Delete File"
                                                                     >
@@ -4855,13 +4974,14 @@ export default function CommunityView() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                                     {filteredFiles.slice(0, visibleFileCount).map(file => {
                                         const cfg = getFileFormatConfig(file);
+                                        const isAudioFile = file.category === 'Audio' || ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma', 'opus', 'weba', 'm4p'].includes(file.extension?.toLowerCase());
                                         const isVideoFile = file.category === 'Video' || ['mp4', 'webm', 'mov'].includes(file.extension?.toLowerCase());
                                         return (
-                                            <div key={file.id} className="glass bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-5 flex flex-col justify-between hover:border-indigo-400 dark:hover:border-indigo-600/60 hover:shadow-md transition-all group">
-                                                <div onClick={() => handleOpenFile(file)} className="cursor-pointer">
+                                            <div key={file.id} className="glass bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-5 flex flex-col justify-between hover:shadow-md transition-all group">
+                                                <div>
                                                     {/* Top Row: Format Badge & Category Tag */}
                                                     <div className="flex items-start justify-between gap-3 mb-4">
-                                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${cfg.bg} ${cfg.border} ${cfg.color} shadow-sm group-hover:scale-105 transition-transform`}>
+                                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${cfg.bg} ${cfg.border} ${cfg.color} shadow-sm`}>
                                                             <span className="material-symbols-outlined text-[28px]">{cfg.icon}</span>
                                                         </div>
                                                         <div className="flex flex-col items-end gap-1">
@@ -4875,7 +4995,7 @@ export default function CommunityView() {
                                                     </div>
 
                                                     {/* Title & Metadata */}
-                                                    <h4 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-2 leading-snug" title={file.name}>
+                                                    <h4 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-2 mb-2 leading-snug select-text" title={file.name}>
                                                         <HighlightText text={file.name} query={fileSearchQuery} />
                                                     </h4>
                                                     
@@ -4898,38 +5018,28 @@ export default function CommunityView() {
                                                     </div>
 
                                                     <div className="flex items-center gap-1 shrink-0">
-                                                        {isVideoFile && (
-                                                            <button
-                                                                onClick={() => handleOpenFile(file)}
-                                                                className="px-2 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all flex items-center gap-1 cursor-pointer"
-                                                                title="Play Video Media"
-                                                            >
-                                                                <span className="material-symbols-outlined text-[16px]">play_circle</span>
-                                                                <span>Play</span>
-                                                            </button>
-                                                        )}
                                                         <button
-                                                            onClick={() => handleOpenFile(file)}
+                                                            onClick={() => setPreviewModalFile(file)}
                                                             className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition-colors cursor-pointer"
-                                                            title="Open File"
+                                                            title="View File"
                                                         >
                                                             <span className="material-symbols-outlined text-[18px]">visibility</span>
                                                         </button>
-                                                        {file.url && (
-                                                            <a
-                                                                href={resolveMediaUrl(file.url)}
-                                                                download={file.name}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
+                                                        {(file.url || file.Url || file.fileUrl || file.id) && (
+                                                            <button
+                                                                onClick={(e) => handleDownloadFile(e, file)}
                                                                 className="p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition-colors cursor-pointer"
                                                                 title="Download File"
                                                             >
                                                                 <span className="material-symbols-outlined text-[18px]">download</span>
-                                                            </a>
+                                                            </button>
                                                         )}
-                                                        {(isAdmin || String(file.uploadedBy) === String(currentUser?.name)) && (
+                                                        {canDeleteFile(file) && (
                                                             <button
-                                                                onClick={() => handleDeleteFile(file.id, file.name)}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteFile(file.id, file.name);
+                                                                }}
                                                                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
                                                                 title="Delete File"
                                                             >
@@ -5359,7 +5469,7 @@ export default function CommunityView() {
                                             </p>
                                         </div>
                                         <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
-                                            {['PDF', 'DOCX', 'XLSX', 'PPTX', 'PNG/JPG', 'MP4'].map(tag => (
+                                            {['PDF', 'DOCX', 'XLSX', 'PPTX', 'MP3', 'PNG/JPG', 'MP4'].map(tag => (
                                                 <span key={tag} className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                                                     {tag}
                                                 </span>
@@ -5668,20 +5778,33 @@ export default function CommunityView() {
             )}
             {/* Document / PDF / Multi-Format Preview Modal */}
             {previewModalFile && (() => {
-                const ext = (previewModalFile.extension || previewModalFile.name?.split('.').pop() || '').toLowerCase();
+                const ext = (previewModalFile.extension || previewModalFile.name?.split('.').pop() || '').toLowerCase().trim();
+                const isAudio = ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma', 'opus', 'weba', 'm4p'].includes(ext) || previewModalFile.category === 'Audio';
                 const isPdf = ext === 'pdf';
-                const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext) || previewModalFile.category === 'Image';
-                const isVideo = ['mp4', 'webm', 'ogg', 'mov', 'm4v'].includes(ext) || previewModalFile.category === 'Video';
-                const isOfficeDoc = ['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt'].includes(ext);
+                const isImage = (['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'avif'].includes(ext) || previewModalFile.category === 'Image') && !isAudio;
+                const isVideo = (['mp4', 'webm', 'ogg', 'mov', 'm4v'].includes(ext) || previewModalFile.category === 'Video') && !isAudio;
+                const isOfficeDoc = ['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt'].includes(ext) && !isAudio;
                 const isWord = ['docx', 'doc'].includes(ext);
                 const isExcel = ['xlsx', 'xls', 'csv'].includes(ext);
                 const isPowerPoint = ['pptx', 'ppt'].includes(ext);
-                const isArchive = ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext) || previewModalFile.category === 'Archive';
+                const isArchive = (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext) || previewModalFile.category === 'Archive') && !isAudio;
                 const isCode = ['js', 'jsx', 'ts', 'tsx', 'json', 'sql', 'py', 'html', 'css', 'xml', 'md', 'txt'].includes(ext) || previewModalFile.category === 'Code';
 
-                const displayUrl = activePdfBlobUrl || (previewModalFile.url && previewModalFile.url !== '#' ? previewModalFile.url : (isPdf ? SAMPLE_PDF_DATA_URL : null));
+                const candidateUrl = (previewModalFile.url && previewModalFile.url !== '#')
+                    ? previewModalFile.url
+                    : ((previewModalFile.Url && previewModalFile.Url !== '#')
+                        ? previewModalFile.Url
+                        : ((previewModalFile.fileUrl && previewModalFile.fileUrl !== '#')
+                            ? previewModalFile.fileUrl
+                            : null));
+                const rawDisplayUrl = (activeFilePreviewUrl && activeFilePreviewUrl !== '#')
+                    ? activeFilePreviewUrl
+                    : (candidateUrl || (isPdf ? (activePdfBlobUrl || SAMPLE_PDF_DATA_URL) : null));
+                const displayUrl = rawDisplayUrl ? resolveMediaUrl(rawDisplayUrl) : (isPdf ? SAMPLE_PDF_DATA_URL : null);
 
-                const docTypeBadgeColor = isPdf
+                const docTypeBadgeColor = isAudio
+                    ? 'bg-violet-500/10 text-violet-500 border-violet-500/20'
+                    : isPdf
                     ? 'bg-red-500/10 text-red-500 border-red-500/20'
                     : isWord
                     ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
@@ -5697,7 +5820,9 @@ export default function CommunityView() {
                     ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
                     : 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20';
 
-                const docIcon = isPdf
+                const docIcon = isAudio
+                    ? 'audiotrack'
+                    : isPdf
                     ? 'picture_as_pdf'
                     : isWord
                     ? 'description'
@@ -5810,15 +5935,14 @@ export default function CommunityView() {
 
                                     {/* Download Document Button */}
                                     {displayUrl && (
-                                        <a
-                                            href={displayUrl}
-                                            download={previewModalFile.name}
-                                            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer text-decoration-none shadow-md shadow-indigo-600/20"
+                                        <button
+                                            onClick={(e) => handleDownloadFile(e, previewModalFile)}
+                                            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/20"
                                             title="Download File"
                                         >
                                             <span className="material-symbols-outlined text-[16px]">download</span>
                                             <span className="hidden sm:inline">Download</span>
-                                        </a>
+                                        </button>
                                     )}
 
                                     {/* Close Button */}
@@ -5911,14 +6035,13 @@ export default function CommunityView() {
                                                 </div>
 
                                                 <div className="flex items-center gap-3 pt-3">
-                                                    <a
-                                                        href={displayUrl}
-                                                        download={previewModalFile.name}
-                                                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2"
+                                                    <button
+                                                        onClick={(e) => handleDownloadFile(e, previewModalFile)}
+                                                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
                                                     >
                                                         <span className="material-symbols-outlined text-[16px]">download</span>
                                                         Download PDF ({previewModalFile.size})
-                                                    </a>
+                                                    </button>
                                                     <button
                                                         onClick={() => setPreviewTab('viewer')}
                                                         className="px-5 py-2.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs transition-all flex items-center gap-2 cursor-pointer"
@@ -5930,6 +6053,44 @@ export default function CommunityView() {
                                             </div>
                                         </div>
                                     )
+                                ) : isAudio ? (
+                                    <div className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 text-center shadow-2xl flex flex-col items-center">
+                                        <div className="w-24 h-24 rounded-3xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center font-bold text-4xl mb-5 border border-violet-500/20 shadow-sm">
+                                            <span className="material-symbols-outlined text-[48px]">audiotrack</span>
+                                        </div>
+                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-violet-100 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 mb-2">
+                                            Digital Audio Asset
+                                        </span>
+                                        <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1 truncate max-w-md" title={previewModalFile.name}>
+                                            {previewModalFile.name}
+                                        </h4>
+                                        <p className="text-xs text-slate-500 mb-6 font-mono">{previewModalFile.size} • Uploaded by {previewModalFile.uploadedBy || 'Team Member'}</p>
+                                        <div className="w-full bg-slate-50 dark:bg-slate-800/80 p-5 rounded-2xl border border-slate-100 dark:border-slate-700/60 mb-6 shadow-inner">
+                                            {displayUrl ? (
+                                                <audio
+                                                    src={displayUrl}
+                                                    controls
+                                                    autoPlay
+                                                    className="w-full outline-none"
+                                                >
+                                                    Your browser does not support HTML5 Audio playback.
+                                                </audio>
+                                            ) : (
+                                                <div className="text-center py-3 text-xs text-amber-500 font-medium">
+                                                    Audio URL is not available. Please verify the uploaded file.
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={(e) => handleDownloadFile(e, previewModalFile)}
+                                                className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">download</span>
+                                                Download Audio Track ({previewModalFile.size})
+                                            </button>
+                                        </div>
+                                    </div>
                                 ) : isOfficeDoc ? (
                                     <div className="w-full max-w-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 text-left text-slate-800 dark:text-slate-200 max-h-[72vh] overflow-y-auto custom-scrollbar shadow-2xl">
                                         <div className="flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
@@ -5979,14 +6140,13 @@ export default function CommunityView() {
 
                                             <div className="flex flex-wrap items-center gap-3 pt-3">
                                                 {displayUrl && (
-                                                    <a
-                                                        href={displayUrl}
-                                                        download={previewModalFile.name}
-                                                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2"
+                                                    <button
+                                                        onClick={(e) => handleDownloadFile(e, previewModalFile)}
+                                                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
                                                     >
                                                         <span className="material-symbols-outlined text-[16px]">download</span>
                                                         Download Document ({previewModalFile.size})
-                                                    </a>
+                                                    </button>
                                                 )}
                                                 {displayUrl && (displayUrl.startsWith('http://') || displayUrl.startsWith('https://')) && (
                                                     <a
@@ -6038,14 +6198,13 @@ export default function CommunityView() {
 
                                             {displayUrl && (
                                                 <div className="pt-3">
-                                                    <a
-                                                        href={displayUrl}
-                                                        download={previewModalFile.name}
-                                                        className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-md transition-all inline-flex items-center gap-2"
+                                                    <button
+                                                        onClick={(e) => handleDownloadFile(e, previewModalFile)}
+                                                        className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-md transition-all inline-flex items-center gap-2 cursor-pointer"
                                                     >
                                                         <span className="material-symbols-outlined text-[16px]">download</span>
                                                         Download Archive ({previewModalFile.size})
-                                                    </a>
+                                                    </button>
                                                 </div>
                                             )}
                                         </div>
@@ -6069,14 +6228,13 @@ export default function CommunityView() {
                                             <p>This file is stored in the community repository. You can download or view it externally:</p>
                                             {displayUrl && (
                                                 <div className="flex items-center gap-3 pt-2">
-                                                    <a
-                                                        href={displayUrl}
-                                                        download={previewModalFile.name}
-                                                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2"
+                                                    <button
+                                                        onClick={(e) => handleDownloadFile(e, previewModalFile)}
+                                                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
                                                     >
                                                         <span className="material-symbols-outlined text-[16px]">download</span>
                                                         Download File ({previewModalFile.size})
-                                                    </a>
+                                                    </button>
                                                     <a
                                                         href={displayUrl}
                                                         target="_blank"
@@ -6101,14 +6259,13 @@ export default function CommunityView() {
                                 </span>
                                 <div className="flex items-center gap-4">
                                     {displayUrl && (
-                                        <a
-                                            href={displayUrl}
-                                            download={previewModalFile.name}
-                                            className="font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-500 transition-colors flex items-center gap-1 cursor-pointer"
+                                        <button
+                                            onClick={(e) => handleDownloadFile(e, previewModalFile)}
+                                            className="font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-500 transition-colors flex items-center gap-1 cursor-pointer bg-transparent border-0 p-0"
                                         >
                                             <span className="material-symbols-outlined text-[14px]">download</span>
                                             Download
-                                        </a>
+                                        </button>
                                     )}
                                     <button
                                         onClick={() => setPreviewModalFile(null)}

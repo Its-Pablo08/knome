@@ -114,18 +114,34 @@ public class NotificationService : INotificationService
 
     public async Task<List<NotificationDto>> GetForUserAsync(int userId, bool unreadOnly = false, int pageNumber = 1, int pageSize = 20)
     {
-        var skip = (pageNumber < 1 ? 1 : pageNumber - 1) * (pageSize < 1 ? 20 : pageSize);
-        var take = pageSize < 1 ? 20 : pageSize;
+        try
+        {
+            var skip = (pageNumber < 1 ? 1 : pageNumber - 1) * (pageSize < 1 ? 20 : pageSize);
+            var take = pageSize < 1 ? 20 : pageSize;
 
-        var items = await _repository.GetForUserAsync(userId, unreadOnly, skip, take);
-        var dtos = _mapper.Map<List<NotificationDto>>(items);
-        await EnrichNotificationDtosAsync(dtos);
-        return dtos;
+            var items = await _repository.GetForUserAsync(userId, unreadOnly, skip, take);
+            var dtos = _mapper.Map<List<NotificationDto>>(items);
+            await EnrichNotificationDtosAsync(dtos);
+            return dtos;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Transient error fetching notifications for user {UserId}. Returning empty list fallback.", userId);
+            return new List<NotificationDto>();
+        }
     }
 
     public async Task<int> GetUnreadCountAsync(int userId)
     {
-        return await _repository.CountForUserAsync(userId, unreadOnly: true);
+        try
+        {
+            return await _repository.CountForUserAsync(userId, unreadOnly: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Transient error counting unread notifications for user {UserId}. Returning 0 fallback.", userId);
+            return 0;
+        }
     }
 
     public async Task<bool> MarkAsReadAsync(long notificationId, int userId)
@@ -183,7 +199,7 @@ public class NotificationService : INotificationService
         await _repository.ReplacePreferencesAsync(userId, entities);
     }
 
-    private async Task EnrichNotificationDtoAsync(NotificationDto dto)
+    private async Task EnrichNotificationDtoAsync(NotificationDto dto, IReadOnlyDictionary<int, Models.User>? senderMap = null)
     {
         dto.Title = dto.EventType switch
         {
@@ -205,7 +221,24 @@ public class NotificationService : INotificationService
         {
             var senderId = (int)dto.RelatedContentId.Value;
             dto.SenderUserId = senderId;
-            var sender = await _userRepository.GetProfileByIdAsync(senderId);
+
+            Models.User? sender = null;
+            if (senderMap != null && senderMap.TryGetValue(senderId, out var foundSender))
+            {
+                sender = foundSender;
+            }
+            else if (senderMap == null)
+            {
+                try
+                {
+                    sender = await _userRepository.GetProfileByIdAsync(senderId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to load sender profile {SenderId}", senderId);
+                }
+            }
+
             if (sender != null)
             {
                 dto.SenderName = sender.FullName;
@@ -264,9 +297,32 @@ public class NotificationService : INotificationService
 
     private async Task EnrichNotificationDtosAsync(IEnumerable<NotificationDto> dtos)
     {
-        foreach (var dto in dtos)
+        var list = dtos.ToList();
+        if (list.Count == 0) return;
+
+        var senderIds = list
+            .Where(d => d.RelatedContentType == Constants.NotificationContentTypes.User && d.RelatedContentId.HasValue)
+            .Select(d => (int)d.RelatedContentId.Value)
+            .Distinct()
+            .ToList();
+
+        Dictionary<int, Models.User>? senderMap = null;
+        if (senderIds.Count > 0)
         {
-            await EnrichNotificationDtoAsync(dto);
+            try
+            {
+                var senders = await _userRepository.FindAsync(u => senderIds.Contains(u.UserId));
+                senderMap = senders.ToDictionary(u => u.UserId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to batch query senders for notifications.");
+            }
+        }
+
+        foreach (var dto in list)
+        {
+            await EnrichNotificationDtoAsync(dto, senderMap);
         }
     }
 
