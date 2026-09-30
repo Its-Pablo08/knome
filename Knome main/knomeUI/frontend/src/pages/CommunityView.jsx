@@ -834,15 +834,17 @@ export default function CommunityView() {
             return { category: 'Image', ext: ext || 'png' };
         }
 
-        // 2. Video & Audio
+        // 2. Audio
+        if (['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma'].includes(ext) || mimeType.startsWith('audio/')) {
+            return { category: 'Audio', ext: ext || 'mp3' };
+        }
+
+        // 3. Video
         if (['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi', 'wmv', 'flv'].includes(ext) || mimeType.startsWith('video/')) {
             return { category: 'Video', ext: ext || 'mp4' };
         }
-        if (['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma'].includes(ext) || mimeType.startsWith('audio/')) {
-            return { category: 'Video', ext: ext || 'mp3' };
-        }
 
-        // 3. Document (PDF, Word, Excel, PowerPoint, Text, Archives, Code, etc.)
+        // 4. Document (PDF, Word, Excel, PowerPoint, Text, Archives, Code, etc.)
         return { category: 'Document', ext: ext || 'pdf' };
     };
 
@@ -850,6 +852,17 @@ export default function CommunityView() {
         const ext = (file?.extension || (file?.name ? file.name.split('.').pop() : '') || '').toLowerCase();
         const cat = file?.category || 'Document';
 
+        if (cat === 'Audio' || ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma'].includes(ext)) {
+            return {
+                badge: (ext || 'MP3').toUpperCase(),
+                label: 'Digital Audio',
+                icon: 'audiotrack',
+                color: 'text-violet-600 dark:text-violet-400',
+                border: 'border-violet-200 dark:border-violet-800/60',
+                bg: 'bg-violet-50 dark:bg-violet-950/40',
+                badgeBg: 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800'
+            };
+        }
         if (['pdf'].includes(ext)) {
             return {
                 badge: 'PDF',
@@ -986,9 +999,9 @@ export default function CommunityView() {
             let backendFileUrl = null;
             if (selectedUploadFile instanceof File) {
                 try {
-                    const uploadMediaType = detected.category === 'Image' ? 'image' : (detected.category === 'Video' ? 'video' : 'doc');
+                    const uploadMediaType = detected.category === 'Image' ? 'image' : (detected.category === 'Audio' ? 'audio' : (detected.category === 'Video' ? 'video' : 'doc'));
                     const uploadResult = await mediaApi.uploadFile(selectedUploadFile, uploadMediaType);
-                    backendFileUrl = uploadResult?.fileUrl || uploadResult?.url;
+                    backendFileUrl = uploadResult?.url || uploadResult?.fileUrl || uploadResult?.data?.url;
                 } catch (upErr) {
                     console.warn('Backend file upload fallback to local:', upErr);
                 }
@@ -996,19 +1009,21 @@ export default function CommunityView() {
 
             let fileDataUrl = null;
             if (selectedUploadFile && !backendFileUrl) {
-                fileDataUrl = await readFileAsDataUrl(selectedUploadFile);
+                // Only create dataUrl for small files to prevent browser freezing
+                if (selectedUploadFile.size < 4 * 1024 * 1024) {
+                    fileDataUrl = await readFileAsDataUrl(selectedUploadFile);
+                }
             }
 
             const fileId = Date.now();
-            const finalUrl = backendFileUrl ? resolveMediaUrl(backendFileUrl) : (fileDataUrl || (fileExt === 'pdf' ? SAMPLE_PDF_DATA_URL : '#'));
+            const finalUrl = backendFileUrl ? resolveMediaUrl(backendFileUrl) : (fileDataUrl || '#');
 
-            // Save full exact user uploaded file URL to IndexedDB!
-            await saveFileBlobToIndexedDb(fileId, finalUrl);
+            // Save blob to IndexedDB only if local dataUrl was needed
+            if (fileDataUrl) {
+                await saveFileBlobToIndexedDb(fileId, fileDataUrl);
+            }
 
-            // Light weight payload for LocalStorage
-            const storedUrlForLocalStorage = (finalUrl && typeof finalUrl === 'string' && finalUrl.length > 50000 && finalUrl.startsWith('data:'))
-                ? (fileExt === 'pdf' ? SAMPLE_PDF_DATA_URL : 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&q=80&w=600&h=400')
-                : finalUrl;
+            const storedUrlForLocalStorage = backendFileUrl || (fileDataUrl && fileDataUrl.length < 50000 ? fileDataUrl : '#');
 
             const newFileItem = {
                 id: String(fileId),
@@ -1020,7 +1035,7 @@ export default function CommunityView() {
                 uploadedByUserId: currentUser?.id || currentUser?.userId || null,
                 uploadedAt: new Date().toISOString(),
                 url: backendFileUrl || finalUrl, // Keep exact URL in memory state
-                hasIndexedDb: true,
+                hasIndexedDb: !!fileDataUrl,
                 downloadCount: 0
             };
 
@@ -1036,8 +1051,8 @@ export default function CommunityView() {
 
             // Save sanitized payload for LocalStorage metadata list
             const localStorageItem = { ...newFileItem, url: storedUrlForLocalStorage };
-            const updatedFilesMemory = [newFileItem, ...filesList.filter(f => String(f.id) !== String(fileId))];
-            const updatedFilesStorage = [localStorageItem, ...filesList.filter(f => String(f.id) !== String(fileId)).map(f => ({ ...f, url: (f.url && f.url.length > 50000 && f.url.startsWith('data:')) ? (f.extension === 'pdf' ? SAMPLE_PDF_DATA_URL : '#') : f.url }))];
+            const updatedFilesMemory = [newFileItem, ...filesList.filter(f => String(f.id).trim() !== String(fileId).trim())];
+            const updatedFilesStorage = [localStorageItem, ...filesList.filter(f => String(f.id).trim() !== String(fileId).trim()).map(f => ({ ...f, url: (f.url && f.url.length > 50000 && f.url.startsWith('data:')) ? '#' : f.url }))];
             
             setFilesList(updatedFilesMemory);
             safeSetStorage(savedFilesKey, updatedFilesStorage);
@@ -1058,6 +1073,15 @@ export default function CommunityView() {
     };
 
     const handleDeleteFile = async (fileId, fileName) => {
+        const ok = await confirm({
+            title: 'Delete Community File',
+            message: `Are you sure you want to delete "${fileName || 'this file'}" from the community?`,
+            confirmText: 'Delete File',
+            cancelText: 'Cancel',
+            variant: 'danger'
+        });
+        if (!ok) return;
+
         const targetId = community?.id || communityId || 101;
         const savedFilesKey = `knome_community_files_${targetId}`;
         try {
@@ -1065,7 +1089,7 @@ export default function CommunityView() {
         } catch (delErr) {
             console.warn('Backend file deletion fallback:', delErr);
         }
-        const updated = filesList.filter(f => String(f.id) !== String(fileId));
+        const updated = filesList.filter(f => String(f.id).trim() !== String(fileId).trim());
         setFilesList(updated);
         safeSetStorage(savedFilesKey, updated);
         window.dispatchEvent(new CustomEvent('community-files-updated', { detail: { communityId: targetId } }));
@@ -1593,13 +1617,32 @@ export default function CommunityView() {
             const localFiles = JSON.parse(localStorage.getItem(savedFilesKey) || '[]');
 
             // Prioritize backend files from server if available so all users see uploaded files!
+            const rawApiFiles = Array.isArray(apiFiles) ? apiFiles : (Array.isArray(apiFiles?.data) ? apiFiles.data : []);
             let combinedSource = localFiles;
-            if (Array.isArray(apiFiles)) {
+            if (rawApiFiles.length > 0) {
                 const map = new Map();
-                apiFiles.forEach(f => map.set(String(f.id), f));
+                rawApiFiles.forEach(f => {
+                    const ext = (f.extension || f.Extension || (f.name || f.Name || '').split('.').pop() || '').toLowerCase();
+                    let cat = f.category || f.Category || 'Document';
+                    if (['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma'].includes(ext)) cat = 'Audio';
+                    const fileObj = {
+                        id: String(f.id || f.Id || Date.now()),
+                        name: f.name || f.Name || 'Document',
+                        category: cat,
+                        extension: ext,
+                        size: f.size || f.Size || '1 MB',
+                        uploadedBy: f.uploadedBy || f.UploadedBy || 'Member',
+                        uploadedByUserId: f.uploadedByUserId || f.UploadedByUserId || null,
+                        uploadedAt: f.uploadedAt || f.UploadedAt || new Date().toISOString(),
+                        url: f.url || f.Url || '#',
+                        downloadCount: f.downloadCount || f.DownloadCount || 0
+                    };
+                    map.set(String(fileObj.id).trim(), fileObj);
+                });
                 localFiles.forEach(f => {
-                    if (!map.has(String(f.id)) && f.url && (f.url.startsWith('http') || f.url.startsWith('/uploads'))) {
-                        map.set(String(f.id), f);
+                    const fid = String(f.id).trim();
+                    if (!map.has(fid) && f.url && (f.url.startsWith('http') || f.url.startsWith('/uploads'))) {
+                        map.set(fid, f);
                     }
                 });
                 combinedSource = Array.from(map.values());

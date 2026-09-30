@@ -1034,6 +1034,49 @@ public class CommunityService : ICommunityService
         dto.UploadedByUserId = currentUserId;
         dto.UploadedAt ??= KnomeTime.Now;
 
+        // Auto-detect Audio category
+        var ext = (dto.Extension ?? Path.GetExtension(dto.Name)?.TrimStart('.') ?? "").ToLowerInvariant();
+        if (new[] { "mp3", "wav", "aac", "ogg", "flac", "m4a", "wma" }.Contains(ext))
+        {
+            dto.Category = "Audio";
+            dto.Extension = ext;
+        }
+
+        // If URL contains heavy base64 data, offload it to physical media file on disk to prevent bloated JSON
+        if (!string.IsNullOrWhiteSpace(dto.Url) && dto.Url.StartsWith("data:") && dto.Url.Contains(";base64,"))
+        {
+            try
+            {
+                var parts = dto.Url.Split(";base64,", 2);
+                var fileBytes = Convert.FromBase64String(parts[1]);
+                var safeExt = string.IsNullOrWhiteSpace(dto.Extension) ? "bin" : dto.Extension.ToLowerInvariant();
+                var mediaFileName = $"media_comm_{communityId}_{dto.Id}.{safeExt}";
+                
+                var baseStorage = GetCommunityFilesDirectory();
+                var uploadsDir = Directory.GetParent(baseStorage)?.FullName ?? baseStorage;
+                var mediaDir = Path.Combine(uploadsDir, "media");
+                if (!Directory.Exists(mediaDir)) Directory.CreateDirectory(mediaDir);
+
+                var targetMediaFile = Path.Combine(mediaDir, mediaFileName);
+                File.WriteAllBytes(targetMediaFile, fileBytes);
+
+                // Also copy to local wwwroot if baseStorage was a network path
+                var localWebRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "media");
+                if (!Directory.Exists(localWebRoot)) Directory.CreateDirectory(localWebRoot);
+                var localMediaFile = Path.Combine(localWebRoot, mediaFileName);
+                if (targetMediaFile != localMediaFile)
+                {
+                    File.WriteAllBytes(localMediaFile, fileBytes);
+                }
+
+                dto.Url = $"/uploads/media/{mediaFileName}";
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to offload base64 file to disk for community file {Id}", dto.Id);
+            }
+        }
+
         var filePath = GetCommunityFilesPath(communityId);
         lock (_commFilesLock)
         {
@@ -1052,11 +1095,20 @@ public class CommunityService : ICommunityService
             }
 
             // Remove any duplicates by ID
-            list.RemoveAll(f => f.Id == dto.Id);
+            list.RemoveAll(f => string.Equals(f.Id?.Trim(), dto.Id?.Trim(), StringComparison.OrdinalIgnoreCase));
             list.Insert(0, dto);
 
             var updatedJson = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(filePath, updatedJson);
+
+            // Also mirror to local wwwroot community_files if filePath is network path
+            var localCommDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "community_files");
+            if (!Directory.Exists(localCommDir)) Directory.CreateDirectory(localCommDir);
+            var localFilePath = Path.Combine(localCommDir, $"community_{communityId}_files.json");
+            if (filePath != localFilePath)
+            {
+                try { File.WriteAllText(localFilePath, updatedJson); } catch {}
+            }
         }
 
         return dto;
@@ -1073,9 +1125,17 @@ public class CommunityService : ICommunityService
                 {
                     var json = File.ReadAllText(filePath);
                     var list = JsonSerializer.Deserialize<List<CommunityFileDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<CommunityFileDto>();
-                    var filtered = list.Where(f => f.Id != fileId).ToList();
+                    var filtered = list.Where(f => !string.Equals(f.Id?.Trim(), fileId?.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
                     var updatedJson = JsonSerializer.Serialize(filtered, new JsonSerializerOptions { WriteIndented = true });
                     File.WriteAllText(filePath, updatedJson);
+
+                    // Also mirror to local wwwroot
+                    var localCommDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "community_files");
+                    var localFilePath = Path.Combine(localCommDir, $"community_{communityId}_files.json");
+                    if (filePath != localFilePath && File.Exists(localFilePath))
+                    {
+                        try { File.WriteAllText(localFilePath, updatedJson); } catch {}
+                    }
                 }
                 catch (Exception ex)
                 {

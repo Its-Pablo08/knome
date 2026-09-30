@@ -144,8 +144,8 @@ public class LocalFileStorageService : IFileStorageService
         string[] allowedMediaExtensions = mediaType?.ToLowerInvariant() switch
         {
             "image" => new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico", ".tiff" },
-            "video" => new[] { ".mp4", ".mov", ".avi", ".webm", ".mkv", ".m4v", ".flv", ".wmv" },
-            "audio" or "podcast" => new[] { ".mp3", ".wav", ".aac", ".ogg", ".m4a", ".webm", ".flac", ".wma" },
+            "video" => new[] { ".mp4", ".mov", ".avi", ".webm", ".mkv", ".m4v", ".flv", ".wmv", ".mp3", ".wav", ".aac", ".ogg", ".m4a", ".flac", ".wma" },
+            "audio" or "podcast" => new[] { ".mp3", ".wav", ".aac", ".ogg", ".m4a", ".webm", ".flac", ".wma", ".mp4" },
             "doc" or "document" => new[] { ".pdf", ".doc", ".docx", ".txt", ".xls", ".xlsx", ".csv", ".ppt", ".pptx", ".zip", ".rar", ".7z", ".tar", ".gz", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp", ".mp4", ".webm", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".aac", ".json", ".xml", ".sql", ".cs", ".js", ".py" },
             _ => new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico", ".tiff", ".mp4", ".mov", ".avi", ".webm", ".mkv", ".m4v", ".flv", ".wmv", ".mp3", ".wav", ".aac", ".ogg", ".m4a", ".webm", ".flac", ".wma", ".pdf", ".doc", ".docx", ".txt", ".xls", ".xlsx", ".csv", ".ppt", ".pptx", ".zip", ".rar", ".7z", ".tar", ".gz", ".json", ".xml", ".sql", ".cs", ".js", ".py" }
         };
