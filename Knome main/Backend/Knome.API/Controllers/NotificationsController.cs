@@ -100,7 +100,7 @@ public class NotificationsController : KnomeControllerBase
     }
 
     [HttpPost("broadcast")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin)]
+    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin + ",System Admin,SYSADM,HR Admin,HRADMIN")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Broadcast([FromBody] BroadcastNotificationDto dto)
     {
@@ -122,7 +122,7 @@ public class NotificationsController : KnomeControllerBase
     }
 
     [HttpPut("broadcast/{id:long}")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin)]
+    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin + ",System Admin,SYSADM,HR Admin,HRADMIN")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateBroadcast(long id, [FromBody] UpdateBroadcastDto dto)
     {
@@ -139,7 +139,7 @@ public class NotificationsController : KnomeControllerBase
     }
 
     [HttpDelete("broadcast/{id:long}")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin)]
+    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin + ",System Admin,SYSADM,HR Admin,HRADMIN")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteBroadcast(long id)
     {

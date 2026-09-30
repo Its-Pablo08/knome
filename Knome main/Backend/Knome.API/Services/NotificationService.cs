@@ -349,6 +349,17 @@ public class NotificationService : INotificationService
                 continue;
             }
 
+            // Exclude personal user notifications (role updates, moderation alerts, login greetings)
+            if (msg.Contains("roles have been updated", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("role has been updated", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("reviewed by moderation", StringComparison.OrdinalIgnoreCase) ||
+                msg.StartsWith("First-time login", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.RelatedContentType, "User", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.RelatedContentType, "VideoModeration", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             seenMessages.Add(msg);
 
             string title = "Organization Announcement";

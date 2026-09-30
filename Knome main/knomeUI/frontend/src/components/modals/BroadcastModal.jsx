@@ -108,16 +108,14 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
     };
 
     const handleDelete = async () => {
-        if (!initialData?.id) return;
-        if (!window.confirm('Are you sure you want to remove this broadcast announcement? It will be cleared from all employee dashboards.')) {
-            return;
-        }
+        const targetId = initialData?.id || initialData?.Id || initialData?.notificationId;
+        if (!targetId) return;
 
         setIsSubmitting(true);
         setError('');
 
         try {
-            await notificationsApi.broadcasts.delete(initialData.id);
+            await notificationsApi.broadcasts.delete(targetId);
             window.dispatchEvent(new CustomEvent('knome:broadcast-updated', {
                 detail: { action: 'deleted' }
             }));

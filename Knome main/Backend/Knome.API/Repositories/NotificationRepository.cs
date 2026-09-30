@@ -194,15 +194,21 @@ public class NotificationRepository : INotificationRepository
         var windowStart = targetDate.AddMinutes(-30);
         var windowEnd = targetDate.AddMinutes(30);
 
-        var siblings = await _db.Notifications
-            .Where(n => n.EventType == eventType && n.Message == oldMessage && n.CreatedDate >= windowStart && n.CreatedDate <= windowEnd)
-            .ToListAsync();
-
-        if (siblings.Count == 0)
+        List<Notification> siblings;
+        if (!string.IsNullOrEmpty(oldMessage))
         {
-            _db.Notifications.Remove(target);
-            await _db.SaveChangesAsync();
-            return 1;
+            siblings = await _db.Notifications
+                .Where(n => n.EventType == eventType && n.Message == oldMessage && n.CreatedDate >= windowStart && n.CreatedDate <= windowEnd)
+                .ToListAsync();
+        }
+        else
+        {
+            siblings = new List<Notification> { target };
+        }
+
+        if (!siblings.Any(s => s.NotificationId == target.NotificationId))
+        {
+            siblings.Add(target);
         }
 
         _db.Notifications.RemoveRange(siblings);

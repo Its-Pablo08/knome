@@ -150,7 +150,7 @@ export const dashboardApi = {
     getTrendingPosts: () => apiClient.get('/feed/widgets/trending-posts'),
     getInternalJobs: () => apiClient.get('/feed/widgets/internal-jobs'),
     getKarmaLeaderboard: () => apiClient.get('/Karma/leaderboard'),
-    getAnnouncements: () => apiClient.get('/notifications/broadcasts').then(res => res?.data || res || []).catch(() => []),
+    getAnnouncements: () => apiClient.get('/notifications/broadcasts', { noCache: true }).then(res => res?.data || res || []).catch(() => []),
 };
 
 // ─────────────────────────────────────────────
@@ -455,7 +455,7 @@ export const notificationsApi = {
 
     /** Organization Broadcasts */
     broadcasts: {
-        getAll: () => apiClient.get('/notifications/broadcasts').then(res => res?.data || res || []).catch(() => []),
+        getAll: () => apiClient.get('/notifications/broadcasts', { noCache: true }).then(res => res?.data || res || []).catch(() => []),
         send: (data) => apiClient.post('/notifications/broadcast', data),
         update: (id, data) => apiClient.put(`/notifications/broadcast/${id}`, data),
         delete: (id) => apiClient.delete(`/notifications/broadcast/${id}`),
