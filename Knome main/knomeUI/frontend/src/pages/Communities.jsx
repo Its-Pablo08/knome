@@ -147,21 +147,45 @@ export default function Communities() {
                     if (isSusp) return 'Banned';
                 } catch (_) {}
 
+                // Check if user was removed from this community
+                try {
+                    const commRemoved = JSON.parse(localStorage.getItem(`knome_community_removed_${id}`) || '[]');
+                    const isRemoved = commRemoved.some(r => {
+                        const strR = String(r).toLowerCase();
+                        return (currentUid && String(currentUid).toLowerCase() === strR) ||
+                               (currentEmpId && currentEmpId.toLowerCase() === strR) ||
+                               (currentEmail && currentEmail === strR) ||
+                               (currentUser?.name && currentUser.name.toLowerCase() === strR);
+                    });
+                    if (isRemoved) return 'none';
+                } catch (_) {}
+
                 // If user is creator or admin of this community, they are Approved!
                 if (isCurrentUserAdmin) return 'Approved';
                 if (currentUid && createdByUserId && String(currentUid) === String(createdByUserId)) return 'Approved';
+
+                const isOrgDefault = type?.toLowerCase().includes('default') || type?.toLowerCase().includes('org');
+                if (isOrgDefault) return 'Approved';
 
                 const s = (apiStatus || '').toLowerCase();
                 if (s === 'approved' || s === 'joined') return 'Approved';
                 if (s === 'pending') return 'Pending';
 
+                // For backend database communities (where apiStatus is evaluated):
+                // If the server confirms not approved/joined/pending, server is the single source of truth!
+                if (apiStatus !== undefined && apiStatus !== null) {
+                    const entry = userJoinedList.find(c => String(c.id) === String(id));
+                    if (entry && entry.status === 'subscribed') return 'Subscribed';
+                    return 'none';
+                }
+
+                // Fallback for purely local mock/offline communities
                 const entry = userJoinedList.find(c => String(c.id) === String(id));
                 if (entry) {
                     if (entry.status === 'joined' || entry.status === 'approved' || entry.status === 'Approved') return 'Approved';
                     if (entry.status === 'pending_approval' || entry.status === 'pending') return 'Pending';
-                    return 'Subscribed';
+                    if (entry.status === 'subscribed') return 'Subscribed';
                 }
-                if (type?.toLowerCase().includes('default') || type?.toLowerCase().includes('org')) return 'Approved';
                 const localMembers = JSON.parse(localStorage.getItem(`knome_community_members_${id}`) || '[]');
                 if (currentUser && localMembers.some(m => (currentUid && String(m.userId || m.id) === String(currentUid)) || (currentUser.name && (m.fullName || m.name || '').toLowerCase() === currentUser.name.toLowerCase()))) return 'Approved';
                 return 'none';
@@ -195,12 +219,29 @@ export default function Communities() {
                     const userKey = `knome_joined_communities_${currentUid || 'guest'}`;
                     const userJoined = JSON.parse(localStorage.getItem(userKey) || '[]');
                     let userJoinedUpdated = false;
+                    const activeDbMap = new Map(data.map(c => [String(c.communityId || c.id), c]));
+
                     const syncedUserJoined = userJoined.map(uj => {
                         if ((uj.status === 'pending_approval' || uj.status === 'pending') && (activeDbIds.has(String(uj.id)) || activeDbNames.has((uj.name || '').toLowerCase().trim()))) {
                             userJoinedUpdated = true;
                             return { ...uj, status: 'joined' };
                         }
                         return uj;
+                    }).filter(uj => {
+                        const dbComm = activeDbMap.get(String(uj.id));
+                        if (!dbComm) return true;
+                        const isOrgDefault = (dbComm.communityType || '').toLowerCase().includes('default') || (dbComm.communityType || '').toLowerCase().includes('org');
+                        const isCreator = currentUid && String(dbComm.createdByUserId) === String(currentUid);
+                        const isDbAdmin = Boolean(dbComm.isCurrentUserAdmin);
+                        const dbStatus = (dbComm.currentUserMembershipStatus || '').toLowerCase();
+                        const isDbMember = dbStatus === 'approved' || dbStatus === 'joined';
+                        if (uj.status === 'joined' || uj.status === 'approved') {
+                            if (!isOrgDefault && !isCreator && !isDbAdmin && !isDbMember) {
+                                userJoinedUpdated = true;
+                                return false; // Prune stale joined community where user was removed in DB!
+                            }
+                        }
+                        return true;
                     });
                     if (userJoinedUpdated) {
                         localStorage.setItem(userKey, JSON.stringify(syncedUserJoined));

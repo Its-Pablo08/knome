@@ -443,8 +443,11 @@ export default function Profile() {
                             allComms.forEach(c => {
                                 const cid = String(c.communityId || c.id);
                                 const isDefault = c.communityType?.toLowerCase()?.includes('default') || c.communityType?.toLowerCase()?.includes('org');
-                                const isJoined = localJoined.some(lj => String(lj.id) === cid);
                                 const isCreator = String(c.createdByUserId) === String(currentProfileUserId);
+                                const isBackend = Boolean(c.communityId);
+                                const dbStatus = (c.currentUserMembershipStatus || '').toLowerCase();
+                                const isDbApproved = dbStatus === 'approved' || dbStatus === 'joined';
+                                const isJoined = isBackend ? isDbApproved : localJoined.some(lj => String(lj.id) === cid);
                                 if ((isDefault || isJoined || isCreator) && !existingIds.has(cid)) {
                                     rawComms.push(c);
                                     existingIds.add(cid);

@@ -595,16 +595,15 @@ public class CommunityService : ICommunityService
             return _mapper.Map<CommunityMemberDto>(existingMember);
         }
 
+        var isAutoApproveNew = community.CommunityType == CommunityTypes.Public || community.CommunityType == CommunityTypes.Org || community.CommunityType == CommunityTypes.Default;
         var newMember = new CommunityMember
         {
             CommunityId = communityId,
             UserId = currentUserId,
-            MemberType = CommunityMemberTypes.Subscriber,
-            Status = (community.CommunityType == CommunityTypes.Public || community.CommunityType == CommunityTypes.Org || community.CommunityType == CommunityTypes.Default)
-                ? CommunityMemberStatuses.Approved
-                : CommunityMemberStatuses.Pending,
+            MemberType = isAutoApproveNew ? CommunityMemberTypes.Member : CommunityMemberTypes.Subscriber,
+            Status = isAutoApproveNew ? CommunityMemberStatuses.Approved : CommunityMemberStatuses.Pending,
             RequestedDate = KnomeTime.Now,
-            DecidedDate = (community.CommunityType == CommunityTypes.Public || community.CommunityType == CommunityTypes.Org || community.CommunityType == CommunityTypes.Default) ? KnomeTime.Now : null
+            DecidedDate = isAutoApproveNew ? KnomeTime.Now : null
         };
 
         await _repo.AddMemberAsync(newMember);
@@ -678,7 +677,31 @@ public class CommunityService : ICommunityService
 
         var member = await _repo.GetMemberAsync(communityId, targetUserId);
         if (member == null)
+        {
+            if (dto.Status == CommunityMemberStatuses.Approved)
+            {
+                member = new CommunityMember
+                {
+                    CommunityId = communityId,
+                    UserId = targetUserId,
+                    MemberType = CommunityMemberTypes.Member,
+                    Status = CommunityMemberStatuses.Approved,
+                    RequestedDate = KnomeTime.Now,
+                    DecidedDate = KnomeTime.Now,
+                    ApprovedByUserId = currentUserId
+                };
+                await _repo.AddMemberAsync(member);
+                var comm = await _repo.GetCommunityByIdAsync(communityId);
+                await _notificationService.PublishAsync(
+                    targetUserId,
+                    NotificationTypes.CommunityJoin,
+                    $"Your request to join {(comm?.Name ?? "the community")} has been approved.",
+                    relatedContentType: NotificationContentTypes.Community,
+                    relatedContentId: communityId);
+                return _mapper.Map<CommunityMemberDto>(member);
+            }
             throw new NotFoundException($"User ID {targetUserId} is not a member or applicant of this community.");
+        }
 
         member.Status = dto.Status;
         member.DecidedDate = KnomeTime.Now;
@@ -696,6 +719,14 @@ public class CommunityService : ICommunityService
 
             await _repo.RemoveCommunityAdminAsync(communityId, targetUserId);
             member.MemberType = CommunityMemberTypes.Subscriber;
+        }
+
+        if (dto.Status == CommunityMemberStatuses.Approved)
+        {
+            if (member.MemberType == CommunityMemberTypes.Subscriber)
+            {
+                member.MemberType = CommunityMemberTypes.Member;
+            }
         }
 
         await _repo.UpdateMemberAsync(member);
