@@ -21,7 +21,7 @@ export default function Footer() {
                             <img 
                                 src={knomeLogoDark} 
                                 alt="KNOME" 
-                                className="h-5.5 md:h-6 w-auto object-contain drop-shadow-xs" 
+                                className="h-8 md:h-9 w-auto object-contain drop-shadow-xs" 
                             />
                         </Link>
 

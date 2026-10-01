@@ -269,22 +269,6 @@ export default function KarmaHistory() {
 
     const activities = apiTx.length > 0 ? apiTx : (isSysAdmin ? [] : defaultMockActivities);
 
-    // Compute category statistics (Points & count) from recorded activities
-    const categoryStats = useMemo(() => {
-        const stats = {};
-        KARMA_CATEGORIES.forEach(c => {
-            stats[c.id] = { points: 0, count: 0 };
-        });
-
-        activities.forEach(act => {
-            if (stats[act.categoryId]) {
-                stats[act.categoryId].points += act.pointsNum;
-                stats[act.categoryId].count += 1;
-            }
-        });
-
-        return stats;
-    }, [activities]);
 
     const filteredActivities = useMemo(() => {
         if (selectedCategoryFilter === 'all') return activities;
@@ -498,86 +482,6 @@ export default function KarmaHistory() {
                 </div>
             )}
 
-            {/* ─── EARNING KARMA POINTS BY CATEGORY (Requested by User) ─── */}
-            <div className="glass card-lift bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-100 dark:border-slate-800/80">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-amber-500 text-[22px]">category</span>
-                            <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">
-                                Karma Points by Category
-                            </h3>
-                            <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800/50">
-                                Official Earning Matrix
-                            </span>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                            Points breakdown per contribution type. Click any category to filter your activity ledger below.
-                        </p>
-                    </div>
-
-                    {selectedCategoryFilter !== 'all' && (
-                        <button
-                            onClick={() => setSelectedCategoryFilter('all')}
-                            className="self-start sm:self-auto px-3 py-1 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
-                        >
-                            <span className="material-symbols-outlined text-[14px]">clear_all</span>
-                            Reset Filter (Show All)
-                        </button>
-                    )}
-                </div>
-
-                {/* 8 Categories Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-                    {KARMA_CATEGORIES.map(cat => {
-                        const isSelected = selectedCategoryFilter === cat.id;
-                        const ptsEarned = categoryStats[cat.id]?.points || 0;
-                        const eventsCount = categoryStats[cat.id]?.count || 0;
-
-                        return (
-                            <button
-                                key={cat.id}
-                                onClick={() => setSelectedCategoryFilter(isSelected ? 'all' : cat.id)}
-                                className={`text-left p-3.5 rounded-2xl border transition-all duration-200 flex flex-col justify-between gap-3 cursor-pointer group relative overflow-hidden ${
-                                    isSelected
-                                        ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-950/40 shadow-sm'
-                                        : 'border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/40 dark:bg-slate-800/30'
-                                }`}
-                            >
-                                {/* Header */}
-                                <div className="flex items-center justify-between">
-                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${cat.bg} border ${cat.border} transition-transform group-hover:scale-110`}>
-                                        <span className={`material-symbols-outlined text-[18px] ${cat.iconColor}`} style={{ fontVariationSettings: "'FILL' 1" }}>
-                                            {cat.icon}
-                                        </span>
-                                    </div>
-                                    <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-200/50 dark:border-amber-800/40">
-                                        {cat.rate}
-                                    </span>
-                                </div>
-
-                                {/* Body */}
-                                <div>
-                                    <h4 className="text-xs font-black text-slate-900 dark:text-white leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                                        {cat.name}
-                                    </h4>
-                                    <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 mt-0.5 truncate" title={cat.unit}>
-                                        {cat.unit}
-                                    </p>
-                                </div>
-
-                                {/* Footer / Total Earned */}
-                                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between">
-                                    <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-slate-400">Earned</span>
-                                    <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
-                                        {ptsEarned > 0 ? `+${ptsEarned} pts` : '0 pts'}
-                                    </span>
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
 
             {/* ─── GLOBAL LEADERBOARD ─── */}
             <div className="glass card-lift bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">

@@ -1236,15 +1236,15 @@ export default function Navbar() {
                             <img 
                                 src={knomeLogo} 
                                 alt="KNOME" 
-                                className="h-8 sm:h-9 w-auto object-contain block dark:hidden drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
+                                className="h-10 sm:h-11 md:h-12 w-auto max-w-[260px] sm:max-w-[320px] object-contain block dark:hidden drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
                             />
                             <img 
                                 src={knomeLogoDark} 
                                 alt="KNOME" 
-                                className="h-8 sm:h-9 w-auto object-contain hidden dark:block drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
+                                className="h-10 sm:h-11 md:h-12 w-auto max-w-[260px] sm:max-w-[320px] object-contain hidden dark:block drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
                             />
-                            <span className="hidden xs:inline-block text-[9.5px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 leading-tight tracking-tight pl-0.5">
-                                Connecting People & Knowledge
+                            <span className="hidden sm:inline-block text-[10px] md:text-[10.5px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 leading-none tracking-tight pl-0.5 whitespace-nowrap">
+                                Knowledge Sharing, Group & Technical Post
                             </span>
                         </div>
                     </Link>
