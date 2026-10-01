@@ -1155,6 +1155,17 @@ export default function AdminConsole() {
             return;
         }
         const count = pendingMediaApprovals.length;
+
+        const isConfirmed = await confirm({
+            title: 'Approve All Media Submissions?',
+            message: `Are you sure you want to approve all ${count} pending media submission${count === 1 ? '' : 's'}? All approved videos and podcasts will be released and published to the enterprise hub.`,
+            confirmText: 'Yes, Approve All',
+            cancelText: 'Cancel',
+            variant: 'success'
+        });
+
+        if (!isConfirmed) return;
+
         const currentList = [...pendingMediaApprovals];
         setPendingMediaApprovals([]);
         localStorage.setItem('knome_pending_media_approvals', JSON.stringify([]));

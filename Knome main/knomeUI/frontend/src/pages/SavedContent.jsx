@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { savedContentApi, resolveMediaUrl } from '../utils/apiService';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
@@ -6,11 +6,11 @@ import HighlightText from '../components/ui/HighlightText';
 import { useScrollLoading } from '../hooks/useScrollLoading';
 import * as signalR from '@microsoft/signalr';
 import { getHubUrl } from '../utils/apiClient';
+import { analyzeContentCategory } from '../components/modals/SaveToCategoryModal';
 
 const DEFAULT_CATEGORIES = [
     { id: 'all', name: 'All Categories', icon: 'folder_open', color: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' },
     { id: 'work', name: 'Work & Tech', icon: 'computer', color: 'bg-indigo-500/10 text-indigo-600 border border-indigo-500/20' },
-    { id: 'design', name: 'Design & Arch', icon: 'palette', color: 'bg-purple-500/10 text-purple-600 border border-purple-500/20' },
     { id: 'hr', name: 'HR & Policies', icon: 'gavel', color: 'bg-rose-500/10 text-rose-600 border border-rose-500/20' },
     { id: 'favorites', name: 'Favorites', icon: 'star', color: 'bg-amber-500/10 text-amber-600 border border-amber-500/20' },
     { id: 'readlater', name: 'Read Later', icon: 'schedule', color: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' },
@@ -63,26 +63,43 @@ export default function SavedContent() {
     const [error, setError] = useState(null);
     const [actionId, setActionId] = useState(null); // For loading spinner on unsave button
 
-    // 📁 Category Management State
-    const [categories, setCategories] = useState(() => {
-        const saved = localStorage.getItem('knome_saved_categories');
-        return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+    // 📁 Category Management State (Standard Fixed Categories Only)
+    const [categories] = useState(() => {
+        try {
+            // Overwrite and sanitize localStorage to remove any custom folders (e.g. ghgffd)
+            localStorage.setItem('knome_saved_categories', JSON.stringify(DEFAULT_CATEGORIES));
+        } catch (e) {}
+        return DEFAULT_CATEGORIES;
     });
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [itemCategoryMap, setItemCategoryMap] = useState(() => {
         const saved = localStorage.getItem('knome_item_category_map');
-        return saved ? JSON.parse(saved) : {
+        const parsed = saved ? JSON.parse(saved) : {
             'Post_10075': 'hr',
-            'Post_10072': 'design',
             'Post_10071': 'work',
             'Post_51': 'favorites'
         };
+        const validIds = ['all', 'work', 'hr', 'favorites', 'readlater'];
+        let changed = false;
+        Object.keys(parsed).forEach(k => {
+            if (!validIds.includes(parsed[k])) {
+                parsed[k] = 'work';
+                changed = true;
+            }
+        });
+        if (changed || !saved) {
+            localStorage.setItem('knome_item_category_map', JSON.stringify(parsed));
+        }
+        return parsed;
     });
 
-    // Modal States
-    const [isCreateCatModalOpen, setIsCreateCatModalOpen] = useState(false);
-    const [newCategoryName, setNewCategoryName] = useState('');
-    const [newCategoryIcon, setNewCategoryIcon] = useState('folder');
+    useEffect(() => {
+        if (selectedCategory === 'design' || !['all', 'work', 'hr', 'favorites', 'readlater'].includes(selectedCategory)) {
+            setSelectedCategory('all');
+        }
+    }, [selectedCategory]);
+
+    // Modal State
     const [assigningItem, setAssigningItem] = useState(null);
 
     const tabs = [
@@ -117,13 +134,24 @@ export default function SavedContent() {
                 else if (t === 'podcast') localPodcasts++;
             });
 
+            const pCount = Math.max(apiCounts.postsCount || 0, localPosts);
+            const aCount = Math.max(apiCounts.articlesCount || 0, localArticles);
+            const vCount = Math.max(apiCounts.videosCount || 0, localVideos);
+            const podCount = Math.max(apiCounts.podcastsCount || 0, localPodcasts);
+            const sumTypes = pCount + aCount + vCount + podCount;
+            const calculatedTotal = Math.max(
+                apiCounts.totalCount || 0,
+                sumTypes,
+                localCustomSaved.length
+            );
+
             setCounts({
-                totalCount: Math.max(apiCounts.totalCount, localCustomSaved.length),
-                postsCount: Math.max(apiCounts.postsCount, localPosts),
-                articlesCount: Math.max(apiCounts.articlesCount, localArticles),
-                videosCount: Math.max(apiCounts.videosCount, localVideos),
-                podcastsCount: Math.max(apiCounts.podcastsCount, localPodcasts),
-                documentsCount: apiCounts.documentsCount,
+                totalCount: calculatedTotal,
+                postsCount: pCount,
+                articlesCount: aCount,
+                videosCount: vCount,
+                podcastsCount: podCount,
+                documentsCount: apiCounts.documentsCount || 0,
             });
         } catch (e) {
             console.error('Failed to load saved counts', e);
@@ -168,13 +196,26 @@ export default function SavedContent() {
                     contentText: extractText(s.content),
                     thumbnailUrl: s.thumbnailUrl || s.image || s.thumbnail || s.coverImage || s.mediaUrl || (Array.isArray(s.mediaUrls) ? s.mediaUrls[0] : null) || (Array.isArray(s.attachmentUrls) ? s.attachmentUrls[0] : null),
                     authorFullName: extractText(s.author),
-                    savedAt: s.savedAt,
+                    savedAt: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
+                    savedDate: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
                     userCategory: s.category,
                     categoryName: s.category
                 }));
 
-            const combined = [...formattedLocal, ...items];
+            const formattedApiItems = items.map(i => ({
+                ...i,
+                savedDate: i.savedDate || i.SavedDate || i.savedAt || i.createdAt || i.createdDate || new Date().toISOString(),
+                savedAt: i.savedAt || i.savedDate || i.SavedDate || i.createdAt || i.createdDate || new Date().toISOString(),
+            }));
+
+            const combined = [...formattedLocal, ...formattedApiItems];
             const deduped = Array.from(new Map(combined.map(i => [String(i.contentId || i.id), i])).values());
+
+            deduped.sort((a, b) => {
+                const dateA = new Date(a.savedDate || a.savedAt || a.createdAt || 0).getTime() || 0;
+                const dateB = new Date(b.savedDate || b.savedAt || b.createdAt || 0).getTime() || 0;
+                return sortBy === 'OldestSaved' ? dateA - dateB : dateB - dateA;
+            });
 
             setSavedItems(deduped);
             setTotalCount(deduped.length);
@@ -202,10 +243,18 @@ export default function SavedContent() {
                     contentText: extractText(s.content),
                     thumbnailUrl: s.thumbnailUrl || s.image || s.thumbnail || s.coverImage || s.mediaUrl || (Array.isArray(s.mediaUrls) ? s.mediaUrls[0] : null) || (Array.isArray(s.attachmentUrls) ? s.attachmentUrls[0] : null),
                     authorFullName: extractText(s.author),
-                    savedAt: s.savedAt,
+                    savedAt: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
+                    savedDate: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
                     userCategory: s.category,
                     categoryName: s.category
                 }));
+
+            formattedLocal.sort((a, b) => {
+                const dateA = new Date(a.savedDate || a.savedAt || a.createdAt || 0).getTime() || 0;
+                const dateB = new Date(b.savedDate || b.savedAt || b.createdAt || 0).getTime() || 0;
+                return sortBy === 'OldestSaved' ? dateA - dateB : dateB - dateA;
+            });
+
             setSavedItems(formattedLocal);
             setTotalCount(formattedLocal.length);
         } finally {
@@ -214,7 +263,12 @@ export default function SavedContent() {
     }, [activeTab, searchQuery, sortBy, pageNumber]);
 
     useEffect(() => {
-        const handleBookmarkSaved = () => {
+        const handleBookmarkSaved = (e) => {
+            if (e?.detail?.removed) {
+                const remId = String(e.detail.contentId || e.detail.id);
+                setSavedItems(prev => prev.filter(i => String(i.contentId || i.id) !== remId));
+                return;
+            }
             loadSavedContent();
         };
         window.addEventListener('knome-bookmark-saved', handleBookmarkSaved);
@@ -278,43 +332,90 @@ export default function SavedContent() {
     // Unsave (Bookmark toggle) action
     const handleUnsave = async (e, item) => {
         e.stopPropagation();
-        const key = `${item.contentType}_${item.contentId}`;
+        const targetId = item.contentId || item.id || item.postId || item.articleId || item.videoId || item.podcastId;
+        const targetType = item.contentType || 'Post';
+        const key = `${targetType}_${targetId}`;
         setActionId(key);
 
-        setSavedItems((prev) => prev.filter((i) => !(i.contentType === item.contentType && i.contentId === item.contentId)));
-        setCounts((prev) => ({
-            ...prev,
-            totalCount: Math.max(0, prev.totalCount - 1),
+        // 1. Optimistically remove from state immediately
+        setSavedItems((prev) => prev.filter((i) => {
+            const curId = String(i.contentId || i.id);
+            const isMatch = curId === String(targetId);
+            if (isMatch && i.contentType && targetType) {
+                return i.contentType.toLowerCase() !== targetType.toLowerCase();
+            }
+            return !isMatch;
         }));
 
+        // 2. Decrement counts
+        setCounts((prev) => {
+            const type = (targetType || '').toLowerCase();
+            return {
+                ...prev,
+                totalCount: Math.max(0, prev.totalCount - 1),
+                postsCount: type === 'post' ? Math.max(0, prev.postsCount - 1) : prev.postsCount,
+                articlesCount: type === 'article' ? Math.max(0, prev.articlesCount - 1) : prev.articlesCount,
+                videosCount: type === 'video' ? Math.max(0, prev.videosCount - 1) : prev.videosCount,
+                podcastsCount: (type === 'podcast' || type === 'audio') ? Math.max(0, prev.podcastsCount - 1) : prev.podcastsCount,
+            };
+        });
+        setTotalCount((prev) => Math.max(0, prev - 1));
+
+        // 3. Clean up all localStorage persistence
         try {
-            await savedContentApi.toggleBookmark(item.contentType, item.contentId);
-            loadCounts();
+            const existingCustom = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
+            const updatedCustom = existingCustom.filter((i) => {
+                const curId = String(i.contentId || i.id);
+                const isMatch = curId === String(targetId);
+                if (isMatch && i.contentType && targetType) {
+                    return i.contentType.toLowerCase() !== targetType.toLowerCase();
+                }
+                return !isMatch;
+            });
+            localStorage.setItem('knome_saved_items_custom', JSON.stringify(updatedCustom));
+
+            const existingBookmarked = JSON.parse(localStorage.getItem('knome_bookmarked_ids') || '[]');
+            const updatedBookmarked = existingBookmarked.filter((id) => String(id) !== String(targetId));
+            localStorage.setItem('knome_bookmarked_ids', JSON.stringify(updatedBookmarked));
+
+            const existingMap = JSON.parse(localStorage.getItem('knome_item_category_map') || '{}');
+            delete existingMap[`${targetType}_${targetId}`];
+            delete existingMap[`${item.contentType}_${item.contentId}`];
+            delete existingMap[`${item.contentType}_${item.id}`];
+            delete existingMap[`Post_${targetId}`];
+            delete existingMap[`Article_${targetId}`];
+            delete existingMap[`Video_${targetId}`];
+            delete existingMap[`Podcast_${targetId}`];
+            delete existingMap[String(targetId)];
+            delete existingMap[targetId];
+            localStorage.setItem('knome_item_category_map', JSON.stringify(existingMap));
+            setItemCategoryMap(existingMap);
+        } catch (storageErr) {
+            console.warn('Failed to clean localStorage bookmarks:', storageErr);
+        }
+
+        // 4. Notify other components across the app
+        try {
+            window.dispatchEvent(new CustomEvent('knome-bookmark-saved', { 
+                detail: { id: targetId, contentId: targetId, contentType: targetType, removed: true } 
+            }));
+            window.dispatchEvent(new StorageEvent('storage', { key: 'knome_saved_items_custom' }));
+        } catch (e) {}
+
+        // 5. Sync with Backend API
+        try {
+            const isNumeric = /^\d+$/.test(String(targetId));
+            if (isNumeric) {
+                await savedContentApi.toggleBookmark(targetType, targetId);
+            }
         } catch (err) {
-            console.error('Failed to unsave item', err);
-            loadSavedContent();
+            console.warn('Backend toggleBookmark notice (item removed locally):', err?.message || err);
         } finally {
             setActionId(null);
+            try {
+                await loadCounts();
+            } catch {}
         }
-    };
-
-    // Category Creation Handler
-    const handleCreateCategory = (e) => {
-        e.preventDefault();
-        if (!newCategoryName.trim()) return;
-
-        const newCat = {
-            id: newCategoryName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-            name: newCategoryName.trim(),
-            icon: newCategoryIcon || 'folder',
-            color: 'bg-indigo-500/10 text-indigo-600 border border-indigo-500/20'
-        };
-
-        const updated = [...categories, newCat];
-        setCategories(updated);
-        localStorage.setItem('knome_saved_categories', JSON.stringify(updated));
-        setNewCategoryName('');
-        setIsCreateCatModalOpen(false);
     };
 
     // Category Assignment Handler
@@ -327,8 +428,9 @@ export default function SavedContent() {
 
     // Helper formatting
     const formatDate = (dateStr) => {
-        if (!dateStr) return '';
+        if (!dateStr) return 'Recently';
         const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return 'Recently';
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     };
 
@@ -356,34 +458,92 @@ export default function SavedContent() {
         }
     };
 
+    const normalizeCategoryId = (raw) => {
+        if (!raw || typeof raw !== 'string') return null;
+        const clean = raw.toLowerCase().trim().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '');
+        if (clean === 'work' || clean === 'work_tech' || clean.includes('work') || clean.includes('tech')) return 'work';
+        if (clean === 'hr' || clean === 'hr_policies' || clean.includes('hr') || clean.includes('policy')) return 'hr';
+        if (clean === 'favorites' || clean === 'favorite' || clean === 'starred' || clean.includes('fav')) return 'favorites';
+        if (clean === 'readlater' || clean === 'read_later' || clean.includes('read') || clean.includes('later')) return 'readlater';
+        if (clean === 'design' || clean === 'design_arch' || clean.includes('design') || clean.includes('arch')) return 'work';
+
+        // Match against existing custom categories
+        const found = categories.find(c => c.id === clean || c.name?.toLowerCase().replace(/[^a-z0-9]/g, '_') === clean);
+        if (found && found.id !== 'all') return found.id;
+
+        return null;
+    };
+
     const getItemCategoryId = (item) => {
-        if (!item) return 'all';
+        if (!item) return 'work';
         const itemKey1 = `${item.contentType}_${item.contentId}`;
         const itemKey2 = `${item.contentType}_${item.id}`;
-        return itemCategoryMap[itemKey1] || 
-               itemCategoryMap[itemKey2] || 
-               itemCategoryMap[item.contentId] || 
-               itemCategoryMap[item.id] || 
-               item.categoryId || 
-               (item.userCategory ? item.userCategory.toLowerCase().replace(/\s+/g, '_') : null) || 
-               (item.category ? item.category.toLowerCase().replace(/\s+/g, '_') : null) || 
-               (item.categoryName ? item.categoryName.toLowerCase().replace(/\s+/g, '_') : null) || 
-               'all';
+
+        // 1. Explicitly mapped in itemCategoryMap
+        const mapped = itemCategoryMap[itemKey1] || itemCategoryMap[itemKey2] || itemCategoryMap[item.contentId] || itemCategoryMap[item.id];
+        const normMapped = normalizeCategoryId(mapped);
+        if (normMapped) return normMapped;
+
+        // 2. Item explicit category property from backend or bookmark
+        const raw = item.categoryId || item.userCategory || item.category || item.categoryName || item.categoryOrCommunity;
+        const normRaw = normalizeCategoryId(raw);
+        if (normRaw) return normRaw;
+
+        // 3. Intelligent AI / content analysis
+        try {
+            const analysis = analyzeContentCategory(
+                item.summary || item.contentText || item.content || '',
+                item.title || '',
+                item.tags || [item.contentType || '']
+            );
+            if (analysis && analysis.id && analysis.id !== 'all') {
+                const normAnalyzed = normalizeCategoryId(analysis.id);
+                if (normAnalyzed) return normAnalyzed;
+            }
+        } catch (e) {}
+
+        // 4. Default to a valid category folder (never 'all')
+        const type = (item.contentType || '').toLowerCase();
+        if (type === 'video' || type === 'article') return 'work';
+        return 'readlater';
     };
 
     // Filter items by category
-    const categoryFilteredItems = savedItems.filter(item => {
-        if (selectedCategory === 'all') return true;
-        const itemCatId = getItemCategoryId(item);
-        return itemCatId === selectedCategory;
-    });
+    const categoryFilteredItems = useMemo(() => {
+        return savedItems.filter(item => {
+            if (selectedCategory === 'all') return true;
+            const itemCatId = getItemCategoryId(item);
+            return itemCatId === selectedCategory;
+        });
+    }, [savedItems, selectedCategory, itemCategoryMap]);
+
+    // Sorted items (Newest Saved vs Oldest Saved)
+    const sortedItems = useMemo(() => {
+        return [...categoryFilteredItems].sort((a, b) => {
+            const dateA = new Date(a.savedDate || a.savedAt || a.createdAt || 0).getTime() || 0;
+            const dateB = new Date(b.savedDate || b.savedAt || b.createdAt || 0).getTime() || 0;
+            if (sortBy === 'OldestSaved') {
+                return dateA - dateB;
+            }
+            return dateB - dateA;
+        });
+    }, [categoryFilteredItems, sortBy]);
 
     // Infinite Scroll Hook
-    const { visibleCount: visibleItemCount, reset: resetScrollLoading } = useScrollLoading(categoryFilteredItems.length, 8, 8);
+    const { visibleCount: visibleItemCount, reset: resetScrollLoading } = useScrollLoading(sortedItems.length, 8, 8);
 
     useEffect(() => {
         resetScrollLoading();
-    }, [selectedCategory, activeTab, resetScrollLoading]);
+    }, [selectedCategory, activeTab, sortBy, resetScrollLoading]);
+
+    // Exact count of items in each category folder and sum across all folders
+    const validCategoryFolders = categories.filter(c => c.id !== 'all');
+    const folderCountsSum = validCategoryFolders.reduce((sum, cat) => {
+        return sum + savedItems.filter(item => getItemCategoryId(item) === cat.id).length;
+    }, 0);
+
+    const totalTypeCount = (counts.postsCount || 0) + (counts.articlesCount || 0) + (counts.videosCount || 0) + (counts.podcastsCount || 0);
+    const unifiedTotalCount = activeTab === 'All' ? Math.max(folderCountsSum, savedItems.length) : (counts.totalCount || savedItems.length);
 
     return (
         <main className="flex-1 flex flex-col gap-5 pb-6 min-w-0 text-slate-800 dark:text-slate-100 font-sans">
@@ -414,7 +574,7 @@ export default function SavedContent() {
                 {/* Content Type Tabs */}
                 <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar whitespace-nowrap">
                     {tabs.map((tab) => {
-                        const count = counts[tab.countKey] || 0;
+                        const count = tab.id === 'All' ? unifiedTotalCount : (counts[tab.countKey] || 0);
                         const isActive = activeTab === tab.id;
                         return (
                             <button
@@ -466,7 +626,6 @@ export default function SavedContent() {
                     >
                         <option value="NewestSaved">Newest Saved</option>
                         <option value="OldestSaved">Oldest Saved</option>
-                        <option value="RecentlyUpdated">Recently Updated</option>
                     </select>
                 </div>
             </div>
@@ -477,7 +636,7 @@ export default function SavedContent() {
                     <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-amber-500 text-[18px]">folder_special</span>
                         <h2 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            Category Folders ({categories.length - 1})
+                            Category Folders
                         </h2>
                     </div>
                 </div>
@@ -487,7 +646,7 @@ export default function SavedContent() {
                     {categories.map((cat) => {
                         const isSelected = selectedCategory === cat.id;
                         const catItemCount = cat.id === 'all' 
-                            ? savedItems.length 
+                            ? folderCountsSum 
                             : savedItems.filter(item => getItemCategoryId(item) === cat.id).length;
 
                         return (
@@ -546,7 +705,7 @@ export default function SavedContent() {
             )}
 
             {/* Empty State */}
-            {!isLoading && !error && categoryFilteredItems.length === 0 && (
+            {!isLoading && !error && sortedItems.length === 0 && (
                 <div className="glass rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-10 text-center flex flex-col items-center justify-center min-h-[300px]">
                     <div className="w-14 h-14 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mb-3">
                         <span className="material-symbols-outlined text-[32px]">folder_off</span>
@@ -576,14 +735,14 @@ export default function SavedContent() {
             )}
 
             {/* Saved Content Items List */}
-            {!isLoading && !error && categoryFilteredItems.length > 0 && (
+            {!isLoading && !error && sortedItems.length > 0 && (
                 <div className="flex flex-col gap-3">
-                    {categoryFilteredItems.slice(0, visibleItemCount).map((item) => {
-                        const itemKey = `${item.contentType}_${item.contentId}`;
+                    {sortedItems.slice(0, visibleItemCount).map((item) => {
+                        const itemKey = `${item.contentType || 'Post'}_${item.contentId || item.id}`;
                         const isUnsaving = actionId === itemKey;
                         const isAvailable = item.isAvailable !== false;
-                        const assignedCatId = itemCategoryMap[itemKey] || 'all';
-                        const assignedCat = categories.find(c => c.id === assignedCatId) || categories[0];
+                        const assignedCatId = getItemCategoryId(item);
+                        const assignedCat = categories.find(c => c.id === assignedCatId) || categories.find(c => c.id === 'work') || categories[1] || categories[0];
 
                         const rawImage = item.thumbnailUrl || item.image || item.thumbnail || item.coverImage || item.mediaUrl || (Array.isArray(item.mediaUrls) ? item.mediaUrls[0] : null) || (Array.isArray(item.attachmentUrls) ? item.attachmentUrls[0] : null);
                         const thumbnailSrc = rawImage ? resolveMediaUrl(rawImage) : getDefaultThumbnail(item.contentType, item.userCategory || item.categoryName);
@@ -634,7 +793,7 @@ export default function SavedContent() {
                                             </button>
 
                                             <span className="text-[11px] font-semibold text-slate-400">
-                                                Saved {formatDate(item.savedDate)}
+                                                Saved {formatDate(item.savedDate || item.savedAt || item.createdAt)}
                                             </span>
                                         </div>
 
@@ -717,7 +876,7 @@ export default function SavedContent() {
                     })}
 
                     {/* Infinite Scroll Progress Indicator */}
-                    {visibleItemCount < categoryFilteredItems.length && (
+                    {visibleItemCount < sortedItems.length && (
                         <div className="py-6 text-center flex items-center justify-center gap-2 text-slate-400 text-xs font-semibold">
                             <span className="material-symbols-outlined text-[20px] animate-spin text-amber-500">progress_activity</span>
                             <span>Loading more saved items on scroll...</span>
@@ -726,68 +885,7 @@ export default function SavedContent() {
                 </div>
             )}
 
-            {/* ─── MODAL 1: CREATE NEW CATEGORY ─── */}
-            {isCreateCatModalOpen && (
-                <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-                    <form onSubmit={handleCreateCategory} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl animate-in zoom-in-95 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-amber-500 font-bold">
-                                <span className="material-symbols-outlined text-xl">create_new_folder</span>
-                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Create Category Folder</h3>
-                            </div>
-                            <button type="button" onClick={() => setIsCreateCatModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                                <span className="material-symbols-outlined text-lg">close</span>
-                            </button>
-                        </div>
-
-                        <div>
-                            <label className="block text-slate-500 font-bold text-xs mb-1">Category Name</label>
-                            <input
-                                type="text"
-                                required
-                                value={newCategoryName}
-                                onChange={e => setNewCategoryName(e.target.value)}
-                                placeholder="e.g. AI Research, Design Patterns..."
-                                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold outline-none text-slate-900 dark:text-white"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-slate-500 font-bold text-xs mb-1">Folder Icon</label>
-                            <div className="grid grid-cols-6 gap-2">
-                                {['folder', 'lightbulb', 'code', 'school', 'work', 'star'].map((icon) => (
-                                    <button
-                                        type="button"
-                                        key={icon}
-                                        onClick={() => setNewCategoryIcon(icon)}
-                                        className={`p-2 rounded-lg flex items-center justify-center border cursor-pointer ${newCategoryIcon === icon ? 'bg-amber-500 text-slate-950 border-amber-500' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'}`}
-                                    >
-                                        <span className="material-symbols-outlined text-[18px]">{icon}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-2 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => setIsCreateCatModalOpen(false)}
-                                className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-xs"
-                            >
-                                Create Category
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            )}
-
-            {/* ─── MODAL 2: ASSIGN CATEGORY TO ITEM ─── */}
+            {/* ─── MODAL: ASSIGN CATEGORY TO ITEM ─── */}
             {assigningItem && (
                 <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl animate-in zoom-in-95 space-y-4">
@@ -806,9 +904,9 @@ export default function SavedContent() {
                         </p>
 
                         <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                            {categories.map((cat) => {
-                                const itemKey = `${assigningItem.contentType}_${assigningItem.contentId}`;
-                                const isCurrent = (itemCategoryMap[itemKey] || 'all') === cat.id;
+                            {categories.filter(c => c.id !== 'all').map((cat) => {
+                                const itemKey = `${assigningItem.contentType || 'Post'}_${assigningItem.contentId || assigningItem.id}`;
+                                const isCurrent = getItemCategoryId(assigningItem) === cat.id;
 
                                 return (
                                     <button
