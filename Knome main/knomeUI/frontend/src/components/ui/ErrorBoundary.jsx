@@ -69,6 +69,12 @@ export default class ErrorBoundary extends Component {
                         <p className="text-xs text-slate-400 mb-6">
                             An unexpected issue occurred while displaying this page.
                         </p>
+                        {this.state.error && (
+                            <div className="p-3 bg-red-950/80 border border-red-800 rounded-xl text-left text-xs font-mono text-red-300 max-h-48 overflow-auto mb-4 w-full select-text">
+                                <p className="font-bold text-red-200">{this.state.error.toString()}</p>
+                                <pre className="text-[10px] mt-1 whitespace-pre-wrap">{this.state.error.stack}</pre>
+                            </div>
+                        )}
                         <div className="flex items-center gap-3 w-full">
                             <button
                                 type="button"
