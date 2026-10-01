@@ -32,7 +32,20 @@ public class CommunityDto
 public class AddCommunityMembersDto
 {
     public List<int> UserIds { get; set; } = new();
+    public List<string>? EmployeeIds { get; set; }
     public string MemberType { get; set; } = "Member";
+    public List<AddCommunityMemberItemDto>? Members { get; set; }
+}
+
+public class AddCommunityMemberItemDto
+{
+    public int? UserId { get; set; }
+    public string? EmployeeId { get; set; }
+    public string? FullName { get; set; }
+    public string? Email { get; set; }
+    public string? Designation { get; set; }
+    public string? DepartmentName { get; set; }
+    public string? ProfilePhotoUrl { get; set; }
 }
 
 public class RejectCommunityDto

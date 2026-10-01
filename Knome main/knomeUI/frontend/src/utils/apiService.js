@@ -309,6 +309,8 @@ export const communitiesApi = {
             ? { userIds: data.map(Number).filter(n => !isNaN(n) && n > 0), memberType: 'Member' }
             : { 
                 userIds: (data?.userIds || []).map(Number).filter(n => !isNaN(n) && n > 0), 
+                employeeIds: data?.employeeIds || [],
+                members: data?.members || [],
                 memberType: data?.memberType || 'Member' 
             };
         return apiClient.post(`/Communities/${communityId}/members`, payload);
