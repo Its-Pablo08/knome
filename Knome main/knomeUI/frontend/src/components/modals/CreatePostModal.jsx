@@ -12,7 +12,8 @@ import {
     formatDraftTimeAgo,
     getActiveComposerScratchpad,
     saveActiveComposerScratchpad,
-    clearActiveComposerScratchpad
+    clearActiveComposerScratchpad,
+    removeDraftFromLocalPosts
 } from '../../utils/draftManager';
 import ImageCropModal from './ImageCropModal';
 import CustomDateTimePicker from '../widgets/CustomDateTimePicker';
@@ -843,12 +844,14 @@ const FILE_LIMITS = {
 
             let createdPostId = activeDraftId;
             const isNumericActiveDraft = /^\d+$/.test(String(activeDraftId));
+            let publishSucceededOnBackend = false;
 
             if (isNumericActiveDraft) {
                 try {
                     const apiRes = await postsApi.update(activeDraftId, payload);
                     const updatedPost = apiRes?.data || apiRes;
                     createdPostId = updatedPost?.postId || updatedPost?.id || activeDraftId;
+                    publishSucceededOnBackend = true;
                 } catch (err) {
                     const errMsg = err?.response?.data?.message || err?.message || '';
                     if (errMsg.toLowerCase().includes('restricted') || errMsg.toLowerCase().includes('blocked') || (err?.response?.status === 400 && errMsg)) {
@@ -857,9 +860,11 @@ const FILE_LIMITS = {
                         setIsPublishing(false);
                         return;
                     }
-                    console.warn('API post update notice, using fallback:', err);
+                    console.warn('API post update failed, falling back to create:', err);
                 }
-            } else {
+            }
+
+            if (!publishSucceededOnBackend) {
                 try {
                     const apiRes = await postsApi.create(payload);
                     const createdPost = apiRes?.data || apiRes;
@@ -910,6 +915,11 @@ const FILE_LIMITS = {
             if (activeDraftId) {
                 removeDraftFromLocalPosts(activeDraftId);
             }
+            try {
+                const deletedIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]');
+                const filteredDeleted = deletedIds.filter(id => String(id) !== String(createdPostId) && String(id) !== String(activeDraftId));
+                localStorage.setItem('knome_deleted_post_ids', JSON.stringify(filteredDeleted));
+            } catch (e) {}
             window.dispatchEvent(new CustomEvent('knome_drafts_updated'));
 
             // Also persist directly to community feed so it is immediately visible and stays visible on refresh (only if not a draft)
@@ -1814,7 +1824,7 @@ const FILE_LIMITS = {
                                         {isPublishing ? (
                                             <>
                                                 <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span>
-                                                {scheduledTime ? 'Scheduling...' : (isDraftMode ? 'Publishing Draft...' : 'Publishing...')}
+                                                <span>{scheduledTime ? 'Scheduling...' : 'Publishing...'}</span>
                                             </>
                                         ) : (
                                             scheduledTime ? (
@@ -1825,7 +1835,7 @@ const FILE_LIMITS = {
                                             ) : (
                                                 <>
                                                     <span className="material-symbols-outlined text-[16px]">send</span>
-                                                    <span>{isDraftMode ? 'Publish Draft' : 'Publish'}</span>
+                                                    <span>Publish Now</span>
                                                 </>
                                             )
                                         )}
