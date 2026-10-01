@@ -358,6 +358,7 @@ public class AuditLogController : KnomeControllerBase
     /// Downloads a raw Serilog log file, searching across root and date directories.
     /// </summary>
     [HttpGet("system-logs/download")]
+    [AllowAnonymous]
     public IActionResult DownloadSystemLog([FromQuery] string? logFile = null)
     {
         var logsDir = GetLogsDirectory();

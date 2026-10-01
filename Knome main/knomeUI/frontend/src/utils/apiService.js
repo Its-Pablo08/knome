@@ -663,6 +663,17 @@ export const adminApi = {
         return `${base}/audit/system-logs/download${logFile ? `?logFile=${encodeURIComponent(logFile)}` : ''}`;
     },
 
+    /** Download system log file as Blob with authentication */
+    downloadSystemLog: async (logFile = '') => {
+        const base = apiClient.getBaseUrl ? apiClient.getBaseUrl() : 'http://localhost:5096/api';
+        const url = `${base}/audit/system-logs/download${logFile ? `?logFile=${encodeURIComponent(logFile)}` : ''}`;
+        const token = localStorage.getItem('knome_jwt');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const resp = await fetch(url, { headers });
+        if (!resp.ok) throw new Error(`Download failed with status ${resp.status}`);
+        return await resp.blob();
+    },
+
     /** GET /notifications/broadcasts */
     getAnnouncements: () => apiClient.get('/notifications/broadcasts').then(res => res?.data || res || []).catch(() => []),
 
