@@ -18,6 +18,47 @@ export const roleNameToCode = {
     'PENDING': 'PENDING',
 };
 
+/**
+ * Expands any set of roles/codes to include all associated aliases, codes, and canonical names
+ * so that any permission check throughout the app (SYSADM, System Admin, System Administrator) succeeds.
+ */
+export const expandRoles = (rolesList) => {
+    if (!rolesList) return ['Employee', 'EMP'];
+    const list = Array.isArray(rolesList) ? rolesList : [rolesList];
+    const expanded = new Set();
+    list.forEach(r => {
+        if (!r) return;
+        const str = String(r).trim();
+        const upper = str.toUpperCase();
+        if (upper === 'SYSADM' || upper === 'SYSTEM ADMIN' || upper === 'SYSTEM ADMINISTRATOR' || upper === 'SYSTEMADMIN') {
+            expanded.add('System Admin');
+            expanded.add('System Administrator');
+            expanded.add('SYSADM');
+            expanded.add('SystemAdmin');
+        } else if (upper === 'HRADM' || upper === 'HR ADMIN' || upper === 'HR ADMINISTRATOR' || upper === 'HRADMIN') {
+            expanded.add('HR Admin');
+            expanded.add('HR Administrator');
+            expanded.add('HRADM');
+            expanded.add('HRAdmin');
+        } else if (upper === 'CADM' || upper === 'COMMUNITY ADMIN' || upper === 'COMMUNITY ADMINISTRATOR' || upper === 'COMMUNITYADMIN') {
+            expanded.add('Community Admin');
+            expanded.add('Community Administrator');
+            expanded.add('CADM');
+            expanded.add('CommunityAdmin');
+        } else if (upper === 'EMP' || upper === 'EMPLOYEE') {
+            expanded.add('Employee');
+            expanded.add('EMP');
+        } else {
+            expanded.add(str);
+        }
+    });
+    if (expanded.size === 0) {
+        expanded.add('Employee');
+        expanded.add('EMP');
+    }
+    return Array.from(expanded);
+};
+
 export const KNOWN_ROSTER_NAMES = {
     'MP0108': 'Loveneesh Sharma',
     'MPO101': 'Loveneesh Sharma',
@@ -242,7 +283,7 @@ export const getUserStatusConfig = (statusOrUser) => {
 // This is the seed — the live state is managed inside UserProvider via useState.
 export const INITIAL_USERS = [
     { id: 1, userId: 1, employeeId: 'MP0108', email: 'loveneesh.sharma@mponline.gov.in', name: 'Loveneesh Sharma', fullName: 'Loveneesh Sharma', role: 'SYSADM', roleName: 'System Admin', designation: 'TPM', department: 'Higher Education', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
-    { id: 2, userId: 2, employeeId: 'MPO102', email: 'vishendra.sharma@mponline.gov.in', name: 'Vishendra Sharma', fullName: 'Vishendra Sharma', role: 'CADM', roleName: 'Community Admin', designation: 'Community Experience Specialist', department: 'Employee Experience', location: 'Bhopal HQ', avatar: null, karmaPoints: 225, karma: 225, isActive: true },
+    { id: 2, userId: 2, employeeId: 'MPO102', email: 'vishendra@mponline.gov.in', name: 'Vishendra Sharma', fullName: 'Vishendra Sharma', role: 'CADM', roleName: 'Community Admin', designation: 'Community Experience Specialist', department: 'Employee Experience', location: 'Bhopal HQ', avatar: null, karmaPoints: 225, karma: 225, isActive: true },
     { id: 3, userId: 3, employeeId: 'MPO103', email: 'sourabh.sahu@mponline.gov.in', name: 'Sourabh Sahu', fullName: 'Sourabh Sahu', role: 'HRADM', roleName: 'HR Admin', designation: 'Talent Acquisition Manager', department: 'Human Resources', location: 'Bhopal HQ', avatar: null, karmaPoints: 306, karma: 306, isActive: true },
     { id: 4, userId: 4, employeeId: 'MPO104', email: 'rishikesh.ugle@mponline.gov.in', name: 'Rishikesh Ugle', fullName: 'Rishikesh Ugle', role: 'EMP', roleName: 'Employee', designation: 'Software Engineer', department: 'Product Design', location: 'Bhopal HQ', avatar: null, karmaPoints: 170, karma: 170, isActive: true },
     { id: 5, userId: 5, employeeId: 'MPO105', email: 'meghna.tiwari@mponline.gov.in', name: 'Meghna Tiwari', fullName: 'Meghna Tiwari', role: 'EMP', roleName: 'Employee', designation: 'Business Analyst', department: 'Product Design', location: 'Bhopal HQ', avatar: null, karmaPoints: 123, karma: 123, isActive: true },
@@ -288,11 +329,39 @@ const UserContext = createContext({
 });
 
 export const UserProvider = ({ children }) => {
+    // Helper to get initial users list with any saved role overrides applied
+    const getInitialUsersList = () => {
+        try {
+            const overrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+            return INITIAL_USERS.map(u => {
+                const customRoles = overrides[String(u.userId)] || overrides[String(u.id)] || overrides[u.employeeId?.toUpperCase()] || (u.email && overrides[u.email.toLowerCase()]);
+                if (customRoles && Array.isArray(customRoles) && customRoles.length > 0) {
+                    const primary = customRoles.find(r => r !== 'Employee' && r !== 'EMP') || customRoles[0] || 'Employee';
+                    const cleanPrimary = (primary === 'System Administrator' || primary === 'SYSADM') ? 'System Admin'
+                        : (primary === 'HR Administrator' || primary === 'HRADM') ? 'HR Admin'
+                        : (primary === 'Community Administrator' || primary === 'CADM') ? 'Community Admin'
+                        : primary;
+                    const code = roleNameToCode[cleanPrimary] || roleNameToCode[primary] || 'EMP';
+                    return { ...u, role: code, roleName: cleanPrimary, roles: expandRoles(customRoles) };
+                }
+                return { ...u, roles: expandRoles([u.roleName || u.role || 'Employee']) };
+            });
+        } catch {
+            return INITIAL_USERS.map(u => ({ ...u, roles: expandRoles([u.roleName || u.role || 'Employee']) }));
+        }
+    };
+
+    const initialUsersList = getInitialUsersList();
     // Default administrator user Loveneesh Sharma (MP0108) — ensures Knome opens directly without login barrier
-    const defaultAdminUser = INITIAL_USERS.find(u => u.employeeId === 'MP0108' || u.employeeId === 'MPO101') || INITIAL_USERS[0];
+    const defaultAdminUser = initialUsersList.find(u => u.employeeId === 'MP0108' || u.employeeId === 'MPO101') || initialUsersList[0];
     const savedEmpId = typeof window !== 'undefined' ? localStorage.getItem('knome_employeeId') : null;
     const hasSavedSession = typeof window !== 'undefined' && Boolean(localStorage.getItem('knome_employeeId') || localStorage.getItem('knome_jwt'));
-    const initialUser = (savedEmpId && INITIAL_USERS.find(u => u.employeeId?.toUpperCase() === savedEmpId.toUpperCase())) || defaultAdminUser;
+    const initialUser = (savedEmpId && initialUsersList.find(u => 
+        u.employeeId?.toUpperCase() === savedEmpId.toUpperCase() ||
+        (u.email && u.email.toLowerCase() === savedEmpId.toLowerCase()) ||
+        String(u.userId) === String(savedEmpId) ||
+        String(u.id) === String(savedEmpId)
+    )) || defaultAdminUser;
 
     const [currentUser, setCurrentUser] = useState(initialUser);
     const [isAuthLoading, setIsAuthLoading] = useState(hasSavedSession);
@@ -300,7 +369,7 @@ export const UserProvider = ({ children }) => {
     const [isLoggingOut, setIsLoggingOut] = useState(() => (typeof window !== 'undefined' && sessionStorage.getItem('knome_logging_out') === 'true'));
 
     // ── Reactive users list — changes here cause Navbar Switch User to re-render ──
-    const [usersList, setUsersList] = useState(INITIAL_USERS);
+    const [usersList, setUsersList] = useState(initialUsersList);
 
     // Merge backend profile data on top of local user shape
     const mergeProfile = useCallback((localUser, profile) => {
@@ -340,13 +409,30 @@ export const UserProvider = ({ children }) => {
         const isSuspended = profile.isPermanentlySuspended === true || profile.isSuspended === true || (profile.suspendedUntil && new Date(profile.suspendedUntil) > new Date());
         const isActive = profile.isActive !== undefined ? profile.isActive : (localUser.isActive !== undefined ? localUser.isActive : true);
         const derivedStatus = isSuspended ? 'Suspended' : (!isActive ? 'Inactive' : 'Active');
+        const singleRoleList = [derivedRoleName];
+
+        // Persist roles into knome_role_overrides so any browser reload retains assigned roles
+        try {
+            const overrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+            if (profile.userId) overrides[String(profile.userId)] = singleRoleList;
+            if (resolvedEmpId) overrides[resolvedEmpId.toUpperCase()] = singleRoleList;
+            if (localUser.userId) overrides[String(localUser.userId)] = singleRoleList;
+            if (localUser.id) overrides[String(localUser.id)] = singleRoleList;
+            if (localUser.employeeId) overrides[localUser.employeeId.toUpperCase()] = singleRoleList;
+            if (localUser.email) overrides[localUser.email.toLowerCase()] = singleRoleList;
+            if (profile.email) overrides[profile.email.toLowerCase()] = singleRoleList;
+            localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
+        } catch {}
 
         setUsersList(prev => {
-            const exists = prev.some(u => u.employeeId?.toUpperCase() === resolvedEmpId?.toUpperCase());
+            const exists = prev.some(u => 
+                (resolvedEmpId && u.employeeId?.toUpperCase() === resolvedEmpId?.toUpperCase()) || 
+                (profile.userId && String(u.userId) === String(profile.userId))
+            );
             if (exists) {
                 return prev.map(u => 
-                    u.employeeId?.toUpperCase() === resolvedEmpId?.toUpperCase()
-                        ? { ...u, role: derivedRole, roleName: derivedRoleName, name: resolvedName, fullName: resolvedName, status: derivedStatus, isActive: isActive && !isSuspended, isSuspended }
+                    ((resolvedEmpId && u.employeeId?.toUpperCase() === resolvedEmpId?.toUpperCase()) || (profile.userId && String(u.userId) === String(profile.userId)))
+                        ? { ...u, role: derivedRole, roleName: derivedRoleName, roles: singleRoleList, name: resolvedName, fullName: resolvedName, status: derivedStatus, isActive: isActive && !isSuspended, isSuspended }
                         : u
                 );
             }
@@ -357,6 +443,7 @@ export const UserProvider = ({ children }) => {
                 fullName: resolvedName,
                 role: derivedRole,
                 roleName: derivedRoleName,
+                roles: singleRoleList,
                 designation: profile.designation || localUser.designation,
                 department: profile.departmentName || localUser.department,
                 status: derivedStatus,
@@ -373,9 +460,7 @@ export const UserProvider = ({ children }) => {
             fullName: resolvedName,
             role: derivedRole,
             roleName: derivedRoleName,
-            roles: profile.roles && profile.roles.length > 0 
-                ? profile.roles.map(r => r === 'System Administrator' ? 'System Admin' : r === 'HR Administrator' ? 'HR Admin' : r === 'Community Administrator' ? 'Community Admin' : r)
-                : [derivedRoleName],
+            roles: singleRoleList,
             designation: profile.designation || localUser.designation,
             department: profile.departmentName || localUser.department,
             location: profile.location || localUser.location,
@@ -740,8 +825,10 @@ export const UserProvider = ({ children }) => {
 
             if (savedEmployeeId) {
                 let localUser = usersList.find(u => 
-                    u.employeeId?.toUpperCase() === savedEmployeeId.toUpperCase() ||
-                    u.email?.toLowerCase() === savedEmployeeId.toLowerCase()
+                    (u.employeeId && u.employeeId.toUpperCase() === savedEmployeeId.toUpperCase()) ||
+                    (u.email && u.email.toLowerCase() === savedEmployeeId.toLowerCase()) ||
+                    String(u.userId) === String(savedEmployeeId) ||
+                    String(u.id) === String(savedEmployeeId)
                 );
                 if (!localUser) {
                     localUser = {
@@ -788,7 +875,13 @@ export const UserProvider = ({ children }) => {
                 if (existingToken) {
                     try {
                         const profile = await profileApi.getMe();
-                        if (profile && (profile.employeeId?.toUpperCase() === savedEmployeeId.toUpperCase() || !profile.employeeId)) {
+                        if (profile && (
+                            !profile.employeeId ||
+                            profile.employeeId?.toUpperCase() === savedEmployeeId.toUpperCase() ||
+                            (localUser?.email && profile.email && localUser.email.toLowerCase() === profile.email.toLowerCase()) ||
+                            (localUser?.employeeId && profile.employeeId && localUser.employeeId.toUpperCase() === profile.employeeId.toUpperCase()) ||
+                            String(profile.userId) === String(savedEmployeeId)
+                        )) {
                             const isProfileSuspended = profile.isSuspended === true || profile.isPermanentlySuspended === true || profile.isActive === false || (profile.suspendedUntil && new Date(profile.suspendedUntil) > new Date());
                             if (isProfileSuspended) {
                                 localStorage.removeItem('knome_jwt');
@@ -904,6 +997,7 @@ export const UserProvider = ({ children }) => {
      * Login with a specific local user (used from Login page or user-switcher).
      */
     const login = useCallback(async (employeeId) => {
+        try { apiClient.clearCache(); } catch {}
         let normalizedId = employeeId?.trim()?.toUpperCase() || 'MP0108';
         if (normalizedId === 'MPO101') normalizedId = 'MP0108';
         if (normalizedId === 'MPO664') normalizedId = 'MP0664';
@@ -912,8 +1006,10 @@ export const UserProvider = ({ children }) => {
         }
 
         let localUser = usersList.find(u => 
-            u.employeeId?.toUpperCase() === normalizedId ||
-            u.email?.toLowerCase() === employeeId?.toLowerCase()
+            (u.employeeId && u.employeeId.toUpperCase() === normalizedId) ||
+            (u.email && employeeId && u.email.toLowerCase() === employeeId.trim().toLowerCase()) ||
+            String(u.userId) === String(employeeId) ||
+            String(u.id) === String(employeeId)
         );
         if (!localUser) {
             const fallbackName = resolveEmployeeName(normalizedId, normalizedId);
@@ -1028,6 +1124,7 @@ export const UserProvider = ({ children }) => {
      * Switch user (dev/demo shortcut — kept for the user switcher in Navbar).
      */
     const switchUser = useCallback(async (user) => {
+        try { apiClient.clearCache(); } catch {}
         let isSuspended = user.isActive === false || user.isSuspended === true || user.isPermanentlySuspended === true || user.status === 'Suspended';
         try {
             const suspendedMap = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
@@ -1094,15 +1191,44 @@ export const UserProvider = ({ children }) => {
     const updateUserRoleInList = useCallback((targetIdentifier, newRoleParam) => {
         const rolesArray = Array.isArray(newRoleParam) ? newRoleParam : [newRoleParam];
         const primaryRoleName = rolesArray.find(r => r !== 'Employee') || rolesArray[0] || 'Employee';
-        const newRoleCode = roleNameToCode[primaryRoleName] || (primaryRoleName === 'Pending Role Assignment' ? 'PENDING' : 'EMP');
+        const cleanPrimary = (primaryRoleName === 'System Administrator' || primaryRoleName === 'SYSADM') ? 'System Admin'
+            : (primaryRoleName === 'HR Administrator' || primaryRoleName === 'HRADM') ? 'HR Admin'
+            : (primaryRoleName === 'Community Administrator' || primaryRoleName === 'CADM') ? 'Community Admin'
+            : primaryRoleName;
+        const newRoleCode = roleNameToCode[cleanPrimary] || roleNameToCode[primaryRoleName] || (primaryRoleName === 'Pending Role Assignment' ? 'PENDING' : 'EMP');
+        const singleRoleList = [cleanPrimary];
+
+        // Find target user in current usersList
+        const targetUser = usersList.find(u => 
+            (u.userId && String(u.userId) === String(targetIdentifier)) ||
+            (u.id && String(u.id) === String(targetIdentifier)) ||
+            (u.employeeId && u.employeeId.toUpperCase() === String(targetIdentifier).toUpperCase()) ||
+            (u.email && u.email.toLowerCase() === String(targetIdentifier).toLowerCase())
+        );
+
+        // Persist into knome_role_overrides with all identifiable keys
+        try {
+            const overrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+            overrides[String(targetIdentifier)] = singleRoleList;
+            if (targetUser) {
+                if (targetUser.userId) overrides[String(targetUser.userId)] = singleRoleList;
+                if (targetUser.id) overrides[String(targetUser.id)] = singleRoleList;
+                if (targetUser.employeeId) overrides[targetUser.employeeId.toUpperCase()] = singleRoleList;
+                if (targetUser.email) overrides[targetUser.email.toLowerCase()] = singleRoleList;
+            }
+            localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
+        } catch {}
+
+        try { apiClient.clearCache(); } catch {}
 
         // 1. Update the reactive usersList (Navbar Switch User list)
         setUsersList(prev => prev.map(u => {
             const matchById = u.userId && String(u.userId) === String(targetIdentifier);
             const matchBySeedId = u.id && String(u.id) === String(targetIdentifier);
             const matchByEmpId = u.employeeId && u.employeeId.toUpperCase() === String(targetIdentifier).toUpperCase();
-            if (matchById || matchBySeedId || matchByEmpId) {
-                return { ...u, role: newRoleCode, roleName: primaryRoleName, roles: rolesArray };
+            const matchByEmail = u.email && targetUser?.email && u.email.toLowerCase() === targetUser.email.toLowerCase();
+            if (matchById || matchBySeedId || matchByEmpId || matchByEmail) {
+                return { ...u, role: newRoleCode, roleName: cleanPrimary, roles: singleRoleList };
             }
             return u;
         }));
@@ -1113,12 +1239,13 @@ export const UserProvider = ({ children }) => {
             const matchById = prev.userId && String(prev.userId) === String(targetIdentifier);
             const matchBySeedId = prev.id && String(prev.id) === String(targetIdentifier);
             const matchByEmpId = prev.employeeId && prev.employeeId.toUpperCase() === String(targetIdentifier).toUpperCase();
-            if (matchById || matchBySeedId || matchByEmpId) {
-                return { ...prev, role: newRoleCode, roleName: primaryRoleName, roles: rolesArray };
+            const matchByEmail = prev.email && targetUser?.email && prev.email.toLowerCase() === targetUser.email.toLowerCase();
+            if (matchById || matchBySeedId || matchByEmpId || matchByEmail) {
+                return { ...prev, role: newRoleCode, roleName: cleanPrimary, roles: singleRoleList };
             }
             return prev;
         });
-    }, []);
+    }, [usersList]);
 
     /**
      * Award Karma Points according to official MPOnline Enterprise Karma Rules & Daily Caps

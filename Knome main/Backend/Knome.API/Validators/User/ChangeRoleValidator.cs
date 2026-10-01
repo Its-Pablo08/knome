@@ -7,12 +7,26 @@ namespace Knome.API.Validators.User;
 
 public class ChangeRoleValidator : AbstractValidator<ChangeRoleDto>
 {
-    private static readonly string[] ValidRoles =
+    private static readonly HashSet<string> ValidRoles = new(StringComparer.OrdinalIgnoreCase)
     {
         Roles.Employee,
+        "Employee",
+        "EMP",
         Roles.CommunityAdmin,
+        "Community Admin",
+        "Community Administrator",
+        "CommunityAdmin",
+        "CADM",
         Roles.HRAdmin,
-        Roles.SystemAdmin
+        "HR Admin",
+        "HR Administrator",
+        "HRAdmin",
+        "HRADM",
+        Roles.SystemAdmin,
+        "System Admin",
+        "System Administrator",
+        "SystemAdmin",
+        "SYSADM"
     };
 
     public ChangeRoleValidator()
@@ -20,6 +34,6 @@ public class ChangeRoleValidator : AbstractValidator<ChangeRoleDto>
         RuleFor(x => x.RoleNames)
             .NotEmpty().WithMessage("At least one role must be assigned.")
             .Must(roles => roles != null && roles.All(r => ValidRoles.Contains(r)))
-            .WithMessage($"Invalid role name specified. Valid roles are: {string.Join(", ", ValidRoles)}");
+            .WithMessage($"Invalid role name specified. Valid roles are: Employee, Community Admin, HR Admin, System Admin");
     }
 }

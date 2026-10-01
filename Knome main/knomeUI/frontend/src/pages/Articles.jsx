@@ -74,9 +74,9 @@ export default function Articles() {
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [showFilterBar, setShowFilterBar] = useState(false);
     
-    const isSysAdmin = currentUser?.role === 'SYSADM' || 
-                       currentUser?.roleName === 'System Administrator' || 
-                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'System Administrator', 'SystemAdmin'].includes(r)));
+    const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) || 
+                       ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) || 
+                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'System Administrator', 'SystemAdmin', 'System Admin'].includes(r)));
 
     // Dynamic Categories State
     const [availableCategories, setAvailableCategories] = useState([

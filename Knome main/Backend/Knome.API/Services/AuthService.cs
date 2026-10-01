@@ -471,11 +471,47 @@ public class AuthService : IAuthService
             new("fullName", fullName)
         };
 
-        // Support standard [Authorize(Roles = "...")] usage across both URI and short claim types
+        // Support standard [Authorize(Roles = "...")] usage across both URI and short claim types, with aliases
         foreach (var role in roles)
         {
             claims.Add(new Claim(ClaimTypes.Role, role));
             claims.Add(new Claim("role", role));
+
+            var rUpper = role.ToUpperInvariant();
+            if (rUpper.Contains("SYSTEM") || rUpper == "SYSADM")
+            {
+                claims.Add(new Claim(ClaimTypes.Role, "System Administrator"));
+                claims.Add(new Claim("role", "System Administrator"));
+                claims.Add(new Claim(ClaimTypes.Role, "System Admin"));
+                claims.Add(new Claim("role", "System Admin"));
+                claims.Add(new Claim(ClaimTypes.Role, "SYSADM"));
+                claims.Add(new Claim("role", "SYSADM"));
+            }
+            else if (rUpper.Contains("HR") || rUpper == "HRADM")
+            {
+                claims.Add(new Claim(ClaimTypes.Role, "HR Administrator"));
+                claims.Add(new Claim("role", "HR Administrator"));
+                claims.Add(new Claim(ClaimTypes.Role, "HR Admin"));
+                claims.Add(new Claim("role", "HR Admin"));
+                claims.Add(new Claim(ClaimTypes.Role, "HRADM"));
+                claims.Add(new Claim("role", "HRADM"));
+            }
+            else if (rUpper.Contains("COMMUNITY") || rUpper == "CADM")
+            {
+                claims.Add(new Claim(ClaimTypes.Role, "Community Admin"));
+                claims.Add(new Claim("role", "Community Admin"));
+                claims.Add(new Claim(ClaimTypes.Role, "Community Administrator"));
+                claims.Add(new Claim("role", "Community Administrator"));
+                claims.Add(new Claim(ClaimTypes.Role, "CADM"));
+                claims.Add(new Claim("role", "CADM"));
+            }
+            else if (rUpper.Contains("EMPLOYEE") || rUpper == "EMP")
+            {
+                claims.Add(new Claim(ClaimTypes.Role, "Employee"));
+                claims.Add(new Claim("role", "Employee"));
+                claims.Add(new Claim(ClaimTypes.Role, "EMP"));
+                claims.Add(new Claim("role", "EMP"));
+            }
         }
 
         var token = new JwtSecurityToken(
