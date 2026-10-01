@@ -39,20 +39,36 @@ export default function MyCommunitiesWidget() {
                 
                 const cType = (c.communityType || c.type || '').toLowerCase();
                 const isOrgDefault = cType.includes('default') || cType.includes('org');
+                const isBackendComm = Boolean(c.communityId);
 
-                const isJoined = Boolean(
-                    c.currentUserMembershipStatus === 'Approved' ||
-                    c.currentUserMembershipStatus === 'joined' ||
-                    c.isCurrentUserAdmin ||
-                    isOrgDefault ||
-                    userJoinedList.some(j => String(j.id) === String(cId) && (j.status === 'joined' || !j.status)) ||
-                    (currentUser && localMembers.some(m => 
-                        (currentUid && String(m.userId || m.id) === String(currentUid)) ||
-                        (currentName && (m.fullName || m.name || '').toLowerCase().trim() === currentName)
-                    )) ||
-                    ((c.createdByUserId || c.creatorUserId) && String(c.createdByUserId || c.creatorUserId) === String(currentUid)) ||
-                    (c.createdBy && currentName && c.createdBy.toLowerCase().includes(currentName))
-                );
+                let isJoined = false;
+                if (isBackendComm) {
+                    const status = (c.currentUserMembershipStatus || '').toLowerCase();
+                    isJoined = Boolean(
+                        status === 'approved' ||
+                        status === 'joined' ||
+                        c.isCurrentUserAdmin ||
+                        isOrgDefault ||
+                        ((c.createdByUserId || c.creatorUserId) && String(c.createdByUserId || c.creatorUserId) === String(currentUid))
+                    );
+                } else {
+                    const removedList = JSON.parse(localStorage.getItem(`knome_community_removed_${cId}`) || '[]');
+                    const isRemoved = removedList.some(r => {
+                        const s = String(r).toLowerCase();
+                        return (currentUid && s === String(currentUid).toLowerCase()) || (currentName && s === currentName);
+                    });
+                    if (!isRemoved) {
+                        isJoined = Boolean(
+                            isOrgDefault ||
+                            userJoinedList.some(j => String(j.id) === String(cId) && (j.status === 'joined' || !j.status)) ||
+                            (currentUser && localMembers.some(m => 
+                                (currentUid && String(m.userId || m.id) === String(currentUid)) ||
+                                (currentName && (m.fullName || m.name || '').toLowerCase().trim() === currentName)
+                            )) ||
+                            ((c.createdByUserId || c.creatorUserId) && String(c.createdByUserId || c.creatorUserId) === String(currentUid))
+                        );
+                    }
+                }
 
                 const userPhoto = c.avatar || c.thumbnail || c.thumbnailUrl || c.banner || c.bannerUrl || c.bannerImageUrl;
                 return {

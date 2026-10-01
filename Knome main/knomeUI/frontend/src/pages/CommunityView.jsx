@@ -1387,9 +1387,9 @@ export default function CommunityView() {
             const isValidInt32 = communityId && !isNaN(communityId) && Number(communityId) > 0 && Number(communityId) <= 2147483647 && !isPureMockId;
 
             const [commData, postsData, rawMembers, apiFiles] = await Promise.all([
-                isValidInt32 ? communitiesApi.getById(communityId).catch(() => null) : null,
+                isValidInt32 ? communitiesApi.getById(communityId, { noCache: true }).catch(() => null) : null,
                 isValidInt32 ? communitiesApi.getPosts(communityId).catch(() => []) : [],
-                isValidInt32 ? communitiesApi.getMembers(communityId).catch(() => []) : [],
+                isValidInt32 ? communitiesApi.getMembers(communityId, null, 1, 200, { noCache: true }).catch(() => []) : [],
                 isValidInt32 ? communitiesApi.getFiles(communityId).catch(() => null) : null
             ]);
             
@@ -1413,8 +1413,8 @@ export default function CommunityView() {
                 const removedSet = new Set(removedMembersList.map(x => String(x).toLowerCase()));
 
                 const defaultCreator = {
-                    userId: commData.creatorUserId || 1,
-                    fullName: commData.createdBy || 'Community Creator',
+                    userId: commData.creatorUserId || commData.createdByUserId || 1,
+                    fullName: commData.createdBy || commData.createdByUserName || 'Community Creator',
                     employeeId: commData.creatorEmployeeId || 'MPO100',
                     designation: 'Community Admin',
                     memberType: 'Admin',
@@ -1422,29 +1422,35 @@ export default function CommunityView() {
                     profilePhotoUrl: commData.creatorAvatar || null
                 };
 
-                // Merge members from backend and local storage so invited users are never lost
+                // 1. Authoritative members from backend database
                 const memberMap = new Map();
                 (Array.isArray(rawMembers) ? rawMembers : []).forEach(m => {
                     const key = String(m?.userId || m?.id || '');
                     if (key) memberMap.set(key, m);
                 });
+
+                // 2. Only preserve purely mock/local offline invites that haven't synced to DB
                 (Array.isArray(localMembersApi) ? localMembersApi : []).forEach(m => {
                     const key = String(m?.userId || m?.id || '');
-                    if (key && !memberMap.has(key)) memberMap.set(key, m);
+                    const isMockOrLocalInvite = Boolean(m?.isLocalInvite || m?.isMockInvite || m?.isPendingInvite || (Number(key) > 1000000000));
+                    if (key && !memberMap.has(key) && isMockOrLocalInvite) {
+                        memberMap.set(key, m);
+                    }
                 });
+
                 if (memberMap.size === 0) {
                     memberMap.set(String(defaultCreator.userId), defaultCreator);
                 }
 
-                const rawList = Array.from(memberMap.values())
+                // 3. Filter out any member recorded in removedSet tombstones
+                let rawList = Array.from(memberMap.values())
                     .filter(m => {
                         const uid = String(m?.userId || m?.id || '').toLowerCase();
                         const empId = String(m?.employeeId || m?.empId || '').toLowerCase();
-                        return !(removedSet.has(uid) || (empId && removedSet.has(empId)));
+                        const name = String(m?.fullName || m?.name || '').toLowerCase();
+                        return !(removedSet.has(uid) || (empId && removedSet.has(empId)) || (name && removedSet.has(name)));
                     })
                     .map(m => (m.memberType === 'Moderator' ? { ...m, memberType: 'Admin' } : m));
-                let resolvedMembers = deduplicateMembers(rawList, contextUsers);
-                localStorage.setItem(savedMembersKey, JSON.stringify(resolvedMembers));
 
                 const resolvedCategory = commData.categoryName || localMatch?.category || 'Technology';
                 setSelectedCategory(resolvedCategory);
@@ -1454,7 +1460,7 @@ export default function CommunityView() {
                     name: commData.name,
                     type: commData.communityType || 'Public',
                     category: resolvedCategory,
-                    membersCount: resolvedMembers.length > 0 ? resolvedMembers.length : (commData.membersCount || 1),
+                    membersCount: rawList.length > 0 ? rawList.length : (commData.membersCount || 1),
                     adminContact: commData.createdByUserName || 'Admin',
                     banner: localMatch?.banner || localMatch?.bannerUrl || resolveMediaUrl(commData.bannerUrl || commData.bannerImageUrl) || imgs.banner,
                     thumbnail: localMatch?.thumbnail || localMatch?.avatar || localMatch?.thumbnailUrl || resolveMediaUrl(commData.thumbnailUrl) || imgs.thumbnail,
@@ -1468,28 +1474,26 @@ export default function CommunityView() {
                     invitedUserIds: localMatch?.invitedUserIds || commData.invitedUserIds || []
                 });
 
-                const userJoinedList = JSON.parse(localStorage.getItem(`knome_joined_communities_${currentUser?.id || 'guest'}`) || '[]');
-                const localEntry = userJoinedList.find(c => String(c.id) === String(commData.communityId));
                 const isDefaultOrg = (commData.communityType || '').toLowerCase().includes('default') || (commData.communityType || '').toLowerCase().includes('org');
+                const isCommAdmin = Boolean(commData.isCurrentUserAdmin);
                 
                 const currentUid = String(currentUser?.userId || currentUser?.id || '');
                 const currentEmpId = String(currentUser?.employeeId || '').toUpperCase();
                 const currentName = String(currentUser?.fullName || currentUser?.name || '').toLowerCase();
+                const currentEmail = String(currentUser?.email || '').toLowerCase();
 
-                const isMemberInList = Boolean(currentUser && resolvedMembers.some(m => {
-                    const mUid = String(m.userId || m.id || '');
-                    const mEmpId = String(m.employeeId || m.empId || m.displayEmpId || '').toUpperCase();
-                    const mName = String(m.fullName || m.name || m.displayName || '').toLowerCase();
-                    return (currentUid && mUid === currentUid) || 
-                           (currentEmpId && mEmpId === currentEmpId) || 
-                           (currentName && mName === currentName);
-                }));
+                const isCreator = Boolean(
+                    (commData.createdByUserId && String(commData.createdByUserId) === currentUid) ||
+                    (commData.creatorUserId && String(commData.creatorUserId) === currentUid)
+                );
 
-                const isUserJoined = !!(localEntry && localEntry.status === 'joined') || 
-                                     commData.currentUserMembershipStatus?.toLowerCase() === 'joined' || 
-                                     commData.currentUserMembershipStatus?.toLowerCase() === 'approved' ||
-                                     isMemberInList;
-                const isUserSubscribed = !!(localEntry && localEntry.status === 'subscribed') || commData.currentUserMembershipStatus?.toLowerCase() === 'subscribed';
+                const isCurrentRemoved = removedSet.has(currentUid.toLowerCase()) || 
+                                         (currentEmpId && removedSet.has(currentEmpId.toLowerCase())) || 
+                                         (currentName && removedSet.has(currentName)) ||
+                                         (currentEmail && removedSet.has(currentEmail));
+
+                const apiStatus = (commData.currentUserMembershipStatus || '').toLowerCase();
+                const isApiApproved = apiStatus === 'approved' || apiStatus === 'joined';
 
                 // Load persistent subscribers and suspended members
                 const savedSubs = JSON.parse(localStorage.getItem(`knome_community_subscribers_${commData.communityId}`) || '[]');
@@ -1498,19 +1502,88 @@ export default function CommunityView() {
                 setSuspendedMembers(savedSuspended);
 
                 // FR-CM-07: Check if current user is suspended from this community
-                const currentEmail = String(currentUser?.email || '').toLowerCase();
                 const userSuspensionRecord = savedSuspended.find(s => {
                     const sUid = String(s.userId || s.id || '');
                     const sEmpId = String(s.employeeId || '').toUpperCase();
                     const sEmail = String(s.email || '').toLowerCase();
                     return (currentUid && sUid === currentUid) || (currentEmpId && sEmpId === currentEmpId) || (currentEmail && sEmail === currentEmail);
                 });
-                const isUserSuspendedInComm = Boolean(userSuspensionRecord) || commData.currentUserMembershipStatus?.toLowerCase() === 'banned';
+                const isUserSuspendedInComm = Boolean(userSuspensionRecord) || apiStatus === 'banned';
                 const isCurrentUserSysAdmin = ['SYSADM'].includes(currentUser?.role) || ['System Administrator', 'System Admin'].includes(currentUser?.roleName);
 
-                // FR-CM-01: Org communities auto-join all employees
+                // Authoritative joined check:
+                // User is a member IF NOT suspended AND:
+                // - Official mandatory Default/Org community for all employees, OR
+                // - Community Admin according to backend, OR
+                // - Community Creator, OR
+                // - Backend DB explicitly confirms status is approved/joined AND user has not been removed locally
+                const isUserJoined = !isUserSuspendedInComm && !isCurrentRemoved && (isDefaultOrg || isCommAdmin || isCreator || isApiApproved);
+
+                // If backend DB reports user is NOT a member, immediately purge stale cache
+                if (!isUserJoined && !isDefaultOrg && !isCommAdmin && !isCreator) {
+                    // Purge current user from member list
+                    rawList = rawList.filter(m => {
+                        const mUid = String(m?.userId || m?.id || '');
+                        const mEmp = String(m?.employeeId || m?.empId || '').toUpperCase();
+                        const mName = String(m?.fullName || m?.name || '').toLowerCase();
+                        return !((currentUid && mUid === currentUid) || 
+                                 (currentEmpId && mEmp === currentEmpId) || 
+                                 (currentName && mName === currentName));
+                    });
+
+                    // Purge from user's joined communities in localStorage
+                    const userKeys = [
+                        `knome_joined_communities_${currentUser?.id || 'guest'}`,
+                        currentUser?.userId ? `knome_joined_communities_${currentUser.userId}` : null,
+                        currentUser?.employeeId ? `knome_joined_communities_${currentUser.employeeId}` : null
+                    ].filter(Boolean);
+
+                    userKeys.forEach(k => {
+                        try {
+                            const list = JSON.parse(localStorage.getItem(k) || '[]');
+                            const cleaned = list.filter(c => String(c.id) !== String(commData.communityId));
+                            if (cleaned.length !== list.length) {
+                                localStorage.setItem(k, JSON.stringify(cleaned));
+                            }
+                        } catch (_) {}
+                    });
+                }
+
+                let resolvedMembers = deduplicateMembers(rawList, contextUsers);
+
+                if (isUserJoined && currentUser) {
+                    const isMemberInList = resolvedMembers.some(m => {
+                        const mUid = String(m.userId || m.id || '');
+                        const mEmpId = String(m.employeeId || m.empId || m.displayEmpId || '').toUpperCase();
+                        const mName = String(m.fullName || m.name || m.displayName || '').toLowerCase();
+                        return (currentUid && mUid === currentUid) || 
+                               (currentEmpId && mEmpId === currentEmpId) || 
+                               (currentName && mName === currentName);
+                    });
+                    if (!isMemberInList) {
+                        resolvedMembers.push({
+                            userId: currentUser.userId || currentUser.id,
+                            fullName: currentUser.fullName || currentUser.name,
+                            employeeId: currentUser.employeeId || 'MPO100',
+                            designation: currentUser.designation || currentUser.roleName || 'Software Developer',
+                            memberType: (isCommAdmin || isCreator) ? 'Admin' : 'Member',
+                            status: 'Approved',
+                            profilePhotoUrl: currentUser.avatar
+                        });
+                        resolvedMembers = deduplicateMembers(resolvedMembers, contextUsers);
+                    }
+                }
+
+                setMembersList(resolvedMembers);
+                localStorage.setItem(savedMembersKey, JSON.stringify(resolvedMembers));
+
+                const userJoinedList = JSON.parse(localStorage.getItem(`knome_joined_communities_${currentUser?.id || 'guest'}`) || '[]');
+                const localEntry = userJoinedList.find(c => String(c.id) === String(commData.communityId));
+                const isUserSubscribed = !isUserJoined && (!!(localEntry && localEntry.status === 'subscribed') || apiStatus === 'subscribed');
+
                 const savedRequests = JSON.parse(localStorage.getItem(`knome_join_requests_${commData.communityId}`) || '[]');
                 const myRequest = savedRequests.find(r => String(r.userId || r.id) === String(currentUser?.id));
+
                 let resolvedStatus;
                 if (isUserSuspendedInComm && !isCurrentUserSysAdmin) {
                     resolvedStatus = 'banned';
@@ -1518,34 +1591,16 @@ export default function CommunityView() {
                         suspensionReason: 'Violation of community guidelines',
                         suspensionDuration: 'Indefinite'
                     });
-                } else if (isUserJoined || isDefaultOrg) {
+                } else if (isUserJoined) {
                     resolvedStatus = 'joined';
                 } else if (isUserSubscribed) {
                     resolvedStatus = 'subscribed';
-                } else if (myRequest) {
+                } else if (apiStatus === 'pending' || (myRequest && !isCurrentRemoved)) {
                     resolvedStatus = 'requested';
                 } else {
-                    const apiStatus = commData.currentUserMembershipStatus?.toLowerCase();
-                    resolvedStatus = (apiStatus && apiStatus !== 'none') ? apiStatus : 'none';
+                    resolvedStatus = 'none';
                 }
                 setMembershipStatus(resolvedStatus);
-
-                if (!isUserSuspendedInComm && (isUserJoined || isDefaultOrg) && currentUser && !isMemberInList) {
-                    resolvedMembers.push({
-                        userId: currentUser.userId || currentUser.id,
-                        fullName: currentUser.fullName || currentUser.name,
-                        employeeId: currentUser.employeeId || 'MPO100',
-                        designation: currentUser.designation || currentUser.roleName || 'Software Developer',
-                        memberType: 'Member',
-                        status: 'Approved',
-                        profilePhotoUrl: currentUser.avatar
-                    });
-                }
-
-                // Final safety deduplication & permanent cache healing
-                resolvedMembers = deduplicateMembers(resolvedMembers, contextUsers);
-                setMembersList(resolvedMembers);
-                localStorage.setItem(savedMembersKey, JSON.stringify(resolvedMembers));
 
                 // Load persisted join requests (from localStorage) and merge with any API pending
                 const pendingFromMembers = resolvedMembers.filter(m => m.status === 'Pending' || m.membershipStatus === 'Pending');
@@ -1564,6 +1619,8 @@ export default function CommunityView() {
                 const targetId = communityId || 101;
                 const savedMembersKey = `knome_community_members_${targetId}`;
                 const localMembers = JSON.parse(localStorage.getItem(savedMembersKey) || '[]');
+                const removedMembersList = JSON.parse(localStorage.getItem(`knome_community_removed_${targetId}`) || '[]');
+                const removedSet = new Set(removedMembersList.map(x => String(x).toLowerCase()));
 
                 const creatorName = found?.createdBy || 'Community Creator';
                 const defaultCreator = {
@@ -1576,9 +1633,14 @@ export default function CommunityView() {
                     profilePhotoUrl: found?.creatorAvatar || found?.avatar || null
                 };
                 const rawFallbackList = (localMembers.length > 0 ? localMembers : [defaultCreator])
+                    .filter(m => {
+                        const uid = String(m?.userId || m?.id || '').toLowerCase();
+                        const empId = String(m?.employeeId || m?.empId || '').toLowerCase();
+                        const name = String(m?.fullName || m?.name || '').toLowerCase();
+                        return !(removedSet.has(uid) || (empId && removedSet.has(empId)) || (name && removedSet.has(name)));
+                    })
                     .map(m => (m.memberType === 'Moderator' ? { ...m, memberType: 'Admin' } : m));
                 let resolvedMembers = deduplicateMembers(rawFallbackList, contextUsers);
-                localStorage.setItem(savedMembersKey, JSON.stringify(resolvedMembers));
 
                 // Check if current user explicitly joined, created the community, or is in resolved members
                 const userJoinedList = JSON.parse(localStorage.getItem(`knome_joined_communities_${currentUser?.id || 'guest'}`) || '[]');
@@ -1586,8 +1648,14 @@ export default function CommunityView() {
                 const currentUidFallback = String(currentUser?.userId || currentUser?.id || '');
                 const currentEmpIdFallback = String(currentUser?.employeeId || '').toUpperCase();
                 const currentNameFallback = String(currentUser?.fullName || currentUser?.name || '').toLowerCase();
+                const currentEmailFallback = String(currentUser?.email || '').toLowerCase();
 
-                const isMemberInList = Boolean(currentUser && resolvedMembers.some(m => {
+                const isUserRemovedFallback = removedSet.has(currentUidFallback.toLowerCase()) || 
+                                             (currentEmpIdFallback && removedSet.has(currentEmpIdFallback.toLowerCase())) || 
+                                             (currentNameFallback && removedSet.has(currentNameFallback)) ||
+                                             (currentEmailFallback && removedSet.has(currentEmailFallback));
+
+                const isMemberInList = Boolean(currentUser && !isUserRemovedFallback && resolvedMembers.some(m => {
                     const mUid = String(m.userId || m.id || '');
                     const mEmpId = String(m.employeeId || m.empId || m.displayEmpId || '').toUpperCase();
                     const mName = String(m.fullName || m.name || m.displayName || '').toLowerCase();
@@ -1596,9 +1664,16 @@ export default function CommunityView() {
                            (currentNameFallback && mName === currentNameFallback);
                 }));
 
-                const isUserJoined = userJoinedList.some(c => String(c.id) === String(targetId)) || 
-                                     (found?.createdBy && currentUser?.name && found.createdBy.toLowerCase().includes(currentUser.name.toLowerCase())) ||
-                                     isMemberInList;
+                const isUserJoined = !isUserRemovedFallback && (
+                    userJoinedList.some(c => String(c.id) === String(targetId) && (c.status === 'joined' || !c.status)) || 
+                    (found?.createdBy && currentUser?.name && found.createdBy.toLowerCase().includes(currentUser.name.toLowerCase())) ||
+                    isMemberInList
+                );
+
+                if (isUserRemovedFallback) {
+                    const cleaned = userJoinedList.filter(c => String(c.id) !== String(targetId));
+                    localStorage.setItem(`knome_joined_communities_${currentUser?.id || 'guest'}`, JSON.stringify(cleaned));
+                }
 
                 if (isUserJoined && currentUser && !isMemberInList) {
                     resolvedMembers.push({
@@ -1626,7 +1701,6 @@ export default function CommunityView() {
                 const savedSuspended = JSON.parse(localStorage.getItem(`knome_community_suspended_${targetId}`) || '[]');
                 setSuspendedMembers(savedSuspended);
 
-                const currentEmailFallback = String(currentUser?.email || '').toLowerCase();
                 const userSuspensionRecord = savedSuspended.find(s => {
                     const sUid = String(s.userId || s.id || '');
                     const sEmpId = String(s.employeeId || '').toUpperCase();
@@ -1648,7 +1722,7 @@ export default function CommunityView() {
                     });
                 } else if (isUserJoined || isDefaultOrgFallback) {
                     calcStatus = 'joined';
-                } else if (myRequest) {
+                } else if (myRequest && !isUserRemovedFallback) {
                     calcStatus = 'requested';
                 } else {
                     calcStatus = 'none';
@@ -2016,8 +2090,25 @@ export default function CommunityView() {
     useEffect(() => {
         loadData();
 
-        const handleMembersUpdated = () => {
-            const targetId = communityId || community?.id || 101;
+        const handleMembersUpdated = (e) => {
+            const targetId = e?.detail?.communityId || communityId || community?.id || 101;
+            if (e?.detail?.communityId && communityId && String(e.detail.communityId) !== String(communityId)) {
+                return;
+            }
+
+            // Immediately check if current user was removed
+            const removedList = JSON.parse(localStorage.getItem(`knome_community_removed_${targetId}`) || '[]');
+            const myUid = String(currentUser?.userId || currentUser?.id || '').toLowerCase();
+            const myEmpId = String(currentUser?.employeeId || '').toUpperCase();
+            const myName = String(currentUser?.fullName || currentUser?.name || '').toLowerCase();
+            const isRemoved = removedList.some(r => {
+                const s = String(r).toLowerCase();
+                return (myUid && s === myUid) || (myEmpId && s === myEmpId.toLowerCase()) || (myName && s === myName);
+            });
+            if (isRemoved) {
+                setMembershipStatus('none');
+            }
+
             const localMembers = JSON.parse(localStorage.getItem(`knome_community_members_${targetId}`) || '[]');
             if (localMembers && localMembers.length > 0) {
                 const deduped = deduplicateMembers(localMembers, contextUsers);
@@ -2113,7 +2204,7 @@ export default function CommunityView() {
             window.removeEventListener('storage', handleMembersUpdated);
             window.removeEventListener('storage', handleFeedOrPostsUpdated);
         };
-    }, [communityId]);
+    }, [communityId, currentUser?.id, currentUser?.userId]);
 
     // Create New Post inside Community (Only for Members - FR-CM-06)
     const handleCreatePost = async (e) => {
@@ -2528,25 +2619,62 @@ export default function CommunityView() {
         // 2. Track tombstone in localStorage so refresh never restores removed member
         const removedKey = `knome_community_removed_${targetId}`;
         const currentRemoved = JSON.parse(localStorage.getItem(removedKey) || '[]');
+        const memberEmpId = (member.employeeId || member.empId || '').toUpperCase();
+        const memberEmail = (member.email || '').toLowerCase();
+        const memberFullName = (member.fullName || member.name || '').toLowerCase();
         const updatedRemoved = Array.from(new Set([
             ...currentRemoved,
             String(memberId),
-            ...(member.employeeId ? [String(member.employeeId).toUpperCase()] : [])
+            ...(member.userId ? [String(member.userId)] : []),
+            ...(memberEmpId ? [memberEmpId] : []),
+            ...(memberEmail ? [memberEmail] : []),
+            ...(memberFullName ? [memberFullName] : [])
         ]));
         localStorage.setItem(removedKey, JSON.stringify(updatedRemoved));
 
-        // 3. Remove from community members local state & cache
+        // 3. Invalidate joined communities in localStorage for the removed member
+        const keysToClean = [
+            `knome_joined_communities_${memberId}`,
+            member.userId ? `knome_joined_communities_${member.userId}` : null,
+            memberEmpId ? `knome_joined_communities_${memberEmpId}` : null
+        ].filter(Boolean);
+        keysToClean.forEach(k => {
+            try {
+                const list = JSON.parse(localStorage.getItem(k) || '[]');
+                const cleaned = list.filter(c => String(c.id) !== String(targetId));
+                localStorage.setItem(k, JSON.stringify(cleaned));
+            } catch (_) {}
+        });
+
+        // 4. Remove from community members local state & cache
         setMembersList(prev => {
-            const updated = prev.filter(m => String(m.userId || m.id) !== String(memberId));
+            const updated = prev.filter(m => {
+                const mUid = String(m.userId || m.id || '');
+                const mEmp = String(m.employeeId || m.empId || '').toUpperCase();
+                const mName = String(m.fullName || m.name || '').toLowerCase();
+                return !(mUid === String(memberId) || (memberEmpId && mEmp === memberEmpId) || (memberFullName && mName === memberFullName));
+            });
             localStorage.setItem(`knome_community_members_${targetId}`, JSON.stringify(updated));
             localStorage.setItem(`knome_community_members_updated_${targetId}`, Date.now().toString());
-            window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
-            window.dispatchEvent(new CustomEvent('community-joined-change'));
             return updated;
         });
 
-        // 4. Update community object members count
+        // 5. If the removed member is the currently logged in user on this client:
+        const isCurrentRemovingSelf = (String(currentUser?.id || currentUser?.userId) === String(memberId)) ||
+                                      (memberEmpId && String(currentUser?.employeeId || '').toUpperCase() === memberEmpId);
+        if (isCurrentRemovingSelf) {
+            setMembershipStatus('none');
+            const selfUserKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
+            const selfJoined = JSON.parse(localStorage.getItem(selfUserKey) || '[]');
+            localStorage.setItem(selfUserKey, JSON.stringify(selfJoined.filter(c => String(c.id) !== String(targetId))));
+        }
+
+        // 6. Update community object members count & dispatch events
         setCommunity(prev => ({ ...prev, membersCount: Math.max(1, (prev.membersCount || 1) - 1) }));
+        window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
+        window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId, removedMemberId: memberId } }));
+        window.dispatchEvent(new Event('storage'));
+
         showToast(`${memberName} has been removed from this community.`, 'info');
         setRemoveModalMember(null);
     };
@@ -2560,6 +2688,20 @@ export default function CommunityView() {
         const isPrivate = community?.type === 'Private';
         const newStatus = isPrivate ? 'requested' : 'joined';
         const targetId = community?.id || communityId || 101;
+
+        // Clear any previous removed tombstone for current user
+        try {
+            const removedKey = `knome_community_removed_${targetId}`;
+            const currentRemoved = JSON.parse(localStorage.getItem(removedKey) || '[]');
+            const uidStr = String(currentUser?.userId || currentUser?.id || '').toLowerCase();
+            const empIdStr = String(currentUser?.employeeId || '').toUpperCase();
+            const nameStr = String(currentUser?.fullName || currentUser?.name || '').toLowerCase();
+            const cleanedRemoved = currentRemoved.filter(x => {
+                const s = String(x).toLowerCase();
+                return !(s === uidStr || (empIdStr && s === empIdStr.toLowerCase()) || (nameStr && s === nameStr));
+            });
+            localStorage.setItem(removedKey, JSON.stringify(cleanedRemoved));
+        } catch (_) {}
 
         try {
             await communitiesApi.join(community.id).catch(() => null);
@@ -2970,30 +3112,111 @@ export default function CommunityView() {
         handleInitiateSuspendMember(member);
     };
 
-    const handleReinstate = (memberId, memberName) => {
+    const handleReinstate = (targetMemberOrId, memberNameOrNorm) => {
         const targetId = community?.id || communityId || 101;
-        const memberToReinstate = suspendedMembers.find(m => String(m.userId || m.id) === String(memberId));
-        if (!memberToReinstate) return;
-        const { suspendedAt, suspendedBy, ...cleanMember } = memberToReinstate;
+
+        // Support both handleReinstate(m, norm) and legacy handleReinstate(memberId, memberName)
+        const isObj = typeof targetMemberOrId === 'object' && targetMemberOrId !== null;
+        const targetNorm = typeof memberNameOrNorm === 'object' && memberNameOrNorm !== null ? memberNameOrNorm : null;
+        const rawName = isObj
+            ? (targetNorm?.displayName || targetMemberOrId.fullName || targetMemberOrId.name || 'Member')
+            : (typeof memberNameOrNorm === 'string' ? memberNameOrNorm : 'Member');
+
+        // Locate member record to reinstate
+        const memberToReinstate = isObj
+            ? targetMemberOrId
+            : suspendedMembers.find(m => {
+                const uid = String(m.userId || m.id || '');
+                const targetUid = String(targetMemberOrId || '');
+                const empId = String(m.employeeId || m.empId || '').toUpperCase();
+                const targetEmp = String(targetMemberOrId || '').toUpperCase();
+                return (targetUid && uid === targetUid) || (targetEmp && empId === targetEmp);
+            });
+
+        // Resolve userId for backend DB update
+        let resolvedUserId = memberToReinstate?.userId || memberToReinstate?.id || targetNorm?.userId || targetNorm?.id;
+        if (!resolvedUserId && typeof targetMemberOrId === 'number') {
+            resolvedUserId = targetMemberOrId;
+        } else if (!resolvedUserId && typeof targetMemberOrId === 'string' && /^\d+$/.test(targetMemberOrId)) {
+            resolvedUserId = Number(targetMemberOrId);
+        }
+        if (!resolvedUserId) {
+            const empToMatch = String(memberToReinstate?.employeeId || memberToReinstate?.empId || targetNorm?.displayEmpId || '').toUpperCase();
+            const foundUser = (contextUsers || []).find(u => 
+                (empToMatch && String(u.employeeId || '').toUpperCase() === empToMatch) ||
+                (rawName && String(u.fullName || u.name || '').toLowerCase() === rawName.toLowerCase())
+            );
+            if (foundUser) {
+                resolvedUserId = foundUser.id || foundUser.userId;
+            }
+        }
 
         // Re-approve membership in backend DB
-        communitiesApi.decideMembership(targetId, memberId, 'Approved').catch(() => null);
+        if (resolvedUserId) {
+            communitiesApi.decideMembership(targetId, resolvedUserId, 'Approved').catch(err => {
+                console.warn('Backend decideMembership warning:', err);
+            });
+        }
 
-        setSuspendedMembers(prev => {
-            const updated = prev.filter(m => String(m.userId || m.id) !== String(memberId));
-            localStorage.setItem(`knome_community_suspended_${targetId}`, JSON.stringify(updated));
-            return updated;
-        });
-        setMembersList(prev => {
-            const updated = deduplicateMembers([...prev, { ...cleanMember, memberType: 'Member', status: 'Approved' }], contextUsers);
-            localStorage.setItem(`knome_community_members_${targetId}`, JSON.stringify(updated));
-            window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
-            window.dispatchEvent(new CustomEvent('community-joined-change'));
-            window.dispatchEvent(new CustomEvent('community-suspended-change', { detail: { communityId: targetId } }));
-            return updated;
-        });
-        setCommunity(prev => ({ ...prev, membersCount: (prev.membersCount || 0) + 1 }));
-        showToast(`${memberName} has been reinstated as a Community Member.`, 'success');
+        // Immediate removal from suspendedMembers list & update localStorage
+        const filterPredicate = (m) => {
+            if (memberToReinstate && m === memberToReinstate) return false;
+            const mUid = String(m.userId || m.id || '');
+            if (resolvedUserId && mUid && String(mUid) === String(resolvedUserId)) return false;
+            if (memberToReinstate?.userId && mUid && String(mUid) === String(memberToReinstate.userId)) return false;
+            if (memberToReinstate?.id && mUid && String(mUid) === String(memberToReinstate.id)) return false;
+
+            const mEmpId = String(m.employeeId || m.empId || '').trim().toUpperCase();
+            const targetEmpId = String(memberToReinstate?.employeeId || memberToReinstate?.empId || targetNorm?.displayEmpId || '').trim().toUpperCase();
+            if (mEmpId && targetEmpId && mEmpId === targetEmpId) return false;
+
+            const mName = String(m.fullName || m.name || '').trim().toLowerCase();
+            const targetName = String(rawName || '').trim().toLowerCase();
+            if (mName && targetName && mName === targetName) return false;
+
+            return true;
+        };
+
+        const updatedSuspended = suspendedMembers.filter(filterPredicate);
+        localStorage.setItem(`knome_community_suspended_${targetId}`, JSON.stringify(updatedSuspended));
+        setSuspendedMembers(updatedSuspended);
+
+        // Build restored member record and restore to membersList
+        const { suspendedAt, suspendedBy, suspensionDuration, suspensionReason, suspendedUntil, ...restMember } = memberToReinstate || {};
+        const cleanMember = {
+            ...restMember,
+            userId: resolvedUserId || restMember.userId || restMember.id || 1,
+            fullName: rawName,
+            employeeId: targetNorm?.displayEmpId || memberToReinstate?.employeeId || 'MPO100',
+            designation: targetNorm?.displayDesignation || memberToReinstate?.designation || 'Member',
+            department: targetNorm?.displayDepartment || memberToReinstate?.department || 'MPOnline',
+            memberType: 'Member',
+            status: 'Approved'
+        };
+
+        const updatedMembers = deduplicateMembers([...membersList, cleanMember], contextUsers);
+        localStorage.setItem(`knome_community_members_${targetId}`, JSON.stringify(updatedMembers));
+        setMembersList(updatedMembers);
+
+        // Update community members count
+        setCommunity(prev => prev ? { ...prev, membersCount: updatedMembers.length } : prev);
+
+        // If the reinstated member is current user, restore active status
+        const isCurrentReinstated = currentUser && (
+            (resolvedUserId && String(currentUser.id || currentUser.userId) === String(resolvedUserId)) ||
+            (cleanMember.employeeId && String(currentUser.employeeId || '').toUpperCase() === String(cleanMember.employeeId).toUpperCase())
+        );
+        if (isCurrentReinstated) {
+            setMembershipStatus('joined');
+            setCommunitySuspensionInfo(null);
+        }
+
+        // Dispatch events cleanly outside state callbacks
+        window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
+        window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId } }));
+        window.dispatchEvent(new CustomEvent('community-suspended-change', { detail: { communityId: targetId } }));
+
+        showToast(`${rawName} has been reinstated as a Community Member.`, 'success');
     };
 
     const handleSubscribeAction = () => {
@@ -5157,7 +5380,7 @@ export default function CommunityView() {
                                 <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
                                     <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                         <span className="material-symbols-outlined text-indigo-500">group_add</span>
-                                        Pending Join Requests (FR-CM-03)
+                                        Pending Join Requests
                                         {joinRequests.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{joinRequests.length}</span>}
                                     </h3>
                                     <p className="text-[12px] text-slate-500 mt-1">Review and approve members requesting access to this community.</p>
@@ -5214,7 +5437,7 @@ export default function CommunityView() {
                                 <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-amber-50/50 dark:bg-amber-900/10">
                                     <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                         <span className="material-symbols-outlined text-amber-500">person_off</span>
-                                        Suspended Members (FR-CM-07)
+                                        Suspended Members
                                         {suspendedMembers.length > 0 && <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{suspendedMembers.length}</span>}
                                     </h3>
                                     <p className="text-[12px] text-slate-500 mt-1">Suspended members cannot post or view content. You can reinstate them at any time.</p>
@@ -5272,7 +5495,7 @@ export default function CommunityView() {
                                                         </div>
                                                     </div>
                                                     <button
-                                                        onClick={() => handleReinstate(m.userId || m.id, norm.displayName)}
+                                                        onClick={() => handleReinstate(m, norm)}
                                                         className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 hover:bg-emerald-100 transition-colors cursor-pointer flex items-center gap-1 shrink-0"
                                                     >
                                                         <span className="material-symbols-outlined text-[14px]">person_add</span>

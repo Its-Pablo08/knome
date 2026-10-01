@@ -270,10 +270,10 @@ export const podcastsApi = {
 //  COMMUNITIES
 // ─────────────────────────────────────────────
 export const communitiesApi = {
-    getAll: (pageSize = 500) => apiClient.get(`/Communities?pageSize=${pageSize}`),
-    getMyCommunities: () => apiClient.get('/Communities/my'),
-    getByUserId: (userId) => apiClient.get(`/Communities/user/${userId}`),
-    getById: (id) => apiClient.get(`/Communities/${id}`),
+    getAll: (pageSize = 500, options = {}) => apiClient.get(`/Communities?pageSize=${pageSize}`, options),
+    getMyCommunities: (options = {}) => apiClient.get('/Communities/my', options),
+    getByUserId: (userId, options = {}) => apiClient.get(`/Communities/user/${userId}`, options),
+    getById: (id, options = {}) => apiClient.get(`/Communities/${id}`, options),
     create: (data) => apiClient.post('/Communities', data),
     update: (id, data) => apiClient.put(`/Communities/${id}`, data),
     delete: (id) => apiClient.delete(`/Communities/${id}`),
@@ -287,10 +287,10 @@ export const communitiesApi = {
     },
     join: (id) => apiClient.post(`/Communities/${id}/join`),
     leave: (id) => apiClient.post(`/Communities/${id}/leave`),
-    getMembers: (id, status = null, pageNumber = 1, pageSize = 50) => {
+    getMembers: (id, status = null, pageNumber = 1, pageSize = 50, options = {}) => {
         let endpoint = `/Communities/${id}/members?pageNumber=${pageNumber}&pageSize=${pageSize}`;
         if (status) endpoint += `&status=${status}`;
-        return apiClient.get(endpoint);
+        return apiClient.get(endpoint, options);
     },
     getPosts: (id, pageNumber = 1, pageSize = 50) => apiClient.get(`/Communities/${id}/posts?pageNumber=${pageNumber}&pageSize=${pageSize}`),
     createPost: (communityId, data) => apiClient.post(`/Communities/${communityId}/posts`, data),

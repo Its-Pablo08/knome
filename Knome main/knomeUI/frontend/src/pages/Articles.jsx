@@ -968,9 +968,6 @@ export default function Articles() {
                                     Back to Articles
                                 </button>
                                 <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Create Article</h1>
-                                <p className="text-sm font-bold text-emerald-500 mt-1 flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-[16px]">cloud_done</span> Draft saved just now
-                                </p>
                             </div>
                             <div className="flex items-center gap-3 relative">
                                 {/* Active Scheduled Pill Chip */}
