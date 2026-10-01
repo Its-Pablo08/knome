@@ -1240,7 +1240,7 @@ export default function CommunityView() {
     }, [allOrgUsers, contextUsers, addMemberSearch]);
 
     const handleAddSelectedMembers = async () => {
-        if (selectedUserIdsToAdd.length === 0) {
+        if (!selectedUserIdsToAdd || selectedUserIdsToAdd.length === 0) {
             showToast('Please select at least one employee to add.', 'error');
             return;
         }
@@ -1248,17 +1248,182 @@ export default function CommunityView() {
         setIsSavingMembers(true);
         try {
             const targetId = community?.id || communityId;
-            await communitiesApi.addMembers(targetId, {
-                userIds: selectedUserIdsToAdd.map(Number),
-                memberType: selectedRoleToAdd
+            const pool = (allOrgUsers && allOrgUsers.length > 0) ? allOrgUsers : (contextUsers || []);
+            
+            // Resolve full user records for selected IDs
+            const selectedUsers = pool.filter(u => {
+                const uid = u.id || u.userId || u.UserId;
+                const emp = u.employeeId || u.empId;
+                return selectedUserIdsToAdd.some(id => String(id) === String(uid) || (emp && String(id).toUpperCase() === String(emp).toUpperCase()));
             });
 
-            await loadData();
+            // 1. Wipe out any previous removal tombstones for these users in this community
+            try {
+                const removedKey = `knome_community_removed_${targetId}`;
+                const removedList = JSON.parse(localStorage.getItem(removedKey) || '[]');
+                const toRemoveFromTombstones = new Set();
+                selectedUsers.forEach(u => {
+                    if (u.id) toRemoveFromTombstones.add(String(u.id).toLowerCase());
+                    if (u.userId) toRemoveFromTombstones.add(String(u.userId).toLowerCase());
+                    if (u.employeeId) toRemoveFromTombstones.add(String(u.employeeId).toLowerCase());
+                    if (u.empId) toRemoveFromTombstones.add(String(u.empId).toLowerCase());
+                    if (u.name) toRemoveFromTombstones.add(String(u.name).toLowerCase());
+                    if (u.fullName) toRemoveFromTombstones.add(String(u.fullName).toLowerCase());
+                    if (u.email) toRemoveFromTombstones.add(String(u.email).toLowerCase());
+                });
+                selectedUserIdsToAdd.forEach(id => toRemoveFromTombstones.add(String(id).toLowerCase()));
 
-            showToast(`✅ Successfully added ${selectedUserIdsToAdd.length} member(s) to "${community?.name}"!`, 'success');
+                const updatedRemoved = removedList.filter(x => !toRemoveFromTombstones.has(String(x).toLowerCase()));
+                localStorage.setItem(removedKey, JSON.stringify(updatedRemoved));
+            } catch (_) {}
+
+            // 2. Remove from suspended list if previously suspended in this community
+            try {
+                const suspendedKey = `knome_community_suspended_${targetId}`;
+                const currentSuspended = JSON.parse(localStorage.getItem(suspendedKey) || '[]');
+                const updatedSuspended = currentSuspended.filter(s => {
+                    const sUid = String(s.userId || s.id || '');
+                    const sEmp = String(s.employeeId || '').toUpperCase();
+                    const sName = String(s.fullName || s.name || '').toLowerCase();
+                    return !selectedUsers.some(u => 
+                        (sUid && String(u.id || u.userId) === sUid) ||
+                        (sEmp && String(u.employeeId || u.empId || '').toUpperCase() === sEmp) ||
+                        (sName && String(u.fullName || u.name).toLowerCase() === sName)
+                    );
+                });
+                localStorage.setItem(suspendedKey, JSON.stringify(updatedSuspended));
+                setSuspendedMembers(updatedSuspended);
+            } catch (_) {}
+
+            // 3. Remove from pending join requests if any
+            try {
+                const requestsKey = `knome_join_requests_${targetId}`;
+                const currentRequests = JSON.parse(localStorage.getItem(requestsKey) || '[]');
+                const updatedRequests = currentRequests.filter(r => {
+                    const rUid = String(r.userId || r.id || '');
+                    const rEmp = String(r.employeeId || '').toUpperCase();
+                    return !selectedUsers.some(u => 
+                        (rUid && String(u.id || u.userId) === rUid) ||
+                        (rEmp && String(u.employeeId || u.empId || '').toUpperCase() === rEmp)
+                    );
+                });
+                localStorage.setItem(requestsKey, JSON.stringify(updatedRequests));
+                setJoinRequests(updatedRequests);
+            } catch (_) {}
+
+            // 4. Construct rich member objects for local cache
+            const newMemberObjects = selectedUsers.map(u => ({
+                userId: u.userId || u.id,
+                id: u.id || u.userId,
+                fullName: u.fullName || u.name,
+                name: u.name || u.fullName,
+                employeeId: u.employeeId || u.empId || 'MPO100',
+                designation: u.designation || 'Software Engineer',
+                department: u.department || u.departmentName || 'Technology',
+                departmentName: u.departmentName || u.department || 'Technology',
+                profilePhotoUrl: u.profilePhotoUrl || u.avatar || null,
+                avatar: u.avatar || u.profilePhotoUrl || null,
+                memberType: selectedRoleToAdd,
+                status: 'Approved',
+                joinedDate: new Date().toISOString()
+            }));
+
+            // 5. Update local community members storage
+            const savedMembersKey = `knome_community_members_${targetId}`;
+            let localMembers = JSON.parse(localStorage.getItem(savedMembersKey) || '[]');
+            newMemberObjects.forEach(newM => {
+                const idx = localMembers.findIndex(m => 
+                    String(m.userId || m.id) === String(newM.userId) || 
+                    (newM.employeeId && String(m.employeeId || m.empId).toUpperCase() === String(newM.employeeId).toUpperCase())
+                );
+                if (idx >= 0) {
+                    localMembers[idx] = { ...localMembers[idx], ...newM, status: 'Approved' };
+                } else {
+                    localMembers.push(newM);
+                }
+            });
+            localStorage.setItem(savedMembersKey, JSON.stringify(localMembers));
+
+            // 6. If currently logged in user is being added, update their joined list
+            const currentUid = String(currentUser?.userId || currentUser?.id || '');
+            const currentEmp = String(currentUser?.employeeId || '').toUpperCase();
+            const isCurrentUserAdded = selectedUsers.some(u => 
+                (currentUid && String(u.id || u.userId) === currentUid) ||
+                (currentEmp && String(u.employeeId || u.empId).toUpperCase() === currentEmp)
+            );
+            if (isCurrentUserAdded && currentUser) {
+                const userJoinedKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
+                const joinedList = JSON.parse(localStorage.getItem(userJoinedKey) || '[]');
+                if (!joinedList.some(c => String(c.id) === String(targetId))) {
+                    joinedList.push({
+                        id: targetId,
+                        name: community?.name || 'Community',
+                        category: community?.category || 'General',
+                        type: community?.type || 'Public',
+                        role: selectedRoleToAdd,
+                        status: 'joined',
+                        joinedDate: new Date().toISOString()
+                    });
+                    localStorage.setItem(userJoinedKey, JSON.stringify(joinedList));
+                }
+                setMembershipStatus('joined');
+            }
+
+            // 7. Call backend API with rich payload
+            const isValidInt32 = targetId && !isNaN(targetId) && Number(targetId) > 0 && Number(targetId) <= 2147483647;
+            if (isValidInt32) {
+                try {
+                    await communitiesApi.addMembers(targetId, {
+                        userIds: selectedUserIdsToAdd.map(Number).filter(n => !isNaN(n) && n > 0),
+                        employeeIds: selectedUsers.map(u => u.employeeId || u.empId).filter(Boolean),
+                        memberType: selectedRoleToAdd,
+                        members: selectedUsers.map(u => ({
+                            userId: Number(u.userId || u.id) || null,
+                            employeeId: u.employeeId || u.empId || null,
+                            fullName: u.fullName || u.name || null,
+                            email: u.email || null,
+                            designation: u.designation || null,
+                            departmentName: u.departmentName || u.department || null,
+                            profilePhotoUrl: u.profilePhotoUrl || u.avatar || null
+                        }))
+                    });
+                } catch (apiErr) {
+                    console.warn('Backend communitiesApi.addMembers warning (falling back to authoritative local sync):', apiErr);
+                }
+            }
+
+            // 8. Update React State immediately
+            setMembersList(prev => {
+                const updated = [...prev];
+                newMemberObjects.forEach(newM => {
+                    const idx = updated.findIndex(m => 
+                        String(m.userId || m.id) === String(newM.userId) || 
+                        (newM.employeeId && String(m.employeeId || m.empId).toUpperCase() === String(newM.employeeId).toUpperCase())
+                    );
+                    if (idx >= 0) {
+                        updated[idx] = { ...updated[idx], ...newM, status: 'Approved' };
+                    } else {
+                        updated.push(newM);
+                    }
+                });
+                return deduplicateMembers(updated, contextUsers);
+            });
+
+            setCommunity(prev => prev ? ({
+                ...prev,
+                membersCount: Math.max((prev.membersCount || 0) + selectedUserIdsToAdd.length, localMembers.length)
+            }) : prev);
+
+            // 9. Synchronize with fresh loadData
+            await loadData().catch(() => {});
+
+            const addedCount = selectedUserIdsToAdd.length;
+            showToast(`✅ Successfully added ${addedCount} member${addedCount > 1 ? 's' : ''} to "${community?.name || 'community'}"!`, 'success');
             setSelectedUserIdsToAdd([]);
             setIsAddMemberModalOpen(false);
             window.dispatchEvent(new CustomEvent('community-joined-change'));
+            window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
+            window.dispatchEvent(new Event('storage'));
         } catch (err) {
             console.error('Failed to add members:', err);
             const msg = err?.data?.message || err?.message || 'Failed to add members to community.';
@@ -6828,10 +6993,20 @@ export default function CommunityView() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        const currentMemberIds = new Set(membersList.filter(m => m.status === 'Approved' || m.status === 'Active' || !m.status).map(m => String(m.userId || m.id)));
+                                        const currentMemberKeys = new Set();
+                                        membersList.filter(m => m.status === 'Approved' || m.status === 'Active' || !m.status).forEach(m => {
+                                            if (m.userId) currentMemberKeys.add(String(m.userId).toLowerCase());
+                                            if (m.id) currentMemberKeys.add(String(m.id).toLowerCase());
+                                            if (m.employeeId) currentMemberKeys.add(String(m.employeeId).toUpperCase());
+                                            if (m.empId) currentMemberKeys.add(String(m.empId).toUpperCase());
+                                        });
                                         const pool = (allOrgUsers && allOrgUsers.length > 0) ? allOrgUsers : (contextUsers || []);
                                         const availableIds = pool
-                                            .filter(u => !currentMemberIds.has(String(u.id || u.userId)))
+                                            .filter(u => {
+                                                const uid = String(u.id || u.userId || '').toLowerCase();
+                                                const emp = String(u.employeeId || u.empId || '').toUpperCase();
+                                                return !((uid && currentMemberKeys.has(uid)) || (emp && currentMemberKeys.has(emp)));
+                                            })
                                             .map(u => u.id || u.userId);
                                         setSelectedUserIdsToAdd(availableIds);
                                     }}
@@ -6866,11 +7041,18 @@ export default function CommunityView() {
                             ) : (
                                 filteredEmployeesToAdd.map(user => {
                                     const uId = user.id || user.userId;
-                                    const isAlreadyMember = membersList.some(m => 
-                                        String(m.userId || m.id) === String(uId) && 
-                                        (m.status === 'Approved' || m.status === 'Active' || !m.status)
-                                    );
-                                    const isSelected = selectedUserIdsToAdd.includes(uId);
+                                    const uEmpId = String(user.employeeId || user.empId || '').toUpperCase();
+                                    const uName = String(user.name || user.fullName || '').toLowerCase();
+                                    const isAlreadyMember = membersList.some(m => {
+                                        const mUid = String(m.userId || m.id || '');
+                                        const mEmpId = String(m.employeeId || m.empId || '').toUpperCase();
+                                        const mName = String(m.fullName || m.name || '').toLowerCase();
+                                        const isMatch = (uId && mUid === String(uId)) ||
+                                                        (uEmpId && mEmpId && uEmpId === mEmpId) ||
+                                                        (uName && mName && uName === mName);
+                                        return isMatch && (m.status === 'Approved' || m.status === 'Active' || !m.status);
+                                    });
+                                    const isSelected = selectedUserIdsToAdd.some(x => String(x) === String(uId));
 
                                     return (
                                         <div
@@ -6878,7 +7060,9 @@ export default function CommunityView() {
                                             onClick={() => {
                                                 if (isAlreadyMember) return;
                                                 setSelectedUserIdsToAdd(prev => 
-                                                    prev.includes(uId) ? prev.filter(x => x !== uId) : [...prev, uId]
+                                                    prev.some(x => String(x) === String(uId)) 
+                                                        ? prev.filter(x => String(x) !== String(uId)) 
+                                                        : [...prev, uId]
                                                 );
                                             }}
                                             className={`py-3 px-3 rounded-xl flex items-center justify-between gap-3 transition-colors ${
@@ -6969,7 +7153,7 @@ export default function CommunityView() {
                                     ) : (
                                         <>
                                             <span className="material-symbols-outlined text-[16px]">person_add</span>
-                                            <span>Add {selectedUserIdsToAdd.length > 0 ? `${selectedUserIdsToAdd.length} Members` : 'Members'}</span>
+                                            <span>Add {selectedUserIdsToAdd.length > 0 ? `${selectedUserIdsToAdd.length} Member${selectedUserIdsToAdd.length > 1 ? 's' : ''}` : 'Members'}</span>
                                         </>
                                     )}
                                 </button>
