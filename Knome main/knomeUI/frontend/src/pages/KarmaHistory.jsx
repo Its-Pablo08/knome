@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getKarmaBadge } from '../utils/karmaEngine';
+import { getKarmaBadge, getKarmaLevelInfo } from '../utils/karmaEngine';
 import { karmaApi, resolveMediaUrl } from '../utils/apiService';
 import { useUser } from '../components/contexts/UserContext';
 
@@ -233,9 +233,10 @@ export default function KarmaHistory() {
 
     const realKarmaPoints = isSysAdmin ? 0 : Number(balance.totalPoints ?? currentUser?.karmaPoints ?? currentUser?.karma ?? 0);
     const karmaBadge = getKarmaBadge(realKarmaPoints);
-    const currentLevel = Math.max(1, Math.floor(realKarmaPoints / 100) + 1);
-    const nextLevelTarget = currentLevel * 100;
-    const progressPercent = realKarmaPoints % 100;
+    const karmaLevelInfo = getKarmaLevelInfo(realKarmaPoints);
+    const currentLevel = karmaLevelInfo.level;
+    const nextLevelTarget = karmaLevelInfo.nextTarget;
+    const progressPercent = karmaLevelInfo.progressPercent;
 
     const apiTx = useMemo(() => {
         if (!balance.recentTransactions || balance.recentTransactions.length === 0) return [];
@@ -438,10 +439,17 @@ export default function KarmaHistory() {
                                     <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Badge Status</span>
                                     <span className="text-xl font-black text-slate-900 dark:text-white truncate">{karmaBadge.name}</span>
                                 </div>
-                                <div className="flex flex-col border-l border-slate-200 dark:border-slate-700 pl-6">
-                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Goal for Level {currentLevel + 1}</span>
-                                    <span className="text-xl font-black text-slate-900 dark:text-white">{nextLevelTarget.toLocaleString()} pts</span>
-                                </div>
+                                {karmaLevelInfo.nextLevel ? (
+                                    <div className="flex flex-col border-l border-slate-200 dark:border-slate-700 pl-6">
+                                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Goal for Level {karmaLevelInfo.nextLevel}</span>
+                                        <span className="text-xl font-black text-slate-900 dark:text-white">{nextLevelTarget.toLocaleString()} pts</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col border-l border-slate-200 dark:border-slate-700 pl-6">
+                                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</span>
+                                        <span className="text-xl font-black text-cyan-500">Max Rank</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -465,7 +473,7 @@ export default function KarmaHistory() {
 
                         <div className="relative z-10 mt-8">
                             <div className="flex justify-between mb-2 text-[12px] font-bold text-white">
-                                <span>Progress to Level {currentLevel + 1}</span>
+                                <span>{karmaLevelInfo.nextLevel ? `Progress to Level ${karmaLevelInfo.nextLevel} (${karmaLevelInfo.nextName})` : 'Maximum Platform Contributor Rank'}</span>
                                 <span>{progressPercent}%</span>
                             </div>
                             <div className="w-full bg-black/20 h-2.5 rounded-full overflow-hidden backdrop-blur-sm border border-white/10">

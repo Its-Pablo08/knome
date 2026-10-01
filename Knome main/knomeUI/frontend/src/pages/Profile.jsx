@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useUser, users, getUserStatusConfig } from '../components/contexts/UserContext';
 import { useToast } from '../components/contexts/ToastContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
-import { getKarmaBadge } from '../utils/karmaEngine';
+import { getKarmaBadge, getKarmaLevelInfo } from '../utils/karmaEngine';
 import { 
     profileApi, 
     userApi, 
@@ -249,6 +249,180 @@ export default function Profile() {
     });
     const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
     const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+
+    // Bio editing states
+    const [isBioModalOpen, setIsBioModalOpen] = useState(false);
+    const [bioInput, setBioInput] = useState('');
+    const [isSavingBio, setIsSavingBio] = useState(false);
+
+    const handleOpenBioModal = () => {
+        setBioInput(displayUser?.bio || '');
+        setIsBioModalOpen(true);
+    };
+
+    const handleSaveBio = async () => {
+        setIsSavingBio(true);
+        try {
+            const currentSkills = Array.isArray(displayUser?.skills)
+                ? displayUser.skills
+                : typeof displayUser?.skills === 'string' && displayUser.skills.trim() !== ''
+                    ? displayUser.skills.split(',').map(s => s.trim()).filter(Boolean)
+                    : [];
+            const currentInterests = Array.isArray(displayUser?.interests)
+                ? displayUser.interests
+                : typeof displayUser?.interests === 'string' && displayUser.interests.trim() !== ''
+                    ? displayUser.interests.split(',').map(i => i.trim()).filter(Boolean)
+                    : [];
+            const updated = await profileApi.update({
+                bio: bioInput.trim(),
+                skills: currentSkills,
+                interests: currentInterests,
+                location: displayUser?.location || '',
+                mobileNo: displayUser?.mobileNo || '',
+                bioVisibility: displayUser?.bioVisibility || 'Public',
+                networkVisibility: displayUser?.networkVisibility || 'Public',
+                photosVisibility: 'Public',
+                interestsVisibility: displayUser?.interestsVisibility || 'Public'
+            });
+            if (updated) {
+                setFetchedUser(updated);
+            }
+            await refreshCurrentUser();
+            setIsBioModalOpen(false);
+            addToast('Bio updated successfully! ✨', 'success');
+        } catch (err) {
+            console.error('Failed to update bio:', err);
+            addToast('Failed to update bio. Please try again.', 'error');
+        } finally {
+            setIsSavingBio(false);
+        }
+    };
+
+    // Core Skills & Interests editing states
+    const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
+    const [isInterestsModalOpen, setIsInterestsModalOpen] = useState(false);
+    const [skillsList, setSkillsList] = useState([]);
+    const [interestsList, setInterestsList] = useState([]);
+    const [skillInput, setSkillInput] = useState('');
+    const [interestInput, setInterestInput] = useState('');
+    const [isSavingSkills, setIsSavingSkills] = useState(false);
+    const [isSavingInterests, setIsSavingInterests] = useState(false);
+
+    const handleOpenSkillsEditor = () => {
+        const current = Array.isArray(displayUser?.skills) && displayUser.skills.length > 0
+            ? displayUser.skills
+            : typeof displayUser?.skills === 'string' && displayUser.skills.trim() !== ''
+                ? displayUser.skills.split(',').map(s => s.trim()).filter(Boolean)
+                : ['Collaboration', 'Problem Solving', 'Innovation'];
+        setSkillsList([...current]);
+        setSkillInput('');
+        setIsSkillsModalOpen(true);
+    };
+
+    const handleAddSkill = (e) => {
+        if (e) e.preventDefault();
+        const trimmed = skillInput.trim();
+        if (!trimmed) return;
+        const newItems = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+        const unique = Array.from(new Set([...skillsList, ...newItems]));
+        setSkillsList(unique);
+        setSkillInput('');
+    };
+
+    const handleRemoveSkill = (skillToRemove) => {
+        setSkillsList(prev => prev.filter(s => s !== skillToRemove));
+    };
+
+    const handleSaveSkills = async () => {
+        setIsSavingSkills(true);
+        try {
+            const currentInterests = Array.isArray(displayUser?.interests) 
+                ? displayUser.interests 
+                : typeof displayUser?.interests === 'string' && displayUser.interests.trim() !== ''
+                    ? displayUser.interests.split(',').map(i => i.trim()).filter(Boolean)
+                    : [];
+            const updated = await profileApi.update({
+                bio: displayUser?.bio || '',
+                skills: skillsList,
+                interests: currentInterests,
+                location: displayUser?.location || '',
+                mobileNo: displayUser?.mobileNo || '',
+                bioVisibility: displayUser?.bioVisibility || 'Public',
+                networkVisibility: displayUser?.networkVisibility || 'Public',
+                photosVisibility: 'Public',
+                interestsVisibility: displayUser?.interestsVisibility || 'Public'
+            });
+            if (updated) {
+                setFetchedUser(updated);
+            }
+            await refreshCurrentUser();
+            setIsSkillsModalOpen(false);
+            addToast('Core skills updated successfully!', 'success');
+        } catch (err) {
+            console.error('Failed to update skills:', err);
+            addToast('Failed to update skills. Please try again.', 'error');
+        } finally {
+            setIsSavingSkills(false);
+        }
+    };
+
+    const handleOpenInterestsEditor = () => {
+        const current = Array.isArray(displayUser?.interests) && displayUser.interests.length > 0
+            ? displayUser.interests
+            : typeof displayUser?.interests === 'string' && displayUser.interests.trim() !== ''
+                ? displayUser.interests.split(',').map(i => i.trim()).filter(Boolean)
+                : ['Technology', 'Learning', 'Productivity'];
+        setInterestsList([...current]);
+        setInterestInput('');
+        setIsInterestsModalOpen(true);
+    };
+
+    const handleAddInterest = (e) => {
+        if (e) e.preventDefault();
+        const trimmed = interestInput.trim();
+        if (!trimmed) return;
+        const newItems = trimmed.split(',').map(i => i.trim()).filter(Boolean);
+        const unique = Array.from(new Set([...interestsList, ...newItems]));
+        setInterestsList(unique);
+        setInterestInput('');
+    };
+
+    const handleRemoveInterest = (interestToRemove) => {
+        setInterestsList(prev => prev.filter(i => i !== interestToRemove));
+    };
+
+    const handleSaveInterests = async () => {
+        setIsSavingInterests(true);
+        try {
+            const currentSkills = Array.isArray(displayUser?.skills)
+                ? displayUser.skills
+                : typeof displayUser?.skills === 'string' && displayUser.skills.trim() !== ''
+                    ? displayUser.skills.split(',').map(s => s.trim()).filter(Boolean)
+                    : [];
+            const updated = await profileApi.update({
+                bio: displayUser?.bio || '',
+                skills: currentSkills,
+                interests: interestsList,
+                location: displayUser?.location || '',
+                mobileNo: displayUser?.mobileNo || '',
+                bioVisibility: displayUser?.bioVisibility || 'Public',
+                networkVisibility: displayUser?.networkVisibility || 'Public',
+                photosVisibility: 'Public',
+                interestsVisibility: displayUser?.interestsVisibility || 'Public'
+            });
+            if (updated) {
+                setFetchedUser(updated);
+            }
+            await refreshCurrentUser();
+            setIsInterestsModalOpen(false);
+            addToast('Interests updated successfully!', 'success');
+        } catch (err) {
+            console.error('Failed to update interests:', err);
+            addToast('Failed to update interests. Please try again.', 'error');
+        } finally {
+            setIsSavingInterests(false);
+        }
+    };
 
     useEffect(() => {
         if (currentProfileUserId) {
@@ -499,6 +673,7 @@ export default function Profile() {
 
     const realKarmaPoints = Number(displayUser.karmaPoints ?? displayUser.karma ?? 0);
     const karmaBadge = getKarmaBadge(realKarmaPoints);
+    const karmaLevel = getKarmaLevelInfo(realKarmaPoints);
 
     // Filtered network connections
     const activeNetworkList = networkFilter === 'Followers' 
@@ -645,35 +820,13 @@ export default function Profile() {
                         >
                             {(displayUser?.name || displayUser?.fullName || currentUser?.fullName || 'User').charAt(0).toUpperCase()}
                         </div>
-                        {isOwnProfile && (
-                            <div 
-                                className="absolute inset-0 rounded-full bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white" 
-                                onClick={() => fileInputRef.current?.click()}
-                                title="Change Profile Photo"
-                            >
-                                <span className="material-symbols-outlined text-[28px]">photo_camera</span>
-                                <span className="text-[10px] font-bold mt-1 uppercase">Change</span>
-                            </div>
-                        )}
                     </div>
-
-                    {/* Right Edit Profile Pencil Button (LinkedIn Style) */}
-                    {isOwnProfile && (
-                        <button
-                            type="button"
-                            onClick={handleOpenEdit}
-                            className="w-10 h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
-                            title="Edit profile information"
-                        >
-                            <span className="material-symbols-outlined text-[22px]">edit</span>
-                        </button>
-                    )}
                 </div>
 
                 {/* Profile Information & Details */}
                 <div className="px-6 md:px-8 pb-6">
                     <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                        {/* Left Side: Name, headline, location, connections */}
+                        {/* Left Side: Name, headline, bio, contact info, connections */}
                         <div className="flex-1 max-w-2xl">
                             <div className="flex flex-wrap items-center gap-2">
                                 <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
@@ -709,25 +862,36 @@ export default function Profile() {
                                 })()}
                             </div>
 
-                            {/* Headline */}
-                            <p className="text-slate-800 dark:text-slate-200 font-normal text-[15px] md:text-base mt-1 leading-snug">
-                                {displayUser?.bio 
-                                    ? displayUser.bio.split('\n')[0]
-                                    : `${displayUser?.designation || 'Software Engineer'} | ${displayUser?.departmentName || 'Technology & Architecture'} | MPOnline Limited`
-                                }
-                            </p>
-
-                            {/* Location & Contact Info */}
-                            <div className="flex flex-wrap items-center gap-1.5 text-slate-500 dark:text-slate-400 text-xs md:text-sm mt-2">
-                                <span>{displayUser?.location || 'Bhopal, Madhya Pradesh, India'}</span>
-                                <span>·</span>
+                            {/* Headline / Bio with Contact info and Edit bio */}
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-slate-800 dark:text-slate-200 font-normal text-[15px] md:text-base leading-snug">
+                                <span>
+                                    {displayUser?.bio 
+                                        ? displayUser.bio.split('\n')[0]
+                                        : `${displayUser?.designation || 'Software Engineer'} | ${displayUser?.departmentName || 'Technology & Architecture'}`
+                                    }
+                                </span>
+                                <span className="text-slate-400 text-xs md:text-sm">·</span>
                                 <button 
                                     type="button"
                                     onClick={() => setIsContactModalOpen(true)}
-                                    className="text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer"
+                                    className="text-blue-600 dark:text-blue-400 font-bold hover:underline text-xs md:text-sm cursor-pointer"
                                 >
                                     Contact info
                                 </button>
+                                {isOwnProfile && (
+                                    <>
+                                        <span className="text-slate-400 text-xs md:text-sm">·</span>
+                                        <button 
+                                            type="button"
+                                            onClick={handleOpenBioModal}
+                                            className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline cursor-pointer"
+                                            title="Edit Bio"
+                                        >
+                                            <span className="material-symbols-outlined text-[14px]">edit</span>
+                                            <span>Edit bio</span>
+                                        </button>
+                                    </>
+                                )}
                             </div>
 
                             {/* Connections link */}
@@ -742,170 +906,134 @@ export default function Profile() {
                             </div>
                         </div>
 
-                        {/* Right Side: Company Badge */}
-                        <div className="flex flex-col gap-2.5 shrink-0 pt-1">
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                                    <span className="material-symbols-outlined text-[18px]">corporate_fare</span>
+                        {/* Right Side: Action Buttons & Share Profile */}
+                        <div className="flex flex-wrap items-center gap-2 self-start mt-1">
+                            {!isOwnProfile && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {displayUser.connectionStatus === 'PendingReceived' ? (
+                                        <>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        if (displayUser.requestId) {
+                                                            await userApi.acceptConnection(displayUser.requestId);
+                                                        } else {
+                                                            await userApi.connect(displayUser.userId);
+                                                        }
+                                                        window.location.reload();
+                                                    } catch (e) {
+                                                        console.error(e);
+                                                    }
+                                                }}
+                                                className="px-5 py-1.5 bg-blue-600 text-white font-bold text-sm rounded-full hover:bg-blue-700 transition-all shadow-xs"
+                                            >
+                                                Accept Request
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        if (displayUser.requestId) {
+                                                            await userApi.rejectConnection(displayUser.requestId);
+                                                        }
+                                                        window.location.reload();
+                                                    } catch (e) {
+                                                        console.error(e);
+                                                    }
+                                                }}
+                                                className="px-4 py-1.5 border border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-sm rounded-full transition-all"
+                                            >
+                                                Ignore
+                                            </button>
+                                        </>
+                                    ) : displayUser.connectionStatus === 'PendingSent' || displayUser.connectionStatus === 'Pending' ? (
+                                        <button 
+                                            onClick={async () => {
+                                                try {
+                                                    await userApi.cancelConnection(displayUser.userId);
+                                                    window.location.reload();
+                                                } catch (e) {
+                                                    console.error(e);
+                                                }
+                                            }}
+                                            className="px-4 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 font-bold text-sm rounded-full hover:bg-amber-100 transition-all border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 cursor-pointer"
+                                            title="Click to cancel connection request"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">schedule</span>
+                                            Pending • Cancel
+                                        </button>
+                                    ) : displayUser.connectionStatus === 'Connected' ? (
+                                        <button 
+                                            onClick={async () => {
+                                                const ok = await confirm({
+                                                    title: 'Remove Connection',
+                                                    message: `Are you sure you want to remove your 1st-degree connection with ${displayUser.name || 'this user'}?`,
+                                                    confirmText: 'Remove Connection',
+                                                    cancelText: 'Cancel',
+                                                    variant: 'warning'
+                                                });
+                                                if (!ok) return;
+                                                try {
+                                                    await userApi.removeConnection(displayUser.userId);
+                                                    addToast && addToast('Connection removed.', 'info');
+                                                    window.location.reload();
+                                                } catch (e) {
+                                                    console.error(e);
+                                                }
+                                            }}
+                                            className="px-4 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-bold text-sm rounded-full hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 transition-all border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
+                                            Connected
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={async () => {
+                                                try {
+                                                    await userApi.connect(displayUser.userId);
+                                                    window.location.reload();
+                                                } catch (e) {
+                                                    console.error(e);
+                                                }
+                                            }}
+                                            className="px-5 py-1.5 bg-blue-600 text-white font-bold text-sm rounded-full hover:bg-blue-700 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">person_add</span>
+                                            Connect
+                                        </button>
+                                    )}
+
+                                    {/* Follow / Following Toggle Button */}
+                                    <button
+                                        onClick={handleToggleFollow}
+                                        disabled={isFollowLoading}
+                                        className={`px-4 py-1.5 font-bold text-sm rounded-full transition-all border flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                                            isFollowing 
+                                                ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 shadow-xs' 
+                                                : 'border border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">
+                                            {isFollowing ? 'check_circle' : 'person_add'}
+                                        </span>
+                                        {isFollowing ? 'Following ✔' : 'Follow'}
+                                    </button>
                                 </div>
-                                <span className="font-bold text-sm text-slate-800 dark:text-slate-200">
-                                    MPOnline Limited
-                                </span>
-                            </div>
+                            )}
+
+                            {/* Share Profile button at right side */}
+                            <button 
+                                type="button"
+                                onClick={() => setIsShareModalOpen(true)}
+                                className="px-4 py-1.5 border border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">share</span>
+                                Share profile
+                            </button>
                         </div>
                     </div>
 
-                    {/* Action Buttons Row */}
-                    <div className="flex flex-wrap items-center gap-2 mt-5">
-                        {isOwnProfile ? (
-                            <button 
-                                type="button"
-                                onClick={handleOpenEdit}
-                                className="px-4 py-1.5 border border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                            >
-                                <span className="material-symbols-outlined text-[18px]">add_circle</span>
-                                <span>Add profile section</span>
-                            </button>
-                        ) : (
-                            <div className="flex flex-wrap items-center gap-2">
-                                {displayUser.connectionStatus === 'PendingReceived' ? (
-                                    <>
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    if (displayUser.requestId) {
-                                                        await userApi.acceptConnection(displayUser.requestId);
-                                                    } else {
-                                                        await userApi.connect(displayUser.userId);
-                                                    }
-                                                    window.location.reload();
-                                                } catch (e) {
-                                                    console.error(e);
-                                                }
-                                            }}
-                                            className="px-5 py-1.5 bg-blue-600 text-white font-bold text-sm rounded-full hover:bg-blue-700 transition-all shadow-xs"
-                                        >
-                                            Accept Request
-                                        </button>
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    if (displayUser.requestId) {
-                                                        await userApi.rejectConnection(displayUser.requestId);
-                                                    }
-                                                    window.location.reload();
-                                                } catch (e) {
-                                                    console.error(e);
-                                                }
-                                            }}
-                                            className="px-4 py-1.5 border border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-sm rounded-full transition-all"
-                                        >
-                                            Ignore
-                                        </button>
-                                    </>
-                                ) : displayUser.connectionStatus === 'PendingSent' || displayUser.connectionStatus === 'Pending' ? (
-                                    <button 
-                                        onClick={async () => {
-                                            try {
-                                                await userApi.cancelConnection(displayUser.userId);
-                                                window.location.reload();
-                                            } catch (e) {
-                                                console.error(e);
-                                            }
-                                        }}
-                                        className="px-4 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 font-bold text-sm rounded-full hover:bg-amber-100 transition-all border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 cursor-pointer"
-                                        title="Click to cancel connection request"
-                                    >
-                                        <span className="material-symbols-outlined text-[16px]">schedule</span>
-                                        Pending • Cancel
-                                    </button>
-                                ) : displayUser.connectionStatus === 'Connected' ? (
-                                    <button 
-                                        onClick={async () => {
-                                            const ok = await confirm({
-                                                title: 'Remove Connection',
-                                                message: `Are you sure you want to remove your 1st-degree connection with ${displayUser.name || 'this user'}?`,
-                                                confirmText: 'Remove Connection',
-                                                cancelText: 'Cancel',
-                                                variant: 'warning'
-                                            });
-                                            if (!ok) return;
-                                            try {
-                                                await userApi.removeConnection(displayUser.userId);
-                                                addToast && addToast('Connection removed.', 'info');
-                                                window.location.reload();
-                                            } catch (e) {
-                                                console.error(e);
-                                            }
-                                        }}
-                                        className="px-4 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-bold text-sm rounded-full hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 transition-all border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 cursor-pointer"
-                                    >
-                                        <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
-                                        Connected
-                                    </button>
-                                ) : (
-                                    <button 
-                                        onClick={async () => {
-                                            try {
-                                                await userApi.connect(displayUser.userId);
-                                                window.location.reload();
-                                            } catch (e) {
-                                                console.error(e);
-                                            }
-                                        }}
-                                        className="px-5 py-1.5 bg-blue-600 text-white font-bold text-sm rounded-full hover:bg-blue-700 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                                    >
-                                        <span className="material-symbols-outlined text-[16px]">person_add</span>
-                                        Connect
-                                    </button>
-                                )}
-
-                                {/* Follow / Following Toggle Button */}
-                                <button
-                                    onClick={handleToggleFollow}
-                                    disabled={isFollowLoading}
-                                    className={`px-4 py-1.5 font-bold text-sm rounded-full transition-all border flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-                                        isFollowing 
-                                            ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 shadow-xs' 
-                                            : 'border border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-[16px]">
-                                        {isFollowing ? 'check_circle' : 'person_add'}
-                                    </span>
-                                    {isFollowing ? 'Following ✔' : 'Follow'}
-                                </button>
-
-                                {/* Facebook-Style Direct Message Button */}
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const targetId = displayUser.userId || displayUser.id;
-                                        const targetName = displayUser.name || displayUser.fullName || '';
-                                        navigate(`/messages?userId=${targetId}&name=${encodeURIComponent(targetName)}`);
-                                    }}
-                                    className="px-4 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold text-sm rounded-full transition-all shadow-xs flex items-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
-                                    title={`Message ${displayUser.name || 'this user'}`}
-                                >
-                                    <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
-                                    <span>Message</span>
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Share Profile button */}
-                        <button 
-                            type="button"
-                            onClick={() => setIsShareModalOpen(true)}
-                            className="px-4 py-1.5 border border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5"
-                        >
-                            <span className="material-symbols-outlined text-[16px]">share</span>
-                            Share profile
-                        </button>
-                    </div>
-
                     {/* Interactive Stats Row */}
-                    <div className={`grid ${isSysAdmin ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3 md:grid-cols-6'} gap-4 py-6 border-t border-slate-100 dark:border-slate-800/50`}>
+                    <div className={`grid ${isSysAdmin ? 'grid-cols-2 md:grid-cols-4' : (isOwnProfile ? 'grid-cols-3 md:grid-cols-5' : 'grid-cols-3 md:grid-cols-6')} gap-4 py-6 border-t border-slate-100 dark:border-slate-800/50 mt-5`}>
                         {!isSysAdmin && (
                             <button onClick={() => setActiveTab('Posts')} className="text-center group cursor-pointer transition-transform hover:scale-105">
                                 <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-br from-indigo-500 to-purple-500">{stats.posts}</p>
@@ -920,10 +1048,12 @@ export default function Profile() {
                             <p className="text-2xl font-black text-slate-900 dark:text-white group-hover:text-indigo-500 transition-colors">{stats.following}</p>
                             <p className="text-slate-500 dark:text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1 group-hover:text-indigo-500 transition-colors">Following</p>
                         </button>
-                        <button onClick={() => { setActiveTab('Network'); setNetworkFilter('All'); }} className="text-center md:border-l border-slate-100 dark:border-slate-800/50 group cursor-pointer transition-transform hover:scale-105">
-                            <p className="text-2xl font-black text-teal-500 dark:text-teal-400">{stats.mutuals}</p>
-                            <p className="text-slate-500 dark:text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1 group-hover:text-teal-500 transition-colors">Mutuals</p>
-                        </button>
+                        {!isOwnProfile && (
+                            <button onClick={() => { setActiveTab('Network'); setNetworkFilter('All'); }} className="text-center md:border-l border-slate-100 dark:border-slate-800/50 group cursor-pointer transition-transform hover:scale-105">
+                                <p className="text-2xl font-black text-teal-500 dark:text-teal-400">{stats.mutuals}</p>
+                                <p className="text-slate-500 dark:text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1 group-hover:text-teal-500 transition-colors">Mutuals</p>
+                            </button>
+                        )}
                         <button onClick={() => setActiveTab('Communities')} className="text-center border-l border-slate-100 dark:border-slate-800/50 group cursor-pointer transition-transform hover:scale-105">
                             <p className="text-2xl font-black text-pink-500 dark:text-pink-400">{stats.commonCommunities}</p>
                             <p className="text-slate-500 dark:text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1 group-hover:text-pink-500 transition-colors">Groups</p>
@@ -961,7 +1091,20 @@ export default function Profile() {
                         <div className="lg:col-span-2 flex flex-col gap-6">
                             {/* Bio */}
                             <div className="rounded-2xl border shadow-sm p-6 glass card-lift">
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">About Me</h3>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">About Me</h3>
+                                    {isOwnProfile && (
+                                        <button
+                                            type="button"
+                                            onClick={handleOpenBioModal}
+                                            className="flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 px-2.5 py-1 rounded-lg transition-colors cursor-pointer border border-indigo-200/60 dark:border-indigo-800/40"
+                                            title="Edit About Me"
+                                        >
+                                            <span className="material-symbols-outlined text-[14px]">edit</span>
+                                            <span>Edit</span>
+                                        </button>
+                                    )}
+                                </div>
                                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm whitespace-pre-line">
                                     {displayUser?.bio || 'Dedicated professional working at Knome, focused on innovation, teamwork, and driving platform excellence.'}
                                 </p>
@@ -970,35 +1113,67 @@ export default function Profile() {
                             {/* Skills & Interests */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="rounded-2xl border shadow-sm p-6 glass card-lift">
-                                    <h3 className="text-[15px] font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-indigo-500">psychology</span>
-                                        Core Skills
-                                    </h3>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-[15px] font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-indigo-500">psychology</span>
+                                            Core Skills
+                                        </h3>
+                                        {isOwnProfile && (
+                                            <button
+                                                type="button"
+                                                onClick={handleOpenSkillsEditor}
+                                                className="flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 px-2.5 py-1 rounded-lg transition-colors cursor-pointer border border-indigo-200/60 dark:border-indigo-800/40"
+                                                title="Edit Core Skills"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">edit</span>
+                                                <span>Edit</span>
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="flex flex-wrap gap-2">
                                         {(Array.isArray(displayUser?.skills) && displayUser.skills.length > 0
                                             ? displayUser.skills
                                             : typeof displayUser?.skills === 'string' && displayUser.skills.trim() !== ''
                                                 ? displayUser.skills.split(',').map(s => s.trim())
                                                 : ['Collaboration', 'Problem Solving', 'Innovation']
-                                        ).map((skill, i) => (
-                                            <span key={i} className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/50 text-[12px] font-bold rounded-lg">{skill}</span>
-                                        ))}
+                                        ).map((skill, i) => {
+                                            const label = typeof skill === 'object' && skill !== null ? (skill.skill || skill.name || JSON.stringify(skill)) : String(skill);
+                                            return (
+                                                <span key={i} className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/50 text-[12px] font-bold rounded-lg">{label}</span>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                                 <div className="rounded-2xl border shadow-sm p-6 glass card-lift">
-                                    <h3 className="text-[15px] font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-pink-500">interests</span>
-                                        Interests
-                                    </h3>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-[15px] font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-pink-500">interests</span>
+                                            Interests
+                                        </h3>
+                                        {isOwnProfile && (
+                                            <button
+                                                type="button"
+                                                onClick={handleOpenInterestsEditor}
+                                                className="flex items-center gap-1 text-xs font-bold text-pink-600 dark:text-pink-400 hover:text-pink-700 hover:bg-pink-50 dark:hover:bg-pink-950/50 px-2.5 py-1 rounded-lg transition-colors cursor-pointer border border-pink-200/60 dark:border-pink-800/40"
+                                                title="Edit Interests"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">edit</span>
+                                                <span>Edit</span>
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="flex flex-wrap gap-2">
                                         {(Array.isArray(displayUser?.interests) && displayUser.interests.length > 0
                                             ? displayUser.interests
                                             : typeof displayUser?.interests === 'string' && displayUser.interests.trim() !== ''
                                                 ? displayUser.interests.split(',').map(i => i.trim())
                                                 : ['Technology', 'Learning', 'Productivity']
-                                        ).map((interest, i) => (
-                                            <span key={i} className="px-3 py-1.5 bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 border border-pink-100 dark:border-pink-800/50 text-[12px] font-bold rounded-lg">{interest}</span>
-                                        ))}
+                                        ).map((interest, i) => {
+                                            const label = typeof interest === 'object' && interest !== null ? (interest.interest || interest.name || JSON.stringify(interest)) : String(interest);
+                                            return (
+                                                <span key={i} className="px-3 py-1.5 bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 border border-pink-100 dark:border-pink-800/50 text-[12px] font-bold rounded-lg">{label}</span>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -1026,22 +1201,31 @@ export default function Profile() {
                                     <div className="absolute -right-8 -top-8 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700"></div>
                                     <h3 className="text-[12px] font-black uppercase tracking-widest text-slate-400 mb-6">Platform Level</h3>
                                     <div className="flex items-center gap-4 mb-6">
-                                        <div className="w-16 h-16 rounded-full border-4 border-indigo-500 flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/50 shadow-md">
-                                            <span className="text-xl font-black text-indigo-500">L{Math.max(1, Math.floor(stats.karma / 100) + 1)}</span>
+                                        <div className={`w-16 h-16 rounded-full border-4 ${karmaLevel.circleBorder} flex items-center justify-center ${karmaLevel.circleBg} shadow-md shrink-0`}>
+                                            <span className={`text-xl font-black ${karmaLevel.circleText}`}>L{karmaLevel.level}</span>
                                         </div>
                                         <div>
-                                            <p className="font-bold text-slate-900 dark:text-white text-lg">{karmaBadge.name} Contributor</p>
-                                            <p className="text-slate-500 text-xs font-semibold mt-0.5">{stats.karma} Karma Points</p>
+                                            <p className="font-bold text-slate-900 dark:text-white text-lg">{karmaLevel.name} Contributor</p>
+                                            <p className="text-slate-500 text-xs font-semibold mt-0.5">Level {karmaLevel.level} • {stats.karma.toLocaleString()} Karma Points</p>
                                         </div>
                                     </div>
                                     <div className="space-y-2">
                                         <div className="flex justify-between text-[11px] font-bold text-slate-500">
-                                            <span>Progress to Level {Math.max(1, Math.floor(stats.karma / 100) + 1) + 1}</span>
-                                            <span className="text-indigo-500">{stats.karma % 100}%</span>
+                                            <span>
+                                                {karmaLevel.nextLevel 
+                                                    ? `Progress to Level ${karmaLevel.nextLevel} (${karmaLevel.nextName} Contributor)` 
+                                                    : 'Maximum Platform Contributor Rank'}
+                                            </span>
+                                            <span className={karmaLevel.circleText}>{karmaLevel.progressPercent}%</span>
                                         </div>
                                         <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                            <div className="h-full bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-500" style={{ width: `${stats.karma % 100}%` }}></div>
+                                            <div className={`h-full ${karmaLevel.progressBar} rounded-full transition-all duration-500`} style={{ width: `${karmaLevel.progressPercent}%` }}></div>
                                         </div>
+                                        {karmaLevel.nextTarget && (
+                                            <p className="text-[10px] font-semibold text-slate-400 text-right mt-1">
+                                                {karmaLevel.pointsRemaining.toLocaleString()} pts to {karmaLevel.nextName}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -1072,7 +1256,8 @@ export default function Profile() {
                                 </div>
                                 <div className="text-center bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 min-w-[200px]">
                                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Platform Level</div>
-                                    <div className="text-3xl font-black text-indigo-500">Level {Math.max(1, Math.floor(stats.karma / 100) + 1)}</div>
+                                    <div className={`text-3xl font-black ${karmaLevel.circleText}`}>Level {karmaLevel.level}</div>
+                                    <div className="text-[11px] font-bold text-slate-500 mt-0.5">{karmaLevel.name} Contributor</div>
                                 </div>
                             </div>
                         </div>
@@ -1126,7 +1311,7 @@ export default function Profile() {
                 )}
                 
                 {activeTab === 'Posts' && (
-                    <div className="space-y-6 max-w-3xl mx-auto">
+                    <div className="space-y-6 w-full">
                         {isTabLoading ? (
                             <p className="text-center text-slate-500 font-medium py-8">Loading posts...</p>
                         ) : tabData.posts.length === 0 ? (
@@ -1623,6 +1808,276 @@ export default function Profile() {
                 onClose={() => setIsShareModalOpen(false)} 
                 user={displayUser} 
             />
+
+            {/* Edit Bio Modal */}
+            {isBioModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsBioModalOpen(false)}></div>
+                    <div className="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in duration-200 overflow-hidden">
+                        <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-[20px]">edit_note</span>
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">Edit About Me & Bio</h2>
+                                    <p className="text-xs text-slate-500">Update your headline and professional summary</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsBioModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+                                <span className="material-symbols-outlined text-[20px]">close</span>
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+                            <div>
+                                <label className="block text-[12px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                                    Your Bio / Headline
+                                </label>
+                                <textarea
+                                    rows={5}
+                                    value={bioInput}
+                                    onChange={(e) => setBioInput(e.target.value)}
+                                    placeholder="Write a short summary about yourself, your role, experience, or what you're working on..."
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none custom-scrollbar resize-none"
+                                />
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                                This will update your profile headline and the "About Me" section on your profile.
+                            </p>
+                        </div>
+
+                        <div className="p-5 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2.5 bg-slate-50 dark:bg-slate-800/50">
+                            <button 
+                                onClick={() => setIsBioModalOpen(false)} 
+                                disabled={isSavingBio} 
+                                className="px-5 py-2 text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-xs transition-colors cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleSaveBio} 
+                                disabled={isSavingBio} 
+                                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                            >
+                                {isSavingBio ? (
+                                    <>
+                                        <span className="material-symbols-outlined text-[15px] animate-spin">refresh</span>
+                                        <span>Saving...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="material-symbols-outlined text-[15px]">check</span>
+                                        <span>Save Bio</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Core Skills Modal */}
+            {isSkillsModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsSkillsModalOpen(false)}></div>
+                    <div className="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in duration-200 overflow-hidden">
+                        <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-[20px]">psychology</span>
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">Edit Core Skills</h2>
+                                    <p className="text-xs text-slate-500">Showcase your technical and domain expertise</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsSkillsModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+                                <span className="material-symbols-outlined text-[20px]">close</span>
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+                            {/* Current Skills as Interactive Badges */}
+                            <div>
+                                <label className="block text-[12px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                                    Current Skills ({skillsList.length})
+                                </label>
+                                {skillsList.length === 0 ? (
+                                    <p className="text-xs text-slate-400 italic py-2">No skills added yet. Type below to add skills.</p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 max-h-48 overflow-y-auto custom-scrollbar">
+                                        {skillsList.map((skill, idx) => (
+                                            <span 
+                                                key={idx} 
+                                                className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 text-xs font-bold rounded-lg shadow-2xs group"
+                                            >
+                                                <span>{skill}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveSkill(skill)}
+                                                    className="w-4 h-4 rounded-full flex items-center justify-center text-indigo-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                                                    title={`Remove ${skill}`}
+                                                >
+                                                    <span className="material-symbols-outlined text-[13px]">close</span>
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Add Skill Input Form */}
+                            <form onSubmit={handleAddSkill} className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={skillInput}
+                                    onChange={(e) => setSkillInput(e.target.value)}
+                                    placeholder="Add skill (e.g. C#, React, Azure) - press Enter"
+                                    className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={!skillInput.trim()}
+                                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer shrink-0"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">add</span>
+                                    <span>Add</span>
+                                </button>
+                            </form>
+                            <p className="text-[11px] text-slate-400">Tip: You can separate multiple skills with commas and add them together.</p>
+                        </div>
+
+                        <div className="p-5 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2.5 bg-slate-50 dark:bg-slate-800/50">
+                            <button 
+                                onClick={() => setIsSkillsModalOpen(false)} 
+                                disabled={isSavingSkills} 
+                                className="px-5 py-2 text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-xs transition-colors cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleSaveSkills} 
+                                disabled={isSavingSkills} 
+                                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                            >
+                                {isSavingSkills ? (
+                                    <>
+                                        <span className="material-symbols-outlined text-[15px] animate-spin">refresh</span>
+                                        <span>Saving...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="material-symbols-outlined text-[15px]">check</span>
+                                        <span>Save Skills</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Interests Modal */}
+            {isInterestsModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsInterestsModalOpen(false)}></div>
+                    <div className="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in duration-200 overflow-hidden">
+                        <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-pink-50 dark:bg-pink-900/40 text-pink-600 dark:text-pink-400 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-[20px]">interests</span>
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">Edit Interests</h2>
+                                    <p className="text-xs text-slate-500">Add personal topics, technologies, or hobbies you follow</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsInterestsModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+                                <span className="material-symbols-outlined text-[20px]">close</span>
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+                            {/* Current Interests as Interactive Badges */}
+                            <div>
+                                <label className="block text-[12px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                                    Current Interests ({interestsList.length})
+                                </label>
+                                {interestsList.length === 0 ? (
+                                    <p className="text-xs text-slate-400 italic py-2">No interests added yet. Type below to add interests.</p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 max-h-48 overflow-y-auto custom-scrollbar">
+                                        {interestsList.map((interest, idx) => (
+                                            <span 
+                                                key={idx} 
+                                                className="inline-flex items-center gap-1.5 px-3 py-1 bg-pink-50 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300 border border-pink-200/80 dark:border-pink-800/60 text-xs font-bold rounded-lg shadow-2xs group"
+                                            >
+                                                <span>{interest}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveInterest(interest)}
+                                                    className="w-4 h-4 rounded-full flex items-center justify-center text-pink-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                                                    title={`Remove ${interest}`}
+                                                >
+                                                    <span className="material-symbols-outlined text-[13px]">close</span>
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Add Interest Input Form */}
+                            <form onSubmit={handleAddInterest} className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={interestInput}
+                                    onChange={(e) => setInterestInput(e.target.value)}
+                                    placeholder="Add interest (e.g. AI, UI/UX, Cloud) - press Enter"
+                                    className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={!interestInput.trim()}
+                                    className="px-4 py-2.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer shrink-0"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">add</span>
+                                    <span>Add</span>
+                                </button>
+                            </form>
+                            <p className="text-[11px] text-slate-400">Tip: You can separate multiple interests with commas and add them together.</p>
+                        </div>
+
+                        <div className="p-5 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2.5 bg-slate-50 dark:bg-slate-800/50">
+                            <button 
+                                onClick={() => setIsInterestsModalOpen(false)} 
+                                disabled={isSavingInterests} 
+                                className="px-5 py-2 text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-xs transition-colors cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleSaveInterests} 
+                                disabled={isSavingInterests} 
+                                className="px-5 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-pink-500/20 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                            >
+                                {isSavingInterests ? (
+                                    <>
+                                        <span className="material-symbols-outlined text-[15px] animate-spin">refresh</span>
+                                        <span>Saving...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="material-symbols-outlined text-[15px]">check</span>
+                                        <span>Save Interests</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Background Banner Customization Modal */}
             {isBannerModalOpen && (
