@@ -273,7 +273,19 @@ export async function getVideos() {
         }
 
 
-        // 4. Include custom imported YouTube playlist videos
+        // 4. Include default series episodes & custom imported YouTube playlist videos
+        APNA_JS_EPISODES.forEach(v => {
+            if (v && v.id && !seenUrls.has(v.id)) {
+                seenUrls.add(v.id);
+                videoList.push(v);
+            }
+        });
+        CWH_JS_EPISODES.forEach(v => {
+            if (v && v.id && !seenUrls.has(v.id)) {
+                seenUrls.add(v.id);
+                videoList.push(v);
+            }
+        });
 
         try {
             const imported = JSON.parse(localStorage.getItem('knome_imported_yt_videos') || '[]');
@@ -281,7 +293,11 @@ export async function getVideos() {
                 imported.forEach(v => {
                     if (v && v.id && !seenUrls.has(v.id)) {
                         seenUrls.add(v.id);
-                        videoList.push(v);
+                        videoList.push({
+                            ...v,
+                            views: '0',
+                            likes: 0
+                        });
                     }
                 });
             }
@@ -295,7 +311,6 @@ export async function getVideos() {
 }
 
 export async function deleteVideo(videoId) {
-
     try {
         await apiClient.delete(`/videos/${videoId}`);
         return true;
@@ -304,6 +319,241 @@ export async function deleteVideo(videoId) {
         throw error;
     }
 }
+
+// ── Default Real Episodes for Pre-seeded Series ────────────────────────────
+export const APNA_JS_EPISODES = [
+    {
+        id: 'yt_apna_1',
+        videoId: 'ajDRvxDWH4w',
+        title: '#1: Variables & Data Types | JavaScript Full Course',
+        description: 'Lecture 1 of JavaScript Masterclass by Shradha Khapra covering variables, let, const, and primitive data types.',
+        thumbnail: 'https://img.youtube.com/vi/ajDRvxDWH4w/hqdefault.jpg',
+        duration: '25:40',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 5, 2026',
+        author: 'Shradha Khapra (Apna College)',
+        authorId: 98,
+        authorDesignation: 'Co-Founder & Lead Educator',
+        channelName: 'Apna College',
+        tags: ['JavaScript', 'Variables', 'ApnaCollege'],
+        sourceUrl: 'https://www.youtube.com/watch?v=ajDRvxDWH4w',
+        sourceType: 'YouTube'
+    },
+    {
+        id: 'yt_apna_2',
+        videoId: 'VlPiVmYuoqw',
+        title: '#2: Operators and Conditional Statements | JavaScript Full Course',
+        description: 'Lecture 2 covering arithmetic, assignment, logical operators, if-else statements, and switch conditions.',
+        thumbnail: 'https://img.youtube.com/vi/VlPiVmYuoqw/hqdefault.jpg',
+        duration: '32:15',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 6, 2026',
+        author: 'Shradha Khapra (Apna College)',
+        authorId: 98,
+        authorDesignation: 'Co-Founder & Lead Educator',
+        channelName: 'Apna College',
+        tags: ['JavaScript', 'Operators', 'ApnaCollege'],
+        sourceUrl: 'https://www.youtube.com/watch?v=VlPiVmYuoqw',
+        sourceType: 'YouTube'
+    },
+    {
+        id: 'yt_apna_3',
+        videoId: 'UmRtFFNuLdM',
+        title: '#3: Loops and Strings in JavaScript | JavaScript Full Course',
+        description: 'Lecture 3 covering for loop, while loop, do-while loop, template literals, and string methods.',
+        thumbnail: 'https://img.youtube.com/vi/UmRtFFNuLdM/hqdefault.jpg',
+        duration: '28:50',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 7, 2026',
+        author: 'Shradha Khapra (Apna College)',
+        authorId: 98,
+        authorDesignation: 'Co-Founder & Lead Educator',
+        channelName: 'Apna College',
+        tags: ['JavaScript', 'Loops', 'Strings'],
+        sourceUrl: 'https://www.youtube.com/watch?v=UmRtFFNuLdM',
+        sourceType: 'YouTube'
+    },
+    {
+        id: 'yt_apna_4',
+        videoId: '13gLB6h3no4',
+        title: '#4: Arrays in JavaScript | JavaScript Full Course',
+        description: 'Lecture 4 covering array indices, push, pop, slice, splice, and array methods in modern JS.',
+        thumbnail: 'https://img.youtube.com/vi/13gLB6h3no4/hqdefault.jpg',
+        duration: '34:20',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 8, 2026',
+        author: 'Shradha Khapra (Apna College)',
+        authorId: 98,
+        authorDesignation: 'Co-Founder & Lead Educator',
+        channelName: 'Apna College',
+        tags: ['JavaScript', 'Arrays', 'Methods'],
+        sourceUrl: 'https://www.youtube.com/watch?v=13gLB6h3no4',
+        sourceType: 'YouTube'
+    },
+    {
+        id: 'yt_apna_5',
+        videoId: 'P0XMXqDG91s',
+        title: '#5: Functions & Methods | JavaScript Full Course',
+        description: 'Lecture 5 covering arrow functions, forEach, map, filter, and reduce array methods.',
+        thumbnail: 'https://img.youtube.com/vi/P0XMXqDG91s/hqdefault.jpg',
+        duration: '40:10',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 9, 2026',
+        author: 'Shradha Khapra (Apna College)',
+        authorId: 98,
+        authorDesignation: 'Co-Founder & Lead Educator',
+        channelName: 'Apna College',
+        tags: ['JavaScript', 'Functions', 'ArrowFunctions'],
+        sourceUrl: 'https://www.youtube.com/watch?v=P0XMXqDG91s',
+        sourceType: 'YouTube'
+    },
+    {
+        id: 'yt_apna_6',
+        videoId: 'fXAGr_j2iGo',
+        title: '#6: DOM Manipulation (Part 1) | JavaScript Full Course',
+        description: 'Lecture 6 covering Window object, Document object, DOM tree, getElementById, and querySelector.',
+        thumbnail: 'https://img.youtube.com/vi/fXAGr_j2iGo/hqdefault.jpg',
+        duration: '45:30',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 10, 2026',
+        author: 'Shradha Khapra (Apna College)',
+        authorId: 98,
+        authorDesignation: 'Co-Founder & Lead Educator',
+        channelName: 'Apna College',
+        tags: ['JavaScript', 'DOM', 'ApnaCollege'],
+        sourceUrl: 'https://www.youtube.com/watch?v=fXAGr_j2iGo',
+        sourceType: 'YouTube'
+    }
+];
+
+export const CWH_JS_EPISODES = [
+    {
+        id: 'yt_cwh_1',
+        videoId: 'ER9SspLe4Hg',
+        title: '#1: Introduction to JavaScript + Setup | JavaScript Tutorials for Beginners',
+        description: 'Tutorial 1 of JavaScript by CodeWithHarry introducing JS syntax, runtime, and developer environment setup.',
+        thumbnail: 'https://img.youtube.com/vi/ER9SspLe4Hg/hqdefault.jpg',
+        duration: '14:22',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 5, 2026',
+        author: 'CodeWithHarry',
+        authorId: 99,
+        authorDesignation: 'Lead Educator & Web Engineer',
+        channelName: 'CodeWithHarry',
+        tags: ['JavaScript', 'Setup', 'CodeWithHarry'],
+        sourceUrl: 'https://www.youtube.com/watch?v=ER9SspLe4Hg',
+        sourceType: 'YouTube'
+    },
+    {
+        id: 'yt_cwh_2',
+        videoId: 'fX2W3flx72E',
+        title: '#2: Variables in JavaScript (var, let, const) | JavaScript Tutorials for Beginners',
+        description: 'Tutorial 2 covering differences between var, let, and const, block scope, and hoisting.',
+        thumbnail: 'https://img.youtube.com/vi/fX2W3flx72E/hqdefault.jpg',
+        duration: '18:40',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 6, 2026',
+        author: 'CodeWithHarry',
+        authorId: 99,
+        authorDesignation: 'Lead Educator & Web Engineer',
+        channelName: 'CodeWithHarry',
+        tags: ['JavaScript', 'Variables', 'CodeWithHarry'],
+        sourceUrl: 'https://www.youtube.com/watch?v=fX2W3flx72E',
+        sourceType: 'YouTube'
+    },
+    {
+        id: 'yt_cwh_3',
+        videoId: 'f6Vq_FvYpQo',
+        title: '#3: Primitives and Objects in JavaScript | JavaScript Tutorials for Beginners',
+        description: 'Tutorial 3 exploring the 7 primitive data types and objects as key-value pairs.',
+        thumbnail: 'https://img.youtube.com/vi/f6Vq_FvYpQo/hqdefault.jpg',
+        duration: '16:15',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 7, 2026',
+        author: 'CodeWithHarry',
+        authorId: 99,
+        authorDesignation: 'Lead Educator & Web Engineer',
+        channelName: 'CodeWithHarry',
+        tags: ['JavaScript', 'DataTypes', 'Objects'],
+        sourceUrl: 'https://www.youtube.com/watch?v=f6Vq_FvYpQo',
+        sourceType: 'YouTube'
+    },
+    {
+        id: 'yt_cwh_4',
+        videoId: '7Q4t7hNq8cE',
+        title: '#4: JavaScript Operators and Expressions | JavaScript Tutorials for Beginners',
+        description: 'Tutorial 4 covering arithmetic, assignment, comparison, and logical operators in JavaScript.',
+        thumbnail: 'https://img.youtube.com/vi/7Q4t7hNq8cE/hqdefault.jpg',
+        duration: '21:05',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 8, 2026',
+        author: 'CodeWithHarry',
+        authorId: 99,
+        authorDesignation: 'Lead Educator & Web Engineer',
+        channelName: 'CodeWithHarry',
+        tags: ['JavaScript', 'Operators', 'Expressions'],
+        sourceUrl: 'https://www.youtube.com/watch?v=7Q4t7hNq8cE',
+        sourceType: 'YouTube'
+    },
+    {
+        id: 'yt_cwh_5',
+        videoId: 'k7Pq3R1a5q0',
+        title: '#5: JavaScript Conditional Expressions | JavaScript Tutorials for Beginners',
+        description: 'Tutorial 5 covering if, if-else, ternary operator, and conditional branching in JS.',
+        thumbnail: 'https://img.youtube.com/vi/k7Pq3R1a5q0/hqdefault.jpg',
+        duration: '19:30',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 9, 2026',
+        author: 'CodeWithHarry',
+        authorId: 99,
+        authorDesignation: 'Lead Educator & Web Engineer',
+        channelName: 'CodeWithHarry',
+        tags: ['JavaScript', 'Conditionals', 'CodeWithHarry'],
+        sourceUrl: 'https://www.youtube.com/watch?v=k7Pq3R1a5q0',
+        sourceType: 'YouTube'
+    },
+    {
+        id: 'yt_cwh_6',
+        videoId: 'hKB-YGF14SY',
+        title: '#6: JavaScript For Loops | JavaScript Tutorials for Beginners',
+        description: 'Tutorial 6 covering for loop, for-in loop, and for-of loop with live code examples.',
+        thumbnail: 'https://img.youtube.com/vi/hKB-YGF14SY/hqdefault.jpg',
+        duration: '22:45',
+        views: '0',
+        likes: 0,
+        category: 'Training & Tutorials',
+        date: 'Aug 10, 2026',
+        author: 'CodeWithHarry',
+        authorId: 99,
+        authorDesignation: 'Lead Educator & Web Engineer',
+        channelName: 'CodeWithHarry',
+        tags: ['JavaScript', 'Loops', 'ForLoops'],
+        sourceUrl: 'https://www.youtube.com/watch?v=hKB-YGF14SY',
+        sourceType: 'YouTube'
+    }
+];
 
 // ── Playlists & Series Service ───────────────────────────────────────────────
 const PLAYLISTS_STORAGE_KEY = 'knome_video_playlists_v1';
@@ -317,10 +567,12 @@ const DEFAULT_PLAYLISTS = [
         author: 'Shradha Khapra (Apna College)',
         authorId: 98,
         authorDesignation: 'Co-Founder & Lead Educator',
-        thumbnail: 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&q=90&w=1200',
+        channelName: 'Apna College',
+        thumbnail: 'https://img.youtube.com/vi/ajDRvxDWH4w/hqdefault.jpg',
         type: 'Series',
         createdDate: '2026-08-05',
-        videoIds: ['yt_apna_1', 'yt_apna_2', 'yt_apna_3', 'yt_apna_4', 'yt_apna_5', 'yt_apna_6']
+        videoIds: ['yt_apna_1', 'yt_apna_2', 'yt_apna_3', 'yt_apna_4', 'yt_apna_5', 'yt_apna_6'],
+        episodes: APNA_JS_EPISODES
     },
     {
         id: 'pl_series_cwh_js',
@@ -330,10 +582,12 @@ const DEFAULT_PLAYLISTS = [
         author: 'CodeWithHarry',
         authorId: 99,
         authorDesignation: 'Lead Educator & Web Engineer',
-        thumbnail: 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&q=90&w=1200',
+        channelName: 'CodeWithHarry',
+        thumbnail: 'https://img.youtube.com/vi/ER9SspLe4Hg/hqdefault.jpg',
         type: 'Series',
         createdDate: '2026-08-05',
-        videoIds: ['yt_cwh_1', 'yt_cwh_2', 'yt_cwh_3', 'yt_cwh_4', 'yt_cwh_5', 'yt_cwh_6']
+        videoIds: ['yt_cwh_1', 'yt_cwh_2', 'yt_cwh_3', 'yt_cwh_4', 'yt_cwh_5', 'yt_cwh_6'],
+        episodes: CWH_JS_EPISODES
     },
     {
         id: 'pl_series_1',
@@ -379,7 +633,20 @@ const DEFAULT_PLAYLISTS = [
 export function getPlaylists() {
     try {
         const stored = localStorage.getItem(PLAYLISTS_STORAGE_KEY);
-        if (stored) return JSON.parse(stored);
+        if (stored) {
+            const list = JSON.parse(stored);
+            if (Array.isArray(list) && list.length > 0) {
+                return list.map(pl => {
+                    if (pl.id === 'pl_series_apna_js' && (!pl.episodes || pl.episodes.length === 0)) {
+                        return { ...pl, episodes: APNA_JS_EPISODES };
+                    }
+                    if (pl.id === 'pl_series_cwh_js' && (!pl.episodes || pl.episodes.length === 0)) {
+                        return { ...pl, episodes: CWH_JS_EPISODES };
+                    }
+                    return pl;
+                });
+            }
+        }
     } catch (e) {}
     localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(DEFAULT_PLAYLISTS));
     return DEFAULT_PLAYLISTS;
@@ -395,10 +662,12 @@ export function savePlaylist(playlistData) {
         author: playlistData.author || 'Meghna Tiwari',
         authorId: playlistData.authorId || 5,
         authorDesignation: playlistData.authorDesignation || 'Product Specialist',
+        channelName: playlistData.channelName || null,
         thumbnail: playlistData.thumbnail || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&q=90&w=1200',
         videoIds: playlistData.videoIds || [],
+        episodes: playlistData.episodes || [],
         type: playlistData.type || 'Playlist',
-        createdDate: new Date().toISOString().split('T')[0]
+        createdDate: playlistData.createdDate || new Date().toISOString().split('T')[0]
     };
     const updated = [newPl, ...existing.filter(p => p.id !== newPl.id)];
     localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(updated));
@@ -417,64 +686,213 @@ export function deletePlaylist(playlistId) {
     }
 }
 
-export function importYouTubePlaylist({ playlistUrl, title, author, category, episodeCount = 6, user = null }) {
+// ── Real Auto-Fetcher for YouTube Playlists & Series ─────────────────────────
+export async function fetchYouTubePlaylistDetails(url) {
+    if (!url) return null;
+    const cleanUrl = url.trim();
+
+    // Extract list ID (e.g. list=PL... or list=OLAK...)
+    const listMatch = cleanUrl.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+    const listId = listMatch ? listMatch[1] : null;
+
+    // Extract single video ID if present
+    const vMatch = cleanUrl.match(/(?:v=|\/embed\/|\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    const videoId = vMatch ? vMatch[1] : null;
+
+    let playlistTitle = '';
+    let authorName = '';
+    let parsedEpisodes = [];
+
+    // 1. If listId exists, attempt to fetch YouTube's official XML feed
+    if (listId) {
+        let xmlText = null;
+        try {
+            // First attempt via local Vite proxy middleware (server-to-server, no CORS issues)
+            const proxyRes = await fetch(`/api/yt-playlist?list=${encodeURIComponent(listId)}`);
+            if (proxyRes.ok) {
+                xmlText = await proxyRes.text();
+            }
+        } catch (e) {
+            console.warn('Local proxy failed, trying CORS fallback:', e);
+        }
+
+        if (!xmlText) {
+            try {
+                // Secondary fallback via public CORS proxy
+                const fallbackRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://www.youtube.com/feeds/videos.xml?playlist_id=' + listId)}`);
+                if (fallbackRes.ok) {
+                    xmlText = await fallbackRes.text();
+                }
+            } catch (e) {
+                console.warn('CORS proxy fallback failed:', e);
+            }
+        }
+
+        if (xmlText && xmlText.includes('<feed')) {
+            try {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(xmlText, 'text/xml');
+
+                playlistTitle = doc.querySelector('feed > title')?.textContent?.trim() || '';
+                authorName = doc.querySelector('feed > author > name')?.textContent?.trim() || '';
+
+                const entries = Array.from(doc.querySelectorAll('entry'));
+                entries.forEach((entry, idx) => {
+                    let vId = entry.getElementsByTagName('yt:videoId')[0]?.textContent?.trim();
+                    if (!vId) {
+                        const idStr = entry.querySelector('id')?.textContent?.trim() || '';
+                        const idM = idStr.match(/video:([a-zA-Z0-9_-]{11})/);
+                        if (idM) vId = idM[1];
+                    }
+                    if (!vId) {
+                        const linkHref = entry.querySelector('link[rel="alternate"]')?.getAttribute('href') || '';
+                        const hrefM = linkHref.match(/v=([a-zA-Z0-9_-]{11})/);
+                        if (hrefM) vId = hrefM[1];
+                    }
+
+                    const title = entry.querySelector('title')?.textContent?.trim() || `Episode ${idx + 1}`;
+                    const thumbNode = entry.getElementsByTagName('media:thumbnail')[0];
+                    const thumbUrl = thumbNode?.getAttribute('url') || (vId ? `https://img.youtube.com/vi/${vId}/hqdefault.jpg` : '');
+                    const descNode = entry.getElementsByTagName('media:description')[0];
+                    const desc = descNode?.textContent?.trim() || '';
+
+                    if (vId) {
+                        parsedEpisodes.push({
+                            index: idx + 1,
+                            videoId: vId,
+                            title: title,
+                            description: desc,
+                            thumbnail: thumbUrl,
+                            duration: 'Session',
+                            views: '0',
+                            likes: 0,
+                            sourceUrl: `https://www.youtube.com/watch?v=${vId}`
+                        });
+                    }
+                });
+            } catch (err) {
+                console.error('Error parsing YouTube feed XML:', err);
+            }
+        }
+    }
+
+    // 2. If title or episodes are still missing, fallback to oEmbed / noembed
+    if (!playlistTitle || parsedEpisodes.length === 0) {
+        try {
+            let oembedUrl = cleanUrl;
+            if (videoId && !cleanUrl.includes('watch?v=' || 'youtu.be')) {
+                oembedUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            }
+            let oRes = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(oembedUrl)}&format=json`);
+            let oData = null;
+            if (oRes.ok) {
+                oData = await oRes.json();
+            } else {
+                oRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(oembedUrl)}`);
+                if (oRes.ok) oData = await oRes.json();
+            }
+
+            if (oData) {
+                if (!playlistTitle) playlistTitle = oData.title || '';
+                if (!authorName) authorName = oData.author_name || '';
+                if (parsedEpisodes.length === 0 && videoId) {
+                    parsedEpisodes.push({
+                        index: 1,
+                        videoId: videoId,
+                        title: oData.title || 'Episode 1',
+                        description: `YouTube video session by ${oData.author_name || 'Creator'}.`,
+                        thumbnail: oData.thumbnail_url || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+                        duration: 'Session',
+                        views: '0',
+                        likes: 0,
+                        sourceUrl: `https://www.youtube.com/watch?v=${videoId}`
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('oEmbed fallback error:', e);
+        }
+    }
+
+    if (!playlistTitle) {
+        playlistTitle = listId ? `YouTube Playlist (${listId.substring(0, 8)}...)` : 'YouTube Video Series';
+    }
+
+    const detectedCount = parsedEpisodes.length > 0 ? parsedEpisodes.length : (listId ? 10 : 1);
+
+    return {
+        success: true,
+        title: playlistTitle,
+        author: authorName || 'YouTube Creator',
+        episodeCount: detectedCount,
+        thumbnail: parsedEpisodes[0]?.thumbnail || (videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : ''),
+        episodes: parsedEpisodes,
+        listId: listId,
+        videoId: videoId
+    };
+}
+
+// ── Import YouTube Playlist / Series ─────────────────────────────────────────
+export function importYouTubePlaylist({ playlistUrl, title, author, category, episodeCount = 6, user = null, preloadedEpisodes = [] }) {
     let listId = 'PLfqMhTWNBTe2C_dQAP1UoemcgAxBTlItp';
-    const match = (playlistUrl || '').match(/list=([a-zA-Z0-9_-]+)/);
+    const match = (playlistUrl || '').match(/[?&]list=([a-zA-Z0-9_-]+)/);
     if (match && match[1]) listId = match[1];
 
     let videoId = null;
     const vMatch = (playlistUrl || '').match(/(?:v=|\/embed\/|\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
     if (vMatch && vMatch[1]) videoId = vMatch[1];
     if (!videoId && listId === 'PLfqMhTWNBTe2C_dQAP1UoemcgAxBTlItp') {
-        videoId = 'tVzUXW6siu0';
+        videoId = 'ajDRvxDWH4w';
     }
 
-    const baseThumbnail = videoId
-        ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
-        : 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&q=90&w=1200';
-
-    const cleanTitle = (title || '').trim() || 'Sigma Web Development Course';
+    const cleanTitle = (title || '').trim() || 'YouTube Masterclass Course';
     const knomeAuthorName = user?.name || 'Meghna Tiwari';
     const knomeAuthorId = user?.id || 5;
     const channelCreatorName = (author || '').trim() || 'YouTube Creator';
 
-    const plId = `pl_yt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-
+    const plId = `pl_yt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const generatedVideoIds = [];
     const customImportedVideos = [];
 
-    const defaultTitles = [
-        'Introduction to Course & Environment Setup',
-        'HTML5 Semantic Elements & Architecture',
-        'CSS3 Masterclass & Flexbox Layouts',
-        'Responsive Design & Media Queries',
-        'JavaScript ES6 Fundamentals & Scope',
-        'DOM Manipulation & Event Listeners',
-        'Async JavaScript, Promises & Fetch API',
-        'Node.js & Express Server Architecture',
-        'MongoDB Database & Mongoose Schemas',
-        'Full-Stack Project Deployment'
-    ];
-
-    const countToGen = Math.min(50, Math.max(3, parseInt(episodeCount) || 6));
+    const parsedCount = parseInt(episodeCount, 10);
+    const countToGen = isNaN(parsedCount) || parsedCount <= 0
+        ? (preloadedEpisodes.length > 0 ? preloadedEpisodes.length : 6)
+        : parsedCount;
 
     for (let i = 0; i < countToGen; i++) {
-        const vId = `yt_imp_${plId}_${i + 1}`;
+        const vId = `yt_imp_${plId}_ep_${i + 1}`;
         generatedVideoIds.push(vId);
-        const epTitle = `#${i + 1}: ${defaultTitles[i % defaultTitles.length]} | ${cleanTitle}`;
 
-        const epSourceUrl = videoId
-            ? `https://www.youtube.com/watch?v=${videoId}&list=${listId}&index=${i + 1}`
-            : `https://www.youtube.com/embed/videoseries?list=${listId}&index=${i + 1}`;
+        const realEp = preloadedEpisodes && preloadedEpisodes[i];
+        const epVideoId = realEp?.videoId || (i === 0 && videoId ? videoId : null);
+
+        let epTitle = '';
+        if (realEp?.title) {
+            epTitle = realEp.title;
+            if (!epTitle.startsWith('#') && !epTitle.toLowerCase().startsWith('episode')) {
+                epTitle = `#${i + 1}: ${epTitle}`;
+            }
+        } else {
+            epTitle = `#${i + 1}: Episode ${i + 1} | ${cleanTitle}`;
+        }
+
+        const epThumb = realEp?.thumbnail || (epVideoId ? `https://img.youtube.com/vi/${epVideoId}/hqdefault.jpg` : (videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&q=90&w=1200'));
+
+        const epSourceUrl = epVideoId
+            ? `https://www.youtube.com/watch?v=${epVideoId}`
+            : (listId
+                ? `https://www.youtube.com/embed/videoseries?list=${listId}&index=${i + 1}`
+                : `https://www.youtube.com/watch?v=${videoId || 'ajDRvxDWH4w'}`);
 
         const vidObj = {
             id: vId,
+            videoId: epVideoId,
             title: epTitle,
-            description: `Lecture ${i + 1} of ${cleanTitle}. Comprehensive web development course by ${channelCreatorName}.`,
-            thumbnail: baseThumbnail,
-            duration: `${12 + (i % 8)}:${20 + (i * 11) % 35}`,
-            views: '2.4M',
-            likes: 195000,
+            description: realEp?.description || `Episode ${i + 1} of ${cleanTitle}. Course created by ${channelCreatorName}.`,
+            thumbnail: epThumb,
+            duration: realEp?.duration || 'Session',
+            views: '0',     // Strictly Knome platform view count only
+            likes: 0,       // Strictly Knome platform like count only
             category: category || 'Training & Tutorials',
             date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             author: knomeAuthorName,
@@ -483,15 +901,21 @@ export function importYouTubePlaylist({ playlistUrl, title, author, category, ep
             channelName: channelCreatorName,
             tags: ['YouTube', 'Playlist', 'Series'],
             sourceUrl: epSourceUrl,
-            sourceType: 'YouTube'
+            sourceType: 'YouTube',
+            playlistId: plId,
+            episodeIndex: i + 1
         };
         customImportedVideos.push(vidObj);
     }
 
+    const baseThumbnail = customImportedVideos[0]?.thumbnail || (videoId
+        ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+        : 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&q=90&w=1200');
+
     const newPl = {
         id: plId,
         title: cleanTitle,
-        description: `Imported Series (${generatedVideoIds.length} Episodes) created by ${knomeAuthorName}.`,
+        description: `Imported Series (${customImportedVideos.length} Episodes) created by ${knomeAuthorName} (Source: ${channelCreatorName}).`,
         category: category || 'Training & Tutorials',
         author: knomeAuthorName,
         authorId: knomeAuthorId,
@@ -499,10 +923,12 @@ export function importYouTubePlaylist({ playlistUrl, title, author, category, ep
         channelName: channelCreatorName,
         thumbnail: baseThumbnail,
         videoIds: generatedVideoIds,
+        episodes: customImportedVideos,
         type: 'Series',
         createdDate: new Date().toISOString().split('T')[0]
     };
 
     return { playlist: newPl, videos: customImportedVideos };
 }
+
 
