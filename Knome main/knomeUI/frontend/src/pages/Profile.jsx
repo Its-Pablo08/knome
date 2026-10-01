@@ -875,6 +875,21 @@ export default function Profile() {
                                     </span>
                                     {isFollowing ? 'Following ✔' : 'Follow'}
                                 </button>
+
+                                {/* Facebook-Style Direct Message Button */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const targetId = displayUser.userId || displayUser.id;
+                                        const targetName = displayUser.name || displayUser.fullName || '';
+                                        navigate(`/messages?userId=${targetId}&name=${encodeURIComponent(targetName)}`);
+                                    }}
+                                    className="px-4 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold text-sm rounded-full transition-all shadow-xs flex items-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
+                                    title={`Message ${displayUser.name || 'this user'}`}
+                                >
+                                    <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
+                                    <span>Message</span>
+                                </button>
                             </div>
                         )}
 

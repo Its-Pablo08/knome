@@ -29,6 +29,7 @@ const KarmaHistory = lazy(() => import('./pages/KarmaHistory'))
 const Network = lazy(() => import('./pages/Network'))
 const SavedContent = lazy(() => import('./pages/SavedContent'))
 const Posts = lazy(() => import('./pages/Posts'))
+const Messages = lazy(() => import('./pages/Messages'))
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -140,6 +141,8 @@ function App() {
                     <Route path="/network"         element={<ProtectedPage><Network /></ProtectedPage>} />
                     <Route path="/saved-content"   element={<ProtectedPage><SavedContent /></ProtectedPage>} />
                     <Route path="/posts"           element={<ProtectedPage><Posts /></ProtectedPage>} />
+                    <Route path="/messages"        element={<ProtectedPage><Messages /></ProtectedPage>} />
+                    <Route path="/chat"            element={<Navigate to="/messages" replace />} />
                     <Route path="*"               element={<Navigate to="/" replace />} />
                   </Routes>
                 </Suspense>

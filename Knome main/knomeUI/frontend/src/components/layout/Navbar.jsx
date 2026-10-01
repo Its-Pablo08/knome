@@ -12,6 +12,17 @@ import { useConfirm } from '../contexts/ConfirmDialogContext';
 import * as signalR from '@microsoft/signalr';
 import { getHubUrl } from '../../utils/apiClient';
 import { formatNotificationDate, getTimeGroup, isNotificationForUser, isSelfNotification, parseNotificationContent } from '../../utils/notificationHelpers';
+import { subscribeToLiveMessages } from '../../utils/realtimeMessenger';
+
+const DISCOVER_CATEGORIES = [
+    { id: 'All', label: 'All', icon: 'grid_view' },
+    { id: 'People', label: 'People', icon: 'person' },
+    { id: 'Post', label: 'Posts', icon: 'dynamic_feed' },
+    { id: 'Article', label: 'Articles', icon: 'article' },
+    { id: 'Video', label: 'Videos', icon: 'videocam' },
+    { id: 'Community', label: 'Communities', icon: 'group' },
+    { id: 'Podcast', label: 'Audio', icon: 'podcasts' },
+];
 
 export default function Navbar() {
     const { currentUser, setCurrentUser, users, logout } = useUser();
@@ -75,6 +86,95 @@ export default function Navbar() {
                        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => 
                            ['SYSADM', 'SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN', 'SYSTEMADMIN'].includes(String(r || '').toUpperCase())
                        ));
+
+    // Direct Messages unread count synchronization
+    const [unreadMsgCount, setUnreadMsgCount] = useState(() => {
+        try {
+            const userId = Number(currentUser?.userId || currentUser?.id || 1);
+            const userSpecific = localStorage.getItem(`knome_unread_messages_count_${userId}`);
+            if (userSpecific !== null) return parseInt(userSpecific, 10) || 0;
+            const stored = localStorage.getItem('knome_unread_messages_count');
+            if (stored !== null) return parseInt(stored, 10) || 0;
+            const convs = localStorage.getItem('knome_global_messenger_conversations');
+            if (convs) {
+                const parsed = JSON.parse(convs);
+                if (Array.isArray(parsed)) {
+                    return parsed.reduce((sum, c) => {
+                        if (c.participantIds && c.participantIds.map(Number).includes(userId)) {
+                            return sum + (c.unreadCounts?.[userId] || 0);
+                        }
+                        return sum;
+                    }, 0);
+                }
+            }
+        } catch (e) {}
+        return 2;
+    });
+
+    useEffect(() => {
+        const handleMsgUpdate = (e) => {
+            if (e?.detail?.unreadCount !== undefined) {
+                setUnreadMsgCount(e.detail.unreadCount);
+            } else {
+                try {
+                    const userId = Number(currentUser?.userId || currentUser?.id || 1);
+                    const userSpecific = localStorage.getItem(`knome_unread_messages_count_${userId}`);
+                    if (userSpecific !== null) {
+                        setUnreadMsgCount(parseInt(userSpecific, 10) || 0);
+                        return;
+                    }
+                    const stored = localStorage.getItem('knome_unread_messages_count');
+                    if (stored !== null) setUnreadMsgCount(parseInt(stored, 10) || 0);
+                } catch (err) {}
+            }
+        };
+        window.addEventListener('knome_messages_updated', handleMsgUpdate);
+        window.addEventListener('storage', handleMsgUpdate);
+        return () => {
+            window.removeEventListener('knome_messages_updated', handleMsgUpdate);
+            window.removeEventListener('storage', handleMsgUpdate);
+        };
+    }, [currentUser]);
+
+    // Live Cross-Tab & Cross-User Real-time Message Subscription
+    useEffect(() => {
+        const uId = Number(currentUser?.userId || currentUser?.id);
+        if (!uId) return;
+
+        const unsubscribe = subscribeToLiveMessages(uId, (livePayload) => {
+            const { sender, message } = livePayload;
+            if (!sender || !message) return;
+
+            const notifItem = {
+                id: `live_msg_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+                type: 'message',
+                eventType: 'Message',
+                notificationType: 'Message',
+                title: 'New Message',
+                senderName: sender.fullName || sender.name || 'Colleague',
+                senderAvatar: sender.avatar,
+                senderUserId: sender.userId,
+                targetUserId: uId,
+                recipientUserId: uId,
+                userId: uId,
+                message: `${sender.fullName || sender.name || 'Colleague'}: "${message.text}"`,
+                text: `${sender.fullName || sender.name || 'Colleague'}: "${message.text}"`,
+                targetUrl: `/messages?userId=${sender.userId}&name=${encodeURIComponent(sender.fullName || sender.name || '')}`,
+                unread: true,
+                createdDate: new Date().toISOString()
+            };
+
+            setAllNotifs(prev => [notifItem, ...prev.filter(n => String(n.id) !== String(notifItem.id))]);
+            
+            // Always display real-time notification popup for incoming messages
+            setToastNotification(notifItem);
+            setUnreadMsgCount(prev => prev + 1);
+        });
+
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
+    }, [currentUser?.userId, currentUser?.id]);
 
     // Smart Enterprise Search State
     const [searchQuery, setSearchQuery] = useState('');
@@ -161,31 +261,7 @@ export default function Navbar() {
         setShowSuggestions(false);
         setSelectedIndex(-1);
 
-        // If search query matches a specific user name or employee ID, navigate directly to their profile
-        const matchedUser = users.find(u => 
-            u.name.toLowerCase() === q.toLowerCase() || 
-            u.name.toLowerCase().includes(q.toLowerCase()) ||
-            u.employeeId?.toLowerCase() === q.toLowerCase()
-        );
-
-        if (matchedUser) {
-            navigate('/profile', { 
-                state: { 
-                    user: { 
-                        userId: matchedUser.userId || matchedUser.id, 
-                        id: matchedUser.userId || matchedUser.id, 
-                        employeeId: matchedUser.employeeId,
-                        name: matchedUser.name, 
-                        fullName: matchedUser.name, 
-                        profilePhotoUrl: matchedUser.avatar, 
-                        avatar: matchedUser.avatar 
-                    } 
-                } 
-            });
-            return;
-        }
-
-        const typeParam = categoryFilter ? `&type=${encodeURIComponent(categoryFilter)}` : '';
+        const typeParam = categoryFilter && categoryFilter !== 'All' ? `&type=${encodeURIComponent(categoryFilter)}` : '';
         navigate(`/search?q=${encodeURIComponent(q)}${typeParam}`);
     };
 
@@ -441,7 +517,13 @@ export default function Navbar() {
         let bg = 'bg-slate-500/10';
         let category = 'System';
 
-        if (isFollow || isConnectionReq) {
+        const isMsg = type.includes('message') || type.includes('chat') || msg.includes('sent you a message');
+        if (isMsg) {
+            icon = 'chat';
+            color = 'text-cyan-500';
+            bg = 'bg-cyan-500/10';
+            category = 'Messages';
+        } else if (isFollow || isConnectionReq) {
             icon = isConnectionReq ? 'connect_without_contact' : 'person_add';
             color = 'text-indigo-500';
             bg = 'bg-indigo-500/10';
@@ -500,6 +582,8 @@ export default function Navbar() {
                 targetUrl = refId ? `/videos?id=${refId}` : '/videos';
             } else if (msg.includes('podcast') || type.includes('podcast') || relType === 'podcast') {
                 targetUrl = refId ? `/podcasts?id=${refId}` : '/podcasts';
+            } else if (isMsg) {
+                targetUrl = refId ? `/messages?userId=${refId}` : '/messages';
             }
         }
 
@@ -1126,6 +1210,10 @@ export default function Navbar() {
             dest = refId ? `/posts?id=${refId}` : (dest || '/posts');
         } else if (isCommNotif) {
             dest = resolveCommunityTarget(notif);
+        } else if (notif.type === 'message' || notif.type === 'chat' || notif.eventType === 'Message' || relType === 'message' || msg.includes('message') || msg.includes('sent you a message')) {
+            const senderId = notif.senderUserId || notif.senderId || refId;
+            const senderName = notif.senderName || notif.parsedSender || '';
+            dest = senderId ? `/messages?userId=${senderId}&name=${encodeURIComponent(senderName)}` : '/messages';
         } else if (notif.type === 'follow_request' || notif.type?.includes('connection') || msg.includes('connection request') || msg.includes('connection')) {
             dest = msg.includes('accepted') ? '/network?tab=Connections' : '/network?tab=Requests';
         } else if (relType === 'user' || notif.type?.includes('follow')) {
@@ -1250,14 +1338,14 @@ export default function Navbar() {
                     </Link>
                 </div>
 
-                {/* ─── CENTER: Smart Search (Dynamic Flex Width - Never Collides or Overlaps) ─── */}
+                {/* ─── CENTER: Smart Search & Discovery (Dynamic Flex Width - Never Collides or Overlaps) ─── */}
                 <div className="hidden lg:flex items-center justify-center flex-1 min-w-0 max-w-[460px] xl:max-w-[520px] mx-2">
                     <div className="relative w-full min-w-0 z-50" ref={searchDropdownRef}>
                         <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px] pointer-events-none transition-colors"
                             style={{color: 'var(--text-muted)'}}>search</span>
                         <input
                             type="text"
-                            placeholder="Search posts, people, articles or tags..."
+                            placeholder="Search posts, people, articles, videos, communities..."
                             value={searchQuery}
                             onChange={(e) => {
                                 setSearchQuery(e.target.value);
@@ -1266,7 +1354,7 @@ export default function Navbar() {
                             onFocus={() => setShowSuggestions(true)}
                             onBlur={() => setTimeout(() => setShowSuggestions(false), 250)}
                             onKeyDown={handleKeyDown}
-                            className="w-full pl-10 pr-[110px] sm:pr-[120px] py-2 text-[13px] sm:text-[13.5px] font-medium rounded-full outline-none transition-all focus:ring-2 focus:ring-blue-500/25 placeholder:text-slate-500 dark:placeholder:text-slate-400"
+                            className="w-full pl-10 pr-[76px] sm:pr-[82px] py-2 text-[13px] sm:text-[13.5px] font-medium rounded-full outline-none transition-all focus:ring-2 focus:ring-blue-500/25 placeholder:text-slate-500 dark:placeholder:text-slate-400"
                             style={{
                                 background: isDark ? 'rgba(14, 26, 56, 0.7)' : 'rgba(239, 246, 255, 0.85)',
                                 border: '1px solid var(--border-mid)',
@@ -1275,8 +1363,8 @@ export default function Navbar() {
                             }}
                         />
 
-                        {/* Right-side controls: Clear (close) button + Theme Search button */}
-                        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 shrink-0">
+                        {/* Right-side controls: Clear (close) button + Icon-only Search button */}
+                        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 shrink-0">
                             {searchQuery && (
                                 <button
                                     type="button"
@@ -1294,102 +1382,149 @@ export default function Navbar() {
                                     handleSearch(searchQuery);
                                 }}
                                 onClick={() => handleSearch(searchQuery)}
-                                className="h-[31px] px-3 sm:px-3.5 rounded-full text-[12px] font-bold text-white flex items-center gap-1.5 transition-all shadow-xs hover:shadow-md hover:brightness-110 active:scale-95 cursor-pointer select-none shrink-0"
+                                className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-white transition-all shadow-xs hover:shadow-md hover:brightness-110 active:scale-95 cursor-pointer select-none shrink-0"
                                 style={{
                                     background: 'linear-gradient(135deg, var(--accent-primary, #2563eb), var(--accent-deep, #4f46e5))',
                                     border: '1px solid rgba(255,255,255,0.2)',
                                     boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)'
                                 }}
-                                title="Search"
+                                title="Search & Discover"
                             >
-                                <span className="material-symbols-outlined text-[15px] leading-none">search</span>
-                                <span>Search</span>
+                                <span className="material-symbols-outlined text-[16px] leading-none">search</span>
                             </button>
                         </div>
 
-                        {/* Search Overlay Dropdown (Universal Enterprise Search) */}
+                        {/* Search Overlay Dropdown (Universal Enterprise Search & Discovery) */}
                         {showSuggestions && (
-                            <div className="absolute top-12 left-0 w-full rounded-2xl overflow-hidden shadow-2xl py-2 z-50"
+                            <div className="absolute top-12 left-0 w-full rounded-2xl overflow-hidden shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 duration-150"
                                 style={{
-                                    background: isDark ? 'rgba(8, 15, 32, 0.97)' : 'rgba(255,255,255,0.98)',
+                                    background: isDark ? 'rgba(8, 15, 32, 0.98)' : 'rgba(255,255,255,0.98)',
                                     border: '1px solid var(--border-mid)',
                                     backdropFilter: 'blur(24px)',
                                     boxShadow: 'var(--shadow-premium)'
                                 }}>
                                 
+                                {/* Discover by Category Bar */}
+                                <div className="px-3 pt-1 pb-2 border-b" style={{ borderColor: 'var(--border-mid)' }}>
+                                    <div className="flex items-center justify-between mb-1.5 px-0.5">
+                                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[13px] text-indigo-500">explore</span>
+                                            Discover by Category
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-0.5">
+                                        {DISCOVER_CATEGORIES.map(cat => (
+                                            <button
+                                                key={cat.id}
+                                                type="button"
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    setShowSuggestions(false);
+                                                    if (searchQuery.trim()) {
+                                                        handleSearch(searchQuery, cat.id);
+                                                    } else {
+                                                        navigate(cat.id === 'All' ? '/search' : `/search?type=${cat.id}`);
+                                                    }
+                                                }}
+                                                className="px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 flex items-center gap-1.5 transition-all bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 dark:hover:text-indigo-400 border border-slate-200/60 dark:border-slate-700/60 cursor-pointer select-none"
+                                            >
+                                                <span className="material-symbols-outlined text-[13px]">{cat.icon}</span>
+                                                <span>{cat.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
                                 {/* Mode A: Real-time Suggestions while typing */}
                                 {searchQuery.trim() !== '' ? (
                                     isSearchingSuggestions ? (
                                         <div className="px-4 py-6 text-center text-slate-400 flex items-center justify-center gap-2">
                                             <div className="w-4 h-4 border-2 border-slate-300 border-t-indigo-500 rounded-full animate-spin"></div>
-                                            <span className="text-[12px] font-medium">Searching...</span>
+                                            <span className="text-[12px] font-medium">Searching across Knome...</span>
                                         </div>
                                     ) : suggestions.length > 0 ? (
-                                        <div className="max-h-[380px] overflow-y-auto custom-scrollbar">
-                                            <div className="px-4 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                                                Matching Suggestions
-                                            </div>
-                                            {suggestions.map((item, idx) => {
-                                                const resolvedThumb = resolveMediaUrl(item.thumbnailUrl);
-                                                const isHighlighted = idx === selectedIndex;
-                                                return (
-                                                    <button
-                                                        key={`${item.contentType}-${item.id}-${idx}`}
-                                                        onMouseDown={() => {
-                                                            setShowSuggestions(false);
-                                                            setSearchQuery('');
-                                                            if (item.contentType === 'User' || item.type === 'User') {
-                                                                navigate('/profile', { 
-                                                                    state: { 
-                                                                        user: { 
-                                                                            userId: item.id, 
-                                                                            id: item.id, 
-                                                                            name: item.title, 
-                                                                            fullName: item.title, 
-                                                                            profilePhotoUrl: item.thumbnailUrl, 
-                                                                            avatar: item.thumbnailUrl 
+                                        <div className="flex flex-col">
+                                            <div className="max-h-[340px] overflow-y-auto custom-scrollbar">
+                                                <div className="px-4 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                                                    Top Matches
+                                                </div>
+                                                {suggestions.map((item, idx) => {
+                                                    const resolvedThumb = resolveMediaUrl(item.thumbnailUrl);
+                                                    const isHighlighted = idx === selectedIndex;
+                                                    return (
+                                                        <button
+                                                            key={`${item.contentType}-${item.id}-${idx}`}
+                                                            onMouseDown={() => {
+                                                                setShowSuggestions(false);
+                                                                setSearchQuery('');
+                                                                if (item.contentType === 'User' || item.type === 'User') {
+                                                                    navigate('/profile', { 
+                                                                        state: { 
+                                                                            user: { 
+                                                                                userId: item.id, 
+                                                                                id: item.id, 
+                                                                                name: item.title, 
+                                                                                fullName: item.title, 
+                                                                                profilePhotoUrl: item.thumbnailUrl, 
+                                                                                avatar: item.thumbnailUrl 
+                                                                            } 
                                                                         } 
-                                                                    } 
-                                                                });
-                                                            } else if (item.contentType === 'Article') {
-                                                                navigate(`/article-view?id=${item.id}`);
-                                                            } else if (item.contentType === 'Community') {
-                                                                navigate(`/community/view?id=${item.id}`);
-                                                            } else {
-                                                                handleSearch(item.title);
-                                                            }
-                                                        }}
-                                                        className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${isHighlighted ? 'bg-blue-500/15' : 'hover:bg-blue-500/10'}`}
-                                                    >
-                                                        {resolvedThumb ? (
-                                                            <img src={resolvedThumb} alt={item.title} className="w-8 h-8 rounded-lg object-cover shrink-0 border border-slate-200 dark:border-slate-800" />
-                                                        ) : (
-                                                            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center font-bold text-xs shrink-0">
-                                                                {item.contentType === 'User' ? '👤' : item.contentType === 'Community' ? '👥' : item.contentType === 'Video' ? '🎥' : '📄'}
+                                                                    });
+                                                                } else if (item.contentType === 'Article') {
+                                                                    navigate(`/article-view?id=${item.id}`);
+                                                                } else if (item.contentType === 'Community') {
+                                                                    navigate(`/community/view?id=${item.id}`);
+                                                                } else {
+                                                                    handleSearch(item.title);
+                                                                }
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${isHighlighted ? 'bg-blue-500/15' : 'hover:bg-blue-500/10'}`}
+                                                        >
+                                                            {resolvedThumb ? (
+                                                                <img src={resolvedThumb} alt={item.title} className="w-8 h-8 rounded-lg object-cover shrink-0 border border-slate-200 dark:border-slate-800" />
+                                                            ) : (
+                                                                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center font-bold text-xs shrink-0">
+                                                                    {item.contentType === 'User' ? '👤' : item.contentType === 'Community' ? '👥' : item.contentType === 'Video' ? '🎥' : '📄'}
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-[13px] font-bold truncate leading-tight" style={{color: 'var(--text-primary)'}}>
+                                                                    <HighlightText text={item.title} query={searchQuery} />
+                                                                </p>
+                                                                <p className="text-[11px] text-slate-400 truncate">
+                                                                    <HighlightText text={item.subtitle} query={searchQuery} />
+                                                                </p>
                                                             </div>
-                                                        )}
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-[13px] font-bold truncate leading-tight" style={{color: 'var(--text-primary)'}}>
-                                                                <HighlightText text={item.title} query={searchQuery} />
-                                                            </p>
-                                                            <p className="text-[11px] text-slate-400 truncate">
-                                                                <HighlightText text={item.subtitle} query={searchQuery} />
-                                                            </p>
-                                                        </div>
-                                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                                                            {item.contentType}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
+                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                                {item.contentType}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            <div className="p-2 border-t" style={{ borderColor: 'var(--border-mid)' }}>
+                                                <button
+                                                    onMouseDown={() => handleSearch(searchQuery)}
+                                                    className="w-full py-2 px-3 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                                >
+                                                    <span>Search all categories for &ldquo;{searchQuery}&rdquo;</span>
+                                                    <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                                                </button>
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="px-4 py-6 text-center text-[13px] text-slate-500">
-                                            No matches for "{searchQuery}". Press Enter to search all results.
+                                            No instant preview for &ldquo;{searchQuery}&rdquo;.
+                                            <button
+                                                onMouseDown={() => handleSearch(searchQuery)}
+                                                className="block mx-auto mt-2 text-xs font-bold text-blue-500 hover:underline cursor-pointer"
+                                            >
+                                                Search all categories for &ldquo;{searchQuery}&rdquo; &rarr;
+                                            </button>
                                         </div>
                                     )
                                 ) : (
-                                    /* Mode B: Recent Searches & Trending Terms when empty/focused */
+                                    /* Mode B: Recent Searches & Trending Topics when empty/focused */
                                     <div className="flex flex-col gap-3 py-1">
                                         {/* Recent Searches */}
                                         {recentSearches.length > 0 && (
@@ -1401,12 +1536,12 @@ export default function Navbar() {
                                                     </span>
                                                     <button 
                                                         onMouseDown={(e) => handleClearHistory(e, null)}
-                                                        className="text-[10px] font-bold text-blue-500 hover:underline"
+                                                        className="text-[10px] font-bold text-blue-500 hover:underline cursor-pointer"
                                                     >
                                                         Clear All
                                                     </button>
                                                 </div>
-                                                {recentSearches.slice(0, 10).map((rec, idx) => (
+                                                {recentSearches.slice(0, 8).map((rec, idx) => (
                                                     <div 
                                                         key={`rec-${idx}`}
                                                         onMouseDown={() => handleSearch(rec.searchTerm)}
@@ -1418,7 +1553,7 @@ export default function Navbar() {
                                                         </div>
                                                         <button 
                                                             onMouseDown={(e) => handleClearHistory(e, rec.searchTerm)}
-                                                            className="text-slate-400 hover:text-red-500 p-0.5 rounded transition-colors"
+                                                            className="text-slate-400 hover:text-red-500 p-0.5 rounded transition-colors cursor-pointer"
                                                             title="Remove search"
                                                         >
                                                             <span className="material-symbols-outlined text-[14px]">close</span>
@@ -1428,7 +1563,32 @@ export default function Navbar() {
                                             </div>
                                         )}
 
-
+                                        {/* Trending Topics / Searches */}
+                                        {trendingSearches.length > 0 && (
+                                            <div className="px-4 py-2 border-t" style={{ borderColor: 'var(--border-mid)' }}>
+                                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 flex items-center gap-1">
+                                                    <span className="material-symbols-outlined text-[13px] text-amber-500">trending_up</span>
+                                                    Trending on Knome
+                                                </div>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {trendingSearches.map((trend, idx) => {
+                                                        const term = typeof trend === 'string' ? trend : (trend.searchTerm || trend.title || '');
+                                                        if (!term) return null;
+                                                        return (
+                                                            <button
+                                                                key={`trend-${idx}`}
+                                                                type="button"
+                                                                onMouseDown={() => handleSearch(term)}
+                                                                className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 border border-slate-200/50 dark:border-slate-700/50 flex items-center gap-1 cursor-pointer transition-all"
+                                                            >
+                                                                <span className="text-slate-400 font-bold text-[11px]">#</span>
+                                                                <span>{term}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -1494,6 +1654,7 @@ export default function Navbar() {
                             {isDark ? 'light_mode' : 'dark_mode'}
                         </span>
                     </button>
+
 
                     {/* Notifications */}
                     <div className="relative shrink-0" ref={notifDropdownRef}>

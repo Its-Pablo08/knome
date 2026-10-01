@@ -1018,15 +1018,20 @@ function PersonCard({ person, searchQuery = '', onConnect, onCancel, onAccept, o
                     <div className="relative w-full">
                         <div className="flex gap-2">
                             <button
-                                onClick={handleOpenProfile}
-                                className="flex-1 py-2.5 rounded-xl font-bold text-[13px] bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                onClick={() => {
+                                    const targetId = person.id || person.userId;
+                                    navigate(`/messages?userId=${targetId}&name=${encodeURIComponent(person.name)}`);
+                                }}
+                                className="flex-1 py-2 rounded-xl font-bold text-[12.5px] bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
+                                title={`Send message to ${person.name}`}
                             >
-                                <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
-                                Connected
+                                <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
+                                <span>Message</span>
                             </button>
                             <button
                                 onClick={() => setShowMenu(!showMenu)}
-                                className="w-10 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-200 transition-colors flex items-center justify-center cursor-pointer"
+                                className="w-9 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-200 transition-colors flex items-center justify-center cursor-pointer"
+                                title="More options"
                             >
                                 <span className="material-symbols-outlined text-[18px]">more_vert</span>
                             </button>

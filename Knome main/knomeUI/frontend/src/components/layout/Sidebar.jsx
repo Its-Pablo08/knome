@@ -51,12 +51,61 @@ export default function Sidebar() {
         return item.to === '/' ? pathname === '/' : pathname === item.to || pathname.startsWith(item.to + '/');
     };
 
+    // Calculate unread messages count from localStorage or default
+    const [unreadMessages, setUnreadMessages] = useState(() => {
+        try {
+            const userId = Number(currentUser?.userId || currentUser?.id || 1);
+            const userSpecific = localStorage.getItem(`knome_unread_messages_count_${userId}`);
+            if (userSpecific !== null) return parseInt(userSpecific, 10) || 0;
+            const stored = localStorage.getItem('knome_unread_messages_count');
+            if (stored !== null) return parseInt(stored, 10) || 0;
+            const convs = localStorage.getItem('knome_global_messenger_conversations');
+            if (convs) {
+                const parsed = JSON.parse(convs);
+                if (Array.isArray(parsed)) {
+                    return parsed.reduce((sum, c) => {
+                        if (c.participantIds && c.participantIds.map(Number).includes(userId)) {
+                            return sum + (c.unreadCounts?.[userId] || 0);
+                        }
+                        return sum;
+                    }, 0);
+                }
+            }
+        } catch (e) {}
+        return 2;
+    });
+
+    useEffect(() => {
+        const handleMsgUpdate = (e) => {
+            if (e?.detail?.unreadCount !== undefined) {
+                setUnreadMessages(e.detail.unreadCount);
+            } else {
+                try {
+                    const userId = Number(currentUser?.userId || currentUser?.id || 1);
+                    const userSpecific = localStorage.getItem(`knome_unread_messages_count_${userId}`);
+                    if (userSpecific !== null) {
+                        setUnreadMessages(parseInt(userSpecific, 10) || 0);
+                        return;
+                    }
+                    const stored = localStorage.getItem('knome_unread_messages_count');
+                    if (stored !== null) setUnreadMessages(parseInt(stored, 10) || 0);
+                } catch (err) {}
+            }
+        };
+        window.addEventListener('knome_messages_updated', handleMsgUpdate);
+        window.addEventListener('storage', handleMsgUpdate);
+        return () => {
+            window.removeEventListener('knome_messages_updated', handleMsgUpdate);
+            window.removeEventListener('storage', handleMsgUpdate);
+        };
+    }, [currentUser]);
+
     const navItems = [
         { to: '/',                 icon: 'home',         label: 'Home',          color: '#6366f1' },
+        { to: '/messages',         icon: 'chat',         label: 'Messages',      color: '#06b6d4', matchPaths: ['/messages', '/chat'], badge: unreadMessages },
         { to: '/community',        icon: 'group',        label: 'Communities',   color: '#0ea5e9', matchPaths: ['/community', '/communities'] },
         { to: '/suggested-people', icon: 'person_add',   label: 'People',        color: '#10b981', matchPaths: ['/suggested-people', '/network'] },
         { to: '/saved-content',    icon: 'bookmark',     label: 'Saved',         color: '#f59e0b' },
-        { to: '/search',           icon: 'search',       label: 'Discover',      color: '#8b5cf6' },
     ];
     const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
                        ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
@@ -122,77 +171,6 @@ export default function Sidebar() {
 
     const renderSidebarContent = (isMobile = false) => (
         <>
-            {/* User Profile Card */}
-            <Link to="/profile" className="block" onClick={() => isMobile && setIsMobileOpen(false)}>
-                <div className="rounded-2xl p-4 relative overflow-hidden transition-all hover:scale-[1.01] cursor-pointer bg-theme-60-surface border border-theme-30 shadow-[0_4px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
-                    {/* Top decorative gradient banner */}
-                    <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/15 border-b border-indigo-500/10"></div>
-                    
-                    {/* Orb decorations */}
-                    <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full opacity-10 pointer-events-none"
-                        style={{background: 'radial-gradient(circle, #6366f1, transparent 70%)'}}></div>
-                    <div className="absolute -bottom-4 -left-4 w-20 h-20 rounded-full opacity-[0.08] pointer-events-none"
-                        style={{background: 'radial-gradient(circle, #ec4899, transparent 70%)'}}></div>
-
-                    <div className="relative z-10 flex items-center gap-3 mb-2 pt-1">
-                        <div className="relative shrink-0 p-[2px] rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 shadow-md">
-                            <img 
-                                className="w-11 h-11 rounded-full object-cover border-2 border-theme-60-surface" 
-                                alt="Avatar" 
-                                src={userAvatar} 
-                                onError={(e) => {
-                                    e.currentTarget.onerror = null;
-                                    e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=6366f1&color=fff`;
-                                }}
-                            />
-                            <div 
-                                className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-theme-60-surface shadow-xs transition-colors ${statusConfig.dotClass}`}
-                                title={`Status: ${statusConfig.label}`}
-                            ></div>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <h3 
-                                className="font-black text-[15.5px] sm:text-[16px] leading-tight tracking-tight text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors break-words"
-                                title={userName}
-                            >
-                                {userName}
-                            </h3>
-                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                <span className="text-[10.5px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded-md border border-indigo-100/80 dark:border-indigo-800/40 leading-none truncate">
-                                    {userRole}
-                                </span>
-                                <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md border leading-none transition-colors ${statusConfig.badgeClass}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dotClass}`}></span>
-                                    {statusConfig.label}
-                                </span>
-                            </div>
-                            <p className="text-[10.5px] font-semibold mt-1 truncate text-slate-500 dark:text-slate-400 flex items-center gap-1" title={userDept}>
-                                <span className="w-1 h-1 rounded-full bg-slate-400 shrink-0"></span>
-                                <span className="truncate">{userDept}</span>
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Stats Row */}
-                    <div className={`relative z-10 grid ${isSysAdmin ? 'grid-cols-2' : 'grid-cols-3'} gap-1.5 pt-2.5 mt-1 border-t border-theme-30`}>
-                        {!isSysAdmin && (
-                            <div className="text-center py-1.5 px-1 rounded-xl bg-theme-60 dark:bg-slate-800/60 border border-theme-30/60">
-                                <p className="text-[12.5px] font-black text-slate-900 dark:text-white leading-tight">{liveKarma.toLocaleString()}</p>
-                                <p className="text-[8.5px] uppercase tracking-wider font-extrabold text-theme-30-text mt-0.5">Points</p>
-                            </div>
-                        )}
-                        <div className="text-center py-1.5 px-1 rounded-xl bg-theme-60 dark:bg-slate-800/60 border border-theme-30/60">
-                            <p className="text-[12.5px] font-black text-slate-900 dark:text-white leading-tight">{livePosts}</p>
-                            <p className="text-[8.5px] uppercase tracking-wider font-extrabold text-theme-30-text mt-0.5">Posts</p>
-                        </div>
-                        <div className="text-center py-1.5 px-1 rounded-xl bg-theme-60 dark:bg-slate-800/60 border border-theme-30/60">
-                            <p className="text-[12.5px] font-black text-slate-900 dark:text-white leading-tight">{userFollowers}</p>
-                            <p className="text-[8.5px] uppercase tracking-wider font-extrabold text-theme-30-text mt-0.5">Followers</p>
-                        </div>
-                    </div>
-                </div>
-            </Link>
-
             {/* Navigation */}
             <nav className="flex flex-col gap-1">
                 {navItems.map(item => {
@@ -232,7 +210,12 @@ export default function Sidebar() {
                             }`}>
                                 {item.label}
                             </span>
-                            <span className={`material-symbols-outlined text-[16px] transition-all ml-auto ${
+                            {item.badge !== undefined && item.badge > 0 && (
+                                <span className="ml-auto mr-1 px-1.5 py-0.5 text-[10px] font-black rounded-full bg-cyan-500 text-white leading-none shadow-xs">
+                                    {item.badge > 99 ? '99+' : item.badge}
+                                </span>
+                            )}
+                            <span className={`material-symbols-outlined text-[16px] transition-all ${item.badge && item.badge > 0 ? '' : 'ml-auto'} ${
                                 isActive
                                     ? 'text-indigo-600 dark:text-indigo-400 opacity-80'
                                     : 'opacity-0 -translate-x-1 group-hover:opacity-40 group-hover:translate-x-0 text-slate-400'
@@ -317,13 +300,13 @@ export default function Sidebar() {
 
     return (
         <>
-            {/* 1. Desktop Sticky Sidebar — fixed to viewport while main content scrolls */}
+            {/* 1. Desktop Static Sidebar — static position with no internal scroll bar */}
             <aside
-                className="hidden md:flex flex-col shrink-0 sticky top-24"
-                style={{ width: '260px', height: 'calc(100vh - 7rem)', overflowY: 'auto', overflowX: 'hidden' }}
+                className="hidden md:flex flex-col shrink-0 sticky top-24 self-start"
+                style={{ width: '260px' }}
             >
-                {/* Inner wrapper with gap — scrollable when sidebar is taller than screen */}
-                <div className="flex flex-col gap-3 pb-4 pr-0.5 custom-scrollbar">
+                {/* Inner wrapper with clean gap — static without scrollbar */}
+                <div className="flex flex-col gap-3 pb-4">
                     {renderSidebarContent(false)}
                 </div>
             </aside>
@@ -385,9 +368,16 @@ export default function Sidebar() {
                     </button>
                 )}
 
-                <Link to="/videos" className={`flex flex-col items-center gap-0.5 p-1 rounded-xl transition-colors ${pathname.startsWith('/videos') ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
-                    <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: pathname.startsWith('/videos') ? "'FILL' 1" : "'FILL' 0" }}>videocam</span>
-                    <span className="text-[10px]">Videos</span>
+                <Link to="/messages" className={`relative flex flex-col items-center gap-0.5 p-1 rounded-xl transition-colors ${pathname.startsWith('/messages') || pathname.startsWith('/chat') ? 'text-cyan-600 dark:text-cyan-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
+                    <div className="relative">
+                        <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: pathname.startsWith('/messages') || pathname.startsWith('/chat') ? "'FILL' 1" : "'FILL' 0" }}>chat</span>
+                        {unreadMessages > 0 && (
+                            <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full text-[8.5px] font-black bg-cyan-500 text-white leading-none">
+                                {unreadMessages > 99 ? '99+' : unreadMessages}
+                            </span>
+                        )}
+                    </div>
+                    <span className="text-[10px]">Messages</span>
                 </Link>
 
                 <button

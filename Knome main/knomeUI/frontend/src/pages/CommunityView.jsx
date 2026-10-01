@@ -5208,6 +5208,16 @@ export default function CommunityView() {
                                                              <span className="material-symbols-outlined text-[14px]">visibility</span>
                                                              <span>Profile</span>
                                                          </button>
+                                                         {String(m.userId || m.id) !== String(currentUser?.userId || currentUser?.id) && (
+                                                             <button 
+                                                                 onClick={() => navigate(`/messages?userId=${m.userId || m.id}&name=${encodeURIComponent(m.displayName || '')}`)}
+                                                                 className="px-2.5 py-1 rounded-lg border border-cyan-200 dark:border-cyan-800/60 bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 text-[11px] font-semibold transition-all shrink-0 flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
+                                                                 title={`Message ${m.displayName || 'member'}`}
+                                                             >
+                                                                 <span className="material-symbols-outlined text-[14px]">chat</span>
+                                                                 <span>Message</span>
+                                                             </button>
+                                                         )}
                                                      </div>
                                                 </div>
                                             );
