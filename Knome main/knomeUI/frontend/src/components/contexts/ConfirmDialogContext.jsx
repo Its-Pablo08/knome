@@ -43,6 +43,19 @@ const VARIANTS = {
         btnShadow: '0 4px 16px rgba(99,102,241,0.3)',
         btnHoverShadow: '0 6px 24px rgba(99,102,241,0.4)',
     },
+    success: {
+        icon: 'check_circle',
+        accentGradient: 'linear-gradient(90deg, #10b981, #059669, #10b981)',
+        iconBgLight: 'linear-gradient(135deg, rgba(16,185,129,0.1), rgba(5,150,105,0.06))',
+        iconBgDark: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1))',
+        iconBorderLight: '1px solid rgba(16,185,129,0.15)',
+        iconBorderDark: '1px solid rgba(16,185,129,0.2)',
+        iconColor: '#10b981',
+        btnGradient: 'linear-gradient(135deg, #10b981, #059669)',
+        btnHoverGradient: 'linear-gradient(135deg, #059669, #047857)',
+        btnShadow: '0 4px 16px rgba(16,185,129,0.3)',
+        btnHoverShadow: '0 6px 24px rgba(16,185,129,0.4)',
+    },
 };
 
 export function ConfirmDialogProvider({ children }) {

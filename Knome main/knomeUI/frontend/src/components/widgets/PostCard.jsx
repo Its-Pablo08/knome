@@ -697,6 +697,23 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '' }) {
         post.engagementSummary
     ]);
 
+    // Synchronize isSaved with global bookmark events
+    useEffect(() => {
+        const handleBookmarkUpdate = (e) => {
+            const curPostId = String(post.id || post.postId || '');
+            const targetId = String(e?.detail?.id || e?.detail?.contentId || '');
+            if (curPostId && targetId && curPostId === targetId) {
+                if (e?.detail?.removed) {
+                    setIsSaved(false);
+                } else {
+                    setIsSaved(true);
+                }
+            }
+        };
+        window.addEventListener('knome-bookmark-saved', handleBookmarkUpdate);
+        return () => window.removeEventListener('knome-bookmark-saved', handleBookmarkUpdate);
+    }, [post.id, post.postId]);
+
     // Fetch genuine comments from database API when user expands comments
     useEffect(() => {
         if (showComments && !hasFetchedComments) {
@@ -1517,17 +1534,27 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '' }) {
                                     if (isSaved) {
                                         setIsSaved(false);
                                         try {
+                                            const curPostId = String(post.id || post.postId);
                                             const bookmarkedIds = JSON.parse(localStorage.getItem('knome_bookmarked_ids') || '[]');
-                                            localStorage.setItem('knome_bookmarked_ids', JSON.stringify(bookmarkedIds.filter(id => id !== String(post.id))));
+                                            localStorage.setItem('knome_bookmarked_ids', JSON.stringify(bookmarkedIds.filter(id => String(id) !== curPostId)));
                                             
                                             const localCustomSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
-                                            localStorage.setItem('knome_saved_items_custom', JSON.stringify(localCustomSaved.filter(i => String(i.contentId || i.id) !== String(post.id))));
+                                            localStorage.setItem('knome_saved_items_custom', JSON.stringify(localCustomSaved.filter(i => String(i.contentId || i.id) !== curPostId)));
 
-                                            await interactionsApi.toggleBookmark('Post', post.id);
+                                            const existingMap = JSON.parse(localStorage.getItem('knome_item_category_map') || '{}');
+                                            delete existingMap[`Post_${curPostId}`];
+                                            delete existingMap[curPostId];
+                                            localStorage.setItem('knome_item_category_map', JSON.stringify(existingMap));
+
+                                            const isNumeric = /^\d+$/.test(curPostId);
+                                            if (isNumeric) {
+                                                await interactionsApi.toggleBookmark('Post', post.id).catch(() => {});
+                                            }
                                             window.dispatchEvent(new CustomEvent('knome-bookmark-saved', { detail: { id: post.id, removed: true } }));
+                                            window.dispatchEvent(new StorageEvent('storage', { key: 'knome_saved_items_custom' }));
                                             addToast('Item removed from saved bookmarks.', 'info');
                                         } catch (e) {
-                                            setIsSaved(true);
+                                            console.warn('Failed to clean bookmark locally', e);
                                         }
                                     } else {
                                         setIsSaveCategoryModalOpen(true);

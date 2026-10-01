@@ -10,8 +10,8 @@ Write-Host "============================================================" -Foreg
 $ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 if (-not $ScriptDir) { $ScriptDir = "D:\Knome_Complete_Project\Knome main" }
 
-# 0. Free Ports 5095 & 5173 if already occupied by any previous run
-$busyPorts = Get-NetTCPConnection -LocalPort 5095, 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+# 0. Free Ports 5095, 5096 & 5173 if already occupied by any previous run
+$busyPorts = Get-NetTCPConnection -LocalPort 5095, 5096, 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
 foreach ($pidToKill in $busyPorts) {
     if ($pidToKill -and $pidToKill -ne $PID -and $pidToKill -ne 4) {
         Get-Process -Id $pidToKill -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -37,22 +37,22 @@ try {
     Write-Host " [Warning] Knome database not reachable on LAPTOP-458. Ensure SQL Server on LAPTOP-458 is running and reachable." -ForegroundColor DarkYellow
 }
 
-# 1. Knome Backend API (Port 5095)
-Write-Host " Starting Knome Backend API on http://localhost:5095..." -ForegroundColor Yellow
+# 1. Knome Backend API (Port 5096 / 5095)
+Write-Host " Starting Knome Backend API on http://localhost:5096..." -ForegroundColor Yellow
 $BackendJob = Start-Job -ScriptBlock {
     param($dir)
     Set-Location "$dir\Backend\Knome.API"
     dotnet run --launch-profile http
 } -ArgumentList $ScriptDir
 
-# Wait for Backend to become ready on Port 5095 (up to 30 seconds)
+# Wait for Backend to become ready on Port 5096 or 5095 (up to 30 seconds)
 $maxWaitSeconds = 30
 $backendReady = $false
-Write-Host " Waiting for Backend API to initialize on port 5095..." -ForegroundColor Yellow -NoNewline
+Write-Host " Waiting for Backend API to initialize on port 5096..." -ForegroundColor Yellow -NoNewline
 for ($i = 0; $i -lt $maxWaitSeconds; $i++) {
     Start-Sleep -Seconds 1
     Write-Host "." -ForegroundColor Yellow -NoNewline
-    $conn = Get-NetTCPConnection -LocalPort 5095 -State Listen -ErrorAction SilentlyContinue
+    $conn = Get-NetTCPConnection -LocalPort 5095, 5096 -State Listen -ErrorAction SilentlyContinue
     if ($conn) {
         $backendReady = $true
         break
@@ -60,7 +60,7 @@ for ($i = 0; $i -lt $maxWaitSeconds; $i++) {
 }
 Write-Host ""
 if ($backendReady) {
-    Write-Host " Backend API is ready and listening on http://localhost:5095" -ForegroundColor Green
+    Write-Host " Backend API is ready and listening on http://localhost:5096 (or 5095)" -ForegroundColor Green
 } else {
     Write-Host " Backend API initialization continuing in background..." -ForegroundColor Yellow
 }
