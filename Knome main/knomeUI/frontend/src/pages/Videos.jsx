@@ -6,7 +6,7 @@ import ReportModal from '../components/modals/ReportModal';
 import SaveToCategoryModal from '../components/modals/SaveToCategoryModal';
 import CommentsSection from '../components/video/CommentsSection';
 import ArticleShareModal from '../components/modals/ArticleShareModal';
-import { getVideos, getPlaylists, savePlaylist, deletePlaylist, importYouTubePlaylist } from '../utils/videoService';
+import { getVideos, getPlaylists, savePlaylist, deletePlaylist, importYouTubePlaylist, fetchYouTubePlaylistDetails } from '../utils/videoService';
 
 import { savedContentApi, getPersonalizedRecommendations, resolveMediaUrl, videosApi, interactionsApi } from '../utils/apiService';
 import { useScrollLoading } from '../hooks/useScrollLoading';
@@ -33,15 +33,15 @@ function VideoPlayer({ video }) {
 
     const getEmbedUrl = (u) => {
         if (!u) return '';
+        // If an individual video ID is present, play that specific video cleanly
+        const ytMatch = u.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/);
+        if (ytMatch && ytMatch[1]) {
+            return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0`;
+        }
+        // Fallback for playlist series links without individual video IDs
         const pureListMatch = u.match(/(?:youtube\.com\/(?:playlist|embed\/videoseries)\?list=)([a-zA-Z0-9_-]+)/);
         if (pureListMatch && pureListMatch[1]) {
             return `https://www.youtube.com/embed/videoseries?list=${pureListMatch[1]}&autoplay=1`;
-        }
-        const ytMatch = u.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/);
-        if (ytMatch && ytMatch[1]) {
-            const listMatch = u.match(/list=([a-zA-Z0-9_-]+)/);
-            const listParam = listMatch ? `&list=${listMatch[1]}` : '';
-            return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0${listParam}`;
         }
         const vmMatch = u.match(/vimeo\.com\/(\d+)/);
         if (vmMatch && vmMatch[1]) return `https://player.vimeo.com/video/${vmMatch[1]}?autoplay=1`;
@@ -52,6 +52,7 @@ function VideoPlayer({ video }) {
     if (isExternalEmbed) {
         return (
             <iframe
+                key={url}
                 className="w-full aspect-video rounded-xl bg-black border-0"
                 src={getEmbedUrl(url)}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
@@ -148,14 +149,35 @@ export default function Videos() {
         setViewsMap(map);
     };
 
-    // Helper: get display view count for a video
+    // Helper: get display view count for a video (Strictly Knome platform views only)
     const getDisplayViews = (video) => {
-        if (!video?.id) return video?.views || '0';
+        if (!video?.id) return '0';
         const saved = viewsMap[video.id];
-        if (saved !== undefined && saved > 0) {
+        if (saved !== undefined && saved !== null) {
             return saved > 999 ? (saved / 1000).toFixed(1) + 'k' : String(saved);
         }
-        return video.views || '0';
+        if (typeof video.viewCount === 'number') {
+            return video.viewCount > 999 ? (video.viewCount / 1000).toFixed(1) + 'k' : String(video.viewCount);
+        }
+        const str = String(video.views || '0').trim();
+        if (str.includes('M') || str.includes('m')) return '0';
+        const parsed = parseInt(str, 10);
+        return isNaN(parsed) ? '0' : String(parsed);
+    };
+
+    // Helper: get display like count for a video (Strictly Knome platform likes only)
+    const getDisplayLikes = (video) => {
+        if (!video?.id) return 0;
+        const savedLikes = localStorage.getItem(`knome_video_likes_${video.id}`);
+        if (savedLikes !== null) {
+            const p = parseInt(savedLikes, 10);
+            if (!isNaN(p)) return p;
+        }
+        if (typeof video.likes === 'number') {
+            if (video.likes > 10000 && video.sourceType === 'YouTube') return 0;
+            return video.likes;
+        }
+        return 0;
     };
 
     const filters = ['All', 'Training & Tutorials', 'Townhalls', 'Engineering Tech Talks', 'Leadership Updates'];
@@ -190,48 +212,14 @@ export default function Videos() {
         if (!url || (!url.includes('youtube.com') && !url.includes('youtu.be'))) return;
         try {
             setIsFetchingYtMeta(true);
-            let targetUrl = url;
-            const listMatch = url.match(/list=([a-zA-Z0-9_-]+)/);
-            const listId = listMatch ? listMatch[1] : null;
-
-            // Try YouTube official oembed first
-            let res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(targetUrl)}&format=json`);
-            let data = null;
-
-            if (res.ok) {
-                data = await res.json();
-            } else {
-                // Fallback to noembed
-                const vMatch = url.match(/(?:v=|\/embed\/|\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-                if (vMatch && vMatch[1]) {
-                    targetUrl = `https://www.youtube.com/watch?v=${vMatch[1]}`;
-                }
-                res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(targetUrl)}`);
-                if (res.ok) data = await res.json();
-            }
-
-            let detectedEpisodes = 10; // Default smart guess
-
-            if (listId) {
-                // Smart default episode count for YouTube playlists
-                detectedEpisodes = 12;
-            }
-
-            if (data && data.title) {
-                const fetchedTitle = data.title;
-                const fetchedAuthor = data.author_name || 'YouTube Creator';
-                const fetchedThumb = data.thumbnail_url || null;
-
-                setYtSeriesTitle(fetchedTitle);
-                setYtAuthorName(fetchedAuthor);
-                setYtEpisodeCount(detectedEpisodes);
-                setAutoFetchedMeta({
-                    title: fetchedTitle,
-                    author: fetchedAuthor,
-                    thumbnail: fetchedThumb,
-                    episodes: detectedEpisodes
-                });
-                showToast(`✨ Auto-fetched: "${fetchedTitle}" (${detectedEpisodes} Episodes Detected)`);
+            const data = await fetchYouTubePlaylistDetails(url);
+            if (data && data.success) {
+                if (data.title) setYtSeriesTitle(data.title);
+                if (data.author) setYtAuthorName(data.author);
+                const epCount = data.episodeCount || (data.episodes ? data.episodes.length : 1);
+                setYtEpisodeCount(epCount);
+                setAutoFetchedMeta(data);
+                showToast(`✨ Auto-fetched: "${data.title}" (${epCount} Episodes Detected)`);
             }
         } catch (e) {
             console.error('Failed to auto-fetch YouTube metadata:', e);
@@ -289,7 +277,8 @@ export default function Videos() {
             author: currentUser?.name || ytAuthorName || 'Meghna Tiwari',
             category: newPlaylist.category,
             episodeCount: ytEpisodeCount,
-            user: currentUser
+            user: currentUser,
+            preloadedEpisodes: autoFetchedMeta?.episodes || []
         });
 
         if (isCurrentUserAdmin) {
@@ -302,7 +291,7 @@ export default function Videos() {
             setVideos(updatedVideos || []);
             setPlaylists(getPlaylists());
             handlePlayPlaylist(res.playlist, 0, updatedVideos);
-            showToast(`🚀 Series "${res.playlist.title}" published successfully!`);
+            showToast(`🚀 Series "${res.playlist.title}" (${res.videos.length} Episodes) published successfully!`);
         } else {
             const pendingItem = {
                 id: `pending_series_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -336,6 +325,8 @@ export default function Videos() {
         e.preventDefault();
         if (!newPlaylist.title.trim()) return;
 
+        const selectedVids = (newPlaylist.selectedVideoIds || []).map(id => videos.find(v => String(v.id) === String(id))).filter(Boolean);
+
         const playlistObj = {
             title: newPlaylist.title,
             description: newPlaylist.description,
@@ -345,6 +336,7 @@ export default function Videos() {
             authorId: currentUser?.id || 5,
             authorDesignation: currentUser?.roleName || 'Product Specialist',
             videoIds: newPlaylist.selectedVideoIds,
+            episodes: selectedVids,
             thumbnail: newPlaylist.selectedVideoIds.length > 0
                 ? (videos.find(v => String(v.id) === String(newPlaylist.selectedVideoIds[0]))?.thumbnail || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&q=90&w=1200')
                 : 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&q=90&w=1200'
@@ -382,29 +374,36 @@ export default function Videos() {
 
     const handlePlayPlaylist = (playlist, startVideoIndex = 0, currentVideos = videos) => {
         const vList = Array.isArray(currentVideos) && currentVideos.length > 0 ? currentVideos : videos;
-        let playlistVids = (playlist.videoIds || []).map((id, idx) => {
-            let found = vList.find(v => (v.id || '').toString() === id.toString());
-            if (!found) {
-                found = {
-                    id: id,
-                    title: `#${idx + 1}: Lecture ${idx + 1} | ${playlist.title}`,
-                    description: `Lecture ${idx + 1} of ${playlist.title} by ${playlist.author || 'Creator'}.`,
-                    thumbnail: playlist.thumbnail || 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&q=90&w=1200',
-                    duration: `${10 + (idx % 5)}:00`,
-                    views: '1.2M',
-                    likes: 8500,
-                    category: playlist.category || 'Training & Tutorials',
-                    date: playlist.createdDate || 'Aug 5, 2026',
-                    author: playlist.author || 'YouTube Creator',
-                    authorId: playlist.authorId || 99,
-                    authorDesignation: playlist.authorDesignation || 'YouTube Creator',
-                    tags: ['Playlist', 'Series'],
-                    sourceUrl: `https://www.youtube.com/embed/videoseries?list=PLfqMhTWNBTe2C_dQAP1UoemcgAxBTlItp&index=${idx + 1}`,
-                    sourceType: 'YouTube'
-                };
-            }
-            return found;
-        }).filter(Boolean);
+        let playlistVids = [];
+
+        // 1. If playlist has its own real episodes array attached, use them directly
+        if (Array.isArray(playlist.episodes) && playlist.episodes.length > 0) {
+            playlistVids = playlist.episodes;
+        } else if (Array.isArray(playlist.videoIds) && playlist.videoIds.length > 0) {
+            playlistVids = playlist.videoIds.map((id, idx) => {
+                let found = vList.find(v => (v.id || '').toString() === id.toString());
+                if (!found) {
+                    found = {
+                        id: id,
+                        title: `#${idx + 1}: Episode ${idx + 1} | ${playlist.title}`,
+                        description: `Episode ${idx + 1} of ${playlist.title}.`,
+                        thumbnail: playlist.thumbnail || 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&q=90&w=1200',
+                        duration: 'Session',
+                        views: '0',
+                        likes: 0,
+                        category: playlist.category || 'Training & Tutorials',
+                        date: playlist.createdDate || 'Oct 1, 2026',
+                        author: playlist.author || 'MPOnline Creator',
+                        authorId: playlist.authorId || 5,
+                        authorDesignation: playlist.authorDesignation || 'Product Specialist',
+                        tags: ['Playlist', 'Series'],
+                        sourceUrl: playlist.playlistUrl || (playlist.videoIds && playlist.videoIds[idx]) || `https://www.youtube.com/embed/videoseries?list=${playlist.id}&index=${idx + 1}`,
+                        sourceType: 'YouTube'
+                    };
+                }
+                return found;
+            }).filter(Boolean);
+        }
 
         if (playlistVids.length === 0) {
             playlistVids = vList.filter(v => v.category === playlist.category).slice(0, 6);
@@ -462,13 +461,6 @@ export default function Videos() {
         const authorKey = activeVideo.authorId ? `user_${activeVideo.authorId}` : `author_${activeVideo.author}`;
         setIsFollowing(localStorage.getItem(`knome_following_${authorKey}`) === 'true');
 
-        // Unique user view tracking — one view per user only
-        const rawViews = String(activeVideo.views || '0').replace(/[^0-9.]/g, '');
-        const parsed = parseFloat(rawViews);
-        const baseCount = isNaN(parsed) ? 0 : Math.round(parsed * (String(activeVideo.views || '').includes('k') ? 1000 : 1));
-        const initialCount = baseCount || 0;
-        setCurrentViews(initialCount);
-
         const currentUid = currentUser?.userId || currentUser?.id || 'anon';
         const userViewKey = `knome_user_viewed_video_${currentUid}_${activeVideo.id}`;
         const hasViewedLocally = localStorage.getItem(userViewKey) === 'true';
@@ -502,17 +494,24 @@ export default function Videos() {
                 })
                 .catch(() => {});
         } else {
+            // Local / Series / YouTube video: Track views and likes on Knome platform only
+            const viewKey = `knome_video_views_${activeVideo.id}`;
+            let currentLocalViews = parseInt(localStorage.getItem(viewKey) || '0', 10);
+            if (isNaN(currentLocalViews)) currentLocalViews = 0;
+
             if (!hasViewedLocally) {
+                currentLocalViews += 1;
+                localStorage.setItem(viewKey, currentLocalViews.toString());
                 localStorage.setItem(userViewKey, 'true');
+                setViewsMap(prev => ({ ...prev, [activeVideo.id]: currentLocalViews }));
             }
+            setCurrentViews(currentLocalViews);
+
+            const savedLikes = localStorage.getItem(`knome_video_likes_${activeVideo.id}`);
+            const initialLikes = savedLikes !== null ? parseInt(savedLikes, 10) : (typeof activeVideo.likes === 'number' && activeVideo.likes < 10000 ? activeVideo.likes : 0);
+            setLikesCount(isNaN(initialLikes) ? 0 : initialLikes);
         }
 
-        const savedLikes = (() => {
-            const raw = localStorage.getItem(`knome_video_likes_${activeVideo.id}`);
-            return raw ? parseInt(raw, 10) : null;
-        })();
-        const effectiveLikes = savedLikes != null ? Math.max(savedLikes, activeVideo.likes || 0) : (activeVideo.likes || 0);
-        setLikesCount(effectiveLikes);
         setShareCount(activeVideo.shares || 0);
         setDescExpanded(false);
         setShowSharePanel(false);
@@ -852,14 +851,30 @@ export default function Videos() {
                                                 className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-semibold placeholder-slate-400 dark:placeholder-slate-500 transition-all" />
                                         </div>
                                         {autoFetchedMeta ? (
-                                            <div className="mt-2 p-2.5 bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 rounded-xl flex items-center justify-between text-emerald-700 dark:text-emerald-400 text-[11px] font-bold">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="material-symbols-outlined text-[18px] text-emerald-500">check_circle</span>
-                                                    <span>Auto-Fetched: <span className="text-slate-900 dark:text-white font-extrabold">{autoFetchedMeta.title}</span> by <span className="text-emerald-600 dark:text-emerald-300">{autoFetchedMeta.author}</span></span>
+                                            <div className="mt-2 space-y-2">
+                                                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 rounded-xl flex items-center justify-between text-emerald-700 dark:text-emerald-400 text-[11px] font-bold">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <span className="material-symbols-outlined text-[18px] text-emerald-500 shrink-0">check_circle</span>
+                                                        <span className="truncate">Auto-Fetched: <span className="text-slate-900 dark:text-white font-extrabold">{autoFetchedMeta.title}</span> by <span className="text-emerald-600 dark:text-emerald-300">{autoFetchedMeta.author}</span></span>
+                                                    </div>
+                                                    <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-lg text-[10px] font-extrabold border border-emerald-200 dark:border-emerald-500/30 shrink-0">
+                                                        {autoFetchedMeta.episodeCount || autoFetchedMeta.episodes?.length || ytEpisodeCount} Episodes Detected
+                                                    </span>
                                                 </div>
-                                                <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-lg text-[10px] font-extrabold border border-emerald-200 dark:border-emerald-500/30">
-                                                    {autoFetchedMeta.episodes} Episodes
-                                                </span>
+                                                {Array.isArray(autoFetchedMeta.episodes) && autoFetchedMeta.episodes.length > 0 && (
+                                                    <div className="max-h-28 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-800/60 rounded-xl p-2.5 border border-slate-200 dark:border-slate-700/80 space-y-1.5">
+                                                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Detected Real Episodes ({autoFetchedMeta.episodes.length}):</p>
+                                                        {autoFetchedMeta.episodes.slice(0, 6).map((ep, idx) => (
+                                                            <div key={idx} className="flex items-center gap-2 text-[11px] text-slate-700 dark:text-slate-300 font-medium">
+                                                                <span className="w-4 h-4 rounded bg-indigo-500/20 text-indigo-500 font-bold text-[9px] flex items-center justify-center shrink-0">{idx + 1}</span>
+                                                                <span className="truncate">{ep.title}</span>
+                                                            </div>
+                                                        ))}
+                                                        {autoFetchedMeta.episodes.length > 6 && (
+                                                            <p className="text-[10px] text-slate-400 font-semibold pl-6">+ {autoFetchedMeta.episodes.length - 6} more episodes</p>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         ) : (
                                             <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Paste any YouTube link — title, channel & episode count will be auto-detected!</p>
@@ -1306,8 +1321,12 @@ export default function Videos() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {playlists.map(pl => {
-                                const plVids = (pl.videoIds || []).map(id => videos.find(v => String(v.id) === String(id))).filter(Boolean);
-                                const count = plVids.length || (pl.videoIds?.length || 4);
+                                const plVids = (Array.isArray(pl.episodes) && pl.episodes.length > 0)
+                                    ? pl.episodes
+                                    : (pl.videoIds || []).map(id => videos.find(v => String(v.id) === String(id))).filter(Boolean);
+                                const count = (Array.isArray(pl.episodes) && pl.episodes.length > 0)
+                                    ? pl.episodes.length
+                                    : (plVids.length || (pl.videoIds?.length || 0));
                                 return (
                                     <div key={pl.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 group flex flex-col">
                                         {/* Thumbnail Card */}
@@ -1457,7 +1476,7 @@ export default function Videos() {
                                             <p className="text-[12px] text-slate-500 dark:text-slate-400 font-semibold">
                                                 <HighlightText text={video.author || 'Creator'} query={searchQuery} />
                                             </p>
-                                            <p className="text-[11px] text-slate-400 mt-0.5">{getDisplayViews(video)} views · {video.likes || 0} likes · {video.date}</p>
+                                            <p className="text-[11px] text-slate-400 mt-0.5">{getDisplayViews(video)} views · {getDisplayLikes(video)} likes · {video.date}</p>
                                         </div>
                                     </div>
                                 ))}
