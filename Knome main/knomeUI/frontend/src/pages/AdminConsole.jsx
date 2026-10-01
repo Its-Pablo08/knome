@@ -1,8 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
-import { useUser, getUserStatusConfig, deduplicateMembers } from '../components/contexts/UserContext';
+import { useUser, getUserStatusConfig, deduplicateMembers, roleNameToCode } from '../components/contexts/UserContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
+
+const localRoleMap = {
+    'Employee': 'EMP',
+    'Community Admin': 'CADM',
+    'Community Administrator': 'CADM',
+    'HR Administrator': 'HRADM',
+    'HR Admin': 'HRADM',
+    'System Administrator': 'SYSADM',
+    'System Admin': 'SYSADM'
+};
 import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, communitiesApi, mediaApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
 import * as XLSX from 'xlsx';
@@ -439,28 +449,46 @@ export default function AdminConsole() {
         return 1;
     };
 
-    // Helper to resolve the user's actual assigned role accurately
+    // Helper to resolve the user's actual assigned role accurately (Strictly Single Role)
     const getUserAssignedRole = (u) => {
         if (!u) return 'Employee';
         
-        // 1. Check if user object has explicit roleName (e.g. from local edit)
-        if (u.roleName && u.roleName !== 'Employee') return u.roleName;
+        // 0. Check localStorage role overrides first (authoritative saved edits)
+        try {
+            const overrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+            const custom = overrides[String(u.userId)] || overrides[String(u.id)] || (u.employeeId && overrides[u.employeeId.toUpperCase()]) || (u.email && overrides[u.email.toLowerCase()]);
+            if (custom) {
+                const list = Array.isArray(custom) ? custom : [custom];
+                for (const r of list) {
+                    const str = String(r).toLowerCase();
+                    if (str.includes('system') || str.includes('sysadm')) return 'System Admin';
+                    if (str.includes('hr') || str.includes('hrad')) return 'HR Admin';
+                    if (str.includes('community') || str.includes('cadm')) return 'Community Admin';
+                }
+                const firstNonEmp = list.find(r => typeof r === 'string' && !['emp', 'employee'].includes(r.toLowerCase()));
+                if (firstNonEmp) return firstNonEmp;
+                return 'Employee';
+            }
+        } catch (e) {}
+
+        // 1. Check explicit roleName on user
+        if (u.roleName) {
+            const rName = String(u.roleName).trim();
+            const lower = rName.toLowerCase();
+            if (lower.includes('system') || lower.includes('sysadm')) return 'System Admin';
+            if (lower.includes('hr') || lower.includes('hrad')) return 'HR Admin';
+            if (lower.includes('community') || lower.includes('cadm')) return 'Community Admin';
+            if (lower === 'employee' || lower === 'emp') return 'Employee';
+        }
 
         // 2. Check roles array from Backend UserSummaryDto
         if (Array.isArray(u.roles) && u.roles.length > 0) {
-            // Find highest priority non-Employee role
-            const priorityRoles = ['System Admin', 'HR Admin', 'Community Admin', 'System Administrator', 'HR Administrator', 'SYSADM', 'HRADM', 'CADM'];
-            for (const pr of priorityRoles) {
-                const match = u.roles.find(r => typeof r === 'string' && r.toLowerCase() === pr.toLowerCase());
-                if (match) {
-                    if (match === 'SYSADM' || match === 'SystemAdmin' || match === 'System Administrator') return 'System Admin';
-                    if (match === 'HRADM' || match === 'HRAdmin' || match === 'HR Administrator') return 'HR Admin';
-                    if (match === 'CADM' || match === 'CommunityAdministrator') return 'Community Admin';
-                    return match;
-                }
+            for (const r of u.roles) {
+                const str = String(typeof r === 'string' ? r : (r.roleName || '')).toLowerCase();
+                if (str.includes('system') || str.includes('sysadm')) return 'System Admin';
+                if (str.includes('hr') || str.includes('hrad')) return 'HR Admin';
+                if (str.includes('community') || str.includes('cadm')) return 'Community Admin';
             }
-            const nonEmp = u.roles.find(r => typeof r === 'string' && r.toLowerCase() !== 'employee' && r.toLowerCase() !== 'emp');
-            if (nonEmp) return nonEmp;
         }
 
         // 3. Check role requests approved in localStorage (knome_pending_role_requests / eh_role_requests)
@@ -473,38 +501,28 @@ export default function AdminConsole() {
                 (u.fullName && r.fullName && r.fullName.toLowerCase() === u.fullName.toLowerCase())
             );
             if (req && req.status === 'Approved' && req.assignedRoleName) {
+                const str = String(req.assignedRoleName).toLowerCase();
+                if (str.includes('system') || str.includes('sysadm')) return 'System Admin';
+                if (str.includes('hr') || str.includes('hrad')) return 'HR Admin';
+                if (str.includes('community') || str.includes('cadm')) return 'Community Admin';
                 return req.assignedRoleName;
             }
         } catch (e) {}
 
-        // 4. Check user context or local overrides
-        if (u.role && u.role !== 'EMP' && u.role !== 'Employee') {
-            if (u.role === 'SYSADM' || u.role === 'System Administrator') return 'System Admin';
-            if (u.role === 'HRADM' || u.role === 'HR Administrator') return 'HR Admin';
-            if (u.role === 'CADM' || u.role === 'CommunityAdministrator') return 'Community Admin';
-            return u.role;
+        // 4. Check user context or local role code
+        if (u.role) {
+            const str = String(u.role).toLowerCase();
+            if (str.includes('sys') || str === 'sysadm') return 'System Admin';
+            if (str.includes('hr') || str === 'hradm') return 'HR Admin';
+            if (str.includes('com') || str === 'cadm') return 'Community Admin';
         }
 
-        if (Array.isArray(u.roles) && u.roles.includes('Employee')) return 'Employee';
-        return u.roleName || 'Employee';
+        return 'Employee';
     };
 
+    // Every user has strictly ONE single role assigned at a time
     const getUserRolesList = (u) => {
-        if (!u) return ['Employee'];
-        if (Array.isArray(u.roles) && u.roles.length > 0) {
-            const roleStrings = u.roles.map(r => typeof r === 'string' ? r : (r.roleName || 'Employee'));
-            const normalized = roleStrings.map(r => {
-                if (r === 'SYSADM' || r === 'SystemAdmin' || r === 'System Administrator') return 'System Admin';
-                if (r === 'HRADM' || r === 'HRAdmin' || r === 'HR Administrator') return 'HR Admin';
-                if (r === 'CADM' || r === 'CommunityAdmin' || r === 'CommunityAdministrator') return 'Community Admin';
-                if (r === 'EMP') return 'Employee';
-                return r;
-            });
-            // deduplicate
-            return Array.from(new Set(normalized));
-        }
-        const single = getUserAssignedRole(u);
-        return [single];
+        return [getUserAssignedRole(u)];
     };
 
     const getRoleBadgeStyle = (roleName) => {
@@ -755,6 +773,29 @@ export default function AdminConsole() {
             setPendingCommunityApprovals([]);
         }
     };
+
+    // Sanitize any multi-role overrides in localStorage to single authoritative roles
+    useEffect(() => {
+        try {
+            const overrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+            let modified = false;
+            Object.keys(overrides).forEach(key => {
+                const val = overrides[key];
+                if (Array.isArray(val) && val.length > 1) {
+                    const str = val.map(r => String(r).toLowerCase()).join(' ');
+                    let single = 'Employee';
+                    if (str.includes('system') || str.includes('sysadm')) single = 'System Admin';
+                    else if (str.includes('hr') || str.includes('hrad')) single = 'HR Admin';
+                    else if (str.includes('community') || str.includes('cadm')) single = 'Community Admin';
+                    overrides[key] = [single];
+                    modified = true;
+                }
+            });
+            if (modified) {
+                localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
+            }
+        } catch (e) {}
+    }, []);
 
     useEffect(() => {
         refreshPendingCommunityApprovals();
@@ -1432,6 +1473,7 @@ export default function AdminConsole() {
                     avatar: avatar,
                     roleName: assignedRole,
                     assignedRole: assignedRole,
+                    roles: [assignedRole],
                     isActive: !isUserSuspended,
                     isSuspended: isUserSuspended,
                     karmaPoints: rawKarma,
@@ -2074,11 +2116,15 @@ export default function AdminConsole() {
         );
     };
 
-    // Handle Role Change Submission (Multiple Roles)
+    // Handle Role Change Submission (Single Role)
     const handleConfirmRoleChange = async () => {
         if (!roleUserId) return;
-        const rolesToAssign = selectedRoles.length > 0 ? selectedRoles : ['Employee'];
-        const primaryRole = rolesToAssign.find(r => r !== 'Employee') || rolesToAssign[0] || 'Employee';
+        const primaryRole = selectedRoles[0] || 'Employee';
+        const rolesToAssign = [primaryRole];
+
+        try {
+            apiClient.clearCache();
+        } catch {}
 
         try {
             await adminApi.changeUserRoles(roleUserId, rolesToAssign);
@@ -2086,11 +2132,35 @@ export default function AdminConsole() {
             console.warn("Backend role change notice:", err);
         }
 
+        // Find the target user object
+        const targetUser = usersList.find(u => String(u.userId) === String(roleUserId) || String(u.id) === String(roleUserId) || (u.employeeId && u.employeeId.toUpperCase() === String(roleUserId).toUpperCase()));
+
+        // Also update knome_pending_role_requests / eh_role_requests in localStorage if there's any request for this user
+        try {
+            const updateStoredRequests = (key) => {
+                const stored = JSON.parse(localStorage.getItem(key) || '[]');
+                if (Array.isArray(stored) && stored.length > 0) {
+                    const updated = stored.map(req => {
+                        const matchId = (targetUser && ((req.userId && String(req.userId) === String(targetUser.userId)) || (req.id && String(req.id) === String(targetUser.id)))) || String(req.userId) === String(roleUserId);
+                        const matchEmp = targetUser && targetUser.employeeId && req.employeeId && req.employeeId.toUpperCase() === targetUser.employeeId.toUpperCase();
+                        if (matchId || matchEmp) {
+                            return { ...req, status: 'Approved', assignedRoleName: primaryRole, role: primaryRole, roles: rolesToAssign };
+                        }
+                        return req;
+                    });
+                    localStorage.setItem(key, JSON.stringify(updated));
+                }
+            };
+            updateStoredRequests('knome_pending_role_requests');
+            updateStoredRequests('eh_role_requests');
+        } catch (e) {}
+
         // Update the local AdminConsole users table
-        setUsersList(prev => prev.map(u => (String(u.userId) === String(roleUserId) || String(u.id) === String(roleUserId)) ? { 
+        setUsersList(prev => prev.map(u => (String(u.userId) === String(roleUserId) || String(u.id) === String(roleUserId) || (targetUser && targetUser.employeeId && u.employeeId === targetUser.employeeId)) ? { 
             ...u, 
             roleName: primaryRole, 
             assignedRole: primaryRole, 
+            role: (localRoleMap && localRoleMap[primaryRole]) || 'EMP',
             roles: rolesToAssign 
         } : u));
 
@@ -2098,14 +2168,22 @@ export default function AdminConsole() {
         // instantly shows the new role for this user, and if it's the logged-in
         // user their currentUser state (role guards, Sidebar, HR Analytics) updates too.
         updateUserRoleInList(roleUserId, rolesToAssign);
+        if (targetUser?.employeeId) {
+            updateUserRoleInList(targetUser.employeeId, rolesToAssign);
+        }
+        if (targetUser?.email) {
+            updateUserRoleInList(targetUser.email, rolesToAssign);
+        }
 
-        const isCurrentUser = currentUser?.userId && String(currentUser.userId) === String(roleUserId);
+        const isCurrentUser = (currentUser?.userId && String(currentUser.userId) === String(roleUserId)) || 
+                              (currentUser?.id && String(currentUser.id) === String(roleUserId)) ||
+                              (currentUser?.employeeId && targetUser?.employeeId && currentUser.employeeId.toUpperCase() === targetUser.employeeId.toUpperCase());
         setIsRoleModalOpen(false);
-        showToast(`Roles for ${roleUserName} updated to '${rolesToAssign.join(', ')}'.${isCurrentUser ? ' Your permissions have been updated!' : ''}`);
+        showToast(`Role for ${roleUserName} updated to '${primaryRole}'.${isCurrentUser ? ' Your permissions have been updated!' : ''}`);
 
         logAuditEntry(
             'RoleChanged',
-            `Assigned roles '${rolesToAssign.join(', ')}' to Employee #${roleUserId} (${roleUserName})`,
+            `Assigned role '${primaryRole}' to Employee #${roleUserId} (${roleUserName})`,
             'text-indigo-600 font-bold'
         );
     };
@@ -4323,7 +4401,7 @@ export default function AdminConsole() {
                                         </tr>
                                     ) : (
                                         filteredUsers.slice(0, visibleUserCount).map(u => {
-                                            const assignedRole = u.roleName || getUserAssignedRole(u);
+                                            const assignedRole = getUserAssignedRole(u);
                                             const empId = u.employeeId || `MPO${u.userId || u.id || '100'}`;
                                             const uEmail = u.email || `${(u.fullName || u.name || 'user').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`;
                                             const uAvatar = u.avatar || u.profilePhotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName || u.name || 'U')}&background=6366f1&color=fff&bold=true`;
@@ -4368,24 +4446,26 @@ export default function AdminConsole() {
                                                         <p className="text-[11px] text-slate-500">{u.department || u.departmentName || 'MPOnline Limited'}</p>
                                                     </td>
                                                     <td className="px-4 py-2.5">
-                                                        <div className="flex flex-wrap gap-1.5 items-center max-w-[220px]">
-                                                            {getUserRolesList(u).map((rItem, rIdx) => (
-                                                                <span key={rIdx} className={`px-2.5 py-0.5 rounded-full text-[10px] inline-flex items-center gap-1 shadow-xs ${getRoleBadgeStyle(rItem)}`}>
-                                                                    <span className="material-symbols-outlined text-[13px]">
-                                                                        {rItem.toLowerCase().includes('system') ? 'shield_person' :
-                                                                         rItem.toLowerCase().includes('hr') ? 'badge' :
-                                                                         rItem.toLowerCase().includes('community') ? 'groups' : 'person'}
+                                                        <div className="flex items-center">
+                                                            {(() => {
+                                                                const role = getUserAssignedRole(u);
+                                                                return (
+                                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] inline-flex items-center gap-1 shadow-xs ${getRoleBadgeStyle(role)}`}>
+                                                                        <span className="material-symbols-outlined text-[13px]">
+                                                                            {role.toLowerCase().includes('system') ? 'shield_person' :
+                                                                             role.toLowerCase().includes('hr') ? 'badge' :
+                                                                             role.toLowerCase().includes('community') ? 'groups' : 'person'}
+                                                                        </span>
+                                                                        <span>{role}</span>
                                                                     </span>
-                                                                    <span>{rItem}</span>
-                                                                </span>
-                                                            ))}
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-2.5">
                                                         {(() => {
-                                                            const uRoles = getUserRolesList(u).map(r => String(r).toLowerCase());
-                                                            const isUserSysAdmin = (u.role === 'SYSADM' || u.roleName === 'System Administrator' || uRoles.some(r => r.includes('system') || r.includes('sysadm'))) &&
-                                                                                   !uRoles.some(r => r.includes('hr') || r.includes('community') || r.includes('employee'));
+                                                            const singleRole = getUserAssignedRole(u).toLowerCase();
+                                                            const isUserSysAdmin = singleRole.includes('system') || singleRole.includes('sysadm');
                                                             if (isUserSysAdmin) {
                                                                 return <span className="text-xs font-bold text-slate-400 dark:text-slate-500" title="System Admin is exempt from Karma">— (Exempt)</span>;
                                                             }
@@ -4425,13 +4505,13 @@ export default function AdminConsole() {
                                                                 onClick={() => {
                                                                     setRoleUserId(String(u.userId || u.id));
                                                                     setRoleUserName(u.fullName || u.name);
-                                                                    setSelectedRoles(getUserRolesList(u));
+                                                                    setSelectedRoles([getUserAssignedRole(u)]);
                                                                     setIsRoleModalOpen(true);
                                                                 }}
                                                                 className="px-2.5 py-1 bg-indigo-500/10 text-indigo-600 font-bold text-[11px] rounded-lg hover:bg-indigo-500/20 cursor-pointer flex items-center gap-1"
                                                             >
                                                                 <span className="material-symbols-outlined text-[13px]">tune</span>
-                                                                <span>Edit Roles</span>
+                                                                <span>Edit Role</span>
                                                             </button>
                                                             <button
                                                                 onClick={() => handleToggleUserActive(u)}
@@ -6841,7 +6921,7 @@ export default function AdminConsole() {
                 subtitle="Enterprise account suspension & governance enforcement"
             />
 
-            {/* ─── MODAL 2: CHANGE EMPLOYEE ROLES (MULTIPLE ROLE ASSIGNMENT) ─── */}
+            {/* ─── MODAL 2: CHANGE EMPLOYEE ROLE (SINGLE ROLE ASSIGNMENT) ─── */}
             {isRoleModalOpen && createPortal(
                 <div className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl animate-in zoom-in-95 max-h-[85vh] my-auto overflow-y-auto">
@@ -6849,8 +6929,8 @@ export default function AdminConsole() {
                             <div className="flex items-center gap-2 text-indigo-600">
                                 <span className="material-symbols-outlined text-2xl">admin_panel_settings</span>
                                 <div>
-                                    <h3 className="text-base font-black text-slate-900 dark:text-white">Manage User Roles</h3>
-                                    <p className="text-[11px] text-slate-400 font-medium">Assign multiple enterprise governance roles to a user</p>
+                                    <h3 className="text-base font-black text-slate-900 dark:text-white">Manage User Role</h3>
+                                    <p className="text-[11px] text-slate-400 font-medium">Assign an enterprise governance role to this user</p>
                                 </div>
                             </div>
                             <button onClick={() => setIsRoleModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-1">
@@ -6866,14 +6946,10 @@ export default function AdminConsole() {
                                     <p className="text-[11px] text-slate-500 font-mono">User ID: #{roleUserId}</p>
                                 </div>
                                 <div className="text-right">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Selected ({selectedRoles.length})</span>
-                                    <div className="flex flex-wrap gap-1 justify-end max-w-[180px]">
-                                        {selectedRoles.map(r => (
-                                            <span key={r} className="px-2 py-0.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold rounded-md text-[10px] border border-indigo-200/50 dark:border-indigo-800/50">
-                                                {r}
-                                            </span>
-                                        ))}
-                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Selected Role</span>
+                                    <span className="px-2.5 py-1 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold rounded-md text-[11px] border border-indigo-200/50 dark:border-indigo-800/50 inline-block">
+                                        {selectedRoles[0] || 'Employee'}
+                                    </span>
                                 </div>
                             </div>
 
@@ -6882,14 +6958,14 @@ export default function AdminConsole() {
                                 <div className="flex items-start gap-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
                                     <span className="material-symbols-outlined text-amber-500 text-[16px] mt-0.5 shrink-0">warning</span>
                                     <p className="text-amber-700 dark:text-amber-400 font-semibold">
-                                        You are modifying <strong>your own roles</strong>. Your session permissions will update immediately upon saving.
+                                        You are modifying <strong>your own role</strong>. Your session permissions will update immediately upon saving.
                                     </p>
                                 </div>
                             )}
 
                             <div>
                                 <label className="block text-slate-700 dark:text-slate-300 font-bold mb-2">
-                                    Select Roles (Multiple Selection Allowed):
+                                    Select Role (Single Role Assignment):
                                 </label>
                                 <div className="space-y-2">
                                     {[
@@ -6922,31 +6998,16 @@ export default function AdminConsole() {
                                             desc: 'Full governance, user administration, security audit logs, and media approvals.'
                                         }
                                     ].map(roleItem => {
-                                        const isSelected = selectedRoles.some(r => {
-                                            const nr = (r === 'HR Administrator' || r === 'HR Admin') ? 'HR Admin'
-                                                : (r === 'System Administrator' || r === 'System Admin') ? 'System Admin'
-                                                : (r === 'Community Administrator' || r === 'Community Admin') ? 'Community Admin'
-                                                : r;
-                                            return nr === roleItem.name;
-                                        });
+                                        const rawRole = selectedRoles[0] || 'Employee';
+                                        const currentNormalized = (rawRole === 'HR Administrator' || rawRole === 'HR Admin' || rawRole === 'HRAdmin') ? 'HR Admin'
+                                            : (rawRole === 'System Administrator' || rawRole === 'System Admin' || rawRole === 'SystemAdmin') ? 'System Admin'
+                                            : (rawRole === 'Community Administrator' || rawRole === 'Community Admin' || rawRole === 'CommunityAdmin') ? 'Community Admin'
+                                            : 'Employee';
+                                        const isSelected = currentNormalized === roleItem.name;
                                         return (
                                             <div
                                                 key={roleItem.name}
-                                                onClick={() => {
-                                                    setSelectedRoles(prev => {
-                                                        const normalizedPrev = prev.map(r => 
-                                                            (r === 'HR Administrator' || r === 'HR Admin') ? 'HR Admin' : 
-                                                            (r === 'System Administrator' || r === 'System Admin') ? 'System Admin' : 
-                                                            (r === 'Community Administrator' || r === 'Community Admin') ? 'Community Admin' : r
-                                                        );
-                                                        if (normalizedPrev.includes(roleItem.name)) {
-                                                            const filtered = normalizedPrev.filter(r => r !== roleItem.name);
-                                                            return filtered.length > 0 ? filtered : ['Employee'];
-                                                        } else {
-                                                            return [...normalizedPrev, roleItem.name];
-                                                        }
-                                                    });
-                                                }}
+                                                onClick={() => setSelectedRoles([roleItem.name])}
                                                 className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
                                                     isSelected
                                                         ? 'border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/30 ring-1 ring-indigo-600'
@@ -6964,12 +7025,14 @@ export default function AdminConsole() {
                                                         <p className="text-[11px] text-slate-400 mt-0.5">{roleItem.desc}</p>
                                                     </div>
                                                 </div>
-                                                <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
+                                                <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
                                                     isSelected
-                                                        ? 'bg-indigo-600 border-indigo-600 text-white'
-                                                        : 'border-slate-300 dark:border-slate-700'
+                                                        ? 'bg-indigo-600 border-indigo-600 text-white ring-2 ring-indigo-200 dark:ring-indigo-900 shadow-xs'
+                                                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
                                                 }`}>
-                                                    {isSelected && <span className="material-symbols-outlined text-[14px]">check</span>}
+                                                    {isSelected && (
+                                                        <div className="w-2 h-2 rounded-full bg-white" />
+                                                    )}
                                                 </div>
                                             </div>
                                         );
@@ -6987,8 +7050,8 @@ export default function AdminConsole() {
                         </div>
 
                         <div className="mt-6 flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
-                            <span className="text-[11px] text-slate-400 font-bold">
-                                {selectedRoles.length} role{selectedRoles.length > 1 ? 's' : ''} selected
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                                Selected: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{selectedRoles[0] || 'Employee'}</strong>
                             </span>
                             <div className="flex items-center gap-2">
                                 <button
@@ -7002,7 +7065,7 @@ export default function AdminConsole() {
                                     className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/25 cursor-pointer flex items-center gap-1.5 transition-all"
                                 >
                                     <span className="material-symbols-outlined text-[15px]">save</span>
-                                    <span>Save Role Changes</span>
+                                    <span>Save Role Change</span>
                                 </button>
                             </div>
                         </div>
@@ -8050,14 +8113,14 @@ export default function AdminConsole() {
                                     onClick={() => {
                                         setRoleUserId(String(selectedUserDetailsUser.userId || selectedUserDetailsUser.id));
                                         setRoleUserName(selectedUserDetailsUser.fullName || selectedUserDetailsUser.name);
-                                        setSelectedRoles(getUserRolesList(selectedUserDetailsUser));
+                                        setSelectedRoles([getUserAssignedRole(selectedUserDetailsUser)]);
                                         setIsUserDetailsModalOpen(false);
                                         setIsRoleModalOpen(true);
                                     }}
                                     className="px-4 py-2 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
                                 >
                                     <span className="material-symbols-outlined text-[15px]">manage_accounts</span>
-                                    Edit Roles
+                                    Edit Role
                                 </button>
 
                                 <button

@@ -266,7 +266,7 @@ public class UserService : IUserService
                     [AssignedBy] = 'System Admin',
                     [AdminComment] = 'Assigned by System Administrator from Knome Admin Console',
                     [ProcessedAt] = GETUTCDATE()
-                WHERE [EmployeeId] = @empId AND [Status] = 'Pending';
+                WHERE [EmployeeId] = @empId;
 
                 IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'EmployeeHubDb')
                 BEGIN
@@ -276,7 +276,7 @@ public class UserService : IUserService
                         [AssignedBy] = 'System Admin',
                         [AdminComment] = 'Assigned by System Administrator from Knome Admin Console',
                         [ProcessedAt] = GETUTCDATE()
-                    WHERE [EmployeeId] = @empId AND [Status] = 'Pending';
+                    WHERE [EmployeeId] = @empId;
                 END
             ";
             var p1 = cmd.CreateParameter(); p1.ParameterName = "@roleName"; p1.Value = primaryRole; cmd.Parameters.Add(p1);

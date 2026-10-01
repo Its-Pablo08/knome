@@ -151,20 +151,10 @@ export const apiClient = {
             }
         }
 
-        // Targeted cache invalidation on state mutations (POST/PUT/DELETE)
+        // Invalidate cache on any state mutation (POST/PUT/DELETE)
         if (!isGet) {
-            const cleanEndpoint = reqEndpoint.startsWith('/') ? reqEndpoint.slice(1) : reqEndpoint;
-            const resourceGroup = cleanEndpoint.split('/')[0]?.toLowerCase();
-            if (resourceGroup) {
-                for (const key of responseCache.keys()) {
-                    const lowKey = key.toLowerCase();
-                    if (lowKey.includes(`/${resourceGroup}`) || lowKey.startsWith(resourceGroup)) {
-                        responseCache.delete(key);
-                    }
-                }
-            } else {
-                responseCache.clear();
-            }
+            responseCache.clear();
+            inFlightRequests.clear();
         }
 
         const executeFetch = async () => {

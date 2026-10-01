@@ -140,21 +140,34 @@ public class UserRepository : Repository<Models.User>, IUserRepository
 
         user.Roles.Clear();
 
-        foreach (var roleName in roleNames.Distinct())
+        foreach (var roleName in roleNames.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            var normalizedRole = roleName switch
+            var trimmed = roleName.Trim();
+            var normalizedRole = trimmed switch
             {
-                "System Admin" => "System Administrator",
-                "HR Admin" => "HR Administrator",
-                "Community Administrator" => "Community Admin",
-                _ => roleName
+                var s when s.Equals("System Admin", StringComparison.OrdinalIgnoreCase) => "System Administrator",
+                var s when s.Equals("SYSADM", StringComparison.OrdinalIgnoreCase) => "System Administrator",
+                var s when s.Equals("HR Admin", StringComparison.OrdinalIgnoreCase) => "HR Administrator",
+                var s when s.Equals("HRADM", StringComparison.OrdinalIgnoreCase) => "HR Administrator",
+                var s when s.Equals("Community Administrator", StringComparison.OrdinalIgnoreCase) => "Community Admin",
+                var s when s.Equals("CADM", StringComparison.OrdinalIgnoreCase) => "Community Admin",
+                var s when s.Equals("EMP", StringComparison.OrdinalIgnoreCase) => "Employee",
+                _ => trimmed
             };
 
-            var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleName == roleName || r.RoleName == normalizedRole || r.RoleCode == roleName);
+            var role = await _db.Roles.FirstOrDefaultAsync(r => 
+                r.RoleName.ToLower() == trimmed.ToLower() || 
+                r.RoleName.ToLower() == normalizedRole.ToLower() || 
+                r.RoleCode.ToLower() == trimmed.ToLower() ||
+                r.RoleCode.ToLower() == normalizedRole.ToLower());
+
             if (role == null)
                 throw new BadRequestException($"Role '{roleName}' does not exist in the database.");
 
-            user.Roles.Add(role);
+            if (!user.Roles.Any(r => r.RoleId == role.RoleId))
+            {
+                user.Roles.Add(role);
+            }
         }
 
         await _db.SaveChangesAsync();

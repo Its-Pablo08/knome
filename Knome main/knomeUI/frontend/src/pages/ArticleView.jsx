@@ -88,10 +88,9 @@ export default function ArticleView() {
     // Find current article or fallback
     const article = articles.find(art => art.id === articleId) || articles.find(art => art.id === '1') || articles[0];
 
-    const isSystemAdminOrAuthor = currentUser?.role === 'System Administrator' || 
-                                  currentUser?.role === 'SYSADM' || 
-                                  currentUser?.role === 'HR Administrator' || 
-                                  currentUser?.role === 'HRADM' || 
+    const isSystemAdminOrAuthor = ['SYSADM', 'HRADM', 'SYSTEM ADMIN', 'HR ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
+                                  ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin'].includes(currentUser?.roleName) || 
+                                  (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'System Administrator', 'HR Administrator', 'System Admin', 'HR Admin'].includes(r))) ||
                                   article?.author?.name === currentUser?.fullName;
 
     const handleDeleteArticle = async () => {

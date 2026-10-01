@@ -273,6 +273,7 @@ export default function CommunityView() {
     const [shareTargetCommunity, setShareTargetCommunity] = useState('');
     const [shareSelectedUsers, setShareSelectedUsers] = useState([]);
     const [shareMessageNote, setShareMessageNote] = useState('');
+    const [shareUserSearchQuery, setShareUserSearchQuery] = useState('');
     const [isSharingProcess, setIsSharingProcess] = useState(false);
     const [allCommunities, setAllCommunities] = useState([]);
 
@@ -1167,15 +1168,15 @@ export default function CommunityView() {
                       (community?.adminContact && currentUser?.name && community.adminContact.toLowerCase().includes(currentUser.name.toLowerCase()));
 
     // Treat SYSADM, CADM, HRADM, Creator, and assigned Admins/Moderators as Community Admins
-    const isAdmin = ['SYSADM', 'CADM', 'HRADM'].includes(currentUser?.role) ||
-                    ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin'].includes(currentUser?.roleName) ||
-                    (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['System Administrator', 'HR Administrator', 'Community Administrator', 'SYSADM', 'HRADM'].includes(r))) ||
+    const isAdmin = ['SYSADM', 'CADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                    ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'Admin'].includes(currentUser?.roleName) ||
+                    (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'SYSADM', 'HRADM', 'CADM', 'Admin'].includes(r))) ||
                     isCreator ||
                     membersList.some(m => String(m.userId || m.id) === String(currentUser?.id) && (m.memberType === 'Admin' || m.memberType === 'Moderator'));
 
-    const isSysAdmin = ['SYSADM', 'HRADM'].includes(currentUser?.role) || 
-                       ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin'].includes(currentUser?.roleName) ||
-                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'System Administrator', 'HR Administrator'].includes(r)));
+    const isSysAdmin = ['SYSADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
+                       ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin'].includes(currentUser?.roleName) ||
+                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin'].includes(r)));
 
     // Load organization directory for admin member addition modal
     useEffect(() => {

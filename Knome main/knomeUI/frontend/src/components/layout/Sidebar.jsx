@@ -58,16 +58,19 @@ export default function Sidebar() {
         { to: '/saved-content',    icon: 'bookmark',     label: 'Saved',         color: '#f59e0b' },
         { to: '/search',           icon: 'search',       label: 'Discover',      color: '#8b5cf6' },
     ];
-
     const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
                        ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
                        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMINISTRATOR', 'SYSTEMADMIN', 'SYSTEM ADMIN'].includes(String(r || '').toUpperCase())));
+
+    const isConsoleAdmin = ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                           ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMINISTRATOR', 'HR ADMIN', 'COMMUNITY ADMINISTRATOR', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
+                           (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEMADMIN', 'HRADMIN', 'COMMUNITYADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN'].includes(String(r || '').toUpperCase())));
 
     const isHrOrSysAdmin = ['SYSADM', 'HRADM', 'SYSTEM ADMIN', 'HR ADMIN', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
                            ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
                            (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'SYSTEMADMIN', 'HRADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'ADMIN'].includes(String(r || '').toUpperCase())));
 
-    if (isSysAdmin) {
+    if (isConsoleAdmin) {
         navItems.push({ to: '/admin-console', icon: 'admin_panel_settings', label: 'Admin Console', color: '#f43f5e' });
     }
     if (isHrOrSysAdmin) {
