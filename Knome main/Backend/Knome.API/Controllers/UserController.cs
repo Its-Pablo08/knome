@@ -124,7 +124,7 @@ public class UserController : KnomeControllerBase
     /// Changes a user's role assignments. Restricted to HR Administrators and System Administrators.
     /// </summary>
     [HttpPut("{id:int}/roles")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin)]
+    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin + ",System Admin,SYSADM")]
     [ProducesResponseType(typeof(ApiResponse<UserProfileDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangeUserRoles(int id, [FromBody] ChangeRoleDto dto)
     {

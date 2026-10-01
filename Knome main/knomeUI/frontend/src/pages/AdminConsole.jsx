@@ -322,11 +322,12 @@ export default function AdminConsole() {
     const navigate = useNavigate();
     const confirm = useConfirm();
 
-    // Comprehensive Role Authorization Check — System Admin, HR Admin, Community Admin & Admin
-    const isAuthorized = ['SYSADM', 'HRADM', 'CADM', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
-                         ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMINISTRATOR', 'HR ADMIN', 'COMMUNITY ADMINISTRATOR', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
-                         ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMINISTRATOR', 'HR ADMIN', 'COMMUNITY ADMINISTRATOR', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
-                         (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMINISTRATOR', 'HR ADMIN', 'COMMUNITY ADMINISTRATOR', 'COMMUNITY ADMIN', 'SYSTEMADMIN', 'HRADMIN'].includes(String(r || '').toUpperCase())));
+    // Strict Role-Based Authorization — Admin Console is exclusively for System Administrators
+    const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                       ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
+                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMINISTRATOR', 'SYSTEMADMIN', 'SYSTEM ADMIN'].includes(String(r || '').toUpperCase())));
+
+    const isAuthorized = isSysAdmin;
 
     // Active Navigation Tab & Hierarchical Functional Domain
     const [activeTab, setActiveTab] = useState('moderation');
@@ -1632,6 +1633,10 @@ export default function AdminConsole() {
     };
 
     const handleApproveRoleRequest = async (requestId, roleName, empName, empId) => {
+        if (!isSysAdmin) {
+            showToast('Access Denied: Only System Administrators can approve role requests.');
+            return;
+        }
         try {
             await adminApi.approveRoleRequest(requestId, roleName).catch(() => {});
             
@@ -1650,7 +1655,7 @@ export default function AdminConsole() {
                         const parsed = JSON.parse(ehStored);
                         const updatedEmps = parsed.map(e => 
                             e.employeeId.toUpperCase() === empId.toUpperCase()
-                                ? { ...e, roles: [roleName, 'Employee'], roleStatus: 'Approved', hasApprovedRole: true }
+                                ? { ...e, roles: [roleName], roleStatus: 'Approved', hasApprovedRole: true }
                                 : e
                         );
                         localStorage.setItem('eh_demo_employees', JSON.stringify(updatedEmps));
@@ -1670,6 +1675,10 @@ export default function AdminConsole() {
     };
 
     const handleRejectRoleRequest = async (requestId, empName) => {
+        if (!isSysAdmin) {
+            showToast('Access Denied: Only System Administrators can reject role requests.');
+            return;
+        }
         try {
             await adminApi.rejectRoleRequest(requestId, 'Rejected by System Admin').catch(() => {});
             
@@ -2119,8 +2128,13 @@ export default function AdminConsole() {
         );
     };
 
-    // Handle Role Change Submission (Single Role)
+    // Handle Role Change Submission (Strict RBAC - System Administrator Only)
     const handleConfirmRoleChange = async () => {
+        if (!isSysAdmin) {
+            showToast('Access Denied: Only System Administrators are permitted to modify user roles.');
+            setIsRoleModalOpen(false);
+            return;
+        }
         if (!roleUserId) return;
         const primaryRole = selectedRoles[0] || 'Employee';
         const rolesToAssign = [primaryRole];
@@ -2158,12 +2172,22 @@ export default function AdminConsole() {
             updateStoredRequests('eh_role_requests');
         } catch (e) {}
 
+        const roleCodeMap = {
+            'System Admin': 'SYSADM',
+            'System Administrator': 'SYSADM',
+            'HR Admin': 'HRADM',
+            'HR Administrator': 'HRADM',
+            'Community Admin': 'CADM',
+            'Community Administrator': 'CADM',
+            'Employee': 'EMP'
+        };
+
         // Update the local AdminConsole users table
         setUsersList(prev => prev.map(u => (String(u.userId) === String(roleUserId) || String(u.id) === String(roleUserId) || (targetUser && targetUser.employeeId && u.employeeId === targetUser.employeeId)) ? { 
             ...u, 
             roleName: primaryRole, 
             assignedRole: primaryRole, 
-            role: (localRoleMap && localRoleMap[primaryRole]) || 'EMP',
+            role: roleCodeMap[primaryRole] || 'EMP',
             roles: rolesToAssign 
         } : u));
 
@@ -4504,18 +4528,21 @@ export default function AdminConsole() {
                                                                 <span className="material-symbols-outlined text-[14px]">visibility</span>
                                                                 <span>View Details</span>
                                                             </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    setRoleUserId(String(u.userId || u.id));
-                                                                    setRoleUserName(u.fullName || u.name);
-                                                                    setSelectedRoles([getUserAssignedRole(u)]);
-                                                                    setIsRoleModalOpen(true);
-                                                                }}
-                                                                className="px-2.5 py-1 bg-indigo-500/10 text-indigo-600 font-bold text-[11px] rounded-lg hover:bg-indigo-500/20 cursor-pointer flex items-center gap-1"
-                                                            >
-                                                                <span className="material-symbols-outlined text-[13px]">tune</span>
-                                                                <span>Edit Role</span>
-                                                            </button>
+                                                            {isSysAdmin && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setRoleUserId(String(u.userId || u.id));
+                                                                        setRoleUserName(u.fullName || u.name);
+                                                                        setSelectedRoles([getUserAssignedRole(u)]);
+                                                                        setIsRoleModalOpen(true);
+                                                                    }}
+                                                                    className="px-2.5 py-1 bg-indigo-500/10 text-indigo-600 font-bold text-[11px] rounded-lg hover:bg-indigo-500/20 cursor-pointer flex items-center gap-1"
+                                                                    title="Modify User Role"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[13px]">tune</span>
+                                                                    <span>Edit Role</span>
+                                                                </button>
+                                                            )}
                                                             <button
                                                                 onClick={() => handleToggleUserActive(u)}
                                                                 className={`px-2.5 py-1 font-bold text-[11px] rounded-lg cursor-pointer ${u.isActive ? 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/20' : 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'}`}
@@ -8112,19 +8139,21 @@ export default function AdminConsole() {
                             </button>
 
                             <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => {
-                                        setRoleUserId(String(selectedUserDetailsUser.userId || selectedUserDetailsUser.id));
-                                        setRoleUserName(selectedUserDetailsUser.fullName || selectedUserDetailsUser.name);
-                                        setSelectedRoles([getUserAssignedRole(selectedUserDetailsUser)]);
-                                        setIsUserDetailsModalOpen(false);
-                                        setIsRoleModalOpen(true);
-                                    }}
-                                    className="px-4 py-2 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-                                >
-                                    <span className="material-symbols-outlined text-[15px]">manage_accounts</span>
-                                    Edit Role
-                                </button>
+                                {isSysAdmin && (
+                                    <button
+                                        onClick={() => {
+                                            setRoleUserId(String(selectedUserDetailsUser.userId || selectedUserDetailsUser.id));
+                                            setRoleUserName(selectedUserDetailsUser.fullName || selectedUserDetailsUser.name);
+                                            setSelectedRoles([getUserAssignedRole(selectedUserDetailsUser)]);
+                                            setIsUserDetailsModalOpen(false);
+                                            setIsRoleModalOpen(true);
+                                        }}
+                                        className="px-4 py-2 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                                    >
+                                        <span className="material-symbols-outlined text-[15px]">manage_accounts</span>
+                                        Edit Role
+                                    </button>
+                                )}
 
                                 <button
                                     onClick={() => {
