@@ -7,7 +7,7 @@ import { getDefaultThumbnail } from '../../pages/SavedContent';
 export const analyzeContentCategory = (text = '', title = '', tags = []) => {
     const combined = `${title || ''} ${text || ''} ${Array.isArray(tags) ? tags.join(' ') : ''}`.toLowerCase();
 
-    if (/docker|kubernetes|k8s|devops|microservice|ci\/cd|pipeline|aws|cloud|server|deploy|code|react|frontend|sql|c#|\.net|backend|technical|script|database/i.test(combined)) {
+    if (/docker|kubernetes|k8s|devops|microservice|ci\/cd|pipeline|aws|cloud|server|deploy|code|react|frontend|sql|c#|\.net|backend|technical|script|database|design|ui|ux|figma|css|palette|mockup|architecture|prototype|layout|theme|graphic/i.test(combined)) {
         return {
             id: 'work',
             category: 'Work & Tech',
@@ -15,16 +15,6 @@ export const analyzeContentCategory = (text = '', title = '', tags = []) => {
             badgeColor: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700',
             confidence: '98%',
             reason: 'Matched Work, Code, DevOps & Technical Engineering'
-        };
-    }
-    if (/design|ui|ux|figma|css|palette|mockup|architecture|prototype|layout|theme|graphic/i.test(combined)) {
-        return {
-            id: 'design',
-            category: 'Design & Arch',
-            icon: 'palette',
-            badgeColor: 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-300 dark:border-purple-700',
-            confidence: '96%',
-            reason: 'Matched UI/UX Design & Architecture'
         };
     }
     if (/hr|policy|gavel|leave|announcement|culture|mponline|employee|onboarding|hiring|workplace|perks|guidelines/i.test(combined)) {
@@ -60,7 +50,6 @@ export const analyzeContentCategory = (text = '', title = '', tags = []) => {
 
 export const PREDEFINED_CATEGORIES = [
     { id: 'work', name: 'Work & Tech', icon: 'computer', desc: 'Code, DevOps, Technical Guides & Microservices' },
-    { id: 'design', name: 'Design & Arch', icon: 'palette', desc: 'UI/UX Mockups, Design Tokens & System Diagrams' },
     { id: 'hr', name: 'HR & Policies', icon: 'gavel', desc: 'Company Policies, Employee Guidelines & HR Updates' },
     { id: 'favorites', name: 'Favorites', icon: 'star', desc: 'Starred Posts, Must-Read Specs & Favorite Items' },
     { id: 'readlater', name: 'Read Later', icon: 'schedule', desc: 'Articles, Podcasts & Bookmarks saved for later' }
@@ -90,10 +79,8 @@ export default function SaveToCategoryModal({ isOpen, onClose, item, onSaved }) 
 
     const aiAnalysis = analyzeContentCategory(contentText, contentTitle, contentTags);
 
-    const [availableCategories, setAvailableCategories] = useState(PREDEFINED_CATEGORIES);
+    const availableCategories = PREDEFINED_CATEGORIES;
     const [selectedCategory, setSelectedCategory] = useState(aiAnalysis.category);
-    const [customCategoryInput, setCustomCategoryInput] = useState('');
-    const [isCustomMode, setIsCustomMode] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const backdropRef = useRef(null);
 
@@ -101,19 +88,25 @@ export default function SaveToCategoryModal({ isOpen, onClose, item, onSaved }) 
         if (!isOpen || !item) return;
         const analysis = analyzeContentCategory(contentText, contentTitle, contentTags);
         setSelectedCategory(analysis.category);
-        setIsCustomMode(false);
-        setCustomCategoryInput('');
 
-        const storedCats = JSON.parse(localStorage.getItem('knome_saved_categories') || '[]');
-        if (storedCats.length > 0) {
-            const merged = [...PREDEFINED_CATEGORIES];
-            storedCats.forEach(c => {
-                if (c.id !== 'all' && !merged.some(m => m.id === c.id || m.name === c.name)) {
-                    merged.push({ id: c.id, name: c.name, icon: c.icon || 'folder', desc: 'Custom Category Folder' });
+        // Remove custom folders (e.g. ghgffd) from localStorage
+        try {
+            const stored = JSON.parse(localStorage.getItem('knome_saved_categories') || '[]');
+            const valid = stored.filter(c => ['work', 'hr', 'favorites', 'readlater', 'all'].includes(c.id));
+            localStorage.setItem('knome_saved_categories', JSON.stringify(valid));
+
+            const map = JSON.parse(localStorage.getItem('knome_item_category_map') || '{}');
+            let mapChanged = false;
+            Object.keys(map).forEach(k => {
+                if (!['work', 'hr', 'favorites', 'readlater', 'all'].includes(map[k])) {
+                    map[k] = 'work';
+                    mapChanged = true;
                 }
             });
-            setAvailableCategories(merged);
-        }
+            if (mapChanged) {
+                localStorage.setItem('knome_item_category_map', JSON.stringify(map));
+            }
+        } catch (e) {}
     }, [item, isOpen]);
 
     useEffect(() => {
@@ -133,10 +126,10 @@ export default function SaveToCategoryModal({ isOpen, onClose, item, onSaved }) 
     const handleConfirmSave = async () => {
         if (!item) return;
         setIsSaving(true);
-        const finalCategory = isCustomMode ? (customCategoryInput.trim() || 'Custom Notes') : selectedCategory;
+        const finalCategory = selectedCategory;
 
-        const matchedCatObj = availableCategories.find(c => c.name === finalCategory);
-        const categoryId = matchedCatObj ? matchedCatObj.id : (isCustomMode ? finalCategory.toLowerCase().replace(/\s+/g, '_') : 'work');
+        const matchedCatObj = PREDEFINED_CATEGORIES.find(c => c.name === finalCategory);
+        const categoryId = matchedCatObj ? matchedCatObj.id : 'work';
 
         const savedItem = {
             id: item.id || `saved_${Date.now()}`,
@@ -177,15 +170,6 @@ export default function SaveToCategoryModal({ isOpen, onClose, item, onSaved }) 
             existingMap[`Post_${savedItem.id}`] = categoryId;
             existingMap[savedItem.id] = categoryId;
             localStorage.setItem('knome_item_category_map', JSON.stringify(existingMap));
-
-            // Save custom category into knome_saved_categories if custom
-            if (isCustomMode) {
-                const storedCats = JSON.parse(localStorage.getItem('knome_saved_categories') || '[]');
-                if (!storedCats.some(c => c.name === finalCategory || c.id === categoryId)) {
-                    const newCatObj = { id: categoryId, name: finalCategory, icon: 'folder', color: 'bg-indigo-500/10 text-indigo-600 border border-indigo-500/20' };
-                    localStorage.setItem('knome_saved_categories', JSON.stringify([...storedCats, newCatObj]));
-                }
-            }
 
             // Track bookmarked IDs for persistence
             const bookmarkedIds = JSON.parse(localStorage.getItem('knome_bookmarked_ids') || '[]');
@@ -265,11 +249,11 @@ export default function SaveToCategoryModal({ isOpen, onClose, item, onSaved }) 
                         </label>
                         <div className="space-y-2">
                             {availableCategories.map(cat => {
-                                const isSelected = !isCustomMode && selectedCategory === cat.name;
+                                const isSelected = selectedCategory === cat.name;
                                 return (
                                     <div
                                         key={cat.name}
-                                        onClick={() => { setSelectedCategory(cat.name); setIsCustomMode(false); }}
+                                        onClick={() => setSelectedCategory(cat.name)}
                                         className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
                                             isSelected 
                                                 ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 text-indigo-900 dark:text-indigo-200 shadow-sm ring-1 ring-indigo-500/30' 
@@ -297,46 +281,6 @@ export default function SaveToCategoryModal({ isOpen, onClose, item, onSaved }) 
                                     </div>
                                 );
                             })}
-
-                            {/* Custom Category Option */}
-                            <div
-                                onClick={() => setIsCustomMode(true)}
-                                className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 ${
-                                    isCustomMode 
-                                        ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 text-indigo-900 dark:text-indigo-200 shadow-sm ring-1 ring-indigo-500/30' 
-                                        : 'bg-slate-50/50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 hover:border-indigo-300 text-slate-700 dark:text-slate-300'
-                                }`}
-                            >
-                                <div className="flex items-center justify-between gap-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold ${
-                                            isCustomMode ? 'bg-indigo-500 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                                        }`}>
-                                            <span className="material-symbols-outlined text-[18px]">create_new_folder</span>
-                                        </div>
-                                        <div>
-                                            <div className="font-bold text-xs">Create Custom Folder / Category</div>
-                                            <div className="text-[11px] text-slate-400">Specify your own custom folder name</div>
-                                        </div>
-                                    </div>
-                                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isCustomMode ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
-                                        {isCustomMode && <span className="material-symbols-outlined text-[14px]">check</span>}
-                                    </div>
-                                </div>
-
-                                {isCustomMode && (
-                                    <div className="pt-2">
-                                        <input
-                                            type="text"
-                                            value={customCategoryInput}
-                                            onChange={(e) => setCustomCategoryInput(e.target.value)}
-                                            placeholder="e.g. Microservices 2026, Interview Prep, System Architecture"
-                                            className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-xl text-xs outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                            autoFocus
-                                        />
-                                    </div>
-                                )}
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -357,7 +301,7 @@ export default function SaveToCategoryModal({ isOpen, onClose, item, onSaved }) 
                         className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                         <span className="material-symbols-outlined text-[16px]">bookmark</span>
-                        Save to {isCustomMode ? (customCategoryInput.trim() || 'Custom') : selectedCategory}
+                        Save to {selectedCategory}
                     </button>
                 </div>
             </div>
