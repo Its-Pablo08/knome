@@ -33,8 +33,6 @@ export default function DraftCard({ draft, onEditDraft, onDeleteDraft, onPublish
     };
 
     const handlePublish = async () => {
-        if (!window.confirm('Are you sure you want to publish this draft to the network feed now?')) return;
-
         setIsPublishing(true);
         try {
             if (onPublishDraft) {

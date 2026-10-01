@@ -218,8 +218,9 @@ export default function Posts() {
     }, [searchQuery, selectedTag, resetScrollLoading]);
 
     const handlePostCreated = () => {
+        setSelectedTag('All');
         // Small delay so backend processes the new post before refetch
-        setTimeout(() => loadPosts(), 500);
+        setTimeout(() => loadPosts(), 300);
     };
 
     return (
@@ -414,29 +415,38 @@ export default function Posts() {
                                             const targetPostId = d.id || d.postId;
                                             const isNumeric = /^\d+$/.test(String(targetPostId));
                                             try {
+                                                let publishedSuccess = false;
+                                                const payload = {
+                                                    contentText: d.text || d.content,
+                                                    audienceType: d.audience || d.audienceType || 'Everyone',
+                                                    status: 'Published',
+                                                    scheduledDate: null,
+                                                    attachmentUrls: (d.attachments || []).map(a => a.backendUrl || a.url),
+                                                    attachmentTypes: (d.attachments || []).map(a => a.type === 'doc' ? 'Document' : a.type === 'image' ? 'Image' : a.type === 'video' ? 'Video' : 'Audio'),
+                                                    mentionedUserIds: []
+                                                };
+
                                                 if (isNumeric) {
-                                                    await postsApi.update(targetPostId, {
-                                                        contentText: d.text || d.content,
-                                                        audienceType: d.audience || d.audienceType || 'Everyone',
-                                                        status: 'Published',
-                                                        scheduledDate: null,
-                                                        attachmentUrls: (d.attachments || []).map(a => a.backendUrl || a.url),
-                                                        attachmentTypes: (d.attachments || []).map(a => a.type === 'doc' ? 'Document' : a.type === 'image' ? 'Image' : a.type === 'video' ? 'Video' : 'Audio'),
-                                                        mentionedUserIds: []
-                                                    });
-                                                } else {
-                                                    await postsApi.create({
-                                                        contentText: d.text || d.content,
-                                                        audienceType: d.audience || d.audienceType || 'Everyone',
-                                                        status: 'Published',
-                                                        scheduledDate: null,
-                                                        attachmentUrls: (d.attachments || []).map(a => a.backendUrl || a.url),
-                                                        attachmentTypes: (d.attachments || []).map(a => a.type === 'doc' ? 'Document' : a.type === 'image' ? 'Image' : a.type === 'video' ? 'Video' : 'Audio'),
-                                                        mentionedUserIds: []
-                                                    });
+                                                    try {
+                                                        await postsApi.update(targetPostId, payload);
+                                                        publishedSuccess = true;
+                                                    } catch (updateErr) {
+                                                        console.warn('Draft update on publish notice, falling back to create:', updateErr);
+                                                    }
                                                 }
+                                                
+                                                if (!publishedSuccess) {
+                                                    await postsApi.create(payload);
+                                                }
+
                                                 clearUserDraft(currentUser?.userId || currentUser?.id);
                                                 removeDraftFromLocalPosts(targetPostId);
+                                                try {
+                                                    const deletedIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]');
+                                                    const filteredDeleted = deletedIds.filter(id => String(id) !== String(targetPostId));
+                                                    localStorage.setItem('knome_deleted_post_ids', JSON.stringify(filteredDeleted));
+                                                } catch (e) {}
+                                                setSelectedTag('All');
                                                 addToast("Draft published successfully! 🚀", "success");
                                                 loadPosts();
                                                 window.dispatchEvent(new CustomEvent('post-created'));
