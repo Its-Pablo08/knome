@@ -17,14 +17,25 @@
     scroll-behavior: smooth;
     margin: 0;
     padding: 0;
+    width: 100%;
     min-height: 100%;
-    font-size: clamp(13.5px, 0.45vw + 9.5px, 16px);
+    font-size: 16px;
+    zoom: 1;
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     background-color: var(--theme-60);
   }
   body {
     margin: 0;
     padding: 0;
+    width: 100%;
     min-height: 100vh;
+    overflow-x: hidden;
+    zoom: 1;
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     font-family: 'Source Sans 3', 'Source Sans Pro', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
     background-color: var(--theme-60);
     color: var(--text-primary);
@@ -32,6 +43,7 @@
     -moz-osx-font-smoothing: grayscale;
   }
   #root {
+    width: 100%;
     min-height: 100vh;
     display: flex;
     flex-direction: column;

@@ -1217,10 +1217,10 @@ export default function Navbar() {
         <>
         {/* TopNavBar */}
         <nav className="fixed top-0 left-0 right-0 w-full z-50 transition-colors duration-300">
-            <div className="max-w-screen-2xl mx-auto px-4 md:px-8 h-[72px] grid grid-cols-2 lg:grid-cols-3 items-center gap-4">
+            <div className="max-w-screen-2xl mx-auto px-4 md:px-6 lg:px-8 h-[72px] flex items-center justify-between gap-3 lg:gap-5 w-full">
                 
                 {/* ─── LEFT: Logo & Navigation ─── */}
-                <div className="flex items-center gap-3 sm:gap-6 justify-start">
+                <div className="flex items-center gap-3 sm:gap-5 justify-start shrink-0">
                     {/* Mobile Hamburger Menu Toggle Button */}
                     <button
                         onClick={() => window.dispatchEvent(new CustomEvent('knome_toggle_mobile_sidebar'))}
@@ -1236,23 +1236,23 @@ export default function Navbar() {
                             <img 
                                 src={knomeLogo} 
                                 alt="KNOME" 
-                                className="h-10 sm:h-11 md:h-12 w-auto max-w-[260px] sm:max-w-[320px] object-contain block dark:hidden drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
+                                className="h-9 sm:h-10 md:h-11 w-auto max-w-[200px] sm:max-w-[280px] object-contain block dark:hidden drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
                             />
                             <img 
                                 src={knomeLogoDark} 
                                 alt="KNOME" 
-                                className="h-10 sm:h-11 md:h-12 w-auto max-w-[260px] sm:max-w-[320px] object-contain hidden dark:block drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
+                                className="h-9 sm:h-10 md:h-11 w-auto max-w-[200px] sm:max-w-[280px] object-contain hidden dark:block drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
                             />
-                            <span className="hidden sm:inline-block text-[10px] md:text-[10.5px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 leading-none tracking-tight pl-0.5 whitespace-nowrap">
+                            <span className="hidden xl:inline-block text-[10px] md:text-[10.5px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 leading-none tracking-tight pl-0.5 whitespace-nowrap">
                                 Knowledge Sharing, Group & Technical Post
                             </span>
                         </div>
                     </Link>
                 </div>
 
-                {/* ─── CENTER: Smart Search ─── */}
-                <div className="hidden lg:flex items-center justify-center w-full">
-                    <div className="relative w-full max-w-[540px] z-50" ref={searchDropdownRef}>
+                {/* ─── CENTER: Smart Search (Dynamic Flex Width - Never Collides or Overlaps) ─── */}
+                <div className="hidden lg:flex items-center justify-center flex-1 min-w-0 max-w-[460px] xl:max-w-[520px] mx-2">
+                    <div className="relative w-full min-w-0 z-50" ref={searchDropdownRef}>
                         <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px] pointer-events-none transition-colors"
                             style={{color: 'var(--text-muted)'}}>search</span>
                         <input
@@ -1266,7 +1266,7 @@ export default function Navbar() {
                             onFocus={() => setShowSuggestions(true)}
                             onBlur={() => setTimeout(() => setShowSuggestions(false), 250)}
                             onKeyDown={handleKeyDown}
-                            className="w-full pl-10 pr-[130px] py-2 text-[13.5px] font-medium rounded-full outline-none transition-all focus:ring-2 focus:ring-blue-500/25 placeholder:text-slate-500 dark:placeholder:text-slate-400"
+                            className="w-full pl-10 pr-[110px] sm:pr-[120px] py-2 text-[13px] sm:text-[13.5px] font-medium rounded-full outline-none transition-all focus:ring-2 focus:ring-blue-500/25 placeholder:text-slate-500 dark:placeholder:text-slate-400"
                             style={{
                                 background: isDark ? 'rgba(14, 26, 56, 0.7)' : 'rgba(239, 246, 255, 0.85)',
                                 border: '1px solid var(--border-mid)',
@@ -1276,12 +1276,12 @@ export default function Navbar() {
                         />
 
                         {/* Right-side controls: Clear (close) button + Theme Search button */}
-                        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 shrink-0">
                             {searchQuery && (
                                 <button
                                     type="button"
                                     onMouseDown={(e) => { e.preventDefault(); setSearchQuery(''); }}
-                                    className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors flex items-center justify-center cursor-pointer"
+                                    className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors flex items-center justify-center cursor-pointer shrink-0"
                                     title="Clear search"
                                 >
                                     <span className="material-symbols-outlined text-[15px] block">close</span>
@@ -1294,7 +1294,7 @@ export default function Navbar() {
                                     handleSearch(searchQuery);
                                 }}
                                 onClick={() => handleSearch(searchQuery)}
-                                className="h-[31px] px-3.5 rounded-full text-[12px] font-bold text-white flex items-center gap-1.5 transition-all shadow-xs hover:shadow-md hover:brightness-110 active:scale-95 cursor-pointer select-none shrink-0"
+                                className="h-[31px] px-3 sm:px-3.5 rounded-full text-[12px] font-bold text-white flex items-center gap-1.5 transition-all shadow-xs hover:shadow-md hover:brightness-110 active:scale-95 cursor-pointer select-none shrink-0"
                                 style={{
                                     background: 'linear-gradient(135deg, var(--accent-primary, #2563eb), var(--accent-deep, #4f46e5))',
                                     border: '1px solid rgba(255,255,255,0.2)',
@@ -1437,11 +1437,11 @@ export default function Navbar() {
                 </div>
 
                 {/* ─── RIGHT: Actions & Profile ─── */}
-                <div className="flex items-center gap-2.5 justify-end">
+                <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 justify-end ml-auto">
 
                     {/* Karma Badge (Visible for HR Admin, Community Admin, and all members; System Admin is exempt) */}
                     {currentUser && !isSysAdmin && (
-                        <Link to="/karma-history" className="relative flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full transition-all hover:scale-105 group cursor-pointer"
+                        <Link to="/karma-history" className="relative flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full transition-all hover:scale-105 group cursor-pointer shrink-0"
                             style={{
                                 background: isDark 
                                     ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(217, 119, 6, 0.1))' 
@@ -1450,9 +1450,9 @@ export default function Navbar() {
                                 boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)'
                             }}
                             title={`${userKarma.toLocaleString()} Karma Points`}>
-                            <span className="material-symbols-outlined text-amber-500 text-[16px] transition-transform group-hover:scale-110" style={{fontVariationSettings:"'FILL' 1"}}>military_tech</span>
-                            <span className="text-[12px] font-black text-amber-600 dark:text-amber-400 tracking-tight">{userKarma.toLocaleString()}</span>
-                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-amber-700/70 dark:text-amber-300/70">pts</span>
+                            <span className="material-symbols-outlined text-amber-500 text-[16px] transition-transform group-hover:scale-110 shrink-0" style={{fontVariationSettings:"'FILL' 1"}}>military_tech</span>
+                            <span className="text-[12px] font-black text-amber-600 dark:text-amber-400 tracking-tight whitespace-nowrap">{userKarma.toLocaleString()}</span>
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-amber-700/70 dark:text-amber-300/70 whitespace-nowrap">pts</span>
                         </Link>
                     )}
 
@@ -1460,17 +1460,17 @@ export default function Navbar() {
                     <button
                         onClick={() => setIsFaqModalOpen(true)}
                         title="Knome Role & Platform FAQs (How to use Knome properly)"
-                        className="relative flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer group"
+                        className="relative flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer group shrink-0"
                         style={{
                             background: isDark ? 'rgba(15, 23, 42, 0.8)' : 'rgba(241, 245, 249, 0.9)',
                             border: '1px solid var(--border-mid)',
                             boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.05)'
                         }}
                     >
-                        <span className="material-symbols-outlined text-[18px] text-indigo-600 dark:text-indigo-400 group-hover:rotate-12 transition-transform" style={{fontVariationSettings:"'FILL' 1"}}>
+                        <span className="material-symbols-outlined text-[18px] text-indigo-600 dark:text-indigo-400 group-hover:rotate-12 transition-transform shrink-0" style={{fontVariationSettings:"'FILL' 1"}}>
                             help
                         </span>
-                        <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200">
+                        <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
                             FAQ
                         </span>
                     </button>
@@ -1479,14 +1479,14 @@ export default function Navbar() {
                     <button
                         onClick={toggleTheme}
                         title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                        className="relative w-9 h-9 rounded-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 group cursor-pointer"
+                        className="relative w-9 h-9 rounded-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 group cursor-pointer shrink-0"
                         style={{
                             background: isDark ? 'rgba(15, 23, 42, 0.8)' : 'rgba(241, 245, 249, 0.9)',
                             border: '1px solid var(--border-mid)',
                             boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.05)'
                         }}
                     >
-                        <span className="material-symbols-outlined text-[18px] transition-all duration-300 group-hover:rotate-12"
+                        <span className="material-symbols-outlined text-[18px] transition-all duration-300 group-hover:rotate-12 shrink-0"
                             style={{
                                 color: isDark ? '#fbbf24' : '#4f46e5',
                                 fontVariationSettings: "'FILL' 1"
@@ -1496,21 +1496,21 @@ export default function Navbar() {
                     </button>
 
                     {/* Notifications */}
-                    <div className="relative" ref={notifDropdownRef}>
+                    <div className="relative shrink-0" ref={notifDropdownRef}>
                         <button
                             onClick={() => {
                                 const nextState = !isNotifOpen;
                                 setIsNotifOpen(nextState);
                                 if (nextState) fetchNotifications();
                             }}
-                            className="relative w-9 h-9 rounded-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                            className="relative w-9 h-9 rounded-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
                             style={{
                                 background: isDark ? 'rgba(15, 23, 42, 0.8)' : 'rgba(241, 245, 249, 0.9)',
                                 border: '1px solid var(--border-mid)',
                                 boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.05)'
                             }}
                         >
-                            <span className="material-symbols-outlined text-[19px] text-theme-30-text" style={{fontVariationSettings:"'FILL' 1"}}>notifications</span>
+                            <span className="material-symbols-outlined text-[19px] text-theme-30-text shrink-0" style={{fontVariationSettings:"'FILL' 1"}}>notifications</span>
                             {unreadCount > 0 && (
                                 <span className="absolute -top-1 -right-1 rounded-full flex items-center justify-center text-[9px] font-black text-white px-1.5 animate-pulse shadow-md select-none pointer-events-none"
                                     style={{
@@ -1810,10 +1810,10 @@ export default function Navbar() {
                     </div>
 
                     {/* User Avatar & Menu */}
-                    <div className="relative" ref={userMenuDropdownRef}>
+                    <div className="relative shrink-0" ref={userMenuDropdownRef}>
                         <button
                             onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                            className="flex items-center gap-2.5 px-3 py-1.5 rounded-full transition-all hover:scale-105 cursor-pointer select-none"
+                            className="flex items-center gap-2 sm:gap-2.5 px-2.5 sm:px-3 py-1.5 rounded-full transition-all hover:scale-105 cursor-pointer select-none shrink-0"
                             style={{
                                 background: isDark ? 'rgba(15, 23, 42, 0.8)' : 'rgba(241, 245, 249, 0.9)',
                                 border: '1px solid var(--border-mid)',
@@ -1833,10 +1833,10 @@ export default function Navbar() {
                                 <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 ${userStatusConfig.dotClass}`} title={`Status: ${userStatusConfig.label}`}></div>
                             </div>
                             <div className="hidden sm:flex flex-col items-start text-left min-w-0">
-                                <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate leading-tight max-w-[140px]" title={currentUser?.fullName || currentUser?.name || 'User'}>
+                                <span className="text-[12.5px] sm:text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate leading-tight max-w-[85px] md:max-w-[110px] xl:max-w-[140px]" title={currentUser?.fullName || currentUser?.name || 'User'}>
                                     {currentUser?.fullName || currentUser?.name || 'User'}
                                 </span>
-                                <span className="text-[9.5px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5 leading-none">{currentUser?.roleName || currentUser?.role || 'Employee'}</span>
+                                <span className="text-[9.5px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5 leading-none truncate max-w-[85px] md:max-w-[110px] xl:max-w-[140px]">{currentUser?.roleName || currentUser?.role || 'Employee'}</span>
                             </div>
                             <span className="material-symbols-outlined text-[16px] text-slate-400 shrink-0">expand_more</span>
                         </button>
