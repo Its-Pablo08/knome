@@ -140,7 +140,11 @@ public class UserRepository : Repository<Models.User>, IUserRepository
 
         user.Roles.Clear();
 
-        foreach (var roleName in roleNames.Distinct(StringComparer.OrdinalIgnoreCase))
+        var effectiveRoles = (roleNames == null || !roleNames.Any()) 
+            ? new List<string> { "Employee" } 
+            : roleNames.Distinct(StringComparer.OrdinalIgnoreCase).Take(1).ToList();
+
+        foreach (var roleName in effectiveRoles)
         {
             var trimmed = roleName.Trim();
             var normalizedRole = trimmed switch
