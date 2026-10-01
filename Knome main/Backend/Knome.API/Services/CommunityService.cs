@@ -199,9 +199,23 @@ public class CommunityService : ICommunityService
     // --- Discovery & Categories ---
     public async Task<List<Knome.API.DTOs.Categories.CategoryDto>> GetCommunityCategoriesAsync()
     {
-        return await _db.Categories
+        var excludedCategories = new[]
+        {
+            "Company Culture",
+            "Culture & HR",
+            "Culture & HR Hub",
+            "Culture",
+            "Hobbies",
+            "Leadership",
+            "Marketing",
+            "Operations",
+            "Product Management"
+        };
+
+        var dbCategories = await _db.Categories
             .AsNoTracking()
-            .Where(c => c.AppliesTo == "Community" || c.AppliesTo == "All" || c.AppliesTo == "Article" || c.Name == "Leadership" || c.Name == "General")
+            .Where(c => (c.AppliesTo == "Community" || c.AppliesTo == "All" || c.AppliesTo == "Article" || c.Name == "General")
+                        && !excludedCategories.Contains(c.Name))
             .OrderBy(c => c.Name)
             .Select(c => new Knome.API.DTOs.Categories.CategoryDto
             {
@@ -210,6 +224,38 @@ public class CommunityService : ICommunityService
                 AppliesTo = c.AppliesTo
             })
             .ToListAsync();
+
+        var catNames = new HashSet<string>(dbCategories.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
+
+        if (!catNames.Contains("Product & Design"))
+        {
+            dbCategories.Add(new Knome.API.DTOs.Categories.CategoryDto { CategoryId = 1016, Name = "Product & Design", AppliesTo = "Community" });
+        }
+        if (!catNames.Contains("Finance"))
+        {
+            dbCategories.Add(new Knome.API.DTOs.Categories.CategoryDto { CategoryId = 1019, Name = "Finance", AppliesTo = "Community" });
+        }
+        if (!catNames.Contains("General"))
+        {
+            dbCategories.Add(new Knome.API.DTOs.Categories.CategoryDto { CategoryId = 1014, Name = "General", AppliesTo = "Community" });
+        }
+        if (!catNames.Contains("Design"))
+        {
+            dbCategories.Add(new Knome.API.DTOs.Categories.CategoryDto { CategoryId = 8, Name = "Design", AppliesTo = "Community" });
+        }
+        if (!catNames.Contains("Engineering"))
+        {
+            dbCategories.Add(new Knome.API.DTOs.Categories.CategoryDto { CategoryId = 7, Name = "Engineering", AppliesTo = "Community" });
+        }
+        if (!catNames.Contains("Technology"))
+        {
+            dbCategories.Add(new Knome.API.DTOs.Categories.CategoryDto { CategoryId = 1, Name = "Technology", AppliesTo = "Community" });
+        }
+
+        return dbCategories
+            .Where(c => !excludedCategories.Contains(c.Name, StringComparer.OrdinalIgnoreCase))
+            .OrderBy(c => c.Name)
+            .ToList();
     }
 
     // --- Create & Update ---

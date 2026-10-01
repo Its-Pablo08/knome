@@ -256,23 +256,32 @@ export default function CommunityView() {
     const [selectedCategory, setSelectedCategory] = useState('Technology');
     const [isSavingCategory, setIsSavingCategory] = useState(false);
     const [availableCategories, setAvailableCategories] = useState([
-        { id: 1, name: 'Technology' },
-        { id: 1016, name: 'Product & Design' },
-        { id: 1017, name: 'Culture & HR' },
-        { id: 1018, name: 'Operations' },
+        { id: 8, name: 'Design' },
+        { id: 7, name: 'Engineering' },
         { id: 1019, name: 'Finance' },
-        { id: 1020, name: 'Marketing' },
-        { id: 12, name: 'Leadership' },
         { id: 1014, name: 'General' },
-        { id: 7, name: 'Engineering' }
+        { id: 1016, name: 'Product & Design' },
+        { id: 1, name: 'Technology' }
     ]);
 
     useEffect(() => {
+        const excludedCategories = new Set([
+            'company culture',
+            'culture & hr',
+            'culture & hr hub',
+            'culture',
+            'hobbies',
+            'leadership',
+            'marketing',
+            'operations',
+            'product management'
+        ]);
         communitiesApi.getCategories()
             .then(res => {
                 const list = res?.data !== undefined ? res.data : res;
                 if (Array.isArray(list) && list.length > 0) {
-                    setAvailableCategories(list);
+                    const filtered = list.filter(c => !excludedCategories.has((c.name || '').toLowerCase().trim()));
+                    setAvailableCategories(filtered);
                 }
             })
             .catch(() => {});

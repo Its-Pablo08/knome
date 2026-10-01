@@ -34,16 +34,25 @@ export default function Communities() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState('All');
     const [filterCategory, setFilterCategory] = useState('All');
+    const EXCLUDED_CATEGORIES = React.useMemo(() => new Set([
+        'company culture',
+        'culture & hr',
+        'culture & hr hub',
+        'culture',
+        'hobbies',
+        'leadership',
+        'marketing',
+        'operations',
+        'product management'
+    ]), []);
+
     const [availableCategories, setAvailableCategories] = useState([
-        { id: 1, name: 'Technology' },
-        { id: 1016, name: 'Product & Design' },
-        { id: 1017, name: 'Culture & HR' },
-        { id: 1018, name: 'Operations' },
+        { id: 8, name: 'Design' },
+        { id: 7, name: 'Engineering' },
         { id: 1019, name: 'Finance' },
-        { id: 1020, name: 'Marketing' },
-        { id: 12, name: 'Leadership' },
         { id: 1014, name: 'General' },
-        { id: 7, name: 'Engineering' }
+        { id: 1016, name: 'Product & Design' },
+        { id: 1, name: 'Technology' }
     ]);
     const [approvalSuccessMsg, setApprovalSuccessMsg] = useState('');
     const [successPopup, setSuccessPopup] = useState(null);
@@ -53,11 +62,12 @@ export default function Communities() {
             .then(res => {
                 const list = res?.data !== undefined ? res.data : res;
                 if (Array.isArray(list) && list.length > 0) {
-                    setAvailableCategories(list);
+                    const filtered = list.filter(c => !EXCLUDED_CATEGORIES.has((c.name || '').toLowerCase().trim()));
+                    setAvailableCategories(filtered);
                 }
             })
             .catch(() => {});
-    }, []);
+    }, [EXCLUDED_CATEGORIES]);
 
     const isHRorAdmin = ['SYSADM', 'HRADM', 'CADM', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
         ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'HR MANAGER', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
@@ -823,9 +833,6 @@ export default function Communities() {
             const s = (c.membershipStatus || '').toLowerCase();
             if (!(s === 'approved' || s === 'joined' || s === 'subscribed' || s === 'pending')) return false;
         }
-        if (activeTab === 'Knome (Org)') {
-            if (formatCommunityType(c.type) !== 'Org') return false;
-        }
         // Type filter
         if (filterType !== 'All') {
             const normalizedFilter = formatCommunityType(filterType);
@@ -838,8 +845,9 @@ export default function Communities() {
             const matches = commCat === targetCat || 
                 (targetCat.includes('design') && commCat.includes('design')) ||
                 (targetCat.includes('product') && commCat.includes('product')) ||
-                (targetCat.includes('culture') && commCat.includes('culture')) ||
-                (targetCat.includes('hr') && commCat.includes('hr')) ||
+                (targetCat.includes('finance') && commCat.includes('finance')) ||
+                (targetCat.includes('general') && commCat.includes('general')) ||
+                (targetCat.includes('engineering') && commCat.includes('engineering')) ||
                 (targetCat.includes('tech') && commCat.includes('tech'));
             if (!matches) return false;
         }
@@ -911,7 +919,7 @@ export default function Communities() {
 
                 {/* Tabs */}
                 <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1">
-                    {['Discover', 'My Communities', 'Knome (Org)'].map(tab => (
+                    {['Discover', 'My Communities'].map(tab => (
                         <button 
                             key={tab}
                             onClick={() => setActiveTab(tab)}
