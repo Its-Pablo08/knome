@@ -59,20 +59,30 @@ public class CommunityService : ICommunityService
 
     private async Task CheckIsAdminOrSysAdminAsync(int communityId, int currentUserId)
     {
-        var exists = await _db.Communities.AnyAsync(c => c.CommunityId == communityId);
-        if (!exists)
+        var community = await _db.Communities.FirstOrDefaultAsync(c => c.CommunityId == communityId);
+        if (community == null)
             throw new NotFoundException($"Community ID {communityId} not found.");
 
+        // 1. Creator of the community is an admin
+        if (community.CreatedByUserId == currentUserId)
+            return;
+
+        // 2. Member of CommunityAdmins many-to-many table
         var isAdmin = await _repo.IsCommunityAdminAsync(communityId, currentUserId);
-        if (!isAdmin)
-        {
-            // Also check if user is a System Administrator, HR Administrator, or Community Admin
-            var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-            if (user == null || !user.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.HRAdmin || r.RoleName == Roles.CommunityAdmin))
-            {
-                throw new UnauthorizedException("You must be a Community Admin, HR Administrator, or System Administrator to perform this action.");
-            }
-        }
+        if (isAdmin)
+            return;
+
+        // 3. User with Admin role in CommunityMembers table
+        var callerMember = await _repo.GetMemberAsync(communityId, currentUserId);
+        if (callerMember != null && callerMember.MemberType == CommunityMemberTypes.Admin && callerMember.Status == CommunityMemberStatuses.Approved)
+            return;
+
+        // 4. Global platform administrators (System Admin, HR Admin, Community Admin)
+        var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
+        if (user != null && user.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.HRAdmin || r.RoleName == Roles.CommunityAdmin))
+            return;
+
+        throw new UnauthorizedException("You must be a Community Admin, HR Administrator, or System Administrator to perform this action.");
     }
 
     private async Task CheckCanViewCommunityAsync(int communityId, int currentUserId, Community? community = null)
@@ -799,36 +809,134 @@ public class CommunityService : ICommunityService
 
     public async Task<List<CommunityMemberDto>> AddMembersAsync(int communityId, int currentUserId, AddCommunityMembersDto dto)
     {
-        if (dto.UserIds == null || dto.UserIds.Count == 0)
-            throw new BadRequestException("At least one user ID must be provided.");
+        var hasUserIds = dto.UserIds != null && dto.UserIds.Count > 0;
+        var hasEmpIds = dto.EmployeeIds != null && dto.EmployeeIds.Count > 0;
+        var hasMembers = dto.Members != null && dto.Members.Count > 0;
+
+        if (!hasUserIds && !hasEmpIds && !hasMembers)
+            throw new BadRequestException("At least one user ID or employee ID must be provided.");
 
         var community = await _repo.GetCommunityByIdAnyStatusAsync(communityId);
         if (community == null)
             throw new NotFoundException($"Community ID {communityId} not found.");
 
-        // Check if caller is System Admin, HR Admin, or Community Admin
-        var caller = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-        var isGlobalAdmin = caller != null && caller.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.HRAdmin);
-        var isCommAdmin = await _repo.IsCommunityAdminAsync(communityId, currentUserId) || community.CreatedByUserId == currentUserId;
-
-        if (!isGlobalAdmin && !isCommAdmin)
-        {
-            throw new UnauthorizedException("Only System Administrators, HR Administrators, or Community Admins can add members to this community.");
-        }
+        await CheckIsAdminOrSysAdminAsync(communityId, currentUserId);
 
         var targetMemberType = string.Equals(dto.MemberType, CommunityMemberTypes.Admin, StringComparison.OrdinalIgnoreCase) 
             ? CommunityMemberTypes.Admin 
             : CommunityMemberTypes.Member;
 
+        var caller = await _db.Users.FindAsync(currentUserId);
         var callerName = caller?.FullName ?? "Administrator";
 
-        foreach (var userId in dto.UserIds.Distinct())
+        // Aggregate targets to add
+        var targetsToProcess = new List<(int? userId, string? empId, string? fullName, string? email, string? desig, string? dept, string? photo)>();
+
+        if (dto.Members != null)
         {
-            var targetUser = await _db.Users.FindAsync(userId);
+            foreach (var m in dto.Members)
+            {
+                targetsToProcess.Add((m.UserId, m.EmployeeId, m.FullName, m.Email, m.Designation, m.DepartmentName, m.ProfilePhotoUrl));
+            }
+        }
+
+        if (dto.UserIds != null)
+        {
+            foreach (var uid in dto.UserIds.Distinct())
+            {
+                if (!targetsToProcess.Any(t => t.userId == uid))
+                {
+                    targetsToProcess.Add((uid, null, null, null, null, null, null));
+                }
+            }
+        }
+
+        if (dto.EmployeeIds != null)
+        {
+            foreach (var empId in dto.EmployeeIds.Distinct())
+            {
+                if (!targetsToProcess.Any(t => string.Equals(t.empId, empId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    targetsToProcess.Add((null, empId, null, null, null, null, null));
+                }
+            }
+        }
+
+        var processedUserIds = new HashSet<int>();
+
+        foreach (var item in targetsToProcess)
+        {
+            User? targetUser = null;
+
+            if (item.userId.HasValue && item.userId.Value > 0)
+            {
+                targetUser = await _db.Users.FindAsync(item.userId.Value);
+            }
+
+            if (targetUser == null && !string.IsNullOrWhiteSpace(item.empId))
+            {
+                targetUser = await _db.Users.FirstOrDefaultAsync(u => u.EmployeeId == item.empId);
+            }
+
+            if (targetUser == null && !string.IsNullOrWhiteSpace(item.email))
+            {
+                targetUser = await _db.Users.FirstOrDefaultAsync(u => u.Email == item.email);
+            }
+
+            if (targetUser == null && !string.IsNullOrWhiteSpace(item.fullName))
+            {
+                targetUser = await _db.Users.FirstOrDefaultAsync(u => u.FullName == item.fullName);
+            }
+
+            // Auto-provision user into database if not yet present
+            if (targetUser == null && (!string.IsNullOrWhiteSpace(item.empId) || !string.IsNullOrWhiteSpace(item.fullName)))
+            {
+                var empIdVal = !string.IsNullOrWhiteSpace(item.empId) ? item.empId : $"EMP{KnomeTime.Now.Ticks % 100000}";
+                var fullNameVal = !string.IsNullOrWhiteSpace(item.fullName) ? item.fullName : "Employee";
+                var emailVal = !string.IsNullOrWhiteSpace(item.email) ? item.email : $"{empIdVal.ToLower()}@mponline.gov.in";
+
+                int? deptId = null;
+                if (!string.IsNullOrWhiteSpace(item.dept))
+                {
+                    var dept = await _db.Departments.FirstOrDefaultAsync(d => d.Name == item.dept);
+                    deptId = dept?.DepartmentId;
+                }
+                if (!deptId.HasValue)
+                {
+                    var fallbackDept = await _db.Departments.FirstOrDefaultAsync();
+                    deptId = fallbackDept?.DepartmentId ?? 1;
+                }
+
+                targetUser = new User
+                {
+                    EmployeeId = empIdVal,
+                    FullName = fullNameVal,
+                    Email = emailVal,
+                    Designation = item.desig ?? "Software Engineer",
+                    DepartmentId = deptId,
+                    Location = "Bhopal HQ",
+                    ProfilePhotoUrl = item.photo,
+                    BioVisibility = "Public",
+                    NetworkVisibility = "Public",
+                    PhotosVisibility = "Public",
+                    InterestsVisibility = "Public",
+                    IsActive = true,
+                    IsPermanentlySuspended = false,
+                    CreatedDate = KnomeTime.Now
+                };
+                _db.Users.Add(targetUser);
+                await _db.SaveChangesAsync();
+            }
+
             if (targetUser == null || !targetUser.IsActive)
                 continue;
 
-            var existingMember = await _repo.GetMemberAsync(communityId, userId);
+            if (processedUserIds.Contains(targetUser.UserId))
+                continue;
+
+            processedUserIds.Add(targetUser.UserId);
+
+            var existingMember = await _repo.GetMemberAsync(communityId, targetUser.UserId);
             if (existingMember != null)
             {
                 existingMember.Status = CommunityMemberStatuses.Approved;
@@ -842,7 +950,7 @@ public class CommunityService : ICommunityService
                 var newMember = new CommunityMember
                 {
                     CommunityId = communityId,
-                    UserId = userId,
+                    UserId = targetUser.UserId,
                     MemberType = targetMemberType,
                     Status = CommunityMemberStatuses.Approved,
                     RequestedDate = KnomeTime.Now,
@@ -854,14 +962,18 @@ public class CommunityService : ICommunityService
 
             if (targetMemberType == CommunityMemberTypes.Admin)
             {
-                await _repo.AddCommunityAdminAsync(communityId, userId);
+                await _repo.AddCommunityAdminAsync(communityId, targetUser.UserId);
+            }
+            else
+            {
+                await _repo.RemoveCommunityAdminAsync(communityId, targetUser.UserId);
             }
 
             // Publish in-app SignalR notification to the added user
             try
             {
                 await _notificationService.PublishAsync(
-                    userId,
+                    targetUser.UserId,
                     NotificationTypes.Community,
                     $"📢 You have been added to the community \"{community.Name}\" as {targetMemberType} by {callerName}.",
                     relatedContentType: NotificationContentTypes.Community,
