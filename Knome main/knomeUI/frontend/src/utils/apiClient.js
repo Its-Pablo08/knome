@@ -42,6 +42,11 @@ async function silentReauth() {
         return null;
     }
 
+    // Do not attempt reauth if user has actively logged out or is logging out
+    if (typeof window !== 'undefined' && sessionStorage.getItem('knome_logging_out') === 'true') {
+        return null;
+    }
+
     let employeeId = localStorage.getItem('knome_employeeId');
     if (!employeeId) {
         const token = localStorage.getItem('knome_jwt');
@@ -53,8 +58,9 @@ async function silentReauth() {
             } catch { /* ignore */ }
         }
     }
+    // If not logged in, NEVER fallback to EMP001 (Aarav) or any user
     if (!employeeId) {
-        employeeId = 'EMP001';
+        return null;
     }
 
     const authCred = sessionStorage.getItem('knome_auth_pwd');
@@ -221,8 +227,8 @@ export const apiClient = {
 
     async handleResponse(response, retryConfig) {
         if (response.status === 401) {
-            // Try silent re-auth once before giving up (all concurrent 401s await the same deduplicated promise)
-            if (retryConfig) {
+            // Try silent re-auth once before giving up (only if an active user session exists)
+            if (retryConfig && localStorage.getItem('knome_jwt') && sessionStorage.getItem('knome_logging_out') !== 'true') {
                 const freshToken = await silentReauth();
 
                 if (freshToken) {

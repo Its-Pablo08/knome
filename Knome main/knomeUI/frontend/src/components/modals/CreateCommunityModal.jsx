@@ -109,6 +109,17 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [category, setCategory] = useState('Technology');
+    const [availableCategories, setAvailableCategories] = useState([
+        { id: 1, name: 'Technology' },
+        { id: 1016, name: 'Product & Design' },
+        { id: 1017, name: 'Culture & HR' },
+        { id: 1018, name: 'Operations' },
+        { id: 1019, name: 'Finance' },
+        { id: 1020, name: 'Marketing' },
+        { id: 12, name: 'Leadership' },
+        { id: 1014, name: 'General' },
+        { id: 7, name: 'Engineering' }
+    ]);
     const [banner, setBanner] = useState('');
     const [avatar, setAvatar] = useState('');
     const [bannerFile, setBannerFile] = useState(null);
@@ -118,6 +129,18 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
     // Structured FAQ pairs
     const [faqList, setFaqList] = useState([{ q: 'Who can join?', a: 'All MPOnline employees may join or request access.' }]);
     const [invitedUserIds, setInvitedUserIds] = useState([]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        communitiesApi.getCategories()
+            .then(res => {
+                const list = res?.data !== undefined ? res.data : res;
+                if (Array.isArray(list) && list.length > 0) {
+                    setAvailableCategories(list);
+                }
+            })
+            .catch(() => {});
+    }, [isOpen]);
 
     const bannerInputRef = useRef(null);
     const avatarInputRef = useRef(null);
@@ -493,15 +516,21 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
 
             const categoryMap = {
                 'Technology': 1,
+                'Product & Design': 1016,
+                'Culture & HR': 1017,
+                'Operations': 1018,
+                'Finance': 1019,
+                'Marketing': 1020,
+                'Leadership': 12,
                 'Engineering': 7,
                 'Design': 8,
-                'Product': 9,
                 'Product Management': 9,
                 'Culture': 10,
                 'Company Culture': 10,
-                'General': 1
+                'General': 1014
             };
-            const mappedCategoryId = categoryMap[category] || 1;
+            const matchedCatObj = (availableCategories || []).find(c => (c.name || '').toLowerCase().trim() === (category || '').toLowerCase().trim());
+            const mappedCategoryId = matchedCatObj?.categoryId || matchedCatObj?.id || categoryMap[category] || 1;
 
             const filteredRules = rulesList.filter(r => r.trim());
             const filteredFaq = faqList.filter(f => f.q.trim() && f.a.trim());
@@ -516,9 +545,11 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                 bannerUrl: finalBanner,
                 thumbnailUrl: finalAvatar,
                 categoryId: mappedCategoryId,
+                categoryName: category,
                 rules: filteredRules.join('\n'),
                 faq: JSON.stringify(filteredFaq),
-                communityType: formattedCommunityType
+                communityType: formattedCommunityType,
+                invitedUserIds: validMemberUserIds
             };
 
             let dbCommunity = null;
@@ -536,13 +567,63 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
 
             const communityId = dbCommunity?.communityId || dbCommunity?.id || Math.floor(Date.now() / 1000);
 
+            // Prepare community members list with creator as Admin + all invited employees
+            const creatorMember = {
+                userId: currentUser?.id || currentUser?.userId || 1,
+                fullName: currentUser?.name || currentUser?.fullName || 'Employee',
+                employeeId: currentUser?.employeeId || `MPO${currentUser?.id || '101'}`,
+                designation: currentUser?.roleName || 'Community Admin',
+                memberType: 'Admin',
+                status: 'Approved',
+                profilePhotoUrl: currentUser?.avatar
+            };
+
+            const memberList = [creatorMember];
+            const targetUserEnrollIds = invitedUserIds || [];
+
+            (targetUserEnrollIds || []).forEach(uId => {
+                const targetUserObj = candidateUsers.find(u => String(u.id || u.userId) === String(uId)) ||
+                    (allAvailableUsers || []).find(u => String(u.id || u.userId) === String(uId)) ||
+                    (users || []).find(u => String(u.id || u.userId) === String(uId));
+                if (targetUserObj) {
+                    const uIdResolved = targetUserObj.id || targetUserObj.userId;
+                    memberList.push({
+                        userId: uIdResolved,
+                        fullName: targetUserObj.name || targetUserObj.fullName,
+                        employeeId: targetUserObj.employeeId || `MPO${uIdResolved}`,
+                        designation: targetUserObj.designation || 'Member',
+                        memberType: 'Member',
+                        status: 'Approved',
+                        profilePhotoUrl: targetUserObj.avatar || null
+                    });
+
+                    // Auto-join directly to target user's joined community list
+                    try {
+                        const targetUserKey = `knome_joined_communities_${uIdResolved}`;
+                        const targetUserJoined = JSON.parse(localStorage.getItem(targetUserKey) || '[]');
+                        safeSetStorage(targetUserKey, [{ 
+                            id: communityId, 
+                            name: dbCommunity?.name || name.trim(), 
+                            status: 'joined', 
+                            category: dbCommunity?.categoryName || category,
+                            type: formattedCommunityType,
+                            banner: finalBanner,
+                            joinedAt: new Date().toISOString() 
+                        }, ...targetUserJoined.filter(c => String(c.id) !== String(communityId))]);
+                    } catch (e) { /* ignore */ }
+                }
+            });
+
+            const dedupedMemberList = deduplicateMembers(memberList);
+            safeSetStorage(`knome_community_members_${communityId}`, dedupedMemberList);
+
             const newCommunity = {
                 id: communityId,
                 communityId: communityId,
                 name: dbCommunity?.name || name.trim(),
                 type: type === 'default' ? 'Org' : (dbCommunity?.communityType ? (['default', 'org'].includes(String(dbCommunity.communityType).toLowerCase()) ? 'Org' : dbCommunity.communityType) : type.charAt(0).toUpperCase() + type.slice(1)),
                 category: dbCommunity?.categoryName || category,
-                members: '1 member',
+                members: `${dedupedMemberList.length} ${dedupedMemberList.length === 1 ? 'member' : 'members'}`,
                 activity: 'New',
                 description: dbCommunity?.description || description.trim() || 'A new community created for MPOnline teams.',
                 banner: finalBanner,
@@ -562,8 +643,37 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                 status: isHRorAdmin ? 'Approved' : 'Pending Approval',
                 isApproved: isHRorAdmin ? true : false,
                 invitedUserIds: invitedUserIds || [],
-                members: `${1 + (invitedUserIds || []).length} ${1 + (invitedUserIds || []).length === 1 ? 'member' : 'members'}`
             };
+
+            // Sync invited members to backend DB if needed
+            if (validMemberUserIds && validMemberUserIds.length > 0 && dbCommunity?.communityId) {
+                try {
+                    communitiesApi.addMembers(dbCommunity.communityId, validMemberUserIds).catch(() => {});
+                } catch (e) {}
+            }
+
+            // Create in-app notifications for invited members
+            const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
+            const newInviteNotifs = invitedUserIds.map(targetId => ({
+                id: Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 1000),
+                targetUserId: targetId,
+                category: 'Community',
+                type: 'invite',
+                text: `${currentUser?.name || 'An employee'} invited you to join the community "${newCommunity.name}".`,
+                message: `${currentUser?.name || 'An employee'} invited you to join the community "${newCommunity.name}".`,
+                senderName: currentUser?.name || 'An employee',
+                senderAvatar: currentUser?.avatar || null,
+                senderUserId: currentUser?.userId || currentUser?.id,
+                createdDate: new Date().toISOString(),
+                createdAt: new Date().toISOString(),
+                unread: true,
+                icon: 'group_add',
+                color: 'text-indigo-400',
+                bg: 'bg-indigo-500/10',
+                communityName: newCommunity.name,
+                communityId: newCommunity.id,
+                actionLink: `/community/view?id=${newCommunity.id}`
+            }));
 
             // ── CASE A: Regular Employee -> Goes to HR Admin for Approval ──
             if (!isHRorAdmin) {
@@ -586,7 +696,6 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                 }, ...userJoined.filter(c => String(c.id) !== String(communityId))]);
 
                 // 3. Send Notification to HR Administrator & System Administrator
-                const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
                 const hrNotif = {
                     id: Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 1000),
                     targetRole: 'HRADM',
@@ -608,9 +717,12 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                     communityId: newCommunity.id,
                     actionLink: '/communities?tab=Approvals'
                 };
-                safeSetStorage('knome_notifications', [hrNotif, ...existingNotifs]);
+                safeSetStorage('knome_notifications', [hrNotif, ...newInviteNotifs, ...existingNotifs]);
                 window.dispatchEvent(new CustomEvent('knome_notification_received', { detail: hrNotif }));
                 window.dispatchEvent(new CustomEvent('community-approval-requested', { detail: newCommunity }));
+                window.dispatchEvent(new CustomEvent('community-invite-sent', {
+                    detail: { invitedUserIds, communityName: newCommunity.name, senderName: currentUser?.name, senderUserId: currentUser?.userId || currentUser?.id }
+                }));
 
                 if (onCommunityCreated) {
                     onCommunityCreated({
@@ -631,27 +743,6 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
             }
 
             // ── CASE B: HR / System Admin -> Auto-Approved Immediately ──
-            // Notifications for invited members
-            const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
-            const newInviteNotifs = invitedUserIds.map(targetId => ({
-                id: Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 1000),
-                targetUserId: targetId,
-                category: 'Community',
-                type: 'invite',
-                text: `${currentUser?.name || 'An employee'} invited you to join the community "${newCommunity.name}".`,
-                senderName: currentUser?.name || 'An employee',
-                senderAvatar: currentUser?.avatar || null,
-                senderUserId: currentUser?.userId || currentUser?.id,
-                createdDate: new Date().toISOString(),
-                createdAt: new Date().toISOString(),
-                unread: true,
-                icon: 'group_add',
-                color: 'text-indigo-400',
-                bg: 'bg-indigo-500/10',
-                communityName: newCommunity.name,
-                communityId: newCommunity.id,
-                actionLink: `/community/view?id=${newCommunity.id}`
-            }));
             safeSetStorage('knome_notifications', [...newInviteNotifs, ...existingNotifs]);
 
             // Save community
@@ -663,52 +754,7 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
             const userJoined = JSON.parse(localStorage.getItem(userKey) || '[]');
             safeSetStorage(userKey, [{ id: communityId, name: newCommunity.name, status: 'joined', joinedAt: new Date().toISOString() }, ...userJoined.filter(c => String(c.id) !== String(communityId))]);
 
-            // Seed creator as admin member
-            const creatorMember = {
-                userId: currentUser?.id || 1,
-                fullName: currentUser?.name || 'Employee',
-                employeeId: currentUser?.employeeId || 'MPO100',
-                designation: currentUser?.roleName || 'Community Admin',
-                memberType: 'Admin',
-                status: 'Approved',
-                profilePhotoUrl: currentUser?.avatar
-            };
 
-            const memberList = [creatorMember];
-            // STRICTLY only the invited user IDs selected by the user!
-            const targetUserEnrollIds = invitedUserIds || [];
-
-            (targetUserEnrollIds || []).forEach(uId => {
-                const targetUserObj = candidateUsers.find(u => String(u.id || u.userId) === String(uId)) ||
-                    (users || []).find(u => String(u.id || u.userId) === String(uId));
-                if (targetUserObj) {
-                    memberList.push({
-                        userId: targetUserObj.id || targetUserObj.userId,
-                        fullName: targetUserObj.name || targetUserObj.fullName,
-                        employeeId: targetUserObj.employeeId || `MPO${targetUserObj.id || targetUserObj.userId}`,
-                        designation: targetUserObj.designation || 'Member',
-                        memberType: 'Member',
-                        status: 'Approved',
-                        profilePhotoUrl: targetUserObj.avatar || null
-                    });
-
-                    // Auto-join directly to target user's joined community list
-                    try {
-                        const targetUserKey = `knome_joined_communities_${targetUserObj.id || targetUserObj.userId}`;
-                        const targetUserJoined = JSON.parse(localStorage.getItem(targetUserKey) || '[]');
-                        safeSetStorage(targetUserKey, [{ 
-                            id: communityId, 
-                            name: newCommunity.name, 
-                            status: 'joined', 
-                            joinedAt: new Date().toISOString() 
-                        }, ...targetUserJoined.filter(c => String(c.id) !== String(communityId))]);
-                    } catch (e) { /* ignore */ }
-                }
-            });
-
-            const dedupedMemberList = deduplicateMembers(memberList);
-            newCommunity.members = `${dedupedMemberList.length} ${dedupedMemberList.length === 1 ? 'member' : 'members'}`;
-            safeSetStorage(`knome_community_members_${communityId}`, dedupedMemberList);
 
             // Seed official welcome post in the name of the new community
             const initialCommunityPost = {
@@ -972,13 +1018,9 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                                             <label className="block text-[11px] sm:text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-1">Primary Category</label>
                                             <select value={category} onChange={(e) => setCategory(e.target.value)}
                                                 className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 dark:text-white font-medium">
-                                                <option>Technology</option>
-                                                <option>Product & Design</option>
-                                                <option>Culture & HR</option>
-                                                <option>Operations</option>
-                                                <option>Finance</option>
-                                                <option>Marketing</option>
-                                                <option>Leadership</option>
+                                                {availableCategories.map(cat => (
+                                                    <option key={cat.categoryId || cat.id || cat.name} value={cat.name}>{cat.name}</option>
+                                                ))}
                                             </select>
                                         </div>
 

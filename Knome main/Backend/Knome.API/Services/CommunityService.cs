@@ -186,6 +186,22 @@ public class CommunityService : ICommunityService
         return dtos;
     }
 
+    // --- Discovery & Categories ---
+    public async Task<List<Knome.API.DTOs.Categories.CategoryDto>> GetCommunityCategoriesAsync()
+    {
+        return await _db.Categories
+            .AsNoTracking()
+            .Where(c => c.AppliesTo == "Community" || c.AppliesTo == "All" || c.AppliesTo == "Article" || c.Name == "Leadership" || c.Name == "General")
+            .OrderBy(c => c.Name)
+            .Select(c => new Knome.API.DTOs.Categories.CategoryDto
+            {
+                CategoryId = c.CategoryId,
+                Name = c.Name,
+                AppliesTo = c.AppliesTo
+            })
+            .ToListAsync();
+    }
+
     // --- Create & Update ---
     public async Task<CommunityDto> CreateCommunityAsync(int currentUserId, CreateCommunityDto dto)
     {
@@ -204,12 +220,31 @@ public class CommunityService : ICommunityService
         if (!secCheck.IsValid)
             throw new BadRequestException("Community details contain blocked URLs or restricted keywords.");
 
-        // FK existence validation (GBV-001)
-        if (dto.CategoryId.HasValue)
+        // Robust category resolution: by CategoryId or CategoryName (FR-CM-01)
+        int? resolvedCategoryId = dto.CategoryId;
+        if (!resolvedCategoryId.HasValue && !string.IsNullOrWhiteSpace(dto.CategoryName))
         {
-            var categoryExists = await _db.Categories.AnyAsync(c => c.CategoryId == dto.CategoryId.Value);
+            var matchingCat = await _db.Categories
+                .FirstOrDefaultAsync(c => c.Name.ToLower() == dto.CategoryName.Trim().ToLower());
+            if (matchingCat != null)
+            {
+                resolvedCategoryId = matchingCat.CategoryId;
+            }
+        }
+
+        if (resolvedCategoryId.HasValue)
+        {
+            var categoryExists = await _db.Categories.AnyAsync(c => c.CategoryId == resolvedCategoryId.Value);
             if (!categoryExists)
-                throw new BadRequestException($"Category ID {dto.CategoryId.Value} does not exist.");
+            {
+                var fallbackCat = await _db.Categories.FirstOrDefaultAsync(c => c.Name == "Technology") ?? await _db.Categories.FirstOrDefaultAsync();
+                resolvedCategoryId = fallbackCat?.CategoryId ?? 1;
+            }
+        }
+        else
+        {
+            var fallbackCat = await _db.Categories.FirstOrDefaultAsync(c => c.Name == "Technology") ?? await _db.Categories.FirstOrDefaultAsync();
+            resolvedCategoryId = fallbackCat?.CategoryId ?? 1;
         }
 
         var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
@@ -221,7 +256,7 @@ public class CommunityService : ICommunityService
             Description = dto.Description,
             BannerUrl = dto.BannerUrl,
             ThumbnailUrl = dto.ThumbnailUrl,
-            CategoryId = dto.CategoryId,
+            CategoryId = resolvedCategoryId,
             Rules = dto.Rules,
             Faq = dto.Faq,
             CommunityType = dto.CommunityType,
@@ -247,6 +282,49 @@ public class CommunityService : ICommunityService
             ApprovedByUserId = isHRorAdmin ? currentUserId : null
         };
         await _repo.AddMemberAsync(member);
+
+        // Add invited members directly to the community & notify them
+        if (dto.InvitedUserIds != null && dto.InvitedUserIds.Count > 0)
+        {
+            var callerName = user?.FullName ?? "An employee";
+            foreach (var inviteeId in dto.InvitedUserIds.Distinct())
+            {
+                if (inviteeId == currentUserId) continue;
+
+                var targetUser = await _db.Users.FindAsync(inviteeId);
+                if (targetUser == null || !targetUser.IsActive) continue;
+
+                var existingMember = await _repo.GetMemberAsync(community.CommunityId, inviteeId);
+                if (existingMember == null)
+                {
+                    var invitedMember = new CommunityMember
+                    {
+                        CommunityId = community.CommunityId,
+                        UserId = inviteeId,
+                        MemberType = CommunityMemberTypes.Member,
+                        Status = CommunityMemberStatuses.Approved,
+                        RequestedDate = KnomeTime.Now,
+                        DecidedDate = KnomeTime.Now,
+                        ApprovedByUserId = currentUserId
+                    };
+                    await _repo.AddMemberAsync(invitedMember);
+                }
+
+                try
+                {
+                    await _notificationService.PublishAsync(
+                        inviteeId,
+                        NotificationTypes.Community,
+                        $"📢 {callerName} invited you to join the community \"{community.Name}\".",
+                        relatedContentType: NotificationContentTypes.Community,
+                        relatedContentId: community.CommunityId);
+                }
+                catch
+                {
+                    // Non-critical notification failure
+                }
+            }
+        }
 
         if (!isHRorAdmin)
         {
@@ -298,19 +376,30 @@ public class CommunityService : ICommunityService
         if (!secCheck.IsValid)
             throw new BadRequestException("Updated community details contain blocked URLs or restricted keywords.");
 
-        // FK existence validation (GBV-001)
-        if (dto.CategoryId.HasValue)
+        int? updateCategoryId = dto.CategoryId;
+        if (!updateCategoryId.HasValue && !string.IsNullOrWhiteSpace(dto.CategoryName))
         {
-            var categoryExists = await _db.Categories.AnyAsync(c => c.CategoryId == dto.CategoryId.Value);
-            if (!categoryExists)
-                throw new BadRequestException($"Category ID {dto.CategoryId.Value} does not exist.");
+            var matchingCat = await _db.Categories
+                .FirstOrDefaultAsync(c => c.Name.ToLower() == dto.CategoryName.Trim().ToLower());
+            if (matchingCat != null)
+            {
+                updateCategoryId = matchingCat.CategoryId;
+            }
+        }
+
+        if (updateCategoryId.HasValue)
+        {
+            var categoryExists = await _db.Categories.AnyAsync(c => c.CategoryId == updateCategoryId.Value);
+            if (categoryExists)
+            {
+                community.CategoryId = updateCategoryId.Value;
+            }
         }
 
         community.Name = trimmedName;
         community.Description = dto.Description;
         community.BannerUrl = dto.BannerUrl;
         community.ThumbnailUrl = dto.ThumbnailUrl;
-        if (dto.CategoryId.HasValue) community.CategoryId = dto.CategoryId.Value;
         community.Rules = dto.Rules;
         community.Faq = dto.Faq;
 

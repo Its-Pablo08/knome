@@ -150,7 +150,7 @@ export const dashboardApi = {
     getTrendingPosts: () => apiClient.get('/feed/widgets/trending-posts'),
     getInternalJobs: () => apiClient.get('/feed/widgets/internal-jobs'),
     getKarmaLeaderboard: () => apiClient.get('/Karma/leaderboard'),
-    getAnnouncements: () => apiClient.get('/notifications/broadcasts').then(res => res?.data || res || []).catch(() => []),
+    getAnnouncements: () => apiClient.get('/notifications/broadcasts', { noCache: true }).then(res => res?.data || res || []).catch(() => []),
 };
 
 // ─────────────────────────────────────────────
@@ -300,10 +300,19 @@ export const communitiesApi = {
     removeAdmin: (communityId, targetUserId) => apiClient.delete(`/Communities/${communityId}/admins/${targetUserId}`),
     removeMember: (communityId, targetUserId) => apiClient.delete(`/Communities/${communityId}/members/${targetUserId}`),
     decideMembership: (communityId, targetUserId, status) => apiClient.put(`/Communities/${communityId}/members/${targetUserId}/decide`, { status }),
+    getCategories: () => apiClient.get('/Communities/categories'),
     getPending: (options = {}) => apiClient.get('/Communities/pending', { noCache: true, ...options }),
     approve: (id) => apiClient.post(`/Communities/${id}/approve`),
     reject: (id, reason = '') => apiClient.post(`/Communities/${id}/reject`, { reason }),
-    addMembers: (communityId, data) => apiClient.post(`/Communities/${communityId}/members`, data),
+    addMembers: (communityId, data) => {
+        const payload = Array.isArray(data)
+            ? { userIds: data.map(Number).filter(n => !isNaN(n) && n > 0), memberType: 'Member' }
+            : { 
+                userIds: (data?.userIds || []).map(Number).filter(n => !isNaN(n) && n > 0), 
+                memberType: data?.memberType || 'Member' 
+            };
+        return apiClient.post(`/Communities/${communityId}/members`, payload);
+    },
     getFiles: (communityId) => apiClient.get(`/Communities/${communityId}/files`),
     uploadFile: (communityId, fileData) => apiClient.post(`/Communities/${communityId}/files`, fileData),
     deleteFile: (communityId, fileId) => apiClient.delete(`/Communities/${communityId}/files/${encodeURIComponent(fileId)}`),
@@ -455,7 +464,7 @@ export const notificationsApi = {
 
     /** Organization Broadcasts */
     broadcasts: {
-        getAll: () => apiClient.get('/notifications/broadcasts').then(res => res?.data || res || []).catch(() => []),
+        getAll: () => apiClient.get('/notifications/broadcasts', { noCache: true }).then(res => res?.data || res || []).catch(() => []),
         send: (data) => apiClient.post('/notifications/broadcast', data),
         update: (id, data) => apiClient.put(`/notifications/broadcast/${id}`, data),
         delete: (id) => apiClient.delete(`/notifications/broadcast/${id}`),

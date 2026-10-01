@@ -66,11 +66,21 @@ export default function Dashboard() {
         const loadAnnouncements = () => {
             dashboardApi.getAnnouncements().then(res => {
                 const list = Array.isArray(res) ? res : (res?.items || res?.data || []);
-                // Ensure only genuine broadcast announcements are rendered (never comments or personal notifications)
+                // Ensure only genuine broadcast announcements are rendered (never comments, personal role updates, or personal notifications)
                 const validAnnouncements = list.filter(item => {
                     const evt = String(item.eventType || item.type || '').toUpperCase();
                     const msg = String(item.message || item.content || '').toLowerCase();
-                    if (msg.includes('commented on') || msg.includes('liked your') || msg.includes('published a new post') || msg.includes('published a new article')) {
+                    if (
+                        msg.includes('commented on') || 
+                        msg.includes('liked your') || 
+                        msg.includes('published a new post') || 
+                        msg.includes('published a new article') ||
+                        msg.includes('roles have been updated') ||
+                        msg.includes('role has been updated') ||
+                        msg.includes('reviewed by moderation') ||
+                        msg.includes('first-time login') ||
+                        msg.includes('joined knome with default')
+                    ) {
                         return false;
                     }
                     return evt === 'HRANNOUNCEMENT' || evt === 'ADMINBROADCAST' || item.isBroadcast === true || item.sender === 'HR Administration';
@@ -263,13 +273,19 @@ export default function Dashboard() {
                                     </button>
                                     <button
                                         onClick={async () => {
-                                            if (window.confirm('Remove this broadcast announcement from all employee feeds?')) {
-                                                try {
-                                                    await notificationsApi.broadcasts.delete(announcements[0].id);
-                                                    window.dispatchEvent(new CustomEvent('knome:broadcast-updated'));
-                                                } catch (e) {
-                                                    console.error('Failed to remove broadcast:', e);
-                                                }
+                                            const target = announcements[0];
+                                            const targetId = target?.id || target?.Id || target?.notificationId;
+                                            if (!targetId) return;
+
+                                            // Optimistically remove from UI immediately
+                                            setAnnouncements(prev => prev.filter(a => (a.id || a.Id || a.notificationId) !== targetId));
+
+                                            try {
+                                                await notificationsApi.broadcasts.delete(targetId);
+                                                window.dispatchEvent(new CustomEvent('knome:broadcast-updated'));
+                                            } catch (e) {
+                                                console.error('Failed to remove broadcast:', e);
+                                                loadAnnouncements();
                                             }
                                         }}
                                         className="p-1 rounded-lg text-amber-700/60 dark:text-amber-300/60 hover:text-rose-600 hover:bg-rose-500/15 transition-all cursor-pointer"

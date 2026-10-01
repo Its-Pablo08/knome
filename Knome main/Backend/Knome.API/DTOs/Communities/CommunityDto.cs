@@ -47,9 +47,11 @@ public class CreateCommunityDto
     public string? BannerUrl { get; set; }
     public string? ThumbnailUrl { get; set; }
     public int? CategoryId { get; set; }
+    public string? CategoryName { get; set; }
     public string? Rules { get; set; }
     public string? Faq { get; set; }
     public string CommunityType { get; set; } = null!;
+    public List<int>? InvitedUserIds { get; set; }
 }
 
 public class UpdateCommunityDto
@@ -59,6 +61,7 @@ public class UpdateCommunityDto
     public string? BannerUrl { get; set; }
     public string? ThumbnailUrl { get; set; }
     public int? CategoryId { get; set; }
+    public string? CategoryName { get; set; }
     public string? Rules { get; set; }
     public string? Faq { get; set; }
 }

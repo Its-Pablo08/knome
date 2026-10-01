@@ -502,14 +502,19 @@ export default function HRAnalytics() {
                         </button>
                         <button
                             onClick={async () => {
-                                if (window.confirm('Remove this broadcast announcement from all employee dashboards?')) {
-                                    try {
-                                        await notificationsApi.broadcasts.delete(activeBroadcasts[0].id);
-                                        window.dispatchEvent(new CustomEvent('knome:broadcast-updated'));
-                                        loadBroadcasts();
-                                    } catch (e) {
-                                        console.error('Failed to remove broadcast:', e);
-                                    }
+                                const target = activeBroadcasts[0];
+                                const targetId = target?.id || target?.Id || target?.notificationId;
+                                if (!targetId) return;
+
+                                setActiveBroadcasts(prev => prev.filter(a => (a.id || a.Id || a.notificationId) !== targetId));
+
+                                try {
+                                    await notificationsApi.broadcasts.delete(targetId);
+                                    window.dispatchEvent(new CustomEvent('knome:broadcast-updated'));
+                                    loadBroadcasts();
+                                } catch (e) {
+                                    console.error('Failed to remove broadcast:', e);
+                                    loadBroadcasts();
                                 }
                             }}
                             className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
