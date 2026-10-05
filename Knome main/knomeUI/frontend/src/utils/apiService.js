@@ -447,6 +447,7 @@ export const notificationsApi = {
 
     /** POST /notifications */
     create: (data) => apiClient.post('/notifications', data),
+    createNotification: (data) => apiClient.post('/notifications', data),
 
     /** PUT /notifications/{id}/read */
     markRead: (notificationId) =>

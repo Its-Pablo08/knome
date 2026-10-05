@@ -947,15 +947,80 @@ export default function Navbar() {
             mapped.time = formatNotificationDate(mapped.createdDate);
             mapped.displayDate = mapped.time;
             mapped.unread = true;
+
+            const isMsg = notification.eventType === 'Message' || notification.notificationType === 'Message' || mapped.type === 'message';
+            const senderId = Number(notification.relatedContentId || notification.referenceId || notification.senderUserId || 0);
+            const isCurrentlyChatting = isMsg && senderId && window.__knome_active_chat_user_id === senderId;
+
+            // If it's a chat message, dispatch to live messenger pipeline
+            if (isMsg && senderId) {
+                let rawText = notification.message || notification.text || '';
+                const colonIdx = rawText.indexOf(': "');
+                if (colonIdx !== -1 && rawText.endsWith('"')) {
+                    rawText = rawText.substring(colonIdx + 3, rawText.length - 1);
+                }
+                const myId = Number(currentUser?.userId || currentUser?.id || 0);
+                const livePayload = {
+                    type: 'NEW_LIVE_MESSAGE',
+                    conversationId: `conv_${Math.min(myId, senderId)}_${Math.max(myId, senderId)}`,
+                    senderId,
+                    recipientId: myId,
+                    sender: {
+                        userId: senderId,
+                        fullName: notification.senderName || mapped.senderName || 'Colleague',
+                        avatar: notification.senderAvatar || mapped.senderAvatar || null
+                    },
+                    message: {
+                        id: `notif_${notification.notificationId || Date.now()}`,
+                        senderId,
+                        senderName: notification.senderName || mapped.senderName || 'Colleague',
+                        text: rawText,
+                        time: formatNotificationDate(notification.createdDate || new Date().toISOString()),
+                        timestamp: new Date(notification.createdDate || Date.now()).getTime()
+                    }
+                };
+                window.dispatchEvent(new CustomEvent('knome_live_message', { detail: livePayload }));
+            }
+
             setAllNotifs(prev => {
                 const filtered = prev.filter(item => String(item.id) !== String(mapped.id));
                 return [mapped, ...filtered];
             });
+
             if (isNotificationAllowed(mapped, notifPreferencesRef.current)) {
-                setToastNotification(mapped);
+                if (!isCurrentlyChatting) {
+                    setToastNotification(mapped);
+                }
                 playChimeSound();
             }
             window.dispatchEvent(new CustomEvent('network-updated'));
+        });
+
+        connection.on("ReceiveDirectMessage", (data) => {
+            try {
+                const payload = typeof data === 'string' ? JSON.parse(data) : data;
+                if (!payload || !payload.message) return;
+                const myId = Number(currentUser?.userId || currentUser?.id || 0);
+                if (Number(payload.recipientId) === myId && Number(payload.senderId) !== myId) {
+                    window.dispatchEvent(new CustomEvent('knome_live_message', { detail: payload }));
+                    if (window.__knome_active_chat_user_id !== Number(payload.senderId)) {
+                        const toastItem = {
+                            id: `msg_toast_${Date.now()}`,
+                            type: 'message',
+                            eventType: 'Message',
+                            title: `Message from ${payload.sender?.fullName || 'Colleague'}`,
+                            message: payload.message.text,
+                            senderName: payload.sender?.fullName || 'Colleague',
+                            senderAvatar: payload.sender?.avatar || null,
+                            targetUrl: `/messages?userId=${payload.senderId}&name=${encodeURIComponent(payload.sender?.fullName || '')}`,
+                            time: 'Just now',
+                            createdDate: new Date().toISOString()
+                        };
+                        setToastNotification(toastItem);
+                        playChimeSound();
+                    }
+                }
+            } catch (err) {}
         });
 
         connection.on("ReactionCountUpdated", (data) => {

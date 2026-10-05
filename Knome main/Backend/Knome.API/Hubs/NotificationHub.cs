@@ -57,4 +57,44 @@ public class NotificationHub : Hub
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"User_{userId}");
     }
+
+    public async Task SendDirectMessage(object messagePayload)
+    {
+        try
+        {
+            if (messagePayload is System.Text.Json.JsonElement elem)
+            {
+                int recipientId = 0;
+                if (elem.TryGetProperty("recipientId", out var rProp) && rProp.TryGetInt32(out var rId))
+                    recipientId = rId;
+                else if (elem.TryGetProperty("recipientUserId", out var ruProp) && ruProp.TryGetInt32(out var ruId))
+                    recipientId = ruId;
+
+                int senderId = 0;
+                if (elem.TryGetProperty("senderId", out var sProp) && sProp.TryGetInt32(out var sId))
+                    senderId = sId;
+
+                if (recipientId > 0)
+                {
+                    await Clients.Group($"User_{recipientId}").SendAsync("ReceiveDirectMessage", messagePayload);
+                    if (senderId > 0 && senderId != recipientId)
+                    {
+                        await Clients.Group($"User_{senderId}").SendAsync("ReceiveDirectMessage", messagePayload);
+                    }
+                }
+                else
+                {
+                    await Clients.All.SendAsync("ReceiveDirectMessage", messagePayload);
+                }
+            }
+            else
+            {
+                await Clients.All.SendAsync("ReceiveDirectMessage", messagePayload);
+            }
+        }
+        catch
+        {
+            // Fallback
+        }
+    }
 }

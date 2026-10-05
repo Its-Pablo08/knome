@@ -1,4 +1,9 @@
+import * as signalR from '@microsoft/signalr';
 import { notificationsApi } from './apiService';
+import { getHubUrl } from './apiClient';
+
+// Storage key for master messenger conversations
+export const MESSAGES_STORAGE_KEY = 'knome_global_messenger_conversations';
 
 // Dedicated broadcast channel for cross-tab and cross-window real-time messaging
 const CHANNEL_NAME = 'knome_live_messenger';
@@ -51,42 +56,227 @@ export const playMessageChime = () => {
 };
 
 /**
- * Dispatches an in-app real-time notification to Navbar & Toast
+ * Deterministic conversation key generator for two user IDs
  */
-export const dispatchLiveMessageNotification = (sender, recipient, text) => {
+export const getConversationKey = (id1, id2) => {
+    const a = Number(id1) || 0;
+    const b = Number(id2) || 0;
+    return `conv_${Math.min(a, b)}_${Math.max(a, b)}`;
+};
+
+/**
+ * Appends a message into the local master conversation storage and recalculates unreads
+ */
+export const appendMessageToGlobalStorage = (payload, currentUserId = null) => {
     try {
-        const notifPayload = {
-            id: `msg_notif_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-            type: 'message',
-            eventType: 'Message',
-            notificationType: 'Message',
-            title: 'New Message',
-            senderName: sender.fullName || sender.name || 'Colleague',
-            senderAvatar: sender.avatar || sender.profilePhotoUrl || null,
-            senderUserId: Number(sender.userId || sender.id),
-            targetUserId: Number(recipient.userId || recipient.id),
-            recipientUserId: Number(recipient.userId || recipient.id),
-            userId: Number(recipient.userId || recipient.id),
-            message: `${sender.fullName || sender.name || 'Colleague'}: "${text}"`,
-            text: `${sender.fullName || sender.name || 'Colleague'}: "${text}"`,
-            targetUrl: `/messages?userId=${Number(sender.userId || sender.id)}&name=${encodeURIComponent(sender.fullName || sender.name || '')}`,
-            unread: true,
-            createdDate: new Date().toISOString()
-        };
-
-        // Broadcast to current window
-        window.dispatchEvent(new CustomEvent('knome_notification_received', { detail: notifPayload }));
-
-        // Broadcast to other tabs
-        if (channel) {
-            channel.postMessage({
-                type: 'NOTIFICATION_BROADCAST',
-                notification: notifPayload
-            });
+        const raw = localStorage.getItem(MESSAGES_STORAGE_KEY);
+        let list = [];
+        if (raw) {
+            try { list = JSON.parse(raw) || []; } catch (e) { list = []; }
         }
+
+        const { conversationId, senderId, recipientId, sender, message } = payload;
+        const convKey = conversationId || getConversationKey(senderId, recipientId);
+        const currId = currentUserId ? Number(currentUserId) : null;
+        const isSelf = currId && Number(senderId) === currId;
+        const isLookingAtChat = typeof window !== 'undefined' && window.__knome_active_chat_user_id === Number(senderId);
+
+        let found = false;
+        const updated = list.map(c => {
+            const pIds = (c.participantIds || []).map(Number);
+            const matches = c.id === convKey || (pIds.includes(Number(senderId)) && pIds.includes(Number(recipientId)));
+            if (matches) {
+                found = true;
+                const existingMsgs = c.messages || [];
+                const isDuplicate = existingMsgs.some(m => String(m.id) === String(message.id) || (m.timestamp === message.timestamp && m.text === message.text));
+                const nextMsgs = isDuplicate ? existingMsgs : [...existingMsgs, message];
+                
+                const unreadInc = (currId && !isSelf && !isLookingAtChat) ? 1 : 0;
+                const currentUnread = c.unreadCounts?.[currId] || 0;
+
+                return {
+                    ...c,
+                    lastMessage: message.text,
+                    lastMessageTime: message.time,
+                    lastMessageTimestamp: message.timestamp || Date.now(),
+                    unreadCounts: {
+                        ...(c.unreadCounts || {}),
+                        ...(currId ? { [currId]: currentUnread + unreadInc } : {})
+                    },
+                    messages: nextMsgs
+                };
+            }
+            return c;
+        });
+
+        if (!found) {
+            const newConv = {
+                id: convKey,
+                participantIds: [Number(senderId), Number(recipientId)],
+                participants: {
+                    [Number(senderId)]: sender,
+                    [Number(recipientId)]: payload.recipient || { userId: Number(recipientId), fullName: 'Colleague' }
+                },
+                participant: sender,
+                unreadCounts: {
+                    ...(currId ? { [currId]: (!isSelf && !isLookingAtChat) ? 1 : 0 } : {})
+                },
+                lastMessage: message.text,
+                lastMessageTime: message.time,
+                lastMessageTimestamp: message.timestamp || Date.now(),
+                messages: [message]
+            };
+            updated.unshift(newConv);
+        }
+
+        localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(updated));
+
+        if (currId) {
+            const totalUnread = updated.reduce((acc, c) => acc + (c.unreadCounts?.[currId] || 0), 0);
+            localStorage.setItem(`knome_unread_messages_count_${currId}`, String(totalUnread));
+            localStorage.setItem('knome_unread_messages_count', String(totalUnread));
+            window.dispatchEvent(new CustomEvent('knome_messages_updated', { detail: { unreadCount: totalUnread } }));
+        }
+
+        return updated;
     } catch (err) {
-        console.error('[RealtimeMessenger] Failed to dispatch live notification:', err);
+        console.warn('[RealtimeMessenger] Failed to update global message storage:', err);
+        return null;
     }
+};
+
+// ── SignalR Client Connection Manager ──
+let messengerHubConnection = null;
+let connectionPromise = null;
+const messageListeners = new Set();
+const seenMessageIds = new Set();
+
+const deliverMessageToListeners = (payload, currentUserId) => {
+    if (!payload || !payload.message) return;
+    const msgKey = String(payload.message.id || `${payload.senderId}_${payload.message.timestamp}_${payload.message.text}`);
+    if (seenMessageIds.has(msgKey)) return; // Deduplicate
+    seenMessageIds.add(msgKey);
+
+    // Keep seen set under control
+    if (seenMessageIds.size > 200) {
+        const first = seenMessageIds.values().next().value;
+        seenMessageIds.delete(first);
+    }
+
+    // Persist to local master storage
+    appendMessageToGlobalStorage(payload, currentUserId);
+
+    // Play chime sound if intended for current user and not self
+    if (currentUserId && Number(payload.recipientId) === Number(currentUserId) && Number(payload.senderId) !== Number(currentUserId)) {
+        playMessageChime();
+    }
+
+    // Dispatch in DOM
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('knome_live_message', { detail: payload }));
+    }
+
+    // Call registered subscribers
+    messageListeners.forEach(fn => {
+        try { fn(payload); } catch (e) { console.error('[RealtimeMessenger] Subscriber error:', e); }
+    });
+};
+
+/**
+ * Initializes or returns active SignalR connection for the current user
+ */
+export const initMessengerSignalR = (userId) => {
+    if (typeof window === 'undefined') return Promise.resolve(null);
+    const uId = Number(userId);
+    if (!uId) return Promise.resolve(null);
+
+    if (messengerHubConnection && messengerHubConnection.state === signalR.HubConnectionState.Connected) {
+        messengerHubConnection.invoke("JoinUserGroup", uId).catch(() => {});
+        return Promise.resolve(messengerHubConnection);
+    }
+
+    if (connectionPromise) return connectionPromise;
+
+    const hubUrl = getHubUrl ? getHubUrl() : `http://${window.location.hostname}:5096/hubs/notifications`;
+
+    const conn = new signalR.HubConnectionBuilder()
+        .withUrl(hubUrl, {
+            accessTokenFactory: () => localStorage.getItem('knome_jwt') || '',
+            transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling
+        })
+        .configureLogging(signalR.LogLevel.None)
+        .withAutomaticReconnect([0, 1000, 3000, 5000, 10000, 30000])
+        .build();
+
+    // 1. Direct message handler
+    conn.on("ReceiveDirectMessage", (data) => {
+        try {
+            const payload = typeof data === 'string' ? JSON.parse(data) : data;
+            deliverMessageToListeners(payload, uId);
+        } catch (e) {
+            console.error('[RealtimeMessenger] Parse error for ReceiveDirectMessage:', e);
+        }
+    });
+
+    // 2. Notification fallback handler (for messages pushed as notifications)
+    conn.on("ReceiveNotification", (notif) => {
+        if (!notif) return;
+        const isMsg = notif.eventType === 'Message' || notif.notificationType === 'Message' || notif.type === 'message';
+        if (!isMsg) return;
+
+        try {
+            const senderId = Number(notif.relatedContentId || notif.referenceId || notif.senderUserId || 0);
+            if (!senderId || senderId === uId) return;
+
+            // Strip "SenderName: " prefix if present in the raw text
+            let rawText = notif.message || notif.text || '';
+            const colonIdx = rawText.indexOf(': "');
+            if (colonIdx !== -1 && rawText.endsWith('"')) {
+                rawText = rawText.substring(colonIdx + 3, rawText.length - 1);
+            }
+
+            const payload = {
+                type: 'NEW_LIVE_MESSAGE',
+                conversationId: getConversationKey(uId, senderId),
+                senderId,
+                recipientId: uId,
+                sender: {
+                    userId: senderId,
+                    fullName: notif.senderName || 'Colleague',
+                    avatar: notif.senderAvatar || null
+                },
+                message: {
+                    id: `notif_${notif.notificationId || Date.now()}`,
+                    senderId,
+                    senderName: notif.senderName || 'Colleague',
+                    text: rawText,
+                    time: new Date(notif.createdDate || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    timestamp: new Date(notif.createdDate || Date.now()).getTime()
+                }
+            };
+
+            deliverMessageToListeners(payload, uId);
+        } catch (e) {
+            console.error('[RealtimeMessenger] Error parsing message notification:', e);
+        }
+    });
+
+    conn.onreconnected(() => {
+        conn.invoke("JoinUserGroup", uId).catch(() => {});
+    });
+
+    connectionPromise = conn.start().then(() => {
+        messengerHubConnection = conn;
+        conn.invoke("JoinUserGroup", uId).catch(() => {});
+        return conn;
+    }).catch(err => {
+        console.warn('[RealtimeMessenger] SignalR start warning (fallback to broadcast/polling):', err);
+        return null;
+    }).finally(() => {
+        connectionPromise = null;
+    });
+
+    return connectionPromise;
 };
 
 /**
@@ -98,7 +288,7 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
 
     const payload = {
         type: 'NEW_LIVE_MESSAGE',
-        conversationId,
+        conversationId: conversationId || getConversationKey(senderId, recipientId),
         senderId,
         recipientId,
         sender: {
@@ -118,7 +308,7 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
             status: 'active'
         },
         message: {
-            id: message.id || `msg_${Date.now()}`,
+            id: message.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
             senderId,
             senderName: sender.fullName || sender.name || 'Colleague',
             text: message.text,
@@ -127,7 +317,10 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
         }
     };
 
-    // 1. Broadcast via HTML5 BroadcastChannel (zero-latency cross-tab communication)
+    // Mark as seen locally to prevent echo loop
+    seenMessageIds.add(String(payload.message.id));
+
+    // 1. Broadcast via HTML5 BroadcastChannel (zero-latency same-browser cross-tab)
     if (channel) {
         try {
             channel.postMessage(payload);
@@ -136,7 +329,7 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
         }
     }
 
-    // 2. Broadcast via storage event trigger for browsers/tabs where BroadcastChannel is blocked
+    // 2. Broadcast via storage event trigger for browsers/tabs fallback
     try {
         localStorage.setItem('knome_last_live_message', JSON.stringify({
             ...payload,
@@ -144,24 +337,41 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
         }));
     } catch (e) {}
 
-    // 3. Dispatch in current window as well
+    // 3. Dispatch in current window
     if (typeof window !== 'undefined') {
         try {
             window.dispatchEvent(new CustomEvent('knome_live_message', { detail: payload }));
         } catch (e) {}
     }
 
-    // 4. Backend sync via API so SignalR broadcasts across network/machines & persists to SQL Server
+    // 4. Update master conversation store locally for sender
+    appendMessageToGlobalStorage(payload, senderId);
+
+    // 5. Send via active SignalR connection (instantly reaches recipient across network/browsers)
     try {
-        notificationsApi.createNotification({
-            recipientUserId: recipientId,
-            message: `${sender.fullName || sender.name || 'Colleague'}: "${message.text}"`,
-            notificationType: 'Message',
-            referenceId: senderId,
-            relatedContentType: 'User'
-        }).catch(() => {
-            // Backend offline or fallback — local real-time already delivered
-        });
+        if (messengerHubConnection && messengerHubConnection.state === signalR.HubConnectionState.Connected) {
+            messengerHubConnection.invoke("SendDirectMessage", payload).catch(() => {});
+        } else {
+            initMessengerSignalR(senderId).then(conn => {
+                if (conn && conn.state === signalR.HubConnectionState.Connected) {
+                    conn.invoke("SendDirectMessage", payload).catch(() => {});
+                }
+            }).catch(() => {});
+        }
+    } catch (e) {}
+
+    // 6. Backend API sync: Persists message notification into SQL Server & triggers hub broadcast
+    try {
+        const createFn = notificationsApi.createNotification || notificationsApi.create;
+        if (createFn) {
+            createFn({
+                recipientUserId: recipientId,
+                message: `${sender.fullName || sender.name || 'Colleague'}: "${message.text}"`,
+                notificationType: 'Message',
+                referenceId: senderId,
+                relatedContentType: 'User'
+            }).catch(() => {});
+        }
     } catch (e) {}
 
     return payload;
@@ -172,47 +382,39 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
  */
 export const subscribeToLiveMessages = (currentUserId, onMessageReceived) => {
     const currId = Number(currentUserId);
+    if (!currId) return () => {};
 
-    const handlePayload = (payload) => {
+    // 1. Start or join SignalR
+    initMessengerSignalR(currId);
+
+    // 2. Register callback in listener set
+    const listener = (payload) => {
         if (!payload || !payload.type) return;
-
-        // A. Handle incoming chat message
         if (payload.type === 'NEW_LIVE_MESSAGE') {
             const { recipientId, senderId } = payload;
-            
-            // Only process if intended for current logged-in user and not sent by self
             if (Number(recipientId) === currId && Number(senderId) !== currId) {
                 if (typeof onMessageReceived === 'function') {
                     onMessageReceived(payload);
                 }
-                playMessageChime();
-            }
-        }
-
-        // B. Handle notification broadcast
-        if (payload.type === 'NOTIFICATION_BROADCAST') {
-            const notif = payload.notification;
-            if (notif && Number(notif.recipientUserId || notif.targetUserId) === currId) {
-                window.dispatchEvent(new CustomEvent('knome_notification_received', { detail: notif }));
             }
         }
     };
+    messageListeners.add(listener);
 
-    // 1. Listen via BroadcastChannel
+    // 3. Listen via BroadcastChannel
     const channelListener = (event) => {
-        handlePayload(event.data);
+        deliverMessageToListeners(event.data, currId);
     };
-
     if (channel) {
         channel.addEventListener('message', channelListener);
     }
 
-    // 2. Listen via storage event fallback
+    // 4. Listen via storage event fallback
     const storageListener = (e) => {
         if (e.key === 'knome_last_live_message' && e.newValue) {
             try {
                 const parsed = JSON.parse(e.newValue);
-                handlePayload(parsed);
+                deliverMessageToListeners(parsed, currId);
             } catch (err) {}
         }
     };
@@ -220,10 +422,10 @@ export const subscribeToLiveMessages = (currentUserId, onMessageReceived) => {
         window.addEventListener('storage', storageListener);
     }
 
-    // 3. Listen via local window event dispatch
+    // 5. Listen via window CustomEvent
     const localListener = (event) => {
         if (event.detail) {
-            handlePayload(event.detail);
+            deliverMessageToListeners(event.detail, currId);
         }
     };
     if (typeof window !== 'undefined') {
@@ -231,6 +433,7 @@ export const subscribeToLiveMessages = (currentUserId, onMessageReceived) => {
     }
 
     return () => {
+        messageListeners.delete(listener);
         if (channel) {
             channel.removeEventListener('message', channelListener);
         }

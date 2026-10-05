@@ -302,7 +302,7 @@ export default function Sidebar() {
         <>
             {/* 1. Desktop Static Sidebar — static position with no internal scroll bar */}
             <aside
-                className="hidden md:flex flex-col shrink-0 sticky top-24 self-start"
+                className="hidden md:flex flex-col shrink-0 sticky top-24 self-start max-h-[calc(100vh-6.5rem)] overflow-y-auto scrollbar-none"
                 style={{ width: '260px' }}
             >
                 {/* Inner wrapper with clean gap — static without scrollbar */}

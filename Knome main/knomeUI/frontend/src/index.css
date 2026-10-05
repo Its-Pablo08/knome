@@ -36,11 +36,17 @@
     -webkit-text-size-adjust: 100%;
     -moz-text-size-adjust: 100%;
     text-size-adjust: 100%;
-    font-family: 'Source Sans 3', 'Source Sans Pro', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+    font-family: 'Source Sans 3', 'Source Sans Pro', -apple-system, BlinkMacSystemFont, Arial, 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'Android Emoji', sans-serif;
     background-color: var(--theme-60);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+  .emoji-font {
+    font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'Android Emoji', -apple-system, sans-serif !important;
+    font-feature-settings: 'liga' 1, 'calt' 1;
+    font-variant-emoji: emoji;
+    text-rendering: optimizeLegibility;
   }
   #root {
     width: 100%;
