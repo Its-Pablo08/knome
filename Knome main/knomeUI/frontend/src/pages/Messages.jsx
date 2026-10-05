@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUser, getUserStatusConfig, KNOWN_ROSTER_NAMES } from '../components/contexts/UserContext';
-import { resolveMediaUrl, userApi, notificationsApi } from '../utils/apiService';
+import { resolveMediaUrl, userApi, notificationsApi, mediaApi } from '../utils/apiService';
 import { sendLiveMessage, subscribeToLiveMessages, playMessageChime, MESSAGES_STORAGE_KEY } from '../utils/realtimeMessenger';
 
 // Storage key for all Facebook-style 1-to-1 conversations across Knome
@@ -384,6 +384,138 @@ export default function Messages() {
     const [hoveredEmoji, setHoveredEmoji] = useState(null);
     const emojiPickerRef = useRef(null);
     const chatInputRef = useRef(null);
+    // ── File Attachments State & Handlers ──
+    const [attachedFiles, setAttachedFiles] = useState([]);
+    const [previewMediaModal, setPreviewMediaModal] = useState(null);
+    const fileAttachmentInputRef = useRef(null);
+
+    const formatFileSize = (bytes) => {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
+    const getFileIcon = (fileName = '', fileType = '') => {
+        const ext = String(fileName || '').split('.').pop().toLowerCase();
+        if (fileType?.startsWith('image/')) return { icon: 'image', color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800' };
+        if (ext === 'pdf') return { icon: 'picture_as_pdf', color: 'text-rose-500 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800' };
+        if (['doc', 'docx'].includes(ext)) return { icon: 'description', color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-800' };
+        if (['xls', 'xlsx', 'csv'].includes(ext)) return { icon: 'table_view', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800' };
+        if (['ppt', 'pptx'].includes(ext)) return { icon: 'slideshow', color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800' };
+        if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return { icon: 'folder_zip', color: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-950/60 border-yellow-200 dark:border-yellow-800' };
+        if (fileType?.startsWith('video/')) return { icon: 'video_file', color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/60 border-purple-200 dark:border-purple-800' };
+        if (fileType?.startsWith('audio/')) return { icon: 'audio_file', color: 'text-pink-500 bg-pink-50 dark:bg-pink-950/60 border-pink-200 dark:border-pink-800' };
+        return { icon: 'draft', color: 'text-slate-500 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700' };
+    };
+
+    const handleDownloadAttachment = async (e, att) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (!att) return;
+        const rawUrl = att.url || att.dataUrl || att.uploadUrl;
+        const attUrl = resolveMediaUrl(rawUrl) || rawUrl;
+        if (!attUrl) return;
+
+        try {
+            if (attUrl.startsWith('data:') || attUrl.startsWith('blob:')) {
+                const a = document.createElement('a');
+                a.href = attUrl;
+                a.download = att.name || 'download';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                return;
+            }
+
+            const response = await fetch(attUrl);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = att.name || 'download';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+        } catch (err) {
+            console.warn('[Messages] Blob download fallback to window.open:', err);
+            window.open(attUrl, '_blank');
+        }
+    };
+
+    const processFiles = (files) => {
+        if (!files || files.length === 0) return;
+        Array.from(files).forEach(file => {
+            const isImage = file.type?.startsWith('image/');
+            const reader = new FileReader();
+
+            reader.onload = () => {
+                const dataUrl = reader.result;
+                const newAtt = {
+                    id: `att_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+                    name: file.name || (isImage ? 'image.png' : 'attachment'),
+                    size: file.size || 0,
+                    type: file.type || (isImage ? 'image/png' : 'application/octet-stream'),
+                    isImage: Boolean(isImage),
+                    dataUrl: dataUrl,
+                    file: file,
+                    isUploading: true
+                };
+
+                const uploadPromise = mediaApi.uploadFile(file, isImage ? 'image' : 'doc')
+                    .then(res => {
+                        const resolvedUrl = res?.url || res?.data?.url || (typeof res === 'string' ? res : null);
+                        if (resolvedUrl) {
+                            setAttachedFiles(current => current.map(item => 
+                                item.id === newAtt.id ? { ...item, uploadUrl: resolvedUrl, isUploading: false } : item
+                            ));
+                            return resolvedUrl;
+                        }
+                        return null;
+                    })
+                    .catch(err => {
+                        console.warn('[Messages] File upload fallback to dataUrl:', err);
+                        setAttachedFiles(current => current.map(item => 
+                            item.id === newAtt.id ? { ...item, isUploading: false } : item
+                        ));
+                        return null;
+                    });
+
+                newAtt.uploadPromise = uploadPromise;
+                setAttachedFiles(prev => [...prev, newAtt]);
+            };
+
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const handleFileSelect = (e) => {
+        processFiles(e.target.files);
+        e.target.value = '';
+    };
+
+    const handlePaste = (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        const filesToProcess = [];
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type?.indexOf('image') !== -1 || items[i].kind === 'file') {
+                const file = items[i].getAsFile();
+                if (file) filesToProcess.push(file);
+            }
+        }
+        if (filesToProcess.length > 0) {
+            processFiles(filesToProcess);
+        }
+    };
+
+    const removeAttachedFile = (fileId) => {
+        setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
+    };
 
     // ── Message Hover & Reaction States ──
     const [activeHoverMsgId, setActiveHoverMsgId] = useState(null);
@@ -597,13 +729,29 @@ export default function Messages() {
                     if (matches) {
                         found = true;
                         const existingMsgs = c.messages || [];
-                        const isDuplicate = existingMsgs.some(m => m.id === message.id);
-                        const nextMsgs = isDuplicate ? existingMsgs : [...existingMsgs, message];
+                        const existingIdx = existingMsgs.findIndex(m => String(m.id) === String(message.id));
+                        let nextMsgs;
+                        if (existingIdx !== -1) {
+                            if ((!existingMsgs[existingIdx].attachments || existingMsgs[existingIdx].attachments.length === 0) && (message.attachments && message.attachments.length > 0)) {
+                                nextMsgs = [...existingMsgs];
+                                nextMsgs[existingIdx] = { ...existingMsgs[existingIdx], ...message };
+                            } else {
+                                nextMsgs = existingMsgs;
+                            }
+                        } else {
+                            const isDuplicate = existingMsgs.some(m => m.timestamp === message.timestamp && m.text === message.text && (m.attachments?.length || 0) === (message.attachments?.length || 0));
+                            nextMsgs = isDuplicate ? existingMsgs : [...existingMsgs, message];
+                        }
                         const unreadInc = isCurrentlyActive ? 0 : 1;
+
+                        const displaySummary = message.text || 
+                            (Array.isArray(message.attachments) && message.attachments.length > 0 
+                                ? (message.attachments.length === 1 ? `📎 ${message.attachments[0].name}` : `📎 ${message.attachments.length} Attachments`) 
+                                : 'Attachment');
 
                         return {
                             ...c,
-                            lastMessage: message.text,
+                            lastMessage: displaySummary || c.lastMessage || 'Attachment',
                             lastMessageTime: message.time,
                             lastMessageTimestamp: message.timestamp || Date.now(),
                             unreadCounts: {
@@ -626,6 +774,11 @@ export default function Messages() {
                         avatar: currentUser?.profilePhotoUrl || currentUser?.avatar || null,
                         status: 'active'
                     };
+                    const displaySummary = message.text || 
+                        (Array.isArray(message.attachments) && message.attachments.length > 0 
+                            ? (message.attachments.length === 1 ? `📎 ${message.attachments[0].name}` : `📎 ${message.attachments.length} Attachments`) 
+                            : 'Attachment');
+
                     const newConv = {
                         id: expectedConvKey,
                         participantIds: [uId, senderId],
@@ -638,7 +791,7 @@ export default function Messages() {
                             [uId]: isCurrentlyActive ? 0 : 1,
                             [senderId]: 0
                         },
-                        lastMessage: message.text,
+                        lastMessage: displaySummary || 'Attachment',
                         lastMessageTime: message.time,
                         lastMessageTimestamp: message.timestamp || Date.now(),
                         messages: [message]
@@ -688,6 +841,15 @@ export default function Messages() {
 
                     const convKey = getConversationKey(uId, senderId);
                     let rawText = notif.message || notif.text || '';
+                    let parsedAttachments = [];
+                    const attTagIdx = rawText.indexOf(' __ATT__:');
+                    if (attTagIdx !== -1) {
+                        try {
+                            parsedAttachments = JSON.parse(rawText.substring(attTagIdx + 9));
+                        } catch (e) {}
+                        rawText = rawText.substring(0, attTagIdx);
+                    }
+
                     const colonIdx = rawText.indexOf(': "');
                     if (colonIdx !== -1 && rawText.endsWith('"')) {
                         rawText = rawText.substring(colonIdx + 3, rawText.length - 1);
@@ -701,22 +863,40 @@ export default function Messages() {
                         (Array.isArray(c.participantIds) && c.participantIds.map(Number).includes(senderId) && c.participantIds.map(Number).includes(uId))
                     );
 
+                    const displaySummary = rawText || 
+                        (parsedAttachments.length > 0 
+                            ? (parsedAttachments.length === 1 ? `📎 ${parsedAttachments[0].name}` : `📎 ${parsedAttachments.length} Attachments`) 
+                            : 'Attachment');
+
                     if (cIdx !== -1) {
                         const existingMsgs = next[cIdx].messages || [];
-                        const alreadyExists = existingMsgs.some(m => String(m.id) === notifMsgId || (m.timestamp === notifTimestamp && m.text === rawText));
-                        if (!alreadyExists) {
+                        const existingIdx = existingMsgs.findIndex(m => String(m.id) === notifMsgId || (m.timestamp === notifTimestamp && m.text === rawText));
+                        if (existingIdx !== -1) {
+                            if ((!existingMsgs[existingIdx].attachments || existingMsgs[existingIdx].attachments.length === 0) && parsedAttachments.length > 0) {
+                                changed = true;
+                                const updatedMsg = { ...existingMsgs[existingIdx], attachments: parsedAttachments };
+                                const updatedMsgs = [...existingMsgs];
+                                updatedMsgs[existingIdx] = updatedMsg;
+                                next[cIdx] = {
+                                    ...next[cIdx],
+                                    lastMessage: displaySummary,
+                                    messages: updatedMsgs
+                                };
+                            }
+                        } else {
                             changed = true;
                             const newMsgObj = {
                                 id: notifMsgId,
                                 senderId,
                                 senderName: notif.senderName || 'Colleague',
                                 text: rawText,
+                                attachments: parsedAttachments,
                                 time: new Date(notif.createdDate || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                                 timestamp: notifTimestamp
                             };
                             next[cIdx] = {
                                 ...next[cIdx],
-                                lastMessage: rawText,
+                                lastMessage: displaySummary,
                                 lastMessageTime: newMsgObj.time,
                                 lastMessageTimestamp: notifTimestamp,
                                 messages: [...existingMsgs, newMsgObj]
@@ -895,18 +1075,43 @@ export default function Messages() {
     const handleSendMessage = async (e) => {
         if (e) e.preventDefault();
         const text = inputMessage.trim();
-        if (!text || !activeConversation || !activeOtherParticipant) return;
+        const hasAttachments = attachedFiles.length > 0;
+        if ((!text && !hasAttachments) || !activeConversation || !activeOtherParticipant) return;
 
         const now = new Date();
         const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const targetConvId = activeConversation.id;
-        const otherId = Number(activeOtherParticipant.userId);
+
+        // Resolve all attachments (wait for pending uploads if active)
+        const currentAttachments = await Promise.all(attachedFiles.map(async f => {
+            let finalUrl = f.uploadUrl;
+            if (!finalUrl && f.uploadPromise) {
+                try {
+                    finalUrl = await f.uploadPromise;
+                } catch {}
+            }
+            return {
+                id: f.id,
+                name: f.name,
+                size: f.size,
+                type: f.type,
+                isImage: Boolean(f.isImage),
+                url: finalUrl || f.dataUrl
+            };
+        }));
+
+        const displaySummary = text 
+            ? text 
+            : (currentAttachments.length === 1 
+                ? `📎 ${currentAttachments[0].name}` 
+                : `📎 ${currentAttachments.length} Attachments`);
 
         const newMessage = {
             id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
             senderId: currentUserId,
             senderName: currentUser?.fullName || currentUser?.name || 'Me',
             text,
+            attachments: currentAttachments,
             time: timeStr,
             timestamp: now.getTime()
         };
@@ -916,7 +1121,7 @@ export default function Messages() {
                 const existingMsgs = c.messages || [];
                 return {
                     ...c,
-                    lastMessage: text,
+                    lastMessage: displaySummary,
                     lastMessageTime: timeStr,
                     lastMessageTimestamp: now.getTime(),
                     messages: [...existingMsgs, newMessage]
@@ -928,6 +1133,7 @@ export default function Messages() {
         setAllConversations(updatedWithMyMsg);
         saveMasterConversations(updatedWithMyMsg);
         setInputMessage('');
+        setAttachedFiles([]);
 
         // Real-Time Delivery: Broadcast to recipient across tabs, windows, and backend SignalR
         try {
@@ -1187,7 +1393,7 @@ export default function Messages() {
 
                             {(activeConversation.messages || []).map((msg, i) => {
                                 const isMe = Number(msg.senderId) === currentUserId;
-                                const isOnlyEm = isEmojiOnly(msg.text);
+                                const isOnlyEm = isEmojiOnly(msg.text) && (!msg.attachments || msg.attachments.length === 0);
                                 const reactions = messageReactions[msg.id] || msg.reactions || {};
                                 const hasReactions = Object.keys(reactions).length > 0;
                                 const isHovered = activeHoverMsgId === (msg.id || i);
@@ -1218,7 +1424,81 @@ export default function Messages() {
                                                             : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-700/80 rounded-bl-xs'
                                                     }`}
                                                 >
-                                                    <p className="break-words whitespace-pre-wrap emoji-font text-[13px] leading-relaxed">{msg.text}</p>
+                                                    {/* Render Attachments if present */}
+                                                    {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                                                        <div className={`flex flex-col gap-2 ${msg.text ? 'mb-2' : ''}`}>
+                                                            {msg.attachments.map(att => {
+                                                                const isImg = att.isImage || (att.type && att.type.startsWith('image/')) || /\.(png|jpe?g|gif|webp|svg)$/i.test(att.name || '');
+                                                                const rawUrl = att.url || att.dataUrl || att.uploadUrl;
+                                                                const attUrl = resolveMediaUrl(rawUrl) || rawUrl;
+                                                                const fileStyle = getFileIcon(att.name, att.type);
+
+                                                                if (isImg) {
+                                                                    return (
+                                                                        <div key={att.id || att.name} className="relative group/att rounded-xl overflow-hidden border border-white/20 dark:border-slate-700/60 max-w-xs shadow-xs">
+                                                                            <img 
+                                                                                src={attUrl} 
+                                                                                alt={att.name}
+                                                                                onClick={() => setPreviewMediaModal({ url: attUrl, name: att.name, isImage: true })}
+                                                                                className="w-full max-h-60 object-cover cursor-pointer transition-transform hover:scale-[1.02]" 
+                                                                                loading="lazy"
+                                                                            />
+                                                                            <div className="absolute bottom-0 inset-x-0 p-1.5 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-center justify-between text-white text-[11px] opacity-90 group-hover/att:opacity-100 transition-opacity">
+                                                                                <span className="truncate max-w-[170px]" title={att.name}>{att.name}</span>
+                                                                                <button 
+                                                                                    type="button"
+                                                                                    onClick={e => handleDownloadAttachment(e, att)} 
+                                                                                    className="p-1 rounded hover:bg-white/20 transition-colors flex items-center cursor-pointer"
+                                                                                    title={`Download ${att.name}`}
+                                                                                >
+                                                                                    <span className="material-symbols-outlined text-[16px]">download</span>
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                }
+
+                                                                return (
+                                                                    <div 
+                                                                        key={att.id || att.name} 
+                                                                        className={`flex items-center gap-2.5 p-2 rounded-xl border transition-all ${
+                                                                            isMe 
+                                                                                ? 'bg-white/15 border-white/25 text-white hover:bg-white/20' 
+                                                                                : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-850'
+                                                                        }`}
+                                                                    >
+                                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 ${fileStyle.color}`}>
+                                                                            <span className="material-symbols-outlined text-[18px]">{fileStyle.icon}</span>
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0 flex flex-col text-left">
+                                                                            <span className="text-xs font-bold truncate leading-tight" title={att.name}>
+                                                                                {att.name}
+                                                                            </span>
+                                                                            <span className={`text-[10.5px] mt-0.5 ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
+                                                                                {formatFileSize(att.size)}
+                                                                            </span>
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={e => handleDownloadAttachment(e, att)}
+                                                                            className={`p-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
+                                                                                isMe 
+                                                                                    ? 'bg-white/20 hover:bg-white/30 text-white' 
+                                                                                    : 'bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+                                                                            }`}
+                                                                            title={`Download ${att.name}`}
+                                                                        >
+                                                                            <span className="material-symbols-outlined text-[16px]">download</span>
+                                                                        </button>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+
+                                                    {msg.text && (
+                                                        <p className="break-words whitespace-pre-wrap emoji-font text-[13px] leading-relaxed">{msg.text}</p>
+                                                    )}
                                                 </div>
                                             )}
 
@@ -1422,17 +1702,89 @@ export default function Messages() {
                                 </div>
                             )}
 
+                            {/* Staged Attachments Preview Bar */}
+                            {attachedFiles.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2 mb-2 p-2 bg-slate-100/90 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 max-h-36 overflow-y-auto">
+                                    {attachedFiles.map(att => {
+                                        const fileStyle = getFileIcon(att.name, att.type);
+                                        return (
+                                            <div 
+                                                key={att.id} 
+                                                className="relative flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-1.5 pr-2.5 shadow-2xs group"
+                                            >
+                                                {att.isImage ? (
+                                                    <img 
+                                                        src={att.dataUrl} 
+                                                        alt={att.name} 
+                                                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 dark:border-slate-700" 
+                                                    />
+                                                ) : (
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${fileStyle.color}`}>
+                                                        <span className="material-symbols-outlined text-[18px]">{fileStyle.icon}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex flex-col min-w-0 max-w-[130px] sm:max-w-[170px]">
+                                                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate" title={att.name}>
+                                                        {att.name}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-400">
+                                                        {formatFileSize(att.size)}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeAttachedFile(att.id)}
+                                                    className="ml-1 w-5 h-5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                                                    title="Remove file"
+                                                >
+                                                    <span className="material-symbols-outlined text-[15px]">close</span>
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
                             <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-1.5 focus-within:border-cyan-500 transition-colors">
                                 <input
                                     ref={chatInputRef}
                                     type="text"
                                     value={inputMessage}
                                     onChange={e => setInputMessage(e.target.value)}
+                                    onPaste={handlePaste}
                                     placeholder={`Message ${activeOtherParticipant.fullName}...`}
                                     className="flex-1 bg-transparent px-3 py-1.5 text-xs text-slate-900 dark:text-white outline-none emoji-font"
                                 />
 
                                 <div className="flex items-center gap-1 shrink-0">
+                                    {/* File Attachment Button */}
+                                    <input 
+                                        type="file" 
+                                        ref={fileAttachmentInputRef} 
+                                        onChange={handleFileSelect} 
+                                        multiple 
+                                        className="hidden" 
+                                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => fileAttachmentInputRef.current?.click()}
+                                        className={`p-1.5 rounded-lg transition-colors cursor-pointer relative ${
+                                            attachedFiles.length > 0
+                                                ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400'
+                                                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700'
+                                        }`}
+                                        title="Attach files (images, documents, PDFs, etc.)"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">attach_file</span>
+                                        {attachedFiles.length > 0 && (
+                                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-cyan-600 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                                                {attachedFiles.length}
+                                            </span>
+                                        )}
+                                    </button>
+
+                                    {/* Emoji Picker Button */}
                                     <button
                                         type="button"
                                         onClick={() => setIsEmojiPickerOpen(prev => !prev)}
@@ -1445,9 +1797,11 @@ export default function Messages() {
                                     >
                                         <span className="material-symbols-outlined text-[20px]">mood</span>
                                     </button>
+
+                                    {/* Send Button */}
                                     <button
                                         type="submit"
-                                        disabled={!inputMessage.trim()}
+                                        disabled={!inputMessage.trim() && attachedFiles.length === 0}
                                         className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all disabled:opacity-40 cursor-pointer shadow-xs active:scale-95"
                                     >
                                         <span>Send</span>
@@ -1542,6 +1896,41 @@ export default function Messages() {
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Full-screen Media Preview Lightbox Modal */}
+            {previewMediaModal && (
+                <div 
+                    className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
+                    onClick={() => setPreviewMediaModal(null)}
+                >
+                    <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={e => e.stopPropagation()}>
+                        <div className="absolute -top-10 right-0 flex items-center gap-2">
+                            <button 
+                                type="button"
+                                onClick={e => handleDownloadAttachment(e, previewMediaModal)} 
+                                className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors cursor-pointer"
+                                title="Download"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">download</span>
+                            </button>
+                            <button
+                                onClick={() => setPreviewMediaModal(null)}
+                                className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors cursor-pointer"
+                                title="Close"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">close</span>
+                            </button>
+                        </div>
+                        <img 
+                            src={previewMediaModal.url} 
+                            alt={previewMediaModal.name} 
+                            className="max-h-[85vh] max-w-full rounded-2xl shadow-2xl object-contain border border-white/20"
+                        />
+                        <p className="text-white/80 text-xs font-semibold mt-2.5 tracking-wide">
+                            {previewMediaModal.name}
+                        </p>
                     </div>
                 </div>
             )}

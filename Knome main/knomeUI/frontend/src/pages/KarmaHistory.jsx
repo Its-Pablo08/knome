@@ -298,46 +298,65 @@ export default function KarmaHistory() {
 
     const karmaTierLevels = [
         {
+            level: 5,
             name: 'Platinum',
             title: 'Enterprise Legend',
             points: '5,000+ pts',
+            minPoints: 5000,
             icon: 'workspace_premium',
             iconColor: 'text-cyan-500 dark:text-cyan-400',
             badgeClass: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-300 border-cyan-300/40 dark:border-cyan-700/50'
         },
         {
+            level: 4,
             name: 'Gold',
             title: 'Domain Expert',
             points: '1,000 – 4,999 pts',
+            minPoints: 1000,
             icon: 'stars',
             iconColor: 'text-amber-500',
             badgeClass: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-300/40 dark:border-amber-700/50'
         },
         {
+            level: 3,
             name: 'Silver',
             title: 'Active Contributor',
             points: '500 – 999 pts',
+            minPoints: 500,
             icon: 'military_tech',
             iconColor: 'text-slate-400 dark:text-slate-300',
             badgeClass: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300/50 dark:border-slate-700'
         },
         {
+            level: 2,
             name: 'Bronze',
             title: 'Community Explorer',
             points: '100 – 499 pts',
+            minPoints: 100,
             icon: 'military_tech',
             iconColor: 'text-amber-700 dark:text-amber-500',
             badgeClass: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border-orange-300/40 dark:border-orange-700/50'
         },
         {
+            level: 1,
             name: 'Starter',
             title: 'New Member',
             points: '0 – 99 pts',
+            minPoints: 0,
             icon: 'flag',
             iconColor: 'text-indigo-500',
             badgeClass: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/50'
         },
     ];
+
+    const getTierLevelForPoints = (points) => {
+        const pts = Math.max(0, Number(points || 0));
+        if (pts >= 5000) return karmaTierLevels[0];
+        if (pts >= 1000) return karmaTierLevels[1];
+        if (pts >= 500) return karmaTierLevels[2];
+        if (pts >= 100) return karmaTierLevels[3];
+        return karmaTierLevels[4];
+    };
 
     const displayLeaderboard = leaderboard;
 
@@ -518,6 +537,7 @@ export default function KarmaHistory() {
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
                             {displayLeaderboard.map((user) => {
                                 const badge = getKarmaBadge(user.points);
+                                const tierLvl = getTierLevelForPoints(user.points);
                                 const isCurrentUser = (currentUser?.userId && user.userId === currentUser.userId) || 
                                                       (currentUser?.id && user.userId === currentUser.id) ||
                                                       user.name === (currentUser?.fullName || currentUser?.name);
@@ -546,9 +566,15 @@ export default function KarmaHistory() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
-                                            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${badge.bg} ${badge.color} ${badge.border}`}>
-                                                <span className="material-symbols-outlined text-[16px]" style={{fontVariationSettings:"'FILL' 1"}}>workspace_premium</span>
-                                                <span className="text-[11px] font-bold uppercase tracking-wider">{badge.name}</span>
+                                            <div className="inline-flex items-center justify-center">
+                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border shadow-xs transition-transform hover:scale-105 select-none ${tierLvl.badgeClass}`}>
+                                                    <KarmaLevelMedal 
+                                                        level={tierLvl.level} 
+                                                        size={20} 
+                                                        className="shrink-0 drop-shadow-xs" 
+                                                    />
+                                                    <span className="font-extrabold uppercase tracking-wider">{tierLvl.name}</span>
+                                                </span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right font-black text-indigo-500 text-[16px]">
@@ -793,7 +819,7 @@ export default function KarmaHistory() {
                                                 <td className="py-2.5 pl-3.5 pr-1">
                                                     <div className="flex items-center gap-2.5 min-w-0">
                                                         <KarmaLevelMedal 
-                                                            level={lvl.level || (lvl.name === 'Diamond' || lvl.name === 'Platinum' ? 5 : lvl.name === 'Gold' ? 4 : lvl.name === 'Silver' ? 3 : lvl.name === 'Bronze' ? 2 : 1)} 
+                                                            level={lvl.level} 
                                                             size={26} 
                                                             className="shrink-0" 
                                                         />
@@ -822,7 +848,7 @@ export default function KarmaHistory() {
                                                 <td className="py-2.5 pl-1 pr-3.5 text-right">
                                                     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold border shrink-0 ${lvl.badgeClass}`}>
                                                         <KarmaLevelMedal 
-                                                            level={lvl.level || (lvl.name === 'Diamond' || lvl.name === 'Platinum' ? 5 : lvl.name === 'Gold' ? 4 : lvl.name === 'Silver' ? 3 : lvl.name === 'Bronze' ? 2 : 1)} 
+                                                            level={lvl.level} 
                                                             size={14} 
                                                             className="shrink-0" 
                                                         />

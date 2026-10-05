@@ -81,6 +81,11 @@ export const appendMessageToGlobalStorage = (payload, currentUserId = null) => {
         const isSelf = currId && Number(senderId) === currId;
         const isLookingAtChat = typeof window !== 'undefined' && window.__knome_active_chat_user_id === Number(senderId);
 
+        const displaySummary = message.text || 
+            (Array.isArray(message.attachments) && message.attachments.length > 0 
+                ? (message.attachments.length === 1 ? `📎 ${message.attachments[0].name}` : `📎 ${message.attachments.length} Attachments`) 
+                : 'Attachment');
+
         let found = false;
         const updated = list.map(c => {
             const pIds = (c.participantIds || []).map(Number);
@@ -88,15 +93,26 @@ export const appendMessageToGlobalStorage = (payload, currentUserId = null) => {
             if (matches) {
                 found = true;
                 const existingMsgs = c.messages || [];
-                const isDuplicate = existingMsgs.some(m => String(m.id) === String(message.id) || (m.timestamp === message.timestamp && m.text === message.text));
-                const nextMsgs = isDuplicate ? existingMsgs : [...existingMsgs, message];
+                const existingIdx = existingMsgs.findIndex(m => String(m.id) === String(message.id));
+                let nextMsgs;
+                if (existingIdx !== -1) {
+                    if ((!existingMsgs[existingIdx].attachments || existingMsgs[existingIdx].attachments.length === 0) && (message.attachments && message.attachments.length > 0)) {
+                        nextMsgs = [...existingMsgs];
+                        nextMsgs[existingIdx] = { ...existingMsgs[existingIdx], ...message };
+                    } else {
+                        nextMsgs = existingMsgs;
+                    }
+                } else {
+                    const isDuplicate = existingMsgs.some(m => m.timestamp === message.timestamp && m.text === message.text && (m.attachments?.length || 0) === (message.attachments?.length || 0));
+                    nextMsgs = isDuplicate ? existingMsgs : [...existingMsgs, message];
+                }
                 
                 const unreadInc = (currId && !isSelf && !isLookingAtChat) ? 1 : 0;
                 const currentUnread = c.unreadCounts?.[currId] || 0;
 
                 return {
                     ...c,
-                    lastMessage: message.text,
+                    lastMessage: displaySummary || c.lastMessage || 'Attachment',
                     lastMessageTime: message.time,
                     lastMessageTimestamp: message.timestamp || Date.now(),
                     unreadCounts: {
@@ -121,7 +137,7 @@ export const appendMessageToGlobalStorage = (payload, currentUserId = null) => {
                 unreadCounts: {
                     ...(currId ? { [currId]: (!isSelf && !isLookingAtChat) ? 1 : 0 } : {})
                 },
-                lastMessage: message.text,
+                lastMessage: displaySummary || 'Attachment',
                 lastMessageTime: message.time,
                 lastMessageTimestamp: message.timestamp || Date.now(),
                 messages: [message]
@@ -230,6 +246,15 @@ export const initMessengerSignalR = (userId) => {
 
             // Strip "SenderName: " prefix if present in the raw text
             let rawText = notif.message || notif.text || '';
+            let parsedAttachments = [];
+            const attTagIdx = rawText.indexOf(' __ATT__:');
+            if (attTagIdx !== -1) {
+                try {
+                    parsedAttachments = JSON.parse(rawText.substring(attTagIdx + 9));
+                } catch (e) {}
+                rawText = rawText.substring(0, attTagIdx);
+            }
+
             const colonIdx = rawText.indexOf(': "');
             if (colonIdx !== -1 && rawText.endsWith('"')) {
                 rawText = rawText.substring(colonIdx + 3, rawText.length - 1);
@@ -250,6 +275,7 @@ export const initMessengerSignalR = (userId) => {
                     senderId,
                     senderName: notif.senderName || 'Colleague',
                     text: rawText,
+                    attachments: parsedAttachments,
                     time: new Date(notif.createdDate || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     timestamp: new Date(notif.createdDate || Date.now()).getTime()
                 }
@@ -286,6 +312,8 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
     const senderId = Number(sender.userId || sender.id);
     const recipientId = Number(recipient.userId || recipient.id);
 
+    const attachmentsList = Array.isArray(message.attachments) ? message.attachments : [];
+
     const payload = {
         type: 'NEW_LIVE_MESSAGE',
         conversationId: conversationId || getConversationKey(senderId, recipientId),
@@ -311,7 +339,8 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
             id: message.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
             senderId,
             senderName: sender.fullName || sender.name || 'Colleague',
-            text: message.text,
+            text: message.text || '',
+            attachments: attachmentsList,
             time: message.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             timestamp: message.timestamp || Date.now()
         }
@@ -364,9 +393,24 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
     try {
         const createFn = notificationsApi.createNotification || notificationsApi.create;
         if (createFn) {
+            let notificationBody = `${sender.fullName || sender.name || 'Colleague'}: "${message.text || ''}"`;
+            if (attachmentsList.length > 0) {
+                if (!message.text) {
+                    notificationBody = `${sender.fullName || sender.name || 'Colleague'}: "📎 ${attachmentsList[0]?.name || 'Sent an attachment'}"`;
+                }
+                const compactAtts = attachmentsList.map(a => ({
+                    id: a.id,
+                    name: a.name,
+                    size: a.size,
+                    type: a.type,
+                    isImage: Boolean(a.isImage),
+                    url: a.url || a.uploadUrl || a.dataUrl
+                }));
+                notificationBody += ` __ATT__:${JSON.stringify(compactAtts)}`;
+            }
             createFn({
                 recipientUserId: recipientId,
-                message: `${sender.fullName || sender.name || 'Colleague'}: "${message.text}"`,
+                message: notificationBody,
                 notificationType: 'Message',
                 referenceId: senderId,
                 relatedContentType: 'User'
