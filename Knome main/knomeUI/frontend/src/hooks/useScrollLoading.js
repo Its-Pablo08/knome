@@ -30,7 +30,7 @@ export function useScrollLoading(totalItemsCount, initialCount = 6, batchSize = 
                     setTimeout(() => {
                         setVisibleCount(prev => prev + batchSize);
                         setIsFetchingMore(false);
-                    }, 250);
+                    }, 50);
                 }
             }
         };

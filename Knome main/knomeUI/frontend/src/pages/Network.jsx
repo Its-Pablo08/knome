@@ -556,7 +556,7 @@ export default function Network() {
     const handleRemoveConnection = async (person) => {
         const ok = await confirm({
             title: 'Remove Connection',
-            message: `Are you sure you want to remove your 1st-degree connection with ${person.name}?`,
+            message: `Are you sure you want to remove your connection with ${person.name}?`,
             confirmText: 'Remove Connection',
             cancelText: 'Cancel',
             variant: 'warning'
@@ -568,7 +568,7 @@ export default function Network() {
             setFullDirectory(prev => prev.map(p => isSameUser(p, person) ? { ...p, connectionStatus: 'NotConnected' } : p));
             
             await userApi.removeConnection(person.id || person.userId);
-            addToast && addToast(`Removed ${person.name} from 1st-degree connections.`, 'info');
+            addToast && addToast(`Removed ${person.name} from connections.`, 'info');
             await fetchAllNetworkData();
             window.dispatchEvent(new CustomEvent('network-updated'));
         } catch (err) {
@@ -604,7 +604,7 @@ export default function Network() {
                         </span>
                     </h1>
                     <p className="text-slate-600 dark:text-slate-400 text-sm md:text-[15px] font-medium leading-relaxed max-w-2xl">
-                        Manage 1st-degree connections, respond to pending connection requests, and discover colleagues across MPOnline Limited.
+                        Manage connections, respond to pending connection requests, and discover colleagues across MPOnline Limited.
                     </p>
                 </div>
                 
@@ -825,7 +825,7 @@ export default function Network() {
                                 <ScrollLoadingIndicator isVisible={visibleCount < connectionsList.length} text="Loading more connections on scroll..." />
                                 {connectionsList.length === 0 && (
                                     <div className="col-span-full py-16 text-center text-slate-500 font-medium">
-                                        You don't have any 1st-degree connections yet. Explore suggestions above to start building your network!
+                                        You don't have any connections yet. Explore suggestions above to start building your network!
                                     </div>
                                 )}
                             </div>
