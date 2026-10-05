@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useUser, users, getUserStatusConfig } from '../components/contexts/UserContext';
 import { useToast } from '../components/contexts/ToastContext';
@@ -18,10 +18,12 @@ import {
     mapArticle,
     resolveMediaUrl 
 } from '../utils/apiService';
+import { sendLiveMessage, playMessageChime } from '../utils/realtimeMessenger';
 import ShareProfileModal from '../components/modals/ShareProfileModal';
 import PostCard from '../components/widgets/PostCard';
 import useScrollLoading from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
+import KarmaBadge, { KarmaLevelMedal } from '../components/ui/KarmaBadge';
 
 const PRESET_BANNERS = [
     {
@@ -152,7 +154,7 @@ export default function Profile() {
         department: resolvedDept,
         departmentName: resolvedDept,
         location: rawUserSource.location || 'Bhopal HQ',
-        bio: rawUserSource.bio || 'Professional team member at Knome.',
+        bio: (rawUserSource.bio && rawUserSource.bio !== 'Professional team member at Knome.') ? rawUserSource.bio : '',
         skills: rawUserSource.skills || ['Collaboration', 'Problem Solving'],
         interests: rawUserSource.interests || ['Technology', 'Productivity'],
         postsCount: Number(rawUserSource.postsCount ?? 0),
@@ -242,6 +244,36 @@ export default function Profile() {
     const fileInputRef = useRef(null);
     const bannerFileInputRef = useRef(null);
 
+    // Connections modal & quick message states
+    const [connectionsList, setConnectionsList] = useState([]);
+    const [isConnectionsLoading, setIsConnectionsLoading] = useState(false);
+    const [isConnectionsModalOpen, setIsConnectionsModalOpen] = useState(false);
+    const [connectionSearchQuery, setConnectionSearchQuery] = useState('');
+    const [quickMessageTarget, setQuickMessageTarget] = useState(null);
+    const [quickMessageText, setQuickMessageText] = useState('');
+    const [isSendingQuickMessage, setIsSendingQuickMessage] = useState(false);
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchConnections = async () => {
+            if (!currentProfileUserId) return;
+            setIsConnectionsLoading(true);
+            try {
+                const res = await userApi.getConnections(currentProfileUserId);
+                const list = Array.isArray(res) ? res : (res?.data || []);
+                if (isMounted) {
+                    setConnectionsList(list);
+                }
+            } catch (err) {
+                console.error("Failed to load connections:", err);
+            } finally {
+                if (isMounted) setIsConnectionsLoading(false);
+            }
+        };
+        fetchConnections();
+        return () => { isMounted = false; };
+    }, [currentProfileUserId]);
+
     // Banner & Contact Customization states
     const [bannerImage, setBannerImage] = useState(() => {
         const key = `knome_user_banner_${currentProfileUserId || 'me'}`;
@@ -256,7 +288,8 @@ export default function Profile() {
     const [isSavingBio, setIsSavingBio] = useState(false);
 
     const handleOpenBioModal = () => {
-        setBioInput(displayUser?.bio || '');
+        const currentBio = displayUser?.bio;
+        setBioInput((currentBio && currentBio !== 'Professional team member at Knome.') ? currentBio : '');
         setIsBioModalOpen(true);
     };
 
@@ -501,7 +534,7 @@ export default function Profile() {
 
     const handleOpenEdit = () => {
         setEditForm({
-            bio: displayUser?.bio || '',
+            bio: (displayUser?.bio && displayUser.bio !== 'Professional team member at Knome.') ? displayUser.bio : '',
             skills: Array.isArray(displayUser?.skills) ? displayUser.skills.join(', ') : (displayUser?.skills || ''),
             interests: Array.isArray(displayUser?.interests) ? displayUser.interests.join(', ') : (displayUser?.interests || ''),
             location: displayUser?.location || '',
@@ -713,6 +746,111 @@ export default function Profile() {
         return resolveMediaUrl(url);
     };
 
+    // Connections count & filtered connections list for modal
+    const displayedConnectionsCount = connectionsList.length > 0
+        ? connectionsList.length
+        : (displayUser?.connectionsCount ?? (stats.mutuals > 0 ? stats.mutuals : (tabData.followers.length > 0 ? tabData.followers.length : 1)));
+
+    const displayedConnectionsList = useMemo(() => {
+        const pool = connectionsList.length > 0 
+            ? connectionsList 
+            : (tabData.followers.length > 0 
+                ? tabData.followers 
+                : (users || []).filter(u => String(u.id || u.userId) !== String(currentProfileUserId)).slice(0, 1));
+        
+        if (!connectionSearchQuery.trim()) return pool;
+        const q = connectionSearchQuery.toLowerCase().trim();
+        return pool.filter(c => {
+            const n = (c.name || c.fullName || '').toLowerCase();
+            const r = (c.designation || c.role || c.roleName || c.department || '').toLowerCase();
+            return n.includes(q) || r.includes(q);
+        });
+    }, [connectionsList, tabData.followers, users, currentProfileUserId, connectionSearchQuery]);
+
+    // Send instant quick message directly from connections modal
+    const handleSendQuickMessage = async (targetColleague) => {
+        const text = quickMessageText.trim();
+        if (!text || !targetColleague) return;
+
+        setIsSendingQuickMessage(true);
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const targetId = Number(targetColleague.id || targetColleague.userId);
+        const myId = Number(currentUser?.userId || currentUser?.id || 1);
+        const targetName = targetColleague.name || targetColleague.fullName || 'Colleague';
+
+        const newMessage = {
+            id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+            senderId: myId,
+            senderName: currentUser?.fullName || currentUser?.name || 'Me',
+            text,
+            time: timeStr,
+            timestamp: now.getTime()
+        };
+
+        const convKey = `conv_${Math.min(myId, targetId)}_${Math.max(myId, targetId)}`;
+        try {
+            const STORAGE_KEY = 'knome_global_messenger_conversations';
+            const raw = localStorage.getItem(STORAGE_KEY);
+            let convs = raw ? JSON.parse(raw) : [];
+            let existingConv = convs.find(c => c.id === convKey);
+            if (existingConv) {
+                existingConv.lastMessage = text;
+                existingConv.lastMessageTime = timeStr;
+                existingConv.lastMessageTimestamp = now.getTime();
+                existingConv.messages = [...(existingConv.messages || []), newMessage];
+            } else {
+                convs.unshift({
+                    id: convKey,
+                    participantIds: [myId, targetId],
+                    participants: {
+                        [myId]: currentUser,
+                        [targetId]: targetColleague
+                    },
+                    participant: targetColleague,
+                    unreadCounts: { [myId]: 0, [targetId]: 1 },
+                    lastMessage: text,
+                    lastMessageTime: timeStr,
+                    lastMessageTimestamp: now.getTime(),
+                    messages: [newMessage]
+                });
+            }
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(convs));
+        } catch (err) {
+            console.warn('Storage sync warning:', err);
+        }
+
+        try {
+            await sendLiveMessage({
+                sender: {
+                    userId: myId,
+                    fullName: currentUser?.fullName || currentUser?.name || 'Colleague',
+                    designation: currentUser?.designation || 'Staff',
+                    department: currentUser?.department || 'MPOnline',
+                    avatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null
+                },
+                recipient: {
+                    userId: targetId,
+                    fullName: targetName,
+                    designation: targetColleague.designation || targetColleague.role || 'Staff',
+                    department: targetColleague.department || 'MPOnline',
+                    avatar: targetColleague.avatar || null
+                },
+                conversationId: convKey,
+                message: newMessage
+            });
+            playMessageChime();
+            addToast(`Message sent to ${targetName}! 💬`, 'success');
+            setQuickMessageText('');
+            setQuickMessageTarget(null);
+        } catch (err) {
+            console.error('Failed to send live message:', err);
+            addToast(`Failed to send message: ${err?.message || 'Network error'}`, 'error');
+        } finally {
+            setIsSendingQuickMessage(false);
+        }
+    };
+
     const isSysAdmin = Boolean(
         (['SYSADM', 'SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN', 'SYSTEMADMIN'].includes(String(displayUser?.role || '').toUpperCase()) || 
          ['SYSADM', 'SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN', 'SYSTEMADMIN'].includes(String(displayUser?.roleName || '').toUpperCase()) || 
@@ -862,86 +1000,46 @@ export default function Profile() {
                                 })()}
                             </div>
 
-                            {/* Headline / Bio with Contact info and Edit bio */}
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-slate-800 dark:text-slate-200 font-normal text-[15px] md:text-base leading-snug">
-                                <span>
-                                    {displayUser?.bio 
-                                        ? displayUser.bio.split('\n')[0]
-                                        : `${displayUser?.designation || 'Software Engineer'} | ${displayUser?.departmentName || 'Technology & Architecture'}`
-                                    }
-                                </span>
-                                <span className="text-slate-400 text-xs md:text-sm">·</span>
+                            {/* Contact info and Connections Link */}
+                            <div className="flex items-center gap-1.5 mt-2 text-xs md:text-sm">
                                 <button 
                                     type="button"
                                     onClick={() => setIsContactModalOpen(true)}
-                                    className="text-blue-600 dark:text-blue-400 font-bold hover:underline text-xs md:text-sm cursor-pointer"
+                                    className="text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer"
                                 >
                                     Contact info
                                 </button>
-                                {isOwnProfile && (
-                                    <>
-                                        <span className="text-slate-400 text-xs md:text-sm">·</span>
-                                        <button 
-                                            type="button"
-                                            onClick={handleOpenBioModal}
-                                            className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline cursor-pointer"
-                                            title="Edit Bio"
-                                        >
-                                            <span className="material-symbols-outlined text-[14px]">edit</span>
-                                            <span>Edit bio</span>
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-
-                            {/* Connections link */}
-                            <div className="mt-1.5">
+                                <span className="text-slate-400 font-normal">·</span>
                                 <button 
                                     type="button"
-                                    onClick={() => { setActiveTab('Network'); setNetworkFilter('All'); }}
-                                    className="text-blue-600 dark:text-blue-400 font-bold hover:underline text-xs md:text-sm cursor-pointer"
+                                    onClick={() => setIsConnectionsModalOpen(true)}
+                                    className="text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                                    title="View 1st-degree connections"
                                 >
-                                    {stats.mutuals + stats.followers > 0 ? `${stats.mutuals + stats.followers}+ connections` : '500+ connections'}
+                                    <span>
+                                        {displayedConnectionsCount} {displayedConnectionsCount === 1 ? 'connection' : 'connections'}
+                                    </span>
                                 </button>
                             </div>
                         </div>
 
-                        {/* Right Side: Edit Profile Icon for own profile */}
-                        {isOwnProfile && (
-                            <button
+                        {/* Right-most side of name: Share profile button */}
+                        <div className="flex items-center shrink-0 self-start md:self-auto mt-1 md:mt-0">
+                            <button 
                                 type="button"
-                                onClick={handleOpenEdit}
-                                className="w-10 h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-slate-200/80 dark:border-slate-700/80 shadow-2xs self-start"
-                                title="Edit Profile"
+                                onClick={() => setIsShareModalOpen(true)}
+                                className="px-4 py-1.5 border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                                title="Share profile"
                             >
-                                <span className="material-symbols-outlined text-[20px]">edit</span>
+                                <span className="material-symbols-outlined text-[17px]">share</span>
+                                <span>Share profile</span>
                             </button>
-                        )}
+                        </div>
                     </div>
 
-                    {/* Action Buttons Row */}
-                    <div className="flex flex-wrap items-center gap-2 mt-5">
-                        {isOwnProfile ? (
-                            <>
-                                <button 
-                                    type="button"
-                                    onClick={handleOpenEdit}
-                                    className="px-4 py-1.5 bg-blue-600 text-white hover:bg-blue-700 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                                >
-                                    <span className="material-symbols-outlined text-[18px]">edit</span>
-                                    <span>Edit profile</span>
-                                </button>
-                                <button 
-                                    type="button"
-                                    onClick={handleOpenEdit}
-                                    className="px-4 py-1.5 border border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                                >
-                                    <span className="material-symbols-outlined text-[18px]">add_circle</span>
-                                    <span>Add profile section</span>
-                                </button>
-                            </>
-                        ) : (
-                            <div className="flex flex-wrap items-center gap-2">
+                    {/* Action Buttons Row (For Other Users' Profiles) */}
+                    {!isOwnProfile && (
+                        <div className="flex flex-wrap items-center gap-2 mt-4">
                                 {displayUser.connectionStatus === 'PendingReceived' ? (
                                     <>
                                         <button
@@ -1064,19 +1162,8 @@ export default function Profile() {
                                     <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
                                     <span>Message</span>
                                 </button>
-                            </div>
-                        )}
-
-                        {/* Share Profile button */}
-                        <button 
-                            type="button"
-                            onClick={() => setIsShareModalOpen(true)}
-                            className="px-4 py-1.5 border border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                        >
-                            <span className="material-symbols-outlined text-[16px]">share</span>
-                            Share profile
-                        </button>
-                    </div>
+                        </div>
+                    )}
                     {/* Interactive Stats Row */}
                     <div className={`grid ${isSysAdmin ? 'grid-cols-2 md:grid-cols-4' : (isOwnProfile ? 'grid-cols-3 md:grid-cols-5' : 'grid-cols-3 md:grid-cols-6')} gap-4 py-6 border-t border-slate-100 dark:border-slate-800/50 mt-5`}>
                         {!isSysAdmin && (
@@ -1134,10 +1221,13 @@ export default function Profile() {
                 {activeTab === 'About' && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 flex flex-col gap-6">
-                            {/* Bio */}
+                            {/* Bio / About Me */}
                             <div className="rounded-2xl border shadow-sm p-6 glass card-lift">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">About Me</h3>
+                                    <h3 className="text-[16px] font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-indigo-500">person</span>
+                                        <span>About Me</span>
+                                    </h3>
                                     {isOwnProfile && (
                                         <button
                                             type="button"
@@ -1150,9 +1240,31 @@ export default function Profile() {
                                         </button>
                                     )}
                                 </div>
-                                <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm whitespace-pre-line">
-                                    {displayUser?.bio || 'Dedicated professional working at Knome, focused on innovation, teamwork, and driving platform excellence.'}
-                                </p>
+                                {displayUser?.bio && displayUser.bio.trim() !== '' && displayUser.bio !== 'Professional team member at Knome.' ? (
+                                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm whitespace-pre-line">
+                                        {displayUser.bio}
+                                    </p>
+                                ) : (
+                                    <div className="py-2">
+                                        {isOwnProfile ? (
+                                            <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+                                                No summary added yet.{' '}
+                                                <button
+                                                    type="button"
+                                                    onClick={handleOpenBioModal}
+                                                    className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline inline-flex items-center gap-0.5 cursor-pointer ml-1"
+                                                >
+                                                    <span>Add summary</span>
+                                                    <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                                                </button>
+                                            </p>
+                                        ) : (
+                                            <p className="text-slate-400 dark:text-slate-500 text-sm italic">
+                                                No summary provided yet.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             
                             {/* Skills & Interests */}
@@ -1246,9 +1358,7 @@ export default function Profile() {
                                     <div className="absolute -right-8 -top-8 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700"></div>
                                     <h3 className="text-[12px] font-black uppercase tracking-widest text-slate-400 mb-6">Platform Level</h3>
                                     <div className="flex items-center gap-4 mb-6">
-                                        <div className={`w-16 h-16 rounded-full border-4 ${karmaLevel.circleBorder} flex items-center justify-center ${karmaLevel.circleBg} shadow-md shrink-0`}>
-                                            <span className={`text-xl font-black ${karmaLevel.circleText}`}>L{karmaLevel.level}</span>
-                                        </div>
+                                        <KarmaLevelMedal level={karmaLevel.level} size={64} className="shrink-0" />
                                         <div>
                                             <p className="font-bold text-slate-900 dark:text-white text-lg">{karmaLevel.name} Contributor</p>
                                             <p className="text-slate-500 text-xs font-semibold mt-0.5">Level {karmaLevel.level} • {stats.karma.toLocaleString()} Karma Points</p>
@@ -1284,13 +1394,7 @@ export default function Profile() {
                         <div className="rounded-2xl border shadow-sm p-8 glass card-lift bg-gradient-to-br from-indigo-500/5 to-purple-500/5">
                             <div className="flex flex-col md:flex-row items-center gap-8 justify-between">
                                 <div className="flex items-center gap-6">
-                                    <div className="w-24 h-24 rounded-full border-4 flex items-center justify-center shadow-lg"
-                                         style={{ 
-                                             borderColor: karmaBadge.color ? karmaBadge.color.replace('text-', '') : '#6366f1', 
-                                             backgroundColor: 'white' 
-                                         }}>
-                                        <span className={`material-symbols-outlined text-[48px] ${karmaBadge.color}`} style={{fontVariationSettings:"'FILL' 1"}}>workspace_premium</span>
-                                    </div>
+                                    <KarmaLevelMedal level={karmaLevel.level} size={84} className="shrink-0" />
                                     <div>
                                         <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-1">{karmaBadge.name} Contributor</h3>
                                         <p className="text-[13px] font-bold text-slate-500 flex items-center gap-2">
@@ -2355,6 +2459,248 @@ export default function Profile() {
                                 type="button"
                                 onClick={() => setIsContactModalOpen(false)}
                                 className="px-5 py-2 text-sm font-bold rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+                            >
+                                Close
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            )}
+            {/* Connections & Direct Message Pop-up Modal */}
+            {isConnectionsModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div 
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" 
+                        onClick={() => {
+                            setIsConnectionsModalOpen(false);
+                            setQuickMessageTarget(null);
+                        }} 
+                    />
+                    <div className="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in duration-200 overflow-hidden">
+                        
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shadow-xs">
+                                    <span className="material-symbols-outlined text-[22px]">diversity_3</span>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                                            Connections
+                                        </h2>
+                                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+                                            {displayedConnectionsCount}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Connected colleagues with {displayUser?.fullName || displayUser?.name || 'this user'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => {
+                                    setIsConnectionsModalOpen(false);
+                                    setQuickMessageTarget(null);
+                                }} 
+                                className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                                title="Close"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">close</span>
+                            </button>
+                        </div>
+
+                        {/* Search Bar */}
+                        <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+                            <div className="relative">
+                                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">
+                                    search
+                                </span>
+                                <input
+                                    type="text"
+                                    value={connectionSearchQuery}
+                                    onChange={(e) => setConnectionSearchQuery(e.target.value)}
+                                    placeholder="Search by name, role, or department..."
+                                    className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                />
+                                {connectionSearchQuery && (
+                                    <button 
+                                        onClick={() => setConnectionSearchQuery('')}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Connections List */}
+                        <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 space-y-3">
+                            {isConnectionsLoading ? (
+                                <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
+                                    <span className="material-symbols-outlined text-4xl animate-spin text-blue-500">progress_activity</span>
+                                    <p className="text-xs font-semibold">Loading connections...</p>
+                                </div>
+                            ) : displayedConnectionsList.length === 0 ? (
+                                <div className="py-12 text-center flex flex-col items-center justify-center">
+                                    <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+                                        <span className="material-symbols-outlined text-3xl">group_off</span>
+                                    </div>
+                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                        {connectionSearchQuery ? 'No matching connections found' : 'No connections to display'}
+                                    </p>
+                                    <p className="text-xs text-slate-500 max-w-xs mt-1">
+                                        {connectionSearchQuery ? 'Try searching with a different name or title.' : 'Grow your network by connecting with colleagues on Knome.'}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsConnectionsModalOpen(false);
+                                            navigate('/network');
+                                        }}
+                                        className="mt-4 px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                                    >
+                                        Discover Colleagues in Network
+                                    </button>
+                                </div>
+                            ) : (
+                                displayedConnectionsList.map(conn => {
+                                    const connId = conn.id || conn.userId;
+                                    const connName = conn.name || conn.fullName || 'Colleague';
+                                    const connRole = conn.designation || conn.role || conn.roleName || 'Employee';
+                                    const connDept = conn.department || conn.departmentName || 'MPOnline';
+                                    const connAvatar = resolveImageUrl(conn.avatar || conn.profilePhotoUrl, connName);
+                                    const isQuickActive = quickMessageTarget?.id === connId || quickMessageTarget?.userId === connId;
+
+                                    return (
+                                        <div 
+                                            key={connId || connName}
+                                            className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-200 dark:hover:border-blue-900/50 hover:shadow-xs transition-all space-y-3"
+                                        >
+                                            <div className="flex items-center justify-between gap-3">
+                                                {/* Left: Avatar + Details */}
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="relative w-11 h-11 shrink-0 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700 bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center font-bold text-indigo-600 dark:text-indigo-400">
+                                                        {connAvatar ? (
+                                                            <img 
+                                                                src={connAvatar} 
+                                                                alt={connName} 
+                                                                className="w-full h-full object-cover" 
+                                                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                                            />
+                                                        ) : (
+                                                            <span>{connName.charAt(0).toUpperCase()}</span>
+                                                        )}
+                                                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" title="Online" />
+                                                    </div>
+
+                                                    <div className="min-w-0 flex-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setIsConnectionsModalOpen(false);
+                                                                navigate(`/profile?id=${connId}`);
+                                                            }}
+                                                            className="text-sm font-bold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline truncate block text-left cursor-pointer"
+                                                        >
+                                                            {connName}
+                                                        </button>
+                                                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                                            {connRole} {connDept && connDept !== connRole ? `· ${connDept}` : ''}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Right: Message & Quick Message Actions */}
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setIsConnectionsModalOpen(false);
+                                                            navigate(`/messages?userId=${connId}&name=${encodeURIComponent(connName)}`);
+                                                        }}
+                                                        className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold text-xs rounded-full transition-all shadow-xs flex items-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
+                                                        title={`Open chat with ${connName}`}
+                                                    >
+                                                        <span className="material-symbols-outlined text-[15px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
+                                                        <span>Message</span>
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (isQuickActive) {
+                                                                setQuickMessageTarget(null);
+                                                            } else {
+                                                                setQuickMessageTarget(conn);
+                                                                setQuickMessageText('');
+                                                            }
+                                                        }}
+                                                        className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
+                                                            isQuickActive 
+                                                                ? 'bg-blue-50 border-blue-300 text-blue-600 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400' 
+                                                                : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                                        }`}
+                                                        title="Quick message pop up"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Expandable Quick Message Box */}
+                                            {isQuickActive && (
+                                                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-top-2 duration-150">
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="text"
+                                                            value={quickMessageText}
+                                                            onChange={(e) => setQuickMessageText(e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                                    e.preventDefault();
+                                                                    handleSendQuickMessage(conn);
+                                                                }
+                                                            }}
+                                                            placeholder={`Send quick message to ${connName}...`}
+                                                            className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                            autoFocus
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            disabled={!quickMessageText.trim() || isSendingQuickMessage}
+                                                            onClick={() => handleSendQuickMessage(conn)}
+                                                            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                                                        >
+                                                            {isSendingQuickMessage ? (
+                                                                <span className="material-symbols-outlined text-[14px] animate-spin">refresh</span>
+                                                            ) : (
+                                                                <span className="material-symbols-outlined text-[14px]">send</span>
+                                                            )}
+                                                            <span>Send</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                            <span className="text-xs text-slate-500 dark:text-slate-400">
+                                Click <strong>Message</strong> to start real-time conversation
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsConnectionsModalOpen(false);
+                                    setQuickMessageTarget(null);
+                                }}
+                                className="px-5 py-2 text-xs font-bold rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors cursor-pointer"
                             >
                                 Close
                             </button>

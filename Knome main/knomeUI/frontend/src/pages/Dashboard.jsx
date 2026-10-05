@@ -12,7 +12,7 @@ import PeopleYouMayKnowWidget from '../components/widgets/PeopleYouMayKnowWidget
 import TextScramble from '../components/ui/TextScramble';
 import ScrollExpandMedia from '../components/ui/scroll-expansion-hero';
 import { BackgroundPaths } from '../components/ui/background-paths';
-import { dashboardApi, karmaApi, mapFeedItem, resolveMediaUrl, notificationsApi } from '../utils/apiService';
+import { dashboardApi, profileApi, karmaApi, mapFeedItem, resolveMediaUrl, notificationsApi } from '../utils/apiService';
 import { useScrollLoading } from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import BroadcastModal from '../components/modals/BroadcastModal';
@@ -26,6 +26,14 @@ export default function Dashboard() {
     const [posts, setPosts] = useState([]);
     const [greeting, setGreeting] = useState('');
     const [isLoading, setIsLoading] = useState(true);
+
+    const [networkState, setNetworkState] = useState({
+        followingIds: new Set(),
+        followerIds: new Set(),
+        followingCount: 0,
+        followersCount: 0,
+        isLoaded: false
+    });
 
     const { visibleCount, reset: resetScrollLoading } = useScrollLoading(posts.length, 6, 6);
 
@@ -107,6 +115,42 @@ export default function Dashboard() {
         else if (hour < 17) setGreeting('Good Afternoon');
         else setGreeting('Good Evening');
     }, []);
+
+    useEffect(() => {
+        const uid = currentUser?.userId || currentUser?.id;
+        if (!uid) return;
+
+        let isMounted = true;
+        const loadNetwork = async () => {
+            try {
+                const [followingRes, followersRes] = await Promise.all([
+                    profileApi.getFollowing(uid).catch(() => []),
+                    profileApi.getFollowers(uid).catch(() => [])
+                ]);
+
+                if (!isMounted) return;
+
+                const followingList = Array.isArray(followingRes) ? followingRes : (followingRes?.data || []);
+                const followersList = Array.isArray(followersRes) ? followersRes : (followersRes?.data || []);
+
+                const fIngIds = new Set(followingList.map(u => String(u.id || u.userId)));
+                const fErIds = new Set(followersList.map(u => String(u.id || u.userId)));
+
+                setNetworkState({
+                    followingIds: fIngIds,
+                    followerIds: fErIds,
+                    followingCount: followingList.length,
+                    followersCount: followersList.length,
+                    isLoaded: true
+                });
+            } catch (err) {
+                console.warn('Failed to load user following/followers for feed', err);
+            }
+        };
+
+        loadNetwork();
+        return () => { isMounted = false; };
+    }, [currentUser?.userId, currentUser?.id]);
 
     const currentUserIdStr = String(currentUser?.userId || currentUser?.id || '');
 
@@ -430,18 +474,35 @@ export default function Dashboard() {
                         ) : posts.length > 0 ? (
                             <>
                                 {posts.slice(0, visibleCount).map((post, idx) => (
-                                    <PostCard key={post.id ? `${post.id}-${idx}` : idx} post={post} onPostDeleted={(deletedId) => {
-                                        if (deletedId) setPosts(prev => prev.filter(p => p.id !== deletedId && p.postId !== deletedId));
-                                        loadPosts(activeFilter);
-                                    }} />
+                                    <PostCard 
+                                        key={post.id ? `${post.id}-${idx}` : idx} 
+                                        post={post} 
+                                        isAuthorFollowed={networkState.followingIds.has(String(post.author?.id || post.authorUserId || post.userId || ''))}
+                                        isAuthorFollower={networkState.followerIds.has(String(post.author?.id || post.authorUserId || post.userId || ''))}
+                                        onPostDeleted={(deletedId) => {
+                                            if (deletedId) setPosts(prev => prev.filter(p => p.id !== deletedId && p.postId !== deletedId));
+                                            loadPosts(activeFilter);
+                                        }} 
+                                    />
                                 ))}
                                 <ScrollLoadingIndicator isVisible={visibleCount < posts.length} text="Loading more feed posts on scroll..." />
                             </>
                         ) : (
-                            <div className="p-12 text-center flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-                                <span className="material-symbols-outlined text-4xl text-slate-300 dark:text-slate-600 mb-2">find_in_page</span>
-                                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">No content found for '{activeFilter}'</h4>
-                                <p className="text-xs text-slate-400 mt-1">Try switching to 'All Posts' to view the full enterprise timeline.</p>
+                            <div className="p-10 text-center flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm animate-in fade-in duration-200">
+                                <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-500 flex items-center justify-center mb-3">
+                                    <span className="material-symbols-outlined text-[32px]">feed</span>
+                                </div>
+                                <h4 className="text-base font-bold text-slate-800 dark:text-slate-100">No content found</h4>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm leading-relaxed">
+                                    There are no posts published on the platform currently. Be the first to share an update with your colleagues!
+                                </p>
+                                <button
+                                    onClick={() => setIsCreatePostOpen(true)}
+                                    className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">add_circle</span>
+                                    <span>Create a Post</span>
+                                </button>
                             </div>
                         )}
                     </div>

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getKarmaBadge, getKarmaLevelInfo } from '../utils/karmaEngine';
 import { karmaApi, resolveMediaUrl } from '../utils/apiService';
 import { useUser } from '../components/contexts/UserContext';
+import KarmaBadge, { KarmaLevelMedal } from '../components/ui/KarmaBadge';
 
 export const KARMA_CATEGORIES = [
     {
@@ -790,12 +791,14 @@ export default function KarmaHistory() {
                                                 }`}
                                             >
                                                 <td className="py-2.5 pl-3.5 pr-1">
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                        <span className={`material-symbols-outlined text-[17px] shrink-0 ${lvl.iconColor}`} style={{fontVariationSettings: "'FILL' 1"}}>
-                                                            {lvl.icon}
-                                                        </span>
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        <KarmaLevelMedal 
+                                                            level={lvl.level || (lvl.name === 'Diamond' || lvl.name === 'Platinum' ? 5 : lvl.name === 'Gold' ? 4 : lvl.name === 'Silver' ? 3 : lvl.name === 'Bronze' ? 2 : 1)} 
+                                                            size={26} 
+                                                            className="shrink-0" 
+                                                        />
                                                         <div className="min-w-0">
-                                                            <div className="flex items-center gap-1 leading-tight">
+                                                            <div className="flex items-center gap-1.5 leading-tight">
                                                                 <span className="font-extrabold text-slate-900 dark:text-white text-xs truncate">
                                                                     {lvl.name}
                                                                 </span>
@@ -817,10 +820,12 @@ export default function KarmaHistory() {
                                                     </span>
                                                 </td>
                                                 <td className="py-2.5 pl-1 pr-3.5 text-right">
-                                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold border shrink-0 ${lvl.badgeClass}`}>
-                                                        <span className="material-symbols-outlined text-[11px]" style={{fontVariationSettings: "'FILL' 1"}}>
-                                                            {lvl.icon}
-                                                        </span>
+                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold border shrink-0 ${lvl.badgeClass}`}>
+                                                        <KarmaLevelMedal 
+                                                            level={lvl.level || (lvl.name === 'Diamond' || lvl.name === 'Platinum' ? 5 : lvl.name === 'Gold' ? 4 : lvl.name === 'Silver' ? 3 : lvl.name === 'Bronze' ? 2 : 1)} 
+                                                            size={14} 
+                                                            className="shrink-0" 
+                                                        />
                                                         <span>{lvl.name}</span>
                                                     </span>
                                                 </td>
