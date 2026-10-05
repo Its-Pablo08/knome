@@ -4,8 +4,20 @@ import { useUser } from '../contexts/UserContext';
 import { ROLE_USER_MANUALS, printRoleManualPdf } from '../../utils/roleManualsData';
 import HighlightText from '../ui/HighlightText';
 
-const STORAGE_KEY_FAQS = 'knome_role_faqs_v3';
+const STORAGE_KEY_FAQS = 'knome_role_faqs_v4';
 const STORAGE_KEY_RULES = 'knome_role_rules_v3';
+
+// Utility to clean any markdown characters and preserve plain English text
+export const stripMarkdown = (text) => {
+    if (!text || typeof text !== 'string') return '';
+    return text
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/<u>([^<]+)<\/u>/gi, '$1')
+        .replace(/#{1,6}\s+/g, '')
+        .trim();
+};
 
 // Default Role Metas & Rules in clear, friendly language
 const DEFAULT_ROLES_META = {
@@ -59,7 +71,7 @@ const DEFAULT_ROLES_META = {
     }
 };
 
-// Easy-to-understand Frequently Asked Questions for Each Role
+// Easy-to-understand Frequently Asked Questions for Each Role (Plain English)
 const DEFAULT_FAQ_DATA = {
     employee: [
         {
@@ -67,86 +79,86 @@ const DEFAULT_FAQ_DATA = {
             category: 'Posts & Feed',
             question: 'How do I create and share a post?',
             answer: `Sharing an update with your colleagues is simple:
-1. Go to the **Home** feed or **Posts** page.
-2. Click inside the **"Create Post"** box.
+1. Go to the Home feed or Posts page.
+2. Click inside the "Create Post" box.
 3. Write your message (up to 400 characters). You can:
-   • **Tag a coworker:** Type \`@\` and choose their name.
-   • **Add a topic:** Type hashtags like \`#Project\` or \`#MPOnline\`.
-   • **Attach files:** Add photos, videos (MP4), audio clips (MP3), or documents (PDF).
+   - Tag a coworker: Type @ and choose their name.
+   - Add a topic: Type hashtags like #Project or #MPOnline.
+   - Attach files: Add photos, videos (MP4), audio clips (MP3), or documents (PDF).
 4. Choose who can see your post:
-   • **Everyone:** All colleagues across MPOnline.
-   • **Specific Community:** Only members of a group you choose.
-   • **Specific People:** Only the colleagues you pick.
-5. Click **"Post Now"** to share immediately, or click the clock icon to schedule it for later.`
+   - Everyone: All colleagues across MPOnline.
+   - Specific Community: Only members of a group you choose.
+   - Specific People: Only the colleagues you pick.
+5. Click "Post Now" to share immediately, or click the clock icon to schedule it for later.`
         },
         {
             id: 2,
             category: 'Scheduling',
             question: 'How do I schedule a post or article for later?',
             answer: `You can write content now and have Knome publish it automatically later:
-• While writing your post or article, click the **clock icon (Schedule)**.
-• Pick a future date and time, or choose a quick shortcut like **"+1 Min"**, **"Tonight 8 PM"**, or **"Tomorrow 9 AM"**.
-• Click **"Schedule"**.
-• **Private until published:** Only you can see your scheduled drafts.
-• You can view, publish immediately, or cancel your scheduled items anytime under the **"⏰ Scheduled"** tab on the Posts or Articles page.`
+- While writing your post or article, click the clock icon (Schedule).
+- Pick a future date and time, or choose a quick shortcut like "+1 Min", "Tonight 8 PM", or "Tomorrow 9 AM".
+- Click "Schedule".
+- Private until published: Only you can see your scheduled drafts.
+- You can view, publish immediately, or cancel your scheduled items anytime under the Scheduled tab on the Posts or Articles page.`
         },
         {
             id: 3,
             category: 'Karma Points',
             question: 'What are Karma Points and how do I earn them?',
             answer: `Karma points reward you for participating and sharing helpful knowledge with your team:
-• **How to earn points:**
-  - Share a post: **+2 Points**
-  - Publish an article: **+5 Points**
-  - Upload a video or podcast: **+3 Points**
-  - When someone likes your post: **+1 Point**
-  - When someone comments on your post: **+1 Point**
-• **Badges you can reach:**
-  - 🔰 **Starter:** 0 – 99 pts (Welcome!)
-  - 🥉 **Bronze:** 100 – 249 pts
-  - 🥈 **Silver:** 250 – 499 pts
-  - 🥇 **Gold:** 500 – 999 pts
-  - 💎 **Platinum:** 1,000+ pts (Top Contributor)
-• Click the **Karma badge** in the top menu anytime to see your score, rank, and history.`
+- How to earn points:
+  - Share a post: +2 Points
+  - Publish an article: +5 Points
+  - Upload a video or podcast: +3 Points
+  - When someone likes your post: +1 Point
+  - When someone comments on your post: +1 Point
+- Badges you can reach:
+  - Starter: 0 to 99 points (Welcome badge)
+  - Bronze: 100 to 249 points
+  - Silver: 250 to 499 points
+  - Gold: 500 to 999 points
+  - Platinum: 1,000+ points (Top Contributor)
+- Click the Karma badge in the top menu anytime to see your score, rank, and history.`
         },
         {
             id: 4,
             category: 'Communities',
             question: 'How do I join, explore, or create a Community?',
             answer: `Communities let you connect with coworkers who share your department, project, or interests:
-• **Company Groups:** You are automatically a member of core company groups like *MPOnline Official*.
-• **Public Groups:** Click **Communities** in the menu, find an interesting group, and click **"Join Community"** to join right away.
-• **Private Groups:** Click **"Request Access"** and the group admin will review your request.
-• **Starting a New Group:** Click **"Create Community"**, add a title, description, and photo, then submit. An HR Admin will review and approve it.`
+- Company Groups: You are automatically a member of core company groups like MPOnline Official.
+- Public Groups: Click Communities in the menu, find an interesting group, and click "Join Community" to join right away.
+- Private Groups: Click "Request Access" and the group admin will review your request.
+- Starting a New Group: Click "Create Community", add a title, description, and photo, then submit. An HR Admin will review and approve it.`
         },
         {
             id: 5,
             category: 'Articles',
             question: 'How do I write and format an Article?',
             answer: `Articles are great for longer guides, detailed tutorials, and project notes:
-1. Go to **Articles** in the top menu and click **"Write Article"**.
+1. Go to Articles in the top menu and click "Write Article".
 2. Enter a title, choose a category, and upload a cover picture.
 3. Write your content using the simple formatting toolbar:
-   • Make text **bold**, *italic*, or <u>underlined</u>.
-   • Add bullet lists or numbered steps.
-4. When you are ready, click **"Publish"** to share it, or schedule it for a future date.`
+   - Make text bold, italic, or underlined.
+   - Add bullet lists or numbered steps.
+4. When you are ready, click "Publish" to share it, or schedule it for a future date.`
         },
         {
             id: 6,
             category: 'Videos & Podcasts',
             question: 'How do Videos and Podcasts work?',
             answer: `You can watch and listen to useful training and team updates anytime:
-• **Videos:** Watch recorded presentations, town halls, and tutorials. You can upload video files (MP4) up to 500MB or embed YouTube videos.
-• **Podcasts:** Listen to audio talks and interviews, or record and upload your own audio episodes (MP3).
-• You can like, comment, and save your favorite videos and podcasts to **Saved Content** to revisit them later.`
+- Videos: Watch recorded presentations, town halls, and tutorials. You can upload video files (MP4) up to 500MB or embed YouTube videos.
+- Podcasts: Listen to audio talks and interviews, or record and upload your own audio episodes (MP3).
+- You can like, comment, and save your favorite videos and podcasts to Saved Content to revisit them later.`
         },
         {
             id: 7,
             category: 'Privacy & Safety',
             question: 'How do I protect my privacy or report inappropriate content?',
             answer: `Knome is designed to be a safe, positive, and respectful workplace:
-• **Report a post:** If you see any rude, offensive, or inappropriate content, click the three dots (\`...\`) on that post and choose **"Report Content"**. Our admin team will review it immediately.
-• **Profile Privacy:** Go to **Profile ➔ Edit Profile** to choose whether your bio and photo are visible to everyone or kept private.`
+- Report a post: If you see any rude, offensive, or inappropriate content, click the three dots menu on that post and choose "Report Content". Our admin team will review it immediately.
+- Profile Privacy: Go to Profile, select Edit Profile, and choose whether your bio and photo are visible to everyone or kept private.`
         }
     ],
 
@@ -156,40 +168,40 @@ const DEFAULT_FAQ_DATA = {
             category: 'Role Basics',
             question: 'What can a Community Admin do?',
             answer: `As a Community Admin, you help run your group smoothly:
-• Review and accept requests from colleagues who want to join.
-• Pin up to 3 important announcements to the top of your feed.
-• Set helpful rules and FAQs for your community members.
-• Delete inappropriate posts and temporarily pause disruptive members if needed.`
+- Review and accept requests from colleagues who want to join.
+- Pin up to 3 important announcements to the top of your feed.
+- Set helpful rules and FAQs for your community members.
+- Delete inappropriate posts and temporarily pause disruptive members if needed.`
         },
         {
             id: 102,
             category: 'Members',
             question: 'How do I accept or decline member requests?',
             answer: `To manage people asking to join your private community:
-1. Open your community and click the **"Admin Tools"** or **"Members"** tab.
-2. Look under **"Pending Requests"**.
-3. Click **"Approve"** to welcome them, or **"Decline"** if they should not join.
-4. You can also invite colleagues directly by clicking **"Invite Employees"**.`
+1. Open your community and click the Admin Tools or Members tab.
+2. Look under Pending Requests.
+3. Click "Approve" to welcome them, or "Decline" if they should not join.
+4. You can also invite colleagues directly by clicking "Invite Employees".`
         },
         {
             id: 103,
             category: 'Pinned Posts',
             question: 'How do I pin important posts to the top?',
             answer: `Keep important announcements where everyone can see them:
-• Click the three dots (\`...\`) on any post in your community and select **"Pin to Community"**.
-• You can have up to **3 pinned posts** at a time.
-• Pinned posts always stay at the top of your group feed with a pin badge.
-• To pin a 4th post, simply unpin one of your older posts first.`
+- Click the three dots menu on any post in your community and select "Pin to Community".
+- You can have up to 3 pinned posts at a time.
+- Pinned posts always stay at the top of your group feed with a pin badge.
+- To pin a fourth post, simply unpin one of your older posts first.`
         },
         {
             id: 104,
             category: 'Community Care',
             question: 'How do I remove bad posts or pause a member?',
             answer: `You have simple controls to keep your community welcoming and respectful:
-• **Delete a post:** Click the three dots (\`...\`) on any post in your group and choose Delete.
-• **Pause a member:** If someone repeatedly posts spam or breaks rules:
-  1. Go to the **Members** tab in your community.
-  2. Find their name and click **"Suspend Member"**.
+- Delete a post: Click the three dots menu on any post in your group and choose Delete.
+- Pause a member: If someone repeatedly posts spam or breaks rules:
+  1. Go to the Members tab in your community.
+  2. Find their name and click "Suspend Member".
   3. Pick a duration (such as 1 day, 7 days, or 30 days) and write a short reason.
   4. While suspended, they can still read posts but cannot post or comment until the time ends.`
         },
@@ -198,10 +210,10 @@ const DEFAULT_FAQ_DATA = {
             category: 'Rules & FAQs',
             question: 'How do I set up Community Rules and FAQs?',
             answer: `Help members know what is expected in your community:
-1. Go to your community and click **Admin Tools ➔ Rules & FAQs**.
+1. Go to your community and click Admin Tools, then select Rules & FAQs.
 2. Add simple guidelines (like "Be respectful" and "Stay on topic").
 3. Add common questions and answers.
-4. Click **"Save"**. They will appear on the right side of your community page immediately.`
+4. Click "Save". They will appear on the right side of your community page immediately.`
         }
     ],
 
@@ -211,10 +223,10 @@ const DEFAULT_FAQ_DATA = {
             category: 'Job Openings',
             question: 'How do I post an internal job opening?',
             answer: `Help colleagues discover new career opportunities at MPOnline:
-1. Click **Openings** (\`/jobs\`) in the top menu.
-2. Click **"Post New Opening"**.
+1. Click Openings in the top menu.
+2. Click "Post New Opening".
 3. Fill in the job title, department, location, required skills, and deadline.
-4. Click **"Publish Opportunity"**.
+4. Click "Publish Opportunity".
 5. The job post appears on the Openings board for all employees and automatically closes after the deadline.`
         },
         {
@@ -222,27 +234,27 @@ const DEFAULT_FAQ_DATA = {
             category: 'Announcements',
             question: 'How do I send an announcement to all employees?',
             answer: `When you have important company news to share:
-• **Home Feed Post:** Create a post and set the Audience to **"Everyone"** so it appears on all employees' home feeds.
-• **Notification Bell Broadcast:** Use the Broadcast feature to send an instant alert directly to every employee's notification bell with an alert chime.`
+- Home Feed Post: Create a post and set the Audience to "Everyone" so it appears on all employees' home feeds.
+- Notification Bell Broadcast: Use the Broadcast feature to send an instant alert directly to every employee's notification bell with an alert chime.`
         },
         {
             id: 203,
             category: 'Community Requests',
             question: 'How do I approve a new community request?',
             answer: `When a colleague suggests a new community:
-1. Open the **Admin Console** or **Communities** page and view **Community Requests**.
+1. Open the Admin Console or Communities page and view Community Requests.
 2. Review the proposed group name, purpose, and lead.
-3. Click **"Approve"** to create the group right away and make the creator its admin, or click **"Decline"** with helpful feedback.`
+3. Click "Approve" to create the group right away and make the creator its admin, or click "Decline" with helpful feedback.`
         },
         {
             id: 204,
             category: 'HR Analytics',
             question: 'What information is shown on the HR Analytics page?',
-            answer: `The **HR Analytics** page gives you a clear snapshot of team engagement:
-• **Employee Counts:** Total registered, active, and paused employee accounts.
-• **Department Activity:** Which teams are most active in sharing and learning.
-• **Karma Overview:** Total karma earned and top contributors across the company.
-• **Community Engagement:** How active groups are and where collaboration is happening.`
+            answer: `The HR Analytics page gives you a clear snapshot of team engagement:
+- Employee Counts: Total registered, active, and paused employee accounts.
+- Department Activity: Which teams are most active in sharing and learning.
+- Karma Overview: Total karma earned and top contributors across the company.
+- Community Engagement: How active groups are and where collaboration is happening.`
         }
     ],
 
@@ -252,32 +264,32 @@ const DEFAULT_FAQ_DATA = {
             category: 'Admin Scope',
             question: 'What can a System Administrator do?',
             answer: `System Administrators have full control over platform settings and safety:
-• Access the full **Admin Console** (\`/admin-console\`).
-• Assign and change user roles (Employee, Community Admin, HR Admin, System Admin).
-• Pause or reactivate employee accounts.
-• Review and resolve reported posts and comments.
-• View system activity logs to see all administrative changes.`
+- Access the full Admin Console (/admin-console).
+- Assign and change user roles (Employee, Community Admin, HR Admin, System Admin).
+- Pause or reactivate employee accounts.
+- Review and resolve reported posts and comments.
+- View system activity logs to see all administrative changes.`
         },
         {
             id: 302,
             category: 'Moderation',
             question: 'How do I handle reported posts?',
             answer: `When an employee reports a post or comment:
-1. Open the **Admin Console** and click the **Content Moderation** tab.
+1. Open the Admin Console and click the Content Moderation tab.
 2. Click any report to view the reported content, author, and reason.
 3. Choose an action:
-   • **Dismiss:** Keep the post if it follows company guidelines.
-   • **Delete Content:** Permanently remove the post from all feeds.
-   • **Suspend User:** Pause the author's account if the violation was serious.`
+   - Dismiss: Keep the post if it follows company guidelines.
+   - Delete Content: Permanently remove the post from all feeds.
+   - Suspend User: Pause the author's account if the violation was serious.`
         },
         {
             id: 303,
             category: 'Roles & Permissions',
             question: 'How do I change an employee role?',
             answer: `To update an employee's permissions:
-1. In the **Admin Console**, click the **User Governance** tab.
+1. In the Admin Console, click the User Governance tab.
 2. Search for the employee by name or ID.
-3. Click **"Edit Roles"** and pick their new role.
+3. Click "Edit Roles" and pick their new role.
 4. Save changes. Their permissions update immediately and they receive an email notification.`
         },
         {
@@ -285,17 +297,17 @@ const DEFAULT_FAQ_DATA = {
             category: 'Account Suspension',
             question: 'How does account suspension work?',
             answer: `If an account needs to be paused for safety or policy reasons:
-1. Click **"Suspend User"** next to their name in the Admin Console.
+1. Click "Suspend User" next to their name in the Admin Console.
 2. Choose a duration (such as 1 day, 7 days, 30 days, or until reactivated) and enter a reason.
 3. While suspended, the user cannot log in and will see a clear message explaining that their account is temporarily paused.
-4. You can click **"Reactivate User"** at any time to restore their access immediately.`
+4. You can click "Reactivate User" at any time to restore their access immediately.`
         },
         {
             id: 305,
             category: 'Activity Logs',
             question: 'How do I check system activity logs?',
             answer: `To review what administrative actions have been taken:
-1. Open the **Admin Console** and click **Audit Logs**.
+1. Open the Admin Console and click Audit Logs.
 2. You will see a clear, dated list of actions such as role updates, suspensions, and content deletions.
 3. You can filter by date, action type, or admin name to easily find specific events.`
         }
@@ -615,11 +627,13 @@ export default function RoleFaqModal({ isOpen, onClose }) {
                         <div>
                             <div className="flex items-center gap-2">
                                 <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                                    Knome Frequently Asked Questions
+                                    Frequently Asked Questions guide
                                 </h3>
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                                    {isSysAdmin ? 'Master Admin View' : 'FAQ Guide'}
-                                </span>
+                                {isSysAdmin && (
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                                        Master Admin View
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -667,7 +681,7 @@ export default function RoleFaqModal({ isOpen, onClose }) {
                         <button 
                             onClick={onClose}
                             className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition-all cursor-pointer shrink-0"
-                            title="Close FAQ Guide"
+                            title="Close Frequently Asked Questions guide"
                         >
                             <span className="material-symbols-outlined text-lg">close</span>
                         </button>
@@ -1083,7 +1097,7 @@ export default function RoleFaqModal({ isOpen, onClose }) {
                                             isExpanded && (
                                                 <div className="px-5 pb-5 pt-1 text-xs text-slate-700 dark:text-slate-300 border-t border-slate-100 dark:border-slate-800/60 leading-relaxed font-normal bg-slate-50/50 dark:bg-slate-950/30">
                                                     <div className="prose dark:prose-invert max-w-none text-xs whitespace-pre-line">
-                                                        <HighlightText text={faq.answer} query={searchQuery} />
+                                                        <HighlightText text={stripMarkdown(faq.answer)} query={searchQuery} />
                                                     </div>
                                                 </div>
                                             )
@@ -1124,16 +1138,6 @@ export default function RoleFaqModal({ isOpen, onClose }) {
                                 ? 'System Governance Mode • Rules & FAQ Editor Active' 
                                 : `MPOnline Knome Knowledge System • ${currentRoleMeta.title} FAQs`}
                         </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={onClose}
-                            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all cursor-pointer flex items-center gap-1.5"
-                        >
-                            <span>Done Reading</span>
-                            <span className="material-symbols-outlined text-[16px]">check</span>
-                        </button>
                     </div>
                 </div>
 
