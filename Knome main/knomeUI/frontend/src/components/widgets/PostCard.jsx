@@ -547,7 +547,7 @@ const setCachedPostInteraction = (postId, updates) => {
     }
 };
 
-export default function PostCard({ post, onPostDeleted, searchQuery = '' }) {
+export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuthorFollowed = false, isAuthorFollower = false }) {
     const { currentUser, awardRuleKarma } = useUser();
     const { addToast } = useToast();
     const confirm = useConfirm();
@@ -1526,6 +1526,17 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '' }) {
                             {post.author?.isVerified && <span className="material-symbols-outlined text-[13px] text-blue-500" style={{fontVariationSettings: "'FILL' 1"}}>verified</span>}
                             <span className="text-slate-300 dark:text-slate-700 text-[11px]">•</span>
                             <span className="font-arial text-slate-500 dark:text-slate-400 text-[12px] font-semibold uppercase tracking-wider">{post.author?.role || post.authorRole || 'Contributor'}</span>
+                            {isAuthorFollowed && !isAuthor && (
+                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-800/60" title="You are following this colleague">
+                                    <span className="material-symbols-outlined text-[11px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                                    <span>Following</span>
+                                </span>
+                            )}
+                            {!isAuthorFollowed && isAuthorFollower && !isAuthor && (
+                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/60" title="This colleague follows you">
+                                    <span>Follows you</span>
+                                </span>
+                            )}
                         </div>
                         <div className="flex items-center gap-1.5">
                             {/* Save & Categorize Button (FR-CI-04) */}

@@ -13,6 +13,8 @@ import * as signalR from '@microsoft/signalr';
 import { getHubUrl } from '../../utils/apiClient';
 import { formatNotificationDate, getTimeGroup, isNotificationForUser, isSelfNotification, parseNotificationContent } from '../../utils/notificationHelpers';
 import { subscribeToLiveMessages } from '../../utils/realtimeMessenger';
+import { getKarmaLevelInfo } from '../../utils/karmaEngine';
+import { KarmaLevelMedal } from '../ui/KarmaBadge';
 
 const DISCOVER_CATEGORIES = [
     { id: 'All', label: 'All', icon: 'grid_view' },
@@ -1600,21 +1602,31 @@ export default function Navbar() {
                 <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 justify-end ml-auto">
 
                     {/* Karma Badge (Visible for HR Admin, Community Admin, and all members; System Admin is exempt) */}
-                    {currentUser && !isSysAdmin && (
-                        <Link to="/karma-history" className="relative flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full transition-all hover:scale-105 group cursor-pointer shrink-0"
-                            style={{
-                                background: isDark 
-                                    ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(217, 119, 6, 0.1))' 
-                                    : 'linear-gradient(135deg, rgba(254, 243, 199, 0.9), rgba(253, 230, 138, 0.6))',
-                                border: '1px solid rgba(245, 158, 11, 0.35)',
-                                boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)'
-                            }}
-                            title={`${userKarma.toLocaleString()} Karma Points`}>
-                            <span className="material-symbols-outlined text-amber-500 text-[16px] transition-transform group-hover:scale-110 shrink-0" style={{fontVariationSettings:"'FILL' 1"}}>military_tech</span>
-                            <span className="text-[12px] font-black text-amber-600 dark:text-amber-400 tracking-tight whitespace-nowrap">{userKarma.toLocaleString()}</span>
-                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-amber-700/70 dark:text-amber-300/70 whitespace-nowrap">pts</span>
-                        </Link>
-                    )}
+                    {currentUser && !isSysAdmin && (() => {
+                        const karmaInfo = getKarmaLevelInfo(userKarma);
+                        return (
+                            <Link 
+                                to="/karma-history" 
+                                className="relative flex items-center gap-1.5 px-3 py-1 rounded-full transition-all hover:scale-105 group cursor-pointer shrink-0 border shadow-xs"
+                                style={{
+                                    background: isDark 
+                                        ? 'linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8))' 
+                                        : 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.85))',
+                                    borderColor: karmaInfo.level === 5 ? 'rgba(56, 189, 248, 0.5)' : karmaInfo.level === 4 ? 'rgba(251, 191, 36, 0.5)' : karmaInfo.level === 3 ? 'rgba(203, 213, 225, 0.6)' : karmaInfo.level === 2 ? 'rgba(251, 146, 60, 0.5)' : 'rgba(129, 140, 248, 0.5)',
+                                    boxShadow: isDark ? '0 2px 10px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.06)'
+                                }}
+                                title={`${karmaInfo.name} Tier (Level ${karmaInfo.level}) • ${userKarma.toLocaleString()} Karma Points`}
+                            >
+                                <KarmaLevelMedal level={karmaInfo.level} size={22} className="shrink-0" />
+                                <span className={`text-[12px] font-black ${karmaInfo.circleText} tracking-tight whitespace-nowrap`}>
+                                    {userKarma.toLocaleString()}
+                                </span>
+                                <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 whitespace-nowrap">
+                                    pts
+                                </span>
+                            </Link>
+                        );
+                    })()}
 
                     {/* ─── Role & Platform FAQ Guide Button ─── */}
                     <button
