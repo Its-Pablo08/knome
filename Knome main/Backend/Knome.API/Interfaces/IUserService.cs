@@ -43,4 +43,7 @@ public interface IUserService
     Task<bool> RejectRoleRequestAsync(int actorUserId, int requestId, RejectKnomeRoleRequestDto dto);
     Task<bool> RegisterPendingRoleRequestAsync(string employeeId);
     Task<RoleRequestStatusDto> GetRoleRequestStatusAsync(string employeeId);
+
+    // User Deletion & Associated Data Cascade
+    Task<bool> DeleteUserAsync(int userId);
 }

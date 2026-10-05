@@ -1193,4 +1193,168 @@ public class UserService : IUserService
             Roles = resultRoles
         };
     }
+
+    /// <summary>
+    /// Permanently deletes a user and cascades all associated dependent records across all platform tables.
+    /// </summary>
+    public async Task<bool> DeleteUserAsync(int userId)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+        if (user == null)
+        {
+            throw new NotFoundException($"User with ID {userId} not found.");
+        }
+
+        var userEmail = user.Email;
+        var userEmpId = user.EmployeeId;
+
+        using var transaction = await _db.Database.BeginTransactionAsync();
+        try
+        {
+            // 1. Break self-referencing manager relationships
+            if (!string.IsNullOrEmpty(userEmpId))
+            {
+                await _db.Database.ExecuteSqlRawAsync(
+                    "UPDATE [Users] SET [ManagerEmployeeId] = NULL WHERE [ManagerEmployeeId] = {0}", userEmpId);
+            }
+            await _db.Database.ExecuteSqlRawAsync(
+                "UPDATE [Users] SET [ManagerEmployeeId] = NULL WHERE [UserId] = {0}", userId);
+
+            // 2. Comments: child replies first, then top-level comments
+            await _db.Database.ExecuteSqlRawAsync(@"
+                DELETE FROM [Comments]
+                WHERE [ParentCommentId] IS NOT NULL
+                  AND (
+                      [UserId] = {0}
+                      OR ([ContentType] = 'Post' AND [ContentId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0}))
+                      OR ([ContentType] = 'Article' AND [ContentId] IN (SELECT [ArticleId] FROM [Articles] WHERE [AuthorUserId] = {0}))
+                      OR ([ContentType] = 'Video' AND [ContentId] IN (SELECT [VideoId] FROM [Videos] WHERE [UploaderUserId] = {0}))
+                      OR ([ContentType] = 'Podcast' AND [ContentId] IN (SELECT [PodcastId] FROM [Podcasts] WHERE [UploaderUserId] = {0}))
+                  );
+                DELETE FROM [Comments]
+                WHERE [UserId] = {0}
+                   OR ([ContentType] = 'Post' AND [ContentId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0}))
+                   OR ([ContentType] = 'Article' AND [ContentId] IN (SELECT [ArticleId] FROM [Articles] WHERE [AuthorUserId] = {0}))
+                   OR ([ContentType] = 'Video' AND [ContentId] IN (SELECT [VideoId] FROM [Videos] WHERE [UploaderUserId] = {0}))
+                   OR ([ContentType] = 'Podcast' AND [ContentId] IN (SELECT [PodcastId] FROM [Podcasts] WHERE [UploaderUserId] = {0}));
+            ", userId);
+
+            // 3. Interactions: Reactions, Bookmarks, Shares, ContentViews, HotPostsScoreCache
+            await _db.Database.ExecuteSqlRawAsync(@"
+                DELETE FROM [Reactions]
+                WHERE [UserId] = {0}
+                   OR ([ContentType] = 'Post' AND [ContentId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0}))
+                   OR ([ContentType] = 'Article' AND [ContentId] IN (SELECT [ArticleId] FROM [Articles] WHERE [AuthorUserId] = {0}))
+                   OR ([ContentType] = 'Video' AND [ContentId] IN (SELECT [VideoId] FROM [Videos] WHERE [UploaderUserId] = {0}))
+                   OR ([ContentType] = 'Podcast' AND [ContentId] IN (SELECT [PodcastId] FROM [Podcasts] WHERE [UploaderUserId] = {0}));
+
+                DELETE FROM [Bookmarks]
+                WHERE [UserId] = {0}
+                   OR ([ContentType] = 'Post' AND [ContentId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0}))
+                   OR ([ContentType] = 'Article' AND [ContentId] IN (SELECT [ArticleId] FROM [Articles] WHERE [AuthorUserId] = {0}))
+                   OR ([ContentType] = 'Video' AND [ContentId] IN (SELECT [VideoId] FROM [Videos] WHERE [UploaderUserId] = {0}))
+                   OR ([ContentType] = 'Podcast' AND [ContentId] IN (SELECT [PodcastId] FROM [Podcasts] WHERE [UploaderUserId] = {0}));
+
+                DELETE FROM [Shares]
+                WHERE [UserId] = {0}
+                   OR ([ContentType] = 'Post' AND [ContentId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0}))
+                   OR ([ContentType] = 'Article' AND [ContentId] IN (SELECT [ArticleId] FROM [Articles] WHERE [AuthorUserId] = {0}));
+
+                DELETE FROM [ContentViews]
+                WHERE [UserId] = {0}
+                   OR ([ContentType] = 'Post' AND [ContentId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0}))
+                   OR ([ContentType] = 'Article' AND [ContentId] IN (SELECT [ArticleId] FROM [Articles] WHERE [AuthorUserId] = {0}));
+
+                DELETE FROM [HotPostsScoreCache]
+                WHERE ([ContentType] = 'Post' AND [ContentId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0}))
+                   OR ([ContentType] = 'Article' AND [ContentId] IN (SELECT [ArticleId] FROM [Articles] WHERE [AuthorUserId] = {0}));
+            ", userId);
+
+            // 4. Governance & Activity: ModerationReports, Notifications, Preferences, Followers, Connections
+            await _db.Database.ExecuteSqlRawAsync(@"
+                DELETE FROM [ModerationReports]
+                WHERE [ReporterUserId] = {0}
+                   OR [ModeratorUserId] = {0}
+                   OR ([ContentType] = 'Post' AND [ContentId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0}))
+                   OR ([ContentType] = 'Article' AND [ContentId] IN (SELECT [ArticleId] FROM [Articles] WHERE [AuthorUserId] = {0}))
+                   OR ([ContentType] = 'Video' AND [ContentId] IN (SELECT [VideoId] FROM [Videos] WHERE [UploaderUserId] = {0}))
+                   OR ([ContentType] = 'Podcast' AND [ContentId] IN (SELECT [PodcastId] FROM [Podcasts] WHERE [UploaderUserId] = {0}));
+
+                DELETE FROM [Notifications] WHERE [UserId] = {0};
+                DELETE FROM [NotificationPreferences] WHERE [UserId] = {0};
+                DELETE FROM [Followers] WHERE [FollowerUserId] = {0} OR [FollowingUserId] = {0};
+                DELETE FROM [ConnectionRequests] WHERE [SenderId] = {0} OR [ReceiverId] = {0};
+                DELETE FROM [KarmaTransactions] WHERE [UserId] = {0};
+                DELETE FROM [KarmaBalances] WHERE [UserId] = {0};
+                DELETE FROM [SearchHistory] WHERE [UserId] = {0};
+                DELETE FROM [AuditLog] WHERE [ActorUserId] = {0};
+            ", userId);
+
+            // 5. Role Requests
+            if (!string.IsNullOrEmpty(userEmail))
+            {
+                await _db.Database.ExecuteSqlRawAsync("DELETE FROM [RoleRequests] WHERE [Email] = {0}", userEmail);
+            }
+
+            // 6. User Profile Skills, Interests, Credentials, Roles
+            await _db.Database.ExecuteSqlRawAsync(@"
+                DELETE FROM [UserSkills] WHERE [UserId] = {0};
+                DELETE FROM [UserInterests] WHERE [UserId] = {0};
+                DELETE FROM [UserCredentials] WHERE [UserId] = {0};
+                DELETE FROM [UserRoles] WHERE [UserId] = {0};
+            ", userId);
+
+            // 7. Posts and dependencies
+            await _db.Database.ExecuteSqlRawAsync(@"
+                DELETE FROM [PostAttachments] WHERE [PostId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0});
+                DELETE FROM [PostAudienceCommunities] WHERE [PostId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0});
+                DELETE FROM [PostAudienceUsers] WHERE [PostId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0}) OR [UserId] = {0};
+                DELETE FROM [PostMentions] WHERE [PostId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0}) OR [MentionedUserId] = {0};
+                DELETE FROM [CommunityPosts] WHERE [PostId] IN (SELECT [PostId] FROM [Posts] WHERE [AuthorUserId] = {0});
+                DELETE FROM [Posts] WHERE [AuthorUserId] = {0};
+            ", userId);
+
+            // 8. Articles and dependencies
+            await _db.Database.ExecuteSqlRawAsync(@"
+                DELETE FROM [ArticleAttachments] WHERE [ArticleId] IN (SELECT [ArticleId] FROM [Articles] WHERE [AuthorUserId] = {0});
+                DELETE FROM [ArticleTags] WHERE [ArticleId] IN (SELECT [ArticleId] FROM [Articles] WHERE [AuthorUserId] = {0});
+                DELETE FROM [ArticleVersions] WHERE [ArticleId] IN (SELECT [ArticleId] FROM [Articles] WHERE [AuthorUserId] = {0}) OR [EditedByUserId] = {0};
+                DELETE FROM [Articles] WHERE [AuthorUserId] = {0};
+            ", userId);
+
+            // 9. Media: Videos & Podcasts
+            await _db.Database.ExecuteSqlRawAsync(@"
+                DELETE FROM [VideoTags] WHERE [VideoId] IN (SELECT [VideoId] FROM [Videos] WHERE [UploaderUserId] = {0});
+                DELETE FROM [Videos] WHERE [UploaderUserId] = {0};
+                DELETE FROM [Podcasts] WHERE [UploaderUserId] = {0};
+            ", userId);
+
+            // 10. Communities, Members, Admins, Jobs, Abbreviations
+            await _db.Database.ExecuteSqlRawAsync(@"
+                DELETE FROM [CommunityMembers] WHERE [UserId] = {0};
+                UPDATE [CommunityMembers] SET [ApprovedByUserId] = NULL WHERE [ApprovedByUserId] = {0};
+                DELETE FROM [CommunityAdmins] WHERE [UserId] = {0};
+                DELETE FROM [CommunityPosts] WHERE [CommunityId] IN (SELECT [CommunityId] FROM [Communities] WHERE [CreatedByUserId] = {0});
+                DELETE FROM [CommunityMembers] WHERE [CommunityId] IN (SELECT [CommunityId] FROM [Communities] WHERE [CreatedByUserId] = {0});
+                DELETE FROM [CommunityAdmins] WHERE [CommunityId] IN (SELECT [CommunityId] FROM [Communities] WHERE [CreatedByUserId] = {0});
+                DELETE FROM [PostAudienceCommunities] WHERE [CommunityId] IN (SELECT [CommunityId] FROM [Communities] WHERE [CreatedByUserId] = {0});
+                DELETE FROM [Communities] WHERE [CreatedByUserId] = {0};
+                DELETE FROM [Jobs] WHERE [PostedByUserId] = {0};
+                UPDATE [Abbreviations] SET [CreatedBy] = NULL WHERE [CreatedBy] = {0};
+            ", userId);
+
+            // 11. Final root record deletion: Users table
+            await _db.Database.ExecuteSqlRawAsync("DELETE FROM [Users] WHERE [UserId] = {0}", userId);
+
+            await transaction.CommitAsync();
+            _logger.LogInformation("Successfully deleted user {UserId} ({Email}) and all associated records.", userId, userEmail);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            _logger.LogError(ex, "Failed to completely delete user {UserId}", userId);
+            throw;
+        }
+    }
 }

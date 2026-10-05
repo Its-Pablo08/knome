@@ -115,6 +115,24 @@ public static class ServiceCollectionExtensions
             ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
         });
 
+        // Named HttpClient for EmployeeHub REST API (profile sync)
+        var ehApiSection = configuration.GetSection("EmployeeHubApi");
+        services.Configure<EmployeeHubApiSettings>(ehApiSection);
+        var ehApiSettings = ehApiSection.Get<EmployeeHubApiSettings>() ?? new EmployeeHubApiSettings();
+        var ehBaseUrl = ehApiSettings.BaseUrl ?? mpoAuthority;
+        services.AddHttpClient("EmployeeHubApi", client =>
+        {
+            client.BaseAddress = new Uri(ehBaseUrl.TrimEnd('/') + '/');
+            client.Timeout = TimeSpan.FromSeconds(ehApiSettings.TimeoutSeconds > 0 ? ehApiSettings.TimeoutSeconds : 10);
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+            if (!string.IsNullOrEmpty(ehApiSettings.ApiKey))
+                client.DefaultRequestHeaders.Add("X-Api-Key", ehApiSettings.ApiKey);
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        });
+
         services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = "DynamicJwt";
@@ -463,6 +481,7 @@ public static class ServiceCollectionExtensions
 
         // Auth
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IEmployeeHubApiService, EmployeeHubApiService>();
 
         // User Module
         services.AddScoped<IUserRepository, UserRepository>();

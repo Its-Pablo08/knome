@@ -1460,6 +1460,17 @@ export const UserProvider = ({ children }) => {
         });
     }, []);
 
+    const deleteUserFromList = useCallback((userIdOrIdentifier) => {
+        if (!userIdOrIdentifier) return;
+        const idStr = String(userIdOrIdentifier).trim().toLowerCase();
+        setUsersList(prev => prev.filter(u => {
+            const uid = String(u.userId || u.id || '').trim().toLowerCase();
+            const empId = String(u.employeeId || '').trim().toLowerCase();
+            const email = String(u.email || '').trim().toLowerCase();
+            return uid !== idStr && empId !== idStr && email !== idStr;
+        }));
+    }, []);
+
     return (
         <UserContext.Provider value={{
             currentUser,
@@ -1475,6 +1486,7 @@ export const UserProvider = ({ children }) => {
             updateUserRoleInList,
             updateUserStatus,
             toggleUserActiveStatus,
+            deleteUserFromList,
             addKarmaPointsToUser,
             awardRuleKarma,
             refreshKarma,
@@ -1500,6 +1512,7 @@ export const useUser = () => {
             refreshKarma: async () => {},
             updateCurrentUserRole: () => {},
             updateUserRoleInList: () => {},
+            deleteUserFromList: () => {},
         };
     }
     return context;

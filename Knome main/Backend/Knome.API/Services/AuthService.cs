@@ -14,9 +14,9 @@ using Knome.API.Models;
 namespace Knome.API.Services;
 
 /// <summary>
-/// Development authentication service using EmployeeID + BCrypt password.
-/// When HRMS SSO is ready, replace this class with an HrmsSsoAuthService
-/// that implements IAuthService — no other code needs to change.
+/// Authentication service using EmployeeID + BCrypt password.
+/// On login, syncs rich user profile from EmployeeHub REST API (photo, bio, department, roles).
+/// Falls back to direct cross-DB SQL sync if the API is unavailable.
 /// </summary>
 public class AuthService : IAuthService
 {
@@ -24,6 +24,7 @@ public class AuthService : IAuthService
     private readonly JwtSettings _jwt;
     private readonly MPOAuthServerSettings _mpoSettings;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IEmployeeHubApiService _employeeHubApi;
     private readonly IEmailService _emailService;
     private readonly INotificationService _notificationService;
     private readonly ILogger<AuthService> _logger;
@@ -33,6 +34,7 @@ public class AuthService : IAuthService
         IOptions<JwtSettings> jwtOptions, 
         IOptions<MPOAuthServerSettings> mpoOptions,
         IHttpClientFactory httpClientFactory,
+        IEmployeeHubApiService employeeHubApi,
         IEmailService emailService, 
         INotificationService notificationService,
         ILogger<AuthService> logger)
@@ -41,6 +43,7 @@ public class AuthService : IAuthService
         _jwt = jwtOptions.Value;
         _mpoSettings = mpoOptions.Value;
         _httpClientFactory = httpClientFactory;
+        _employeeHubApi = employeeHubApi;
         _emailService = emailService;
         _notificationService = notificationService;
         _logger = logger;
@@ -357,10 +360,28 @@ public class AuthService : IAuthService
 
     // ------------------------------------------------------------------ //
 
+    /// <summary>
+    /// Syncs a user from the EmployeeHub REST API into the Knome Users table.
+    /// Priority:
+    ///   1. EmployeeHub REST API  → rich profile (photo, bio, phone, roles, department by code)
+    ///   2. Direct cross-DB SQL   → fallback when API is offline / not configured
+    ///   3. Token-identity stub   → last-resort auto-provision so login never fails
+    /// </summary>
     private async Task SyncUserFromEmployeeHubIfAvailableAsync(string employeeIdOrEmail)
     {
         try
         {
+            // ── STRATEGY 1: EmployeeHub REST API ──────────────────────────────────────
+            var apiProfile = await _employeeHubApi.GetEmployeeProfileAsync(employeeIdOrEmail);
+            if (apiProfile != null)
+            {
+                await ApplyEmployeeHubProfileToKnomeAsync(apiProfile);
+                return; // Profile applied — no need for SQL fallback
+            }
+
+            // ── STRATEGY 2: Cross-DB SQL fallback (EmployeeHubDb on same SQL instance) ─
+            _logger.LogDebug("[Sync] API unavailable for {Id} — trying cross-DB SQL sync", employeeIdOrEmail);
+
             var conn = _db.Database.GetDbConnection();
             if (conn.State != System.Data.ConnectionState.Open)
                 await conn.OpenAsync();
@@ -369,82 +390,216 @@ public class AuthService : IAuthService
             cmd.CommandText = @"
                 IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'EmployeeHubDb')
                 BEGIN
-                    DECLARE @ehEmpId NVARCHAR(30), @ehName NVARCHAR(150), @ehEmail NVARCHAR(150), @ehDeptId INT, @ehDesig NVARCHAR(100), @ehLoc NVARCHAR(100);
+                    -- Step 1: Fetch rich profile from EmployeeHub
+                    DECLARE @ehEmpId    NVARCHAR(50);
+                    DECLARE @ehName     NVARCHAR(150);
+                    DECLARE @ehEmail    NVARCHAR(150);
+                    DECLARE @ehDeptCode NVARCHAR(30);
+                    DECLARE @ehDeptName NVARCHAR(100);
+                    DECLARE @ehDesig    NVARCHAR(100);
+                    DECLARE @ehLoc      NVARCHAR(100);
+                    DECLARE @ehPhoto    NVARCHAR(500);
+                    DECLARE @ehBio      NVARCHAR(MAX);
+                    DECLARE @ehPhone    NVARCHAR(20);
+                    DECLARE @ehJoin     DATE;
+                    DECLARE @ehMgrId    NVARCHAR(50);
+                    DECLARE @ehActive   BIT;
 
-                    SELECT TOP 1 
-                        @ehEmpId = EmployeeId, 
-                        @ehName = FullName, 
-                        @ehEmail = Email, 
-                        @ehDeptId = DepartmentId, 
-                        @ehDesig = Designation, 
-                        @ehLoc = Location
-                    FROM [EmployeeHubDb].[dbo].[Employees]
-                    WHERE UPPER(EmployeeId) = UPPER(@searchId) 
-                       OR UPPER(Email) = UPPER(@searchId)
-                       OR REPLACE(UPPER(EmployeeId), '0', 'O') = REPLACE(UPPER(@searchId), '0', 'O');
+                    SELECT TOP 1
+                        @ehEmpId    = e.[EmployeeId],
+                        @ehName     = e.[FullName],
+                        @ehEmail    = e.[Email],
+                        @ehDeptCode = d.[Code],
+                        @ehDeptName = d.[Name],
+                        @ehDesig    = e.[Designation],
+                        @ehLoc      = e.[Location],
+                        @ehPhoto    = e.[ProfilePhotoUrl],
+                        @ehBio      = e.[Bio],
+                        @ehPhone    = e.[PhoneNumber],
+                        @ehJoin     = e.[JoiningDate],
+                        @ehMgrId    = e.[ReportingManagerId],
+                        @ehActive   = e.[IsActive]
+                    FROM [EmployeeHubDb].[dbo].[Employees] e
+                    LEFT JOIN [EmployeeHubDb].[dbo].[Departments] d ON d.[DepartmentId] = e.[DepartmentId]
+                    WHERE UPPER(e.[EmployeeId]) = UPPER(@searchId)
+                       OR UPPER(e.[Email])      = UPPER(@searchId);
 
-                    IF @ehEmpId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM [Users] WHERE EmployeeId = @ehEmpId OR Email = @ehEmail)
+                    IF @ehEmpId IS NOT NULL
                     BEGIN
-                        INSERT INTO [Users] ([EmployeeId], [FullName], [Email], [DepartmentId], [Designation], [Location], [IsActive], [CreatedDate], [ProfileCompletion], [BioVisibility], [NetworkVisibility], [PhotosVisibility], [InterestsVisibility])
-                        VALUES (@ehEmpId, @ehName, @ehEmail, ISNULL(@ehDeptId, 1), ISNULL(@ehDesig, 'Staff'), ISNULL(@ehLoc, 'Bhopal'), 1, GETUTCDATE(), 50, 'Public', 'Public', 'Public', 'Public');
+                        -- Step 2: Resolve DepartmentId in Knome by Code then Name
+                        DECLARE @knomeDeptId INT = (
+                            SELECT TOP 1 [DepartmentId] FROM [Departments]
+                            WHERE [DepartmentCode] = @ehDeptCode
+                               OR [Name] = @ehDeptName
+                        );
+                        IF @knomeDeptId IS NULL SET @knomeDeptId = 1; -- default fallback dept
 
-                        DECLARE @newUserId INT = SCOPE_IDENTITY();
-                        DECLARE @defaultHash NVARCHAR(255) = (SELECT TOP 1 [PasswordHash] FROM [EmployeeHubDb].[dbo].[UserCredentials] WHERE [EmployeeId] = @ehEmpId);
-                        IF @defaultHash IS NULL
-                            SET @defaultHash = (SELECT TOP 1 PasswordHash FROM [UserCredentials] WHERE PasswordHash LIKE '$2%');
-                        IF @defaultHash IS NULL
-                            SET @defaultHash = '$2a$11$CS8Szl.LS4r1zinkLjKb8ucRdww25eHjSGhqc6my/hQXCbb9DW0Nm';
-
-                        INSERT INTO [UserCredentials] ([UserId], [PasswordHash], [PasswordSalt], [LastUpdated])
-                        VALUES (@newUserId, @defaultHash, '', GETUTCDATE());
-
-                        DECLARE @defaultEmpRoleId INT = (SELECT TOP 1 [RoleId] FROM [Roles] WHERE [RoleName] = 'Employee' OR [RoleCode] = 'EMP');
-                        IF @defaultEmpRoleId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM [UserRoles] WHERE [UserId] = @newUserId AND [RoleId] = @defaultEmpRoleId)
+                        -- Step 3: INSERT or UPDATE user in Knome
+                        IF NOT EXISTS (SELECT 1 FROM [Users] WHERE [EmployeeId] = @ehEmpId)
                         BEGIN
-                            INSERT INTO [UserRoles] ([UserId], [RoleId]) VALUES (@newUserId, @defaultEmpRoleId);
+                            -- New user: handle email conflict (e.g. placeholder mpoXXX@knome.local)
+                            -- If another row has the same email (placeholder), update that row first
+                            IF EXISTS (SELECT 1 FROM [Users] WHERE [Email] = @ehEmail AND [EmployeeId] <> @ehEmpId)
+                            BEGIN
+                                UPDATE [Users]
+                                SET [Email] = @ehEmpId + '@knome.placeholder.local'
+                                WHERE [Email] = @ehEmail AND [EmployeeId] <> @ehEmpId;
+                            END
+
+                            INSERT INTO [Users] (
+                                [EmployeeId], [FullName], [Email], [DepartmentId], [Designation],
+                                [Location], [ProfilePhotoUrl], [Bio], [MobileNo], [JoiningDate],
+                                [ManagerEmployeeId], [IsActive], [IsPermanentlySuspended],
+                                [CreatedDate], [LastSyncedFromHrmsDate], [ProfileCompletion],
+                                [BioVisibility], [NetworkVisibility], [PhotosVisibility], [InterestsVisibility]
+                            )
+                            VALUES (
+                                @ehEmpId, @ehName, @ehEmail, @knomeDeptId, ISNULL(@ehDesig, 'Employee'),
+                                ISNULL(@ehLoc, 'Bhopal HQ'), @ehPhoto, @ehBio, @ehPhone, @ehJoin,
+                                @ehMgrId, ISNULL(@ehActive, 1), 0,
+                                GETUTCDATE(), GETUTCDATE(), 50,
+                                'Public', 'Public', 'Public', 'Public'
+                            );
+
+                            DECLARE @newUserId INT = SCOPE_IDENTITY();
+
+                            -- Seed password from EmployeeHub credentials or default bcrypt
+                            DECLARE @ehPwdHash NVARCHAR(500) = (
+                                SELECT TOP 1 [PasswordHash]
+                                FROM [EmployeeHubDb].[dbo].[UserCredentials]
+                                WHERE [EmployeeId] = @ehEmpId
+                            );
+                            IF @ehPwdHash IS NULL
+                                SET @ehPwdHash = ISNULL(
+                                    (SELECT TOP 1 [PasswordHash] FROM [UserCredentials] WHERE [PasswordHash] LIKE '$2%'),
+                                    '$2a$11$CS8Szl.LS4r1zinkLjKb8ucRdww25eHjSGhqc6my/hQXCbb9DW0Nm'
+                                );
+
+                            IF NOT EXISTS (SELECT 1 FROM [UserCredentials] WHERE [UserId] = @newUserId)
+                                INSERT INTO [UserCredentials] ([UserId], [PasswordHash], [PasswordSalt], [LastUpdated])
+                                VALUES (@newUserId, @ehPwdHash, '', GETUTCDATE());
+                        END
+                        ELSE
+                        BEGIN
+                            -- Existing user: UPDATE profile from EmployeeHub (keep local overrides for bio/photo if set)
+                            UPDATE [Users]
+                            SET
+                                [FullName]             = @ehName,
+                                [Email]                = @ehEmail,
+                                [DepartmentId]         = @knomeDeptId,
+                                [Designation]          = ISNULL(@ehDesig, [Designation]),
+                                [Location]             = ISNULL(@ehLoc, [Location]),
+                                [ProfilePhotoUrl]      = ISNULL([ProfilePhotoUrl], @ehPhoto),
+                                [Bio]                  = ISNULL([Bio], @ehBio),
+                                [MobileNo]             = ISNULL([MobileNo], @ehPhone),
+                                [JoiningDate]          = ISNULL([JoiningDate], @ehJoin),
+                                [ManagerEmployeeId]    = ISNULL([ManagerEmployeeId], @ehMgrId),
+                                [IsActive]             = ISNULL(@ehActive, [IsActive]),
+                                [LastSyncedFromHrmsDate] = GETUTCDATE(),
+                                [ModifiedDate]         = GETUTCDATE()
+                            WHERE [EmployeeId] = @ehEmpId;
+                        END
+
+                        -- Step 4: Resolve UserId for role assignment
+                        DECLARE @resolvedUserId INT = (SELECT [UserId] FROM [Users] WHERE [EmployeeId] = @ehEmpId);
+
+                        -- Step 5: Sync roles from EmployeeHub EmployeeRoles → Knome UserRoles
+                        -- Employee base role always
+                        DECLARE @knomeEmpRole INT = (SELECT TOP 1 [RoleId] FROM [Roles] WHERE [RoleName] = 'Employee' OR [RoleCode] = 'EMP');
+                        IF @knomeEmpRole IS NOT NULL AND NOT EXISTS (
+                            SELECT 1 FROM [UserRoles] WHERE [UserId] = @resolvedUserId AND [RoleId] = @knomeEmpRole
+                        )
+                            INSERT INTO [UserRoles] ([UserId], [RoleId]) VALUES (@resolvedUserId, @knomeEmpRole);
+
+                        -- Map EmployeeHub elevated roles → Knome roles by RoleCode
+                        IF EXISTS (
+                            SELECT 1 FROM [EmployeeHubDb].[dbo].[EmployeeRoles] er
+                            INNER JOIN [EmployeeHubDb].[dbo].[Roles] hr ON hr.[RoleId] = er.[RoleId]
+                            WHERE er.[EmployeeId] = @ehEmpId AND hr.[RoleCode] = 'SYSADM'
+                        )
+                        BEGIN
+                            DECLARE @sysAdmId INT = (SELECT TOP 1 [RoleId] FROM [Roles] WHERE [RoleName] = 'System Administrator' OR [RoleCode] = 'SYSADM');
+                            IF @sysAdmId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM [UserRoles] WHERE [UserId] = @resolvedUserId AND [RoleId] = @sysAdmId)
+                                INSERT INTO [UserRoles] ([UserId], [RoleId]) VALUES (@resolvedUserId, @sysAdmId);
+                        END
+
+                        IF EXISTS (
+                            SELECT 1 FROM [EmployeeHubDb].[dbo].[EmployeeRoles] er
+                            INNER JOIN [EmployeeHubDb].[dbo].[Roles] hr ON hr.[RoleId] = er.[RoleId]
+                            WHERE er.[EmployeeId] = @ehEmpId AND hr.[RoleCode] = 'HRADM'
+                        )
+                        BEGIN
+                            DECLARE @hrAdmId INT = (SELECT TOP 1 [RoleId] FROM [Roles] WHERE [RoleName] = 'HR Administrator' OR [RoleCode] = 'HRADM');
+                            IF @hrAdmId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM [UserRoles] WHERE [UserId] = @resolvedUserId AND [RoleId] = @hrAdmId)
+                                INSERT INTO [UserRoles] ([UserId], [RoleId]) VALUES (@resolvedUserId, @hrAdmId);
+                        END
+
+                        IF EXISTS (
+                            SELECT 1 FROM [EmployeeHubDb].[dbo].[EmployeeRoles] er
+                            INNER JOIN [EmployeeHubDb].[dbo].[Roles] hr ON hr.[RoleId] = er.[RoleId]
+                            WHERE er.[EmployeeId] = @ehEmpId AND hr.[RoleCode] = 'CADM'
+                        )
+                        BEGIN
+                            DECLARE @cAdmId INT = (SELECT TOP 1 [RoleId] FROM [Roles] WHERE [RoleName] = 'Community Admin' OR [RoleCode] = 'CADM');
+                            IF @cAdmId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM [UserRoles] WHERE [UserId] = @resolvedUserId AND [RoleId] = @cAdmId)
+                                INSERT INTO [UserRoles] ([UserId], [RoleId]) VALUES (@resolvedUserId, @cAdmId);
                         END
                     END
                 END
 
-                -- Fallback auto-provision directly from token identity if user does not exist in Knome
-                IF NOT EXISTS (SELECT 1 FROM [Users] WHERE UPPER(EmployeeId) = UPPER(@searchId) OR UPPER(Email) = UPPER(@searchId))
+                -- Fallback: auto-provision from token identity if not yet in Knome
+                IF NOT EXISTS (SELECT 1 FROM [Users] WHERE UPPER([EmployeeId]) = UPPER(@searchId) OR UPPER([Email]) = UPPER(@searchId))
                 BEGIN
-                    DECLARE @fallbackEmpId NVARCHAR(50) = UPPER(@searchId);
-                    DECLARE @fallbackName NVARCHAR(100) = @searchId;
+                    DECLARE @fbEmpId   NVARCHAR(50)  = UPPER(@searchId);
+                    DECLARE @fbName    NVARCHAR(100) = @searchId;
+                    DECLARE @fbEmail   NVARCHAR(150);
+
                     IF CHARINDEX('@', @searchId) > 0
                     BEGIN
-                        SET @fallbackName = SUBSTRING(@searchId, 1, CHARINDEX('@', @searchId) - 1);
-                        SET @fallbackEmpId = UPPER(@fallbackName);
+                        SET @fbName  = SUBSTRING(@searchId, 1, CHARINDEX('@', @searchId) - 1);
+                        SET @fbEmpId = UPPER(@fbName);
+                        SET @fbEmail = @searchId;
                     END
+                    ELSE
+                        SET @fbEmail = @searchId + '@mponline.gov.in';
 
-                    INSERT INTO [Users] ([EmployeeId], [FullName], [Email], [DepartmentId], [Designation], [Location], [IsActive], [CreatedDate], [ProfileCompletion], [BioVisibility], [NetworkVisibility], [PhotosVisibility], [InterestsVisibility])
-                    VALUES (@fallbackEmpId, @fallbackName, CASE WHEN CHARINDEX('@', @searchId) > 0 THEN @searchId ELSE @searchId + '@mponline.gov.in' END, 1, 'Employee', 'Bhopal', 1, GETUTCDATE(), 50, 'Public', 'Public', 'Public', 'Public');
+                    INSERT INTO [Users] (
+                        [EmployeeId], [FullName], [Email], [DepartmentId], [Designation], [Location],
+                        [IsActive], [IsPermanentlySuspended], [CreatedDate], [ProfileCompletion],
+                        [BioVisibility], [NetworkVisibility], [PhotosVisibility], [InterestsVisibility]
+                    )
+                    VALUES (
+                        @fbEmpId, @fbName, @fbEmail, 1, 'Employee', 'Bhopal HQ',
+                        1, 0, GETUTCDATE(), 50,
+                        'Public', 'Public', 'Public', 'Public'
+                    );
 
-                    DECLARE @fallbackUid INT = SCOPE_IDENTITY();
-                    DECLARE @fallbackHash NVARCHAR(255) = (SELECT TOP 1 PasswordHash FROM [UserCredentials] WHERE PasswordHash LIKE '$2%');
-                    IF @fallbackHash IS NULL
-                        SET @fallbackHash = '$2a$11$CS8Szl.LS4r1zinkLjKb8ucRdww25eHjSGhqc6my/hQXCbb9DW0Nm';
+                    DECLARE @fbUid INT = SCOPE_IDENTITY();
+                    DECLARE @fbHash NVARCHAR(255) = ISNULL(
+                        (SELECT TOP 1 [PasswordHash] FROM [UserCredentials] WHERE [PasswordHash] LIKE '$2%'),
+                        '$2a$11$CS8Szl.LS4r1zinkLjKb8ucRdww25eHjSGhqc6my/hQXCbb9DW0Nm'
+                    );
 
-                    INSERT INTO [UserCredentials] ([UserId], [PasswordHash], [PasswordSalt], [LastUpdated])
-                    VALUES (@fallbackUid, @fallbackHash, '', GETUTCDATE());
+                    IF NOT EXISTS (SELECT 1 FROM [UserCredentials] WHERE [UserId] = @fbUid)
+                        INSERT INTO [UserCredentials] ([UserId], [PasswordHash], [PasswordSalt], [LastUpdated])
+                        VALUES (@fbUid, @fbHash, '', GETUTCDATE());
 
-                    DECLARE @empRoleId2 INT = (SELECT TOP 1 [RoleId] FROM [Roles] WHERE [RoleName] = 'Employee' OR [RoleCode] = 'EMP');
-                    IF @empRoleId2 IS NOT NULL
-                    BEGIN
-                        INSERT INTO [UserRoles] ([UserId], [RoleId]) VALUES (@fallbackUid, @empRoleId2);
-                    END
+                    DECLARE @fbEmpRole INT = (SELECT TOP 1 [RoleId] FROM [Roles] WHERE [RoleName] = 'Employee' OR [RoleCode] = 'EMP');
+                    IF @fbEmpRole IS NOT NULL AND NOT EXISTS (SELECT 1 FROM [UserRoles] WHERE [UserId] = @fbUid AND [RoleId] = @fbEmpRole)
+                        INSERT INTO [UserRoles] ([UserId], [RoleId]) VALUES (@fbUid, @fbEmpRole);
                 END
 
-                -- Ensure any user without roles is assigned Employee role
-                DECLARE @globalEmpRole INT = (SELECT TOP 1 [RoleId] FROM [Roles] WHERE [RoleName] = 'Employee' OR [RoleCode] = 'EMP');
-                IF @globalEmpRole IS NOT NULL
+                -- Final safety net: any user still without roles gets Employee role
+                DECLARE @safeEmpRole INT = (SELECT TOP 1 [RoleId] FROM [Roles] WHERE [RoleName] = 'Employee' OR [RoleCode] = 'EMP');
+                IF @safeEmpRole IS NOT NULL
                 BEGIN
                     INSERT INTO [UserRoles] ([UserId], [RoleId])
-                    SELECT u.[UserId], @globalEmpRole
+                    SELECT u.[UserId], @safeEmpRole
                     FROM [Users] u
-                    WHERE NOT EXISTS (SELECT 1 FROM [UserRoles] ur WHERE ur.UserId = u.UserId);
+                    WHERE NOT EXISTS (SELECT 1 FROM [UserRoles] ur WHERE ur.[UserId] = u.[UserId]);
                 END
             ";
+
             var p = cmd.CreateParameter();
             p.ParameterName = "@searchId";
             p.Value = employeeIdOrEmail;
@@ -455,6 +610,184 @@ public class AuthService : IAuthService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to auto-sync user {SearchId} from EmployeeHubDb", employeeIdOrEmail);
+        }
+    }
+
+    // ------------------------------------------------------------------ //
+
+    /// <summary>
+    /// Applies a rich EmployeeHub API profile to the Knome database.
+    /// INSERTs new users or UPDATEs existing ones with the latest HR data.
+    /// Syncs roles (EMP always; SYSADM/HRADM/CADM when present in EmployeeHub roles).
+    /// </summary>
+    private async Task ApplyEmployeeHubProfileToKnomeAsync(DTOs.EmployeeHub.EmployeeHubProfileDto profile)
+    {
+        try
+        {
+            var conn = _db.Database.GetDbConnection();
+            if (conn.State != System.Data.ConnectionState.Open)
+                await conn.OpenAsync();
+
+            using var cmd = conn.CreateCommand();
+
+            // Resolve Knome DepartmentId by Code or Name
+            cmd.CommandText = @"
+                SELECT TOP 1 [DepartmentId] FROM [Departments]
+                WHERE ([DepartmentCode] = @deptCode AND @deptCode IS NOT NULL)
+                   OR ([Name]           = @deptName AND @deptName IS NOT NULL)";
+
+            void AddParam(System.Data.IDbCommand c, string name, object? value)
+            {
+                var p = c.CreateParameter();
+                p.ParameterName = name;
+                p.Value = value ?? DBNull.Value;
+                c.Parameters.Add(p);
+            }
+
+            AddParam(cmd, "@deptCode", profile.DepartmentCode);
+            AddParam(cmd, "@deptName", profile.DepartmentName);
+
+            var deptResult = await cmd.ExecuteScalarAsync();
+            int knomeDeptId = deptResult != null && deptResult != DBNull.Value ? Convert.ToInt32(deptResult) : 1;
+
+            // Handle email conflict with placeholder accounts
+            cmd.Parameters.Clear();
+            cmd.CommandText = @"
+                IF EXISTS (SELECT 1 FROM [Users] WHERE [Email] = @email AND [EmployeeId] <> @empId)
+                    UPDATE [Users] SET [Email] = @empId + '@knome.placeholder.local'
+                    WHERE [Email] = @email AND [EmployeeId] <> @empId";
+            AddParam(cmd, "@email",  profile.Email);
+            AddParam(cmd, "@empId",  profile.EmployeeId);
+            await cmd.ExecuteNonQueryAsync();
+
+            // INSERT or UPDATE the user record
+            cmd.Parameters.Clear();
+            cmd.CommandText = @"
+                IF NOT EXISTS (SELECT 1 FROM [Users] WHERE [EmployeeId] = @empId)
+                BEGIN
+                    INSERT INTO [Users] (
+                        [EmployeeId], [FullName], [Email], [DepartmentId], [Designation],
+                        [Location], [ProfilePhotoUrl], [Bio], [MobileNo], [JoiningDate],
+                        [ManagerEmployeeId], [IsActive], [IsPermanentlySuspended],
+                        [CreatedDate], [LastSyncedFromHrmsDate], [ProfileCompletion],
+                        [BioVisibility], [NetworkVisibility], [PhotosVisibility], [InterestsVisibility]
+                    ) VALUES (
+                        @empId, @fullName, @email, @deptId, @designation,
+                        @location, @photo, @bio, @phone, @joiningDate,
+                        @managerId, @isActive, 0,
+                        GETUTCDATE(), GETUTCDATE(), 50,
+                        'Public', 'Public', 'Public', 'Public'
+                    );
+
+                    DECLARE @newUid INT = SCOPE_IDENTITY();
+                    DECLARE @pwdHash NVARCHAR(500) = ISNULL(
+                        (SELECT TOP 1 [PasswordHash] FROM [UserCredentials] WHERE [PasswordHash] LIKE '$2%'),
+                        '$2a$11$CS8Szl.LS4r1zinkLjKb8ucRdww25eHjSGhqc6my/hQXCbb9DW0Nm'
+                    );
+                    IF NOT EXISTS (SELECT 1 FROM [UserCredentials] WHERE [UserId] = @newUid)
+                        INSERT INTO [UserCredentials] ([UserId], [PasswordHash], [PasswordSalt], [LastUpdated])
+                        VALUES (@newUid, @pwdHash, '', GETUTCDATE());
+                END
+                ELSE
+                BEGIN
+                    UPDATE [Users] SET
+                        [FullName]              = @fullName,
+                        [Email]                 = @email,
+                        [DepartmentId]          = @deptId,
+                        [Designation]           = ISNULL(@designation, [Designation]),
+                        [Location]              = ISNULL(@location, [Location]),
+                        [ProfilePhotoUrl]       = ISNULL([ProfilePhotoUrl], @photo),
+                        [Bio]                   = ISNULL([Bio], @bio),
+                        [MobileNo]              = ISNULL([MobileNo], @phone),
+                        [JoiningDate]           = ISNULL([JoiningDate], @joiningDate),
+                        [ManagerEmployeeId]     = ISNULL([ManagerEmployeeId], @managerId),
+                        [IsActive]              = @isActive,
+                        [LastSyncedFromHrmsDate]= GETUTCDATE(),
+                        [ModifiedDate]          = GETUTCDATE()
+                    WHERE [EmployeeId] = @empId;
+                END";
+
+            AddParam(cmd, "@empId",       profile.EmployeeId);
+            AddParam(cmd, "@fullName",    profile.FullName);
+            AddParam(cmd, "@email",       profile.Email);
+            AddParam(cmd, "@deptId",      knomeDeptId);
+            AddParam(cmd, "@designation", profile.Designation);
+            AddParam(cmd, "@location",    profile.Location);
+            AddParam(cmd, "@photo",       profile.ProfilePhotoUrl);
+            AddParam(cmd, "@bio",         profile.Bio);
+            AddParam(cmd, "@phone",       profile.PhoneNumber);
+            AddParam(cmd, "@joiningDate", (object?)profile.JoiningDate ?? DBNull.Value);
+            AddParam(cmd, "@managerId",   profile.ReportingManagerId);
+            AddParam(cmd, "@isActive",    profile.IsActive ? 1 : 0);
+            await cmd.ExecuteNonQueryAsync();
+
+            // Resolve UserId
+            cmd.Parameters.Clear();
+            cmd.CommandText = "SELECT [UserId] FROM [Users] WHERE [EmployeeId] = @empId";
+            AddParam(cmd, "@empId", profile.EmployeeId);
+            var uidResult = await cmd.ExecuteScalarAsync();
+            if (uidResult == null || uidResult == DBNull.Value) return;
+            int userId = Convert.ToInt32(uidResult);
+
+            // Sync roles: always Employee, plus elevated roles from EmployeeHub
+            var rolesToAssign = new List<string> { "Employee" };
+            foreach (var r in profile.Roles)
+            {
+                var code = r.RoleCode?.ToUpperInvariant();
+                if (code == "SYSADM") rolesToAssign.Add("System Administrator");
+                else if (code == "HRADM") rolesToAssign.Add("HR Administrator");
+                else if (code == "CADM") rolesToAssign.Add("Community Admin");
+            }
+
+            foreach (var roleName in rolesToAssign.Distinct())
+            {
+                cmd.Parameters.Clear();
+                cmd.CommandText = @"
+                    DECLARE @rid INT = (SELECT TOP 1 [RoleId] FROM [Roles] WHERE [RoleName] = @roleName OR [RoleCode] = @roleName);
+                    IF @rid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM [UserRoles] WHERE [UserId] = @uid AND [RoleId] = @rid)
+                        INSERT INTO [UserRoles] ([UserId], [RoleId]) VALUES (@uid, @rid)";
+                AddParam(cmd, "@roleName", roleName);
+                AddParam(cmd, "@uid",      userId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // Sync skills from EmployeeHub
+            if (profile.Skills.Count > 0)
+            {
+                foreach (var skill in profile.Skills.Where(s => !string.IsNullOrWhiteSpace(s)).Take(20))
+                {
+                    cmd.Parameters.Clear();
+                    cmd.CommandText = @"
+                        IF NOT EXISTS (SELECT 1 FROM [UserSkills] WHERE [UserId] = @uid AND [Skill] = @skill)
+                            INSERT INTO [UserSkills] ([UserId], [Skill]) VALUES (@uid, @skill)";
+                    AddParam(cmd, "@uid",   userId);
+                    AddParam(cmd, "@skill", skill.Trim());
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+
+            // Sync interests from EmployeeHub
+            if (profile.Interests.Count > 0)
+            {
+                foreach (var interest in profile.Interests.Where(i => !string.IsNullOrWhiteSpace(i)).Take(20))
+                {
+                    cmd.Parameters.Clear();
+                    cmd.CommandText = @"
+                        IF NOT EXISTS (SELECT 1 FROM [UserInterests] WHERE [UserId] = @uid AND [Interest] = @interest)
+                            INSERT INTO [UserInterests] ([UserId], [Interest]) VALUES (@uid, @interest)";
+                    AddParam(cmd, "@uid",      userId);
+                    AddParam(cmd, "@interest", interest.Trim());
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+
+            _logger.LogInformation(
+                "[Sync] Applied EmployeeHub API profile for {EmployeeId} ({Name}) → Knome UserId={UserId}",
+                profile.EmployeeId, profile.FullName, userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[Sync] Failed to apply EmployeeHub profile for {EmployeeId}", profile.EmployeeId);
         }
     }
 
