@@ -181,15 +181,13 @@ export default function Communities() {
                 if (s === 'approved' || s === 'joined') return 'Approved';
                 if (s === 'pending') return 'Pending';
 
-                // For backend database communities (where apiStatus is evaluated):
-                // If the server confirms not approved/joined/pending, server is the single source of truth!
-                if (apiStatus !== undefined && apiStatus !== null) {
-                    const entry = userJoinedList.find(c => String(c.id) === String(id));
-                    if (entry && entry.status === 'subscribed') return 'Subscribed';
-                    return 'none';
-                }
+                // Check pending join requests in localStorage
+                try {
+                    const savedRequests = JSON.parse(localStorage.getItem(`knome_join_requests_${id}`) || '[]');
+                    if (savedRequests.some(r => String(r.userId || r.id) === currentUid)) return 'Pending';
+                } catch (_) {}
 
-                // Fallback for purely local mock/offline communities
+                // Check user joined list
                 const entry = userJoinedList.find(c => String(c.id) === String(id));
                 if (entry) {
                     if (entry.status === 'joined' || entry.status === 'approved' || entry.status === 'Approved') return 'Approved';
@@ -788,28 +786,159 @@ export default function Communities() {
     };
 
     const saveJoinedCommunity = async (community) => {
+        const isPrivate = community.type === 'Private';
+        const targetId = community.id;
+        const currentUid = String(currentUser?.userId || currentUser?.id || '');
+
+        // Clear removed tombstone if re-joining
+        try {
+            const removedKey = `knome_community_removed_${targetId}`;
+            const currentRemoved = JSON.parse(localStorage.getItem(removedKey) || '[]');
+            const cleanedRemoved = currentRemoved.filter(x => String(x).toLowerCase() !== currentUid.toLowerCase());
+            localStorage.setItem(removedKey, JSON.stringify(cleanedRemoved));
+        } catch (_) {}
+
         try {
             await communitiesApi.join(community.id).catch(() => null);
         } catch (err) {
             console.error('Failed to join community via API:', err);
         }
-        // FR-CM-09: Persist join to localStorage regardless of API success
-        const newStatus = community.type === 'Private' ? 'Pending' : 'Approved';
-        const userKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
-        const existingJoined = JSON.parse(localStorage.getItem(userKey) || '[]');
-        if (!existingJoined.some(c => String(c.id) === String(community.id))) {
-            existingJoined.push({
-                id: community.id,
-                name: community.name,
-                status: newStatus === 'Approved' ? 'joined' : 'pending',
-                joinedAt: new Date().toISOString()
-            });
+
+        if (isPrivate) {
+            // Save request to knome_join_requests_${targetId}
+            const newRequest = {
+                id: currentUser?.id || currentUser?.userId || Date.now(),
+                userId: currentUser?.id || currentUser?.userId || Date.now(),
+                name: currentUser?.name || currentUser?.fullName || 'Current Employee',
+                fullName: currentUser?.name || currentUser?.fullName || 'Current Employee',
+                role: currentUser?.roleName || 'Employee',
+                designation: currentUser?.roleName || currentUser?.designation || 'Employee',
+                department: currentUser?.departmentName || currentUser?.department || 'Engineering',
+                avatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
+                employeeId: currentUser?.employeeId || 'MPO100',
+                requestedAt: new Date().toISOString(),
+                status: 'Pending'
+            };
+            const existingReqs = JSON.parse(localStorage.getItem(`knome_join_requests_${targetId}`) || '[]');
+            const filteredReqs = existingReqs.filter(r => String(r.id || r.userId) !== String(newRequest.userId));
+            localStorage.setItem(`knome_join_requests_${targetId}`, JSON.stringify([newRequest, ...filteredReqs]));
+
+            // Persist pending status in joined communities
+            const userKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
+            const existingJoined = JSON.parse(localStorage.getItem(userKey) || '[]');
+            const existingIdx = existingJoined.findIndex(c => String(c.id) === String(targetId));
+            if (existingIdx >= 0) {
+                existingJoined[existingIdx].status = 'pending';
+            } else {
+                existingJoined.push({
+                    id: targetId,
+                    name: community.name,
+                    status: 'pending',
+                    joinedAt: new Date().toISOString()
+                });
+            }
             localStorage.setItem(userKey, JSON.stringify(existingJoined));
+
+            // Notify community creator/admin
+            try {
+                const creatorId = community.createdByUserId || community.creatorUserId || 1;
+                const adminNotif = {
+                    id: Date.now() + Math.floor(Math.random() * 1000),
+                    targetUserId: creatorId,
+                    targetCreatorId: creatorId,
+                    communityId: targetId,
+                    type: 'join_request',
+                    category: 'Community',
+                    text: `🔔 ${currentUser?.name || 'An employee'} requested to join your private community "${community.name}". Pending your approval.`,
+                    senderName: currentUser?.name || 'Employee',
+                    senderAvatar: currentUser?.avatar || null,
+                    senderUserId: currentUser?.userId || currentUser?.id,
+                    createdDate: new Date().toISOString(),
+                    createdAt: new Date().toISOString(),
+                    unread: true,
+                    icon: 'person_add',
+                    color: 'text-indigo-400',
+                    bg: 'bg-indigo-500/10',
+                    communityName: community.name,
+                    actionLink: `/community/view?id=${targetId}`
+                };
+                const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
+                localStorage.setItem('knome_notifications', JSON.stringify([adminNotif, ...existingNotifs]));
+                window.dispatchEvent(new CustomEvent('notification-updated'));
+                window.dispatchEvent(new CustomEvent('knome_new_notification'));
+                window.dispatchEvent(new CustomEvent('knome_notification_received', { detail: adminNotif }));
+            } catch (_) {}
+
+            setCommunities(prev => prev.map(c => String(c.id) === String(targetId) ? { ...c, membershipStatus: 'Pending' } : c));
+            window.dispatchEvent(new CustomEvent('community-joined-change'));
+            addToast(`📨 Join request sent to "${community.name}" administrator.`, 'info');
+        } else {
+            // Public community
+            const userKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
+            const existingJoined = JSON.parse(localStorage.getItem(userKey) || '[]');
+            const existingIdx = existingJoined.findIndex(c => String(c.id) === String(targetId));
+            if (existingIdx >= 0) {
+                existingJoined[existingIdx].status = 'joined';
+            } else {
+                existingJoined.push({
+                    id: targetId,
+                    name: community.name,
+                    status: 'joined',
+                    joinedAt: new Date().toISOString()
+                });
+            }
+            localStorage.setItem(userKey, JSON.stringify(existingJoined));
+
+            // Add to local members list
+            const localMembers = JSON.parse(localStorage.getItem(`knome_community_members_${targetId}`) || '[]');
+            if (!localMembers.some(m => String(m.userId || m.id) === currentUid)) {
+                localMembers.push({
+                    userId: currentUser?.id || currentUser?.userId || 99,
+                    fullName: currentUser?.name || currentUser?.fullName || 'Current Employee',
+                    employeeId: currentUser?.employeeId || 'MPO100',
+                    designation: currentUser?.roleName || 'Member',
+                    memberType: 'Member',
+                    status: 'Approved',
+                    profilePhotoUrl: currentUser?.avatar
+                });
+                localStorage.setItem(`knome_community_members_${targetId}`, JSON.stringify(localMembers));
+            }
+
+            setCommunities(prev => prev.map(c => String(c.id) === String(targetId) ? { 
+                ...c, 
+                membershipStatus: 'Approved',
+                members: `${(parseInt(c.members) || 1) + 1} members`
+            } : c));
+            window.dispatchEvent(new CustomEvent('community-joined-change'));
+            addToast(`🎉 You have joined "${community.name}"!`, 'success');
         }
-        setCommunities(prev => prev.map(c => c.id === community.id ? { 
-            ...c, 
-            membershipStatus: newStatus 
-        } : c));
+    };
+
+    const handleCancelRequestOnCard = async (community) => {
+        const ok = await confirm({
+            title: 'Cancel Join Request',
+            message: `Do you want to cancel your pending join request for "${community.name}"?`,
+            confirmText: 'Cancel Request',
+            cancelText: 'Keep Request',
+            variant: 'danger'
+        });
+        if (!ok) return;
+
+        try { await communitiesApi.leave(community.id).catch(() => null); } catch (_) {}
+        const targetId = community.id;
+        const currentUid = String(currentUser?.userId || currentUser?.id || '');
+
+        const existingReqs = JSON.parse(localStorage.getItem(`knome_join_requests_${targetId}`) || '[]');
+        const cleanedReqs = existingReqs.filter(r => String(r.id || r.userId) !== currentUid);
+        localStorage.setItem(`knome_join_requests_${targetId}`, JSON.stringify(cleanedReqs));
+
+        const userKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
+        const userJoined = JSON.parse(localStorage.getItem(userKey) || '[]');
+        localStorage.setItem(userKey, JSON.stringify(userJoined.filter(c => String(c.id) !== String(targetId))));
+
+        setCommunities(prev => prev.map(c => String(c.id) === String(targetId) ? { ...c, membershipStatus: 'none' } : c));
+        window.dispatchEvent(new CustomEvent('community-joined-change'));
+        addToast('Join request cancelled.', 'info');
     };
 
     const handleCommunityCreated = (result) => {
@@ -1324,12 +1453,26 @@ export default function Communities() {
 
                                                     if (community.type === 'Private') {
                                                         return (
-                                                            <button onClick={(e) => { 
-                                                                e.stopPropagation(); 
-                                                                if (community.membershipStatus !== 'Pending' && community.membershipStatus !== 'Approved') {
-                                                                    saveJoinedCommunity(community);
-                                                                }
-                                                            }} className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] transition-colors ${community.membershipStatus === 'Pending' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 cursor-default' : community.membershipStatus === 'Approved' ? 'bg-emerald-100 text-emerald-600 cursor-default' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer'}`}>
+                                                            <button 
+                                                                onClick={(e) => { 
+                                                                    e.stopPropagation(); 
+                                                                    if (community.membershipStatus === 'Pending') {
+                                                                        handleCancelRequestOnCard(community);
+                                                                    } else if (community.membershipStatus !== 'Approved') {
+                                                                        saveJoinedCommunity(community);
+                                                                    } else {
+                                                                        navigate(`/community/view?id=${community.id}`);
+                                                                    }
+                                                                }} 
+                                                                className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] transition-colors cursor-pointer ${
+                                                                    community.membershipStatus === 'Pending' 
+                                                                        ? 'bg-amber-100 hover:bg-rose-100 text-amber-700 hover:text-rose-700 dark:bg-amber-900/30 dark:hover:bg-rose-950/40 dark:text-amber-400 dark:hover:text-rose-400 border border-amber-300 dark:border-amber-700' 
+                                                                        : community.membershipStatus === 'Approved' 
+                                                                            ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                                                                            : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
+                                                                }`}
+                                                                title={community.membershipStatus === 'Pending' ? 'Click to cancel request' : community.membershipStatus === 'Approved' ? 'Joined Member' : 'Request to join'}
+                                                            >
                                                                 {community.membershipStatus === 'Pending' ? 'Requested' : community.membershipStatus === 'Approved' ? 'Joined' : 'Request'}
                                                             </button>
                                                         );
@@ -1350,18 +1493,14 @@ export default function Communities() {
                                         <div className="flex items-center justify-between gap-1.5 pt-2 mt-auto border-t border-slate-100 dark:border-slate-800/80 text-[10px] font-bold text-slate-500 dark:text-slate-400">
                                             <div className="flex items-center gap-1 shrink-0 whitespace-nowrap">
                                                 <span className="material-symbols-outlined text-[13px] text-indigo-500">group</span>
-                                                <span>{community.members}</span>
+                                                <span>{parseInt(community.members) || community.membersCount || 1}</span>
                                             </div>
-                                            {community.category && (
-                                                <span className="text-[9px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded-full truncate max-w-[80px]" title={community.category}>
-                                                    <HighlightText text={community.category} query={searchQuery} />
-                                                </span>
-                                            )}
                                             <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                                                <div className={`flex items-center gap-0.5 whitespace-nowrap ${community.type === 'Public' ? 'text-teal-600 dark:text-teal-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                                                    <span className="material-symbols-outlined text-[13px]">{community.type === 'Public' ? 'trending_up' : 'forum'}</span>
-                                                    <span>{community.activity}</span>
-                                                </div>
+                                                {community.category && (
+                                                    <span className="text-[9px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded-full truncate max-w-[120px]" title={community.category}>
+                                                        <HighlightText text={community.category} query={searchQuery} />
+                                                    </span>
+                                                )}
                                                 {/* Delete Button located in bottom right of box */}
                                                 {isSysAdmin && (
                                                     <button 

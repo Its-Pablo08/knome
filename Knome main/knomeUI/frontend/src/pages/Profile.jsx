@@ -1014,7 +1014,7 @@ export default function Profile() {
                                     type="button"
                                     onClick={() => setIsConnectionsModalOpen(true)}
                                     className="text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer flex items-center gap-1"
-                                    title="View 1st-degree connections"
+                                    title="View connections"
                                 >
                                     <span>
                                         {displayedConnectionsCount} {displayedConnectionsCount === 1 ? 'connection' : 'connections'}
@@ -1096,7 +1096,7 @@ export default function Profile() {
                                         onClick={async () => {
                                             const ok = await confirm({
                                                 title: 'Remove Connection',
-                                                message: `Are you sure you want to remove your 1st-degree connection with ${displayUser.name || 'this user'}?`,
+                                                message: `Are you sure you want to remove your connection with ${displayUser.name || 'this user'}?`,
                                                 confirmText: 'Remove Connection',
                                                 cancelText: 'Cancel',
                                                 variant: 'warning'
