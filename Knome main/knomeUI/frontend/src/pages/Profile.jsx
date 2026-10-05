@@ -906,144 +906,40 @@ export default function Profile() {
                             </div>
                         </div>
 
-                        {/* Right Side: Action Buttons & Share Profile */}
-                        <div className="flex flex-wrap items-center gap-2 self-start mt-1">
-                            {!isOwnProfile && (
-                                <div className="flex flex-wrap items-center gap-2">
-                                    {displayUser.connectionStatus === 'PendingReceived' ? (
-                                        <>
-                                            <button
-                                                onClick={async () => {
-                                                    try {
-                                                        if (displayUser.requestId) {
-                                                            await userApi.acceptConnection(displayUser.requestId);
-                                                        } else {
-                                                            await userApi.connect(displayUser.userId);
-                                                        }
-                                                        window.location.reload();
-                                                    } catch (e) {
-                                                        console.error(e);
-                                                    }
-                                                }}
-                                                className="px-5 py-1.5 bg-blue-600 text-white font-bold text-sm rounded-full hover:bg-blue-700 transition-all shadow-xs"
-                                            >
-                                                Accept Request
-                                            </button>
-                                            <button
-                                                onClick={async () => {
-                                                    try {
-                                                        if (displayUser.requestId) {
-                                                            await userApi.rejectConnection(displayUser.requestId);
-                                                        }
-                                                        window.location.reload();
-                                                    } catch (e) {
-                                                        console.error(e);
-                                                    }
-                                                }}
-                                                className="px-4 py-1.5 border border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-sm rounded-full transition-all"
-                                            >
-                                                Ignore
-                                            </button>
-                                        </>
-                                    ) : displayUser.connectionStatus === 'PendingSent' || displayUser.connectionStatus === 'Pending' ? (
-                                        <button 
-                                            onClick={async () => {
-                                                try {
-                                                    await userApi.cancelConnection(displayUser.userId);
-                                                    window.location.reload();
-                                                } catch (e) {
-                                                    console.error(e);
-                                                }
-                                            }}
-                                            className="px-4 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 font-bold text-sm rounded-full hover:bg-amber-100 transition-all border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 cursor-pointer"
-                                            title="Click to cancel connection request"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">schedule</span>
-                                            Pending • Cancel
-                                        </button>
-                                    ) : displayUser.connectionStatus === 'Connected' ? (
-                                        <button 
-                                            onClick={async () => {
-                                                const ok = await confirm({
-                                                    title: 'Remove Connection',
-                                                    message: `Are you sure you want to remove your 1st-degree connection with ${displayUser.name || 'this user'}?`,
-                                                    confirmText: 'Remove Connection',
-                                                    cancelText: 'Cancel',
-                                                    variant: 'warning'
-                                                });
-                                                if (!ok) return;
-                                                try {
-                                                    await userApi.removeConnection(displayUser.userId);
-                                                    addToast && addToast('Connection removed.', 'info');
-                                                    window.location.reload();
-                                                } catch (e) {
-                                                    console.error(e);
-                                                }
-                                            }}
-                                            className="px-4 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-bold text-sm rounded-full hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 transition-all border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 cursor-pointer"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
-                                            Connected
-                                        </button>
-                                    ) : (
-                                        <button 
-                                            onClick={async () => {
-                                                try {
-                                                    await userApi.connect(displayUser.userId);
-                                                    window.location.reload();
-                                                } catch (e) {
-                                                    console.error(e);
-                                                }
-                                            }}
-                                            className="px-5 py-1.5 bg-blue-600 text-white font-bold text-sm rounded-full hover:bg-blue-700 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">person_add</span>
-                                            Connect
-                                        </button>
-                                    )}
-
-                                    {/* Follow / Following Toggle Button */}
-                                    <button
-                                        onClick={handleToggleFollow}
-                                        disabled={isFollowLoading}
-                                        className={`px-4 py-1.5 font-bold text-sm rounded-full transition-all border flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-                                            isFollowing 
-                                                ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 shadow-xs' 
-                                                : 'border border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                                        }`}
-                                    >
-                                        <span className="material-symbols-outlined text-[16px]">
-                                            {isFollowing ? 'check_circle' : 'person_add'}
-                                        </span>
-                                        {isFollowing ? 'Following ✔' : 'Follow'}
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Share Profile button at right side */}
-                            <button 
+                        {/* Right Side: Edit Profile Icon for own profile */}
+                        {isOwnProfile && (
+                            <button
                                 type="button"
-                                onClick={() => setIsShareModalOpen(true)}
-                                className="px-4 py-1.5 border border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                onClick={handleOpenEdit}
+                                className="w-10 h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-slate-200/80 dark:border-slate-700/80 shadow-2xs self-start"
+                                title="Edit Profile"
                             >
-                                <span className="material-symbols-outlined text-[16px]">share</span>
-                                Share profile
+                                <span className="material-symbols-outlined text-[20px]">edit</span>
                             </button>
-                        </div>
+                        )}
                     </div>
 
-<<<<<<< HEAD
                     {/* Action Buttons Row */}
                     <div className="flex flex-wrap items-center gap-2 mt-5">
                         {isOwnProfile ? (
-                            <button 
-                                type="button"
-                                onClick={handleOpenEdit}
-                                className="px-4 py-1.5 border border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                            >
-                                <span className="material-symbols-outlined text-[18px]">add_circle</span>
-                                <span>Add profile section</span>
-                            </button>
+                            <>
+                                <button 
+                                    type="button"
+                                    onClick={handleOpenEdit}
+                                    className="px-4 py-1.5 bg-blue-600 text-white hover:bg-blue-700 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                                    <span>Edit profile</span>
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={handleOpenEdit}
+                                    className="px-4 py-1.5 border border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                                    <span>Add profile section</span>
+                                </button>
+                            </>
                         ) : (
                             <div className="flex flex-wrap items-center gap-2">
                                 {displayUser.connectionStatus === 'PendingReceived' ? (
@@ -1175,15 +1071,12 @@ export default function Profile() {
                         <button 
                             type="button"
                             onClick={() => setIsShareModalOpen(true)}
-                            className="px-4 py-1.5 border border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5"
+                            className="px-4 py-1.5 border border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-sm rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
                         >
                             <span className="material-symbols-outlined text-[16px]">share</span>
                             Share profile
                         </button>
                     </div>
-
-=======
->>>>>>> 3045283780624cf87f585adb06978276dd6da4b9
                     {/* Interactive Stats Row */}
                     <div className={`grid ${isSysAdmin ? 'grid-cols-2 md:grid-cols-4' : (isOwnProfile ? 'grid-cols-3 md:grid-cols-5' : 'grid-cols-3 md:grid-cols-6')} gap-4 py-6 border-t border-slate-100 dark:border-slate-800/50 mt-5`}>
                         {!isSysAdmin && (
