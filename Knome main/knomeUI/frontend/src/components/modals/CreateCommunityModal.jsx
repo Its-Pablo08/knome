@@ -239,7 +239,7 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
     }, [candidateUsers, userSearchQuery]);
 
     const employeeGridRef = useRef(null);
-    const { visibleCount: visibleUserCount, resetVisibleCount: resetUserCount } = useScrollLoading(filteredUsers.length, 12, 12, 100, employeeGridRef);
+    const { visibleCount: visibleUserCount, isFetchingMore: isFetchingMoreUsers, resetVisibleCount: resetUserCount } = useScrollLoading(filteredUsers.length, 60, 50, 300, employeeGridRef);
 
     useEffect(() => {
         resetUserCount();
@@ -1345,93 +1345,57 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                                             )}
                                         </div>
 
-                                        {/* Dedicated Selected Members Box */}
-                                        <div className="mb-3.5 bg-white dark:bg-slate-800/90 border border-indigo-200/90 dark:border-indigo-800/70 rounded-2xl p-3 sm:p-3.5 shadow-xs transition-all">
-                                            <div className="flex items-center justify-between gap-2 mb-2 px-0.5">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-6 h-6 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                                                        <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
-                                                    </div>
-                                                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                                                        Selected Members Box
-                                                    </span>
-                                                    <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full transition-colors ${
-                                                        selectedUsers.length > 0
-                                                            ? 'bg-indigo-600 text-white shadow-xs'
-                                                            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                                                    }`}>
-                                                        {selectedUsers.length}
-                                                    </span>
-                                                </div>
+                                        {/* Selected Members Chips directly under the search bar */}
+                                        {selectedUsers.length > 0 && (
+                                            <div className="flex flex-wrap items-center gap-1.5 mb-3 p-2 bg-indigo-50/60 dark:bg-slate-800/70 rounded-xl border border-indigo-100 dark:border-indigo-900/40 max-h-[105px] overflow-y-auto custom-scrollbar">
+                                                <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 px-1 shrink-0">
+                                                    Selected ({selectedUsers.length}):
+                                                </span>
+                                                {selectedUsers.map(user => {
+                                                    const userId = user.id || user.userId;
+                                                    const displayName = user.name || user.fullName || 'Employee';
+                                                    const displayAvatar = user.avatar || user.profilePhotoUrl;
+                                                    const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff&size=48`;
 
-                                                {selectedUsers.length > 0 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setInvitedUserIds([])}
-                                                        className="text-[11px] font-bold text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 transition-colors flex items-center gap-1 cursor-pointer px-2 py-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                                                        title="Deselect all members"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[14px]">remove_done</span>
-                                                        Clear All
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            {selectedUsers.length === 0 ? (
-                                                <div className="py-2.5 px-3 text-center border border-dashed border-slate-200 dark:border-slate-700/80 rounded-xl bg-slate-50/60 dark:bg-slate-800/40">
-                                                    <p className="text-[11px] text-slate-400 dark:text-slate-400 font-medium">
-                                                        No members selected yet. Click on any employee cards below to add them to this box.
-                                                    </p>
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-wrap gap-2 max-h-[135px] overflow-y-auto custom-scrollbar p-1">
-                                                    {selectedUsers.map(user => {
-                                                        const userId = user.id || user.userId;
-                                                        const displayName = user.name || user.fullName || 'Employee';
-                                                        const displayAvatar = user.avatar || user.profilePhotoUrl;
-                                                        const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff&size=48`;
-
-                                                        return (
-                                                            <div
-                                                                key={userId}
-                                                                className="inline-flex items-center gap-2 pl-1.5 pr-2 py-1.5 bg-indigo-50/80 dark:bg-indigo-950/50 border border-indigo-200/90 dark:border-indigo-800/60 rounded-xl shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-600 transition-all group select-none animate-in fade-in zoom-in-95 duration-150"
+                                                    return (
+                                                        <span
+                                                            key={userId}
+                                                            className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-0.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 rounded-full text-xs font-semibold text-slate-800 dark:text-slate-200 shadow-2xs group select-none animate-in fade-in zoom-in-95 duration-100"
+                                                        >
+                                                            <img
+                                                                src={displayAvatar || fallbackAvatar}
+                                                                className="w-4 h-4 rounded-full object-cover shrink-0"
+                                                                alt={displayName}
+                                                                onError={(e) => {
+                                                                    e.target.onerror = null;
+                                                                    e.target.src = fallbackAvatar;
+                                                                }}
+                                                            />
+                                                            <span className="text-[11px] font-bold truncate max-w-[120px]">{displayName}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    toggleInviteUser(userId);
+                                                                }}
+                                                                className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors cursor-pointer shrink-0 ml-0.5"
+                                                                title={`Remove ${displayName}`}
                                                             >
-                                                                <img
-                                                                    src={displayAvatar || fallbackAvatar}
-                                                                    className="w-5 h-5 rounded-full object-cover shrink-0 border border-indigo-300 dark:border-indigo-600"
-                                                                    alt={displayName}
-                                                                    onError={(e) => {
-                                                                        e.target.onerror = null;
-                                                                        e.target.src = fallbackAvatar;
-                                                                    }}
-                                                                />
-                                                                <div className="flex flex-col min-w-0">
-                                                                    <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate max-w-[130px] leading-tight">
-                                                                        {displayName}
-                                                                    </span>
-                                                                    {user.designation && (
-                                                                        <span className="text-[9px] text-slate-400 truncate max-w-[130px] leading-none mt-0.5">
-                                                                            {user.designation}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        toggleInviteUser(userId);
-                                                                    }}
-                                                                    className="w-4 h-4 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors cursor-pointer shrink-0 ml-1"
-                                                                    title={`Remove ${displayName}`}
-                                                                >
-                                                                    <span className="material-symbols-outlined text-[13px] leading-none">close</span>
-                                                                </button>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
+                                                                <span className="material-symbols-outlined text-[12px] leading-none">close</span>
+                                                            </button>
+                                                        </span>
+                                                    );
+                                                })}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setInvitedUserIds([])}
+                                                    className="ml-auto text-[11px] font-bold text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 px-1.5 py-0.5 rounded cursor-pointer shrink-0 transition-colors"
+                                                    title="Deselect all members"
+                                                >
+                                                    Clear All
+                                                </button>
+                                            </div>
+                                        )}
 
                                         <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium px-1 mb-2">
                                             <span>Showing {filteredUsers.length} of {candidateUsers.length} employees</span>
@@ -1441,7 +1405,7 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                                         </div>
 
                                         {/* Employee Grid with Scroll */}
-                                        <div ref={employeeGridRef} className="max-h-[340px] overflow-y-auto pr-1">
+                                        <div ref={employeeGridRef} className="max-h-[380px] overflow-y-auto pr-1">
                                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                                                 {filteredUsers.length === 0 ? (
                                                     <div className="col-span-full py-8 text-center bg-white dark:bg-slate-800/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
@@ -1505,7 +1469,7 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                                                     })
                                                 )}
                                             </div>
-                                            <ScrollLoadingIndicator isVisible={visibleUserCount < filteredUsers.length} text="Loading more employees on scroll..." />
+                                            <ScrollLoadingIndicator isVisible={isFetchingMoreUsers && visibleUserCount < filteredUsers.length} text="Loading more employees on scroll..." />
                                         </div>
                                     </div>
                                 </div>
@@ -1516,10 +1480,7 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
 
                 {/* Footer Buttons */}
                 {!createdCommunityLink && !isSubmittedForApproval && (
-                    <div className="px-5 py-3 sm:px-6 sm:py-3.5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center rounded-b-2xl sm:rounded-b-3xl bg-white dark:bg-slate-900 shrink-0 z-10">
-                        <button onClick={handleCloseModal} className="px-5 py-2 text-[13px] font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer">
-                            Cancel
-                        </button>
+                    <div className="px-5 py-3 sm:px-6 sm:py-3.5 border-t border-slate-100 dark:border-slate-800 flex justify-end items-center gap-3 rounded-b-2xl sm:rounded-b-3xl bg-white dark:bg-slate-900 shrink-0 z-10">
                         <div className="flex gap-3">
                             {step === 2 && (
                                 <button onClick={() => setStep(1)}

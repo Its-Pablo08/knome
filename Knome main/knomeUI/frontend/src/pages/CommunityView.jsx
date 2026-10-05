@@ -1198,7 +1198,8 @@ export default function CommunityView() {
     };
 
     // Community Creator check
-    const isCreator = (community?.creatorUserId && String(community.creatorUserId) === String(currentUser?.id)) ||
+    const isCreator = (community?.creatorUserId && String(community.creatorUserId) === String(currentUser?.id || currentUser?.userId)) ||
+                      (community?.createdByUserId && String(community.createdByUserId) === String(currentUser?.id || currentUser?.userId)) ||
                       (community?.createdBy && currentUser?.name && community.createdBy.toLowerCase().includes(currentUser.name.toLowerCase())) ||
                       (community?.adminContact && currentUser?.name && community.adminContact.toLowerCase().includes(currentUser.name.toLowerCase()));
 
@@ -1207,7 +1208,15 @@ export default function CommunityView() {
                     ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'Admin'].includes(currentUser?.roleName) ||
                     (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'SYSADM', 'HRADM', 'CADM', 'Admin'].includes(r))) ||
                     isCreator ||
-                    membersList.some(m => String(m.userId || m.id) === String(currentUser?.id) && (m.memberType === 'Admin' || m.memberType === 'Moderator'));
+                    Boolean(community?.isCurrentUserAdmin) ||
+                    membersList.some(m => {
+                        const mUid = String(m.userId || m.id || '');
+                        const mEmp = String(m.employeeId || m.empId || '').toUpperCase();
+                        const isMatch = (currentUser?.id && mUid === String(currentUser.id)) ||
+                                        (currentUser?.userId && mUid === String(currentUser.userId)) ||
+                                        (currentUser?.employeeId && mEmp && mEmp === String(currentUser.employeeId).toUpperCase());
+                        return isMatch && (m.memberType === 'Admin' || m.memberType === 'Moderator' || m.roleName === 'Admin' || m.role === 'Admin');
+                    });
 
     const isSysAdmin = ['SYSADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
                        ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin'].includes(currentUser?.roleName) ||
@@ -1650,7 +1659,6 @@ export default function CommunityView() {
                 });
 
                 const isDefaultOrg = (commData.communityType || '').toLowerCase().includes('default') || (commData.communityType || '').toLowerCase().includes('org');
-                const isCommAdmin = Boolean(commData.isCurrentUserAdmin);
                 
                 const currentUid = String(currentUser?.userId || currentUser?.id || '');
                 const currentEmpId = String(currentUser?.employeeId || '').toUpperCase();
@@ -1659,8 +1667,17 @@ export default function CommunityView() {
 
                 const isCreator = Boolean(
                     (commData.createdByUserId && String(commData.createdByUserId) === currentUid) ||
-                    (commData.creatorUserId && String(commData.creatorUserId) === currentUid)
+                    (commData.creatorUserId && String(commData.creatorUserId) === currentUid) ||
+                    (commData.createdByUserName && currentName && commData.createdByUserName.toLowerCase().includes(currentName))
                 );
+
+                const isMemberAdmin = rawList.some(m => {
+                    const mUid = String(m?.userId || m?.id || '');
+                    const mEmp = String(m?.employeeId || m?.empId || '').toUpperCase();
+                    return ((currentUid && mUid === currentUid) || (currentEmpId && mEmp === currentEmpId)) && 
+                           (m.memberType === 'Admin' || m.memberType === 'Moderator');
+                });
+                const isCommAdmin = Boolean(commData.isCurrentUserAdmin) || isMemberAdmin;
 
                 const isCurrentRemoved = removedSet.has(currentUid.toLowerCase()) || 
                                          (currentEmpId && removedSet.has(currentEmpId.toLowerCase())) || 
@@ -1669,6 +1686,19 @@ export default function CommunityView() {
 
                 const apiStatus = (commData.currentUserMembershipStatus || '').toLowerCase();
                 const isApiApproved = apiStatus === 'approved' || apiStatus === 'joined';
+
+                const userJoinedList = JSON.parse(localStorage.getItem(`knome_joined_communities_${currentUser?.id || 'guest'}`) || '[]');
+                const isLocalJoined = userJoinedList.some(c => String(c.id) === String(commData.communityId) && (c.status === 'joined' || !c.status));
+                const isLocalPending = userJoinedList.some(c => String(c.id) === String(commData.communityId) && (c.status === 'pending' || c.status === 'requested'));
+
+                const isMemberInRawList = rawList.some(m => {
+                    const mUid = String(m?.userId || m?.id || '');
+                    const mEmp = String(m?.employeeId || m?.empId || '').toUpperCase();
+                    const mName = String(m?.fullName || m?.name || '').toLowerCase();
+                    return (currentUid && mUid === currentUid) || 
+                           (currentEmpId && mEmp === currentEmpId) || 
+                           (currentName && mName === currentName);
+                });
 
                 // Load persistent subscribers and suspended members
                 const savedSubs = JSON.parse(localStorage.getItem(`knome_community_subscribers_${commData.communityId}`) || '[]');
@@ -1687,15 +1717,16 @@ export default function CommunityView() {
                 const isCurrentUserSysAdmin = ['SYSADM'].includes(currentUser?.role) || ['System Administrator', 'System Admin'].includes(currentUser?.roleName);
 
                 // Authoritative joined check:
-                // User is a member IF NOT suspended AND:
-                // - Official mandatory Default/Org community for all employees, OR
-                // - Community Admin according to backend, OR
+                // User is a member IF NOT suspended AND NOT removed locally AND:
+                // - Default/Org community, OR
+                // - Community Admin, OR
                 // - Community Creator, OR
-                // - Backend DB explicitly confirms status is approved/joined AND user has not been removed locally
-                const isUserJoined = !isUserSuspendedInComm && !isCurrentRemoved && (isDefaultOrg || isCommAdmin || isCreator || isApiApproved);
+                // - Backend DB confirms approved/joined, OR
+                // - User joined locally or present in member list
+                const isUserJoined = !isUserSuspendedInComm && !isCurrentRemoved && (isDefaultOrg || isCommAdmin || isCreator || isApiApproved || isLocalJoined || isMemberInRawList);
 
-                // If backend DB reports user is NOT a member, immediately purge stale cache
-                if (!isUserJoined && !isDefaultOrg && !isCommAdmin && !isCreator) {
+                // If backend DB reports user is NOT a member and no local join exists, clean cache
+                if (!isUserJoined && !isDefaultOrg && !isCommAdmin && !isCreator && !isLocalPending) {
                     // Purge current user from member list
                     rawList = rawList.filter(m => {
                         const mUid = String(m?.userId || m?.id || '');
@@ -1752,12 +1783,15 @@ export default function CommunityView() {
                 setMembersList(resolvedMembers);
                 localStorage.setItem(savedMembersKey, JSON.stringify(resolvedMembers));
 
-                const userJoinedList = JSON.parse(localStorage.getItem(`knome_joined_communities_${currentUser?.id || 'guest'}`) || '[]');
                 const localEntry = userJoinedList.find(c => String(c.id) === String(commData.communityId));
                 const isUserSubscribed = !isUserJoined && (!!(localEntry && localEntry.status === 'subscribed') || apiStatus === 'subscribed');
 
                 const savedRequests = JSON.parse(localStorage.getItem(`knome_join_requests_${commData.communityId}`) || '[]');
-                const myRequest = savedRequests.find(r => String(r.userId || r.id) === String(currentUser?.id));
+                const myRequest = savedRequests.find(r => {
+                    const rUid = String(r.userId || r.id || '');
+                    const rEmp = String(r.employeeId || '').toUpperCase();
+                    return (currentUid && rUid === currentUid) || (currentEmpId && rEmp && rEmp === currentEmpId);
+                });
 
                 let resolvedStatus;
                 if (isUserSuspendedInComm && !isCurrentUserSysAdmin) {
@@ -1770,7 +1804,7 @@ export default function CommunityView() {
                     resolvedStatus = 'joined';
                 } else if (isUserSubscribed) {
                     resolvedStatus = 'subscribed';
-                } else if (apiStatus === 'pending' || (myRequest && !isCurrentRemoved)) {
+                } else if (!isCurrentRemoved && (apiStatus === 'pending' || Boolean(myRequest) || isLocalPending)) {
                     resolvedStatus = 'requested';
                 } else {
                     resolvedStatus = 'none';
@@ -1885,7 +1919,12 @@ export default function CommunityView() {
                 const isUserSuspendedInComm = Boolean(userSuspensionRecord);
                 const isCurrentUserSysAdmin = ['SYSADM'].includes(currentUser?.role) || ['System Administrator', 'System Admin'].includes(currentUser?.roleName);
 
-                const myRequest = savedRequests.find(r => String(r.userId || r.id) === String(currentUser?.id));
+                const myRequest = savedRequests.find(r => {
+                    const rUid = String(r.userId || r.id || '');
+                    const rEmp = String(r.employeeId || '').toUpperCase();
+                    return (currentUidFallback && rUid === currentUidFallback) || (currentEmpIdFallback && rEmp && rEmp === currentEmpIdFallback);
+                });
+                const isLocalPendingFallback = userJoinedList.some(c => String(c.id) === String(targetId) && (c.status === 'pending' || c.status === 'requested'));
                 const isDefaultOrgFallback = found ? ((found.type || '').toLowerCase().includes('default') || (found.type || '').toLowerCase().includes('org')) : false;
 
                 let calcStatus;
@@ -1897,7 +1936,7 @@ export default function CommunityView() {
                     });
                 } else if (isUserJoined || isDefaultOrgFallback) {
                     calcStatus = 'joined';
-                } else if (myRequest && !isUserRemovedFallback) {
+                } else if (!isUserRemovedFallback && (Boolean(myRequest) || isLocalPendingFallback)) {
                     calcStatus = 'requested';
                 } else {
                     calcStatus = 'none';
@@ -2921,23 +2960,40 @@ export default function CommunityView() {
             // Private community — save request to localStorage so Admin can see it
             setMembershipStatus('requested');
             const newRequest = {
-                id: currentUser?.id || Date.now(),
-                userId: currentUser?.id || Date.now(),
-                name: currentUser?.name || 'Current Employee',
-                fullName: currentUser?.name || 'Current Employee',
+                id: currentUser?.userId || currentUser?.id || Date.now(),
+                userId: currentUser?.userId || currentUser?.id || Date.now(),
+                name: currentUser?.fullName || currentUser?.name || 'Current Employee',
+                fullName: currentUser?.fullName || currentUser?.name || 'Current Employee',
+                employeeId: currentUser?.employeeId || 'MPO100',
                 role: currentUser?.roleName || 'Employee',
-                designation: currentUser?.roleName || 'Employee',
-                department: currentUser?.departmentName || 'Engineering',
-                avatar: currentUser?.avatar || null,
+                designation: currentUser?.designation || currentUser?.roleName || 'Employee',
+                department: currentUser?.departmentName || currentUser?.department || 'Engineering',
+                avatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
                 requestedAt: new Date().toISOString(),
                 status: 'Pending'
             };
 
             setJoinRequests(prev => {
-                const updated = [newRequest, ...prev.filter(r => String(r.id) !== String(currentUser?.id))];
+                const updated = [newRequest, ...prev.filter(r => String(r.userId || r.id) !== String(newRequest.userId))];
                 localStorage.setItem(`knome_join_requests_${targetId}`, JSON.stringify(updated));
                 return updated;
             });
+
+            // Also track in user's joined list as pending so Communities card & refresh shows "Requested"
+            const userKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
+            const existingJoined = JSON.parse(localStorage.getItem(userKey) || '[]');
+            const updatedJoined = existingJoined.filter(c => String(c.id) !== String(targetId));
+            updatedJoined.push({
+                id: targetId,
+                name: community?.name,
+                category: community?.category,
+                type: 'Private',
+                role: 'Member',
+                status: 'pending',
+                requestedAt: new Date().toISOString()
+            });
+            localStorage.setItem(userKey, JSON.stringify(updatedJoined));
+            window.dispatchEvent(new CustomEvent('community-joined-change'));
 
             // Store a notification for community creator and admins
             try {
@@ -2980,22 +3036,85 @@ export default function CommunityView() {
             return;
         }
 
+        // Sole Admin check: protect communities from being abandoned without an administrator
+        const isCommAdmin = isAdmin || membersList.some(m => {
+            const mUid = String(m.userId || m.id || '');
+            const mEmp = String(m.employeeId || m.empId || '').toUpperCase();
+            const isMatch = (currentUser?.id && mUid === String(currentUser.id)) ||
+                            (currentUser?.userId && mUid === String(currentUser.userId)) ||
+                            (currentUser?.employeeId && mEmp && mEmp === String(currentUser.employeeId).toUpperCase());
+            return isMatch && (m.memberType === 'Admin' || m.memberType === 'Moderator');
+        });
+        const adminsCount = getAdminCount();
+        if (isCommAdmin && adminsCount <= 1 && membersList.length > 1) {
+            setAdminProtectionWarning({
+                title: 'Cannot Leave as Sole Community Admin',
+                message: `You are currently the only Community Admin for "${community?.name}". A community with multiple members must always have at least one active Community Admin.\n\nPlease assign another member as Community Admin using "Make Admin" before leaving.`
+            });
+            return;
+        }
+
+        const isPrivate = community?.type === 'Private';
+        const ok = await confirm({
+            title: `Leave ${community?.name || 'Community'}`,
+            message: isPrivate
+                ? `Are you sure you want to leave "${community?.name || 'this private community'}"? Your access to discussions, files, and members will be revoked, and you will need admin approval to rejoin.`
+                : `Are you sure you want to leave "${community?.name || 'this community'}"?`,
+            confirmText: 'Leave Community',
+            cancelText: 'Cancel',
+            variant: 'danger'
+        });
+        if (!ok) return;
+
         try {
-            await communitiesApi.leave(community.id).catch(() => null);
+            await communitiesApi.leave(community.id);
         } catch (err) {
             console.warn('Backend leave API warning:', err);
+            if (err?.response?.data?.message) {
+                showToast(err.response.data.message, 'error');
+                return;
+            }
         }
 
         setMembershipStatus('none');
         const targetId = community?.id || communityId || 101;
 
-        // FR-CM-09: Remove from joined localStorage so leave persists on refresh
-        const userKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
-        const existingJoined = JSON.parse(localStorage.getItem(userKey) || '[]');
-        localStorage.setItem(userKey, JSON.stringify(existingJoined.filter(c => String(c.id) !== String(targetId))));
+        // Persist tombstone in localStorage so refresh doesn't bring back membership from cached seeds
+        const removedKey = `knome_community_removed_${targetId}`;
+        const currentRemoved = JSON.parse(localStorage.getItem(removedKey) || '[]');
+        const uidStr = String(currentUser?.userId || currentUser?.id || '');
+        const empIdStr = (currentUser?.employeeId || '').toUpperCase();
+        const nameStr = (currentUser?.fullName || currentUser?.name || '').toLowerCase();
+        const updatedRemoved = Array.from(new Set([
+            ...currentRemoved,
+            ...(uidStr ? [uidStr] : []),
+            ...(empIdStr ? [empIdStr] : []),
+            ...(nameStr ? [nameStr] : [])
+        ]));
+        localStorage.setItem(removedKey, JSON.stringify(updatedRemoved));
 
+        // FR-CM-09: Remove from joined localStorage so leave persists on refresh
+        const userKeys = [
+            `knome_joined_communities_${currentUser?.id || 'guest'}`,
+            currentUser?.userId ? `knome_joined_communities_${currentUser.userId}` : null,
+            currentUser?.employeeId ? `knome_joined_communities_${currentUser.employeeId}` : null
+        ].filter(Boolean);
+
+        userKeys.forEach(k => {
+            try {
+                const existingJoined = JSON.parse(localStorage.getItem(k) || '[]');
+                localStorage.setItem(k, JSON.stringify(existingJoined.filter(c => String(c.id) !== String(targetId))));
+            } catch (_) {}
+        });
+
+        // Filter out current user from members list
         setMembersList(prev => {
-            const updated = prev.filter(m => String(m.userId || m.id) !== String(currentUser?.id));
+            const updated = prev.filter(m => {
+                const mUid = String(m.userId || m.id || '');
+                const mEmp = String(m.employeeId || m.empId || '').toUpperCase();
+                const mName = String(m.fullName || m.name || '').toLowerCase();
+                return !(mUid === uidStr || (empIdStr && mEmp === empIdStr) || (nameStr && mName === nameStr));
+            });
             localStorage.setItem(`knome_community_members_${targetId}`, JSON.stringify(updated));
             localStorage.setItem(`knome_community_members_updated_${targetId}`, Date.now().toString());
             window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
@@ -3439,13 +3558,44 @@ export default function CommunityView() {
     };
 
     const handleCancelRequest = async () => {
-        try { await communitiesApi.leave(community.id).catch(() => null); } catch (e) { /* ignore */ }
+        const ok = await confirm({
+            title: 'Cancel Join Request',
+            message: `Are you sure you want to cancel your request to join "${community?.name || 'this community'}"?`,
+            confirmText: 'Yes, Cancel Request',
+            cancelText: 'Keep Request',
+            variant: 'danger'
+        });
+        if (!ok) return;
+
+        try { await communitiesApi.leave(community?.id || communityId).catch(() => null); } catch (e) { /* ignore */ }
         const targetId = community?.id || communityId || 101;
+        const currentUid = String(currentUser?.userId || currentUser?.id || '');
+        const currentEmpId = String(currentUser?.employeeId || '').toUpperCase();
+
         setJoinRequests(prev => {
-            const updated = prev.filter(r => String(r.id) !== String(currentUser?.id));
+            const updated = prev.filter(r => {
+                const rUid = String(r.userId || r.id || '');
+                const rEmp = String(r.employeeId || '').toUpperCase();
+                return !((currentUid && rUid === currentUid) || (currentEmpId && rEmp === currentEmpId));
+            });
             localStorage.setItem(`knome_join_requests_${targetId}`, JSON.stringify(updated));
             return updated;
         });
+
+        const userKeys = [
+            `knome_joined_communities_${currentUser?.id || 'guest'}`,
+            currentUser?.userId ? `knome_joined_communities_${currentUser.userId}` : null,
+            currentUser?.employeeId ? `knome_joined_communities_${currentUser.employeeId}` : null
+        ].filter(Boolean);
+
+        userKeys.forEach(k => {
+            try {
+                const existingJoined = JSON.parse(localStorage.getItem(k) || '[]');
+                localStorage.setItem(k, JSON.stringify(existingJoined.filter(c => String(c.id) !== String(targetId))));
+            } catch (_) {}
+        });
+
+        window.dispatchEvent(new CustomEvent('community-joined-change'));
         setMembershipStatus('none');
         showToast('Your join request has been cancelled.', 'info');
     };
@@ -3456,18 +3606,32 @@ export default function CommunityView() {
     const handleApprove = async (requestId, requestName) => {
         const targetId = community?.id || communityId || 101;
         const request = joinRequests.find(r => String(r.id || r.userId) === String(requestId));
+        const reqUserId = request?.userId || requestId;
+        const reqEmpId = request?.employeeId;
 
         // Try backend API
         try {
-            await communitiesApi.decideMembership(targetId, requestId, 'Approved').catch(() => null);
+            await communitiesApi.decideMembership(targetId, reqUserId, 'Approved').catch(() => null);
         } catch (e) { /* fallback to localStorage */ }
+
+        // Clear any previous removed tombstone for approved user
+        try {
+            const removedKey = `knome_community_removed_${targetId}`;
+            const currentRemoved = JSON.parse(localStorage.getItem(removedKey) || '[]');
+            const cleanedRemoved = currentRemoved.filter(x => {
+                const s = String(x).toLowerCase();
+                return !(s === String(reqUserId).toLowerCase() || (reqEmpId && s === String(reqEmpId).toLowerCase()));
+            });
+            localStorage.setItem(removedKey, JSON.stringify(cleanedRemoved));
+        } catch (_) {}
 
         // Add to membersList
         setMembersList(prev => {
             const newMember = {
-                userId: request?.userId || requestId,
+                userId: reqUserId,
+                id: reqUserId,
                 fullName: request?.name || request?.fullName || requestName,
-                employeeId: request?.employeeId || 'MPO100',
+                employeeId: reqEmpId || 'MPO100',
                 designation: request?.role || request?.designation || 'Employee',
                 memberType: 'Member',
                 status: 'Approved',
@@ -3475,10 +3639,40 @@ export default function CommunityView() {
             };
             const updated = deduplicateMembers([...prev, newMember], contextUsers);
             localStorage.setItem(`knome_community_members_${targetId}`, JSON.stringify(updated));
+            localStorage.setItem(`knome_community_members_updated_${targetId}`, Date.now().toString());
             window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
             window.dispatchEvent(new CustomEvent('community-joined-change'));
             return updated;
         });
+
+        // Persist 'joined' status in the requester's knome_joined_communities
+        const requesterJoinedKeys = [
+            `knome_joined_communities_${reqUserId}`,
+            reqEmpId ? `knome_joined_communities_${reqEmpId}` : null
+        ].filter(Boolean);
+
+        requesterJoinedKeys.forEach(k => {
+            try {
+                const joinedList = JSON.parse(localStorage.getItem(k) || '[]');
+                const filtered = joinedList.filter(c => String(c.id) !== String(targetId));
+                filtered.push({
+                    id: targetId,
+                    name: community?.name || 'Community',
+                    category: community?.category || 'General',
+                    type: community?.type || 'Private',
+                    role: 'Member',
+                    status: 'joined',
+                    joinedDate: new Date().toISOString()
+                });
+                localStorage.setItem(k, JSON.stringify(filtered));
+            } catch (_) {}
+        });
+
+        // If the current user on this client was the requester, update membershipStatus immediately
+        const currentUid = String(currentUser?.userId || currentUser?.id || '');
+        if (currentUid && String(reqUserId) === currentUid) {
+            setMembershipStatus('joined');
+        }
 
         // Remove from joinRequests
         setJoinRequests(prev => {
@@ -3493,7 +3687,7 @@ export default function CommunityView() {
         try {
             const approvalNotif = {
                 id: Date.now() + Math.floor(Math.random() * 1000),
-                targetUserId: requestId,
+                targetUserId: reqUserId,
                 type: 'community_approved',
                 category: 'Community',
                 text: `✅ Your request to join "${community?.name}" has been approved! You are now a Member.`,
@@ -3511,9 +3705,9 @@ export default function CommunityView() {
                 actionLink: `/community/view?id=${targetId}`
             };
             const existing = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
-            // Remove admin join_request notif for this user + community
-            const cleaned = existing.filter(n => !(n.type === 'join_request' && String(n.communityId) === String(targetId)));
+            const cleaned = existing.filter(n => !(n.type === 'join_request' && String(n.communityId) === String(targetId) && String(n.senderUserId || '') === String(reqUserId)));
             localStorage.setItem('knome_notifications', JSON.stringify([approvalNotif, ...cleaned]));
+            window.dispatchEvent(new CustomEvent('knome_notification_received', { detail: approvalNotif }));
         } catch (e) { /* ignore */ }
 
         showToast(`✅ ${requestName} approved and added as a Member.`, 'success');
@@ -3524,23 +3718,46 @@ export default function CommunityView() {
     // ─────────────────────────────────────────
     const handleReject = async (requestId, requestName) => {
         const targetId = community?.id || communityId || 101;
+        const request = joinRequests.find(r => String(r.id || r.userId) === String(requestId));
+        const reqUserId = request?.userId || requestId;
+        const reqEmpId = request?.employeeId;
 
         // Try backend API
         try {
-            await communitiesApi.decideMembership(targetId, requestId, 'Rejected').catch(() => null);
+            await communitiesApi.decideMembership(targetId, reqUserId, 'Rejected').catch(() => null);
         } catch (e) { /* fallback */ }
 
+        // Remove from joinRequests
         setJoinRequests(prev => {
             const updated = prev.filter(r => String(r.id || r.userId) !== String(requestId));
             localStorage.setItem(`knome_join_requests_${targetId}`, JSON.stringify(updated));
             return updated;
         });
 
+        // Clean requester's knome_joined_communities
+        const requesterJoinedKeys = [
+            `knome_joined_communities_${reqUserId}`,
+            reqEmpId ? `knome_joined_communities_${reqEmpId}` : null
+        ].filter(Boolean);
+
+        requesterJoinedKeys.forEach(k => {
+            try {
+                const joinedList = JSON.parse(localStorage.getItem(k) || '[]');
+                const filtered = joinedList.filter(c => String(c.id) !== String(targetId));
+                localStorage.setItem(k, JSON.stringify(filtered));
+            } catch (_) {}
+        });
+
+        const currentUid = String(currentUser?.userId || currentUser?.id || '');
+        if (currentUid && String(reqUserId) === currentUid) {
+            setMembershipStatus('none');
+        }
+
         // Notify the requesting user of rejection
         try {
             const rejectionNotif = {
                 id: Date.now() + Math.floor(Math.random() * 1000),
-                targetUserId: requestId,
+                targetUserId: reqUserId,
                 type: 'community_rejected',
                 category: 'Community',
                 text: `❌ Your request to join "${community?.name}" was not approved at this time.`,
@@ -3558,8 +3775,9 @@ export default function CommunityView() {
                 actionLink: '/community'
             };
             const existing = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
-            const cleaned = existing.filter(n => !(n.type === 'join_request' && String(n.communityId) === String(targetId)));
+            const cleaned = existing.filter(n => !(n.type === 'join_request' && String(n.communityId) === String(targetId) && String(n.senderUserId || '') === String(reqUserId)));
             localStorage.setItem('knome_notifications', JSON.stringify([rejectionNotif, ...cleaned]));
+            window.dispatchEvent(new CustomEvent('knome_notification_received', { detail: rejectionNotif }));
         } catch (e) { /* ignore */ }
 
         showToast(`${requestName}'s join request has been rejected.`, 'warning');
@@ -5081,29 +5299,31 @@ export default function CommunityView() {
                                         </h3>
                                         <p className="text-xs text-slate-500 mt-1">View all team members, assigned community roles, and designations.</p>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        {isAdmin && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsAddMemberModalOpen(true)}
-                                                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-xs transition-all cursor-pointer shrink-0"
-                                                title="Add organization employees to this community"
-                                            >
-                                                <span className="material-symbols-outlined text-[17px]">person_add</span>
-                                                <span>Add Member</span>
-                                            </button>
-                                        )}
-                                        <div className="relative">
-                                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
-                                            <input 
-                                                type="text" 
-                                                value={memberSearchQuery}
-                                                onChange={(e) => setMemberSearchQuery(e.target.value)}
-                                                placeholder="Search members..."
-                                                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                            />
+                                    {(!community || community.type !== 'Private' || membershipStatus === 'joined' || isAdmin) && (
+                                        <div className="flex items-center gap-3">
+                                            {isAdmin && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsAddMemberModalOpen(true)}
+                                                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-xs transition-all cursor-pointer shrink-0"
+                                                    title="Add organization employees to this community"
+                                                >
+                                                    <span className="material-symbols-outlined text-[17px]">person_add</span>
+                                                    <span>Add Member</span>
+                                                </button>
+                                            )}
+                                            <div className="relative">
+                                                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                                                <input 
+                                                    type="text" 
+                                                    value={memberSearchQuery}
+                                                    onChange={(e) => setMemberSearchQuery(e.target.value)}
+                                                    placeholder="Search members..."
+                                                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
 
                                 {community.type === 'Private' && membershipStatus !== 'joined' && !isAdmin ? (
@@ -5133,7 +5353,9 @@ export default function CommunityView() {
                                                         <img 
                                                             src={m.resolvedAvatar} 
                                                             alt={m.displayName} 
-                                                            className="w-10 h-10 rounded-full object-cover shrink-0 border border-slate-200 dark:border-slate-700 shadow-xs"
+                                                            className="w-10 h-10 rounded-full object-cover shrink-0 border border-slate-200 dark:border-slate-700 shadow-xs cursor-pointer hover:opacity-90 transition-opacity"
+                                                            onClick={() => navigate(`/profile?id=${m.userId || m.id || 1}`)}
+                                                            title={`View ${m.displayName}'s Profile`}
                                                             onError={(e) => {
                                                                 e.target.onerror = null;
                                                                 e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(m.displayName)}&background=6366f1&color=fff`;
@@ -5142,9 +5364,14 @@ export default function CommunityView() {
                                                         <div className="min-w-0 flex-1">
                                                             {/* Name + Employee ID + Role Badge */}
                                                             <div className="flex items-center gap-1.5 min-w-0">
-                                                                <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate" title={m.displayName}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => navigate(`/profile?id=${m.userId || m.id || 1}`)}
+                                                                    className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline cursor-pointer text-left transition-colors"
+                                                                    title={`View ${m.displayName}'s Profile`}
+                                                                >
                                                                     <HighlightText text={m.displayName} query={memberSearchQuery} />
-                                                                </h4>
+                                                                </button>
                                                                 {m.displayEmpId && (
                                                                     <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/70 dark:border-slate-700/60 shrink-0">
                                                                         <HighlightText text={m.displayEmpId} query={memberSearchQuery} />
@@ -5200,14 +5427,6 @@ export default function CommunityView() {
                                                                  </button>
                                                              </>
                                                          )}
-                                                         <button 
-                                                             onClick={() => navigate(`/profile?id=${m.userId || m.id || 1}`)}
-                                                             className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-[11px] font-semibold transition-all shrink-0 flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
-                                                             title="View Member Profile"
-                                                         >
-                                                             <span className="material-symbols-outlined text-[14px]">visibility</span>
-                                                             <span>Profile</span>
-                                                         </button>
                                                          {String(m.userId || m.id) !== String(currentUser?.userId || currentUser?.id) && (
                                                              <button 
                                                                  onClick={() => navigate(`/messages?userId=${m.userId || m.id}&name=${encodeURIComponent(m.displayName || '')}`)}
@@ -5232,116 +5451,6 @@ export default function CommunityView() {
                     {/* Files & Media Tab - Enterprise Document Management */}
                     {activeTab === 'files' && (
                         <div className="space-y-6">
-                            {/* Enterprise Toolbar & Filter System */}
-                            <div className="glass bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-4">
-                                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                                    {/* Category Filter Pills with Badges */}
-                                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 custom-scrollbar">
-                                        {[
-                                            { id: 'All', label: 'All Assets', icon: 'inventory_2', count: fileCategoryCounts.All },
-                                            { id: 'Document', label: 'Documents', icon: 'description', count: fileCategoryCounts.Document },
-                                            { id: 'Image', label: 'Images', icon: 'image', count: fileCategoryCounts.Image },
-                                            { id: 'Video', label: 'Videos', icon: 'movie', count: fileCategoryCounts.Video },
-                                            { id: 'Audio', label: 'Audio', icon: 'audiotrack', count: fileCategoryCounts.Audio },
-                                        ].map(cat => {
-                                            const isSelected = fileCategoryFilter === cat.id;
-                                            return (
-                                                <button
-                                                    key={cat.id}
-                                                    onClick={() => setFileCategoryFilter(cat.id)}
-                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 border ${
-                                                        isSelected
-                                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-600/30'
-                                                            : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/70 dark:border-slate-700/60 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60'
-                                                    }`}
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px]">{cat.icon}</span>
-                                                    <span>{cat.label}</span>
-                                                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                                                        isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                                                    }`}>
-                                                        {cat.count || 0}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {/* Action Controls: Search, Sort, View Toggle, Upload */}
-                                    <div className="flex flex-wrap items-center gap-2.5">
-                                        {/* Search Input */}
-                                        <div className="relative flex-1 sm:w-56 md:w-64">
-                                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
-                                            <input
-                                                type="text"
-                                                value={fileSearchQuery}
-                                                onChange={(e) => setFileSearchQuery(e.target.value)}
-                                                placeholder="Filter by name or ext..."
-                                                className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                            />
-                                            {fileSearchQuery && (
-                                                <button onClick={() => setFileSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                                                    <span className="material-symbols-outlined text-[15px]">close</span>
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        {/* Sort By Dropdown */}
-                                        <div className="relative">
-                                            <select
-                                                value={fileSortBy}
-                                                onChange={(e) => setFileSortBy(e.target.value)}
-                                                className="py-2 pl-3 pr-8 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500 appearance-none"
-                                            >
-                                                <option value="newest">Newest First</option>
-                                                <option value="oldest">Oldest First</option>
-                                                <option value="name">Name (A-Z)</option>
-                                                <option value="size">Size (Largest)</option>
-                                            </select>
-                                            <span className="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px] pointer-events-none">expand_more</span>
-                                        </div>
-
-                                        {/* View Switcher: Table vs Grid */}
-                                        <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
-                                            <button
-                                                onClick={() => setFileViewMode('table')}
-                                                className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center ${
-                                                    fileViewMode === 'table'
-                                                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
-                                                }`}
-                                                title="Directory Table View"
-                                            >
-                                                <span className="material-symbols-outlined text-[18px]">table_rows</span>
-                                            </button>
-                                            <button
-                                                onClick={() => setFileViewMode('grid')}
-                                                className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center ${
-                                                    fileViewMode === 'grid'
-                                                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
-                                                }`}
-                                                title="Card Grid View"
-                                            >
-                                                <span className="material-symbols-outlined text-[18px]">grid_view</span>
-                                            </button>
-                                        </div>
-
-                                        {/* Upload Button */}
-                                        {(membershipStatus === 'joined' || isAdmin) && (
-                                            <button
-                                                onClick={() => setIsUploadModalOpen(true)}
-                                                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-sm shadow-indigo-600/30 flex items-center gap-1.5 shrink-0 cursor-pointer"
-                                            >
-                                                <span className="material-symbols-outlined text-[18px]">upload_file</span>
-                                                <span>Upload Document</span>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* 3. Restricted State for Private Communities */}
                             {community.type === 'Private' && membershipStatus !== 'joined' && !isAdmin ? (
                                 <div className="p-12 text-center glass bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-500 text-sm flex flex-col items-center gap-3">
                                     <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-1 border border-indigo-200 dark:border-indigo-800/60">
@@ -5350,7 +5459,118 @@ export default function CommunityView() {
                                     <p className="font-bold text-slate-900 dark:text-white text-base">Community Repository Restricted</p>
                                     <p className="text-xs text-slate-500 max-w-sm mx-auto">Shared files, institutional documents, and media for this private community are accessible only to approved community members.</p>
                                 </div>
-                            ) : filteredFiles.length === 0 ? (
+                            ) : (
+                                <>
+                                    {/* Enterprise Toolbar & Filter System */}
+                                    <div className="glass bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-4">
+                                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                            {/* Category Filter Pills with Badges */}
+                                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 custom-scrollbar">
+                                                {[
+                                                    { id: 'All', label: 'All Assets', icon: 'inventory_2', count: fileCategoryCounts.All },
+                                                    { id: 'Document', label: 'Documents', icon: 'description', count: fileCategoryCounts.Document },
+                                                    { id: 'Image', label: 'Images', icon: 'image', count: fileCategoryCounts.Image },
+                                                    { id: 'Video', label: 'Videos', icon: 'movie', count: fileCategoryCounts.Video },
+                                                    { id: 'Audio', label: 'Audio', icon: 'audiotrack', count: fileCategoryCounts.Audio },
+                                                ].map(cat => {
+                                                    const isSelected = fileCategoryFilter === cat.id;
+                                                    return (
+                                                        <button
+                                                            key={cat.id}
+                                                            onClick={() => setFileCategoryFilter(cat.id)}
+                                                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 border ${
+                                                                isSelected
+                                                                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-600/30'
+                                                                    : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/70 dark:border-slate-700/60 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                                                            }`}
+                                                        >
+                                                            <span className="material-symbols-outlined text-[16px]">{cat.icon}</span>
+                                                            <span>{cat.label}</span>
+                                                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                                                                isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                                                            }`}>
+                                                                {cat.count || 0}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Action Controls: Search, Sort, View Toggle, Upload */}
+                                            <div className="flex flex-wrap items-center gap-2.5">
+                                                {/* Search Input */}
+                                                <div className="relative flex-1 sm:w-56 md:w-64">
+                                                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                                                    <input
+                                                        type="text"
+                                                        value={fileSearchQuery}
+                                                        onChange={(e) => setFileSearchQuery(e.target.value)}
+                                                        placeholder="Filter by name or ext..."
+                                                        className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                                                    />
+                                                    {fileSearchQuery && (
+                                                        <button onClick={() => setFileSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                                            <span className="material-symbols-outlined text-[15px]">close</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {/* Sort By Dropdown */}
+                                                <div className="relative">
+                                                    <select
+                                                        value={fileSortBy}
+                                                        onChange={(e) => setFileSortBy(e.target.value)}
+                                                        className="py-2 pl-3 pr-8 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500 appearance-none"
+                                                    >
+                                                        <option value="newest">Newest First</option>
+                                                        <option value="oldest">Oldest First</option>
+                                                        <option value="name">Name (A-Z)</option>
+                                                        <option value="size">Size (Largest)</option>
+                                                    </select>
+                                                    <span className="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px] pointer-events-none">expand_more</span>
+                                                </div>
+
+                                                {/* View Switcher: Table vs Grid */}
+                                                <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
+                                                    <button
+                                                        onClick={() => setFileViewMode('table')}
+                                                        className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center ${
+                                                            fileViewMode === 'table'
+                                                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                                                        }`}
+                                                        title="Directory Table View"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[18px]">table_rows</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setFileViewMode('grid')}
+                                                        className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center ${
+                                                            fileViewMode === 'grid'
+                                                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                                                        }`}
+                                                        title="Card Grid View"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[18px]">grid_view</span>
+                                                    </button>
+                                                </div>
+
+                                                {/* Upload Button */}
+                                                {(membershipStatus === 'joined' || isAdmin) && (
+                                                    <button
+                                                        onClick={() => setIsUploadModalOpen(true)}
+                                                        className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-sm shadow-indigo-600/30 flex items-center gap-1.5 shrink-0 cursor-pointer"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                                                        <span>Upload Document</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                    </div>
+                                    </div>
+
+                                    {filteredFiles.length === 0 ? (
                                 /* 4. Formal Empty State */
                                 <div className="p-12 text-center glass bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-500 text-sm flex flex-col items-center gap-3">
                                     <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto border border-slate-200 dark:border-slate-700">
@@ -5554,6 +5774,8 @@ export default function CommunityView() {
                                 </div>
                             )}
                             <ScrollLoadingIndicator isVisible={visibleFileCount < filteredFiles.length} text="Loading more community files on scroll..." />
+                                </>
+                            )}
                         </div>
                     )}
 

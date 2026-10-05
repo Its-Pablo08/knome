@@ -157,6 +157,24 @@ public class UserController : KnomeControllerBase
     }
 
     /// <summary>
+    /// Permanently deletes a user and cascades all associated data.
+    /// Restricted to HR Administrators and System Administrators.
+    /// </summary>
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin + ",System Admin,SYSADM")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeleteUser(int id)
+    {
+        var requestingUserId = GetCurrentUserId();
+        if (id == requestingUserId)
+        {
+            throw new BadRequestException("You cannot delete your own account.");
+        }
+        await _userService.DeleteUserAsync(id);
+        return Ok(ApiResponse<bool>.SuccessResponse(200, "User and all associated data deleted successfully.", true));
+    }
+
+    /// <summary>
     /// Follows the user with the given id (FR-PN-01). Triggers a "New Follower" notification (FR-NT-01).
     /// </summary>
     [HttpPost("{id:int}/follow")]

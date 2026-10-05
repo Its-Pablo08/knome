@@ -164,18 +164,17 @@ export default function PeopleYouMayKnowWidget() {
                     if (!rawName || /^(EMP|MPO)\d+$/i.test(rawName.trim()) || rawName.toUpperCase().startsWith('NON_EXISTENT')) {
                         const codeKey = (rawName.trim() || empCode).toUpperCase();
                         const knownRoster = {
-                            'EMP001': 'Aarav Sharma',
-                            'EMP002': 'Priya Patel',
-                            'EMP003': 'Rohan Verma',
-                            'EMP004': 'Neha Gupta',
+                            'MP0108': 'Loveneesh Sharma',
                             'MPO101': 'Loveneesh Sharma',
+                            'MP0664': 'Vishendra Sharma',
                             'MPO102': 'Vishendra Sharma',
                             'MPO103': 'Sourabh Sahu',
-                            'MPO104': 'Rishikesh Ugle',
-                            'MPO105': 'Meghna Tiwari',
-                            'MPO106': 'Mayur Verma',
-                            'MPO107': 'Vilash Deshmukh',
+                            'MPO105': 'Meghna',
+                            'MPO116': 'Meghna',
                             'MPO089': 'Vilash Deshmukh',
+                            'MPO111': 'Mayur Bansal',
+                            'MPO652': 'Deepak Simrodia',
+                            'mpo652': 'Deepak Simrodia'
                         };
                         rawName = knownRoster[codeKey] || rawName || 'Colleague';
                     }

@@ -626,6 +626,10 @@ export const adminApi = {
     activateUser: (userId) => 
         apiClient.put(`/users/${userId}/activate`),
 
+    /** DELETE /users/{id} */
+    deleteUser: (userId) => 
+        apiClient.delete(`/users/${userId}`),
+
     /** PUT /users/{id}/roles */
     changeUserRoles: (userId, roleNames) => {
         const rawList = Array.isArray(roleNames) ? roleNames : [roleNames];

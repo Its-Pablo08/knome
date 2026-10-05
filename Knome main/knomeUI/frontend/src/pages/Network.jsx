@@ -9,49 +9,32 @@ import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
 
 const KNOWN_ROSTER_NAMES = {
-    'EMP001': 'Aarav Sharma',
-    'EMP002': 'Priya Patel',
-    'EMP003': 'Rohan Verma',
-    'EMP004': 'Neha Gupta',
     'MP0108': 'Loveneesh Sharma',
     'MPO101': 'Loveneesh Sharma',
+    'MP0664': 'Vishendra Sharma',
     'MPO102': 'Vishendra Sharma',
     'MPO103': 'Sourabh Sahu',
-    'MPO104': 'Rishikesh Ugle',
-    'MPO105': 'Meghna Tiwari',
-    'MPO106': 'Mayur Verma',
-    'MPO107': 'Ankit Sharma',
-    'MPO108': 'Pooja Sharma',
-    'MPO089': 'Vilash Deshmukh',
-    'MPO109': 'Suresh Verma',
-    'MPO110': 'Kabir Singh',
-    'MPO111': 'Mayur Bansal',
-    'MPO112': 'Anup',
-    'MPO113': 'Mahesh Sharma',
-    'MPO114': 'Ramesh Sharma',
-    'MPO115': 'Aishwary',
+    'MPO105': 'Meghna',
     'MPO116': 'Meghna',
-    'MPO117': 'Lovnesh Sharma',
-    'MPO118': 'Raman Kumar',
-    'MPO119': 'Rishabh Pandey',
-    'MPO120': 'Krisha Dabhi',
-    'MPO121': 'Mahi Rathore',
-    'MPO122': 'Satendra Singh',
+    'MPO089': 'Vilash Deshmukh',
+    'MPO111': 'Mayur Bansal',
     'MPO652': 'Deepak Simrodia',
-    'MPO664': 'Ramesh Patel',
-    'MP0664': 'Vishendra Sharma',
+    'mpo652': 'Deepak Simrodia'
 };
 
 
 const KNOWN_ROSTER_ROLES = {
-    'EMP001': { role: 'Employee', designation: 'Senior Software Engineer' },
-    'EMP002': { role: 'Community Admin', designation: 'Quality Assurance Lead' },
-    'EMP003': { role: 'HR Admin', designation: 'HR Specialist' },
-    'EMP004': { role: 'System Admin', designation: 'DevOps Lead' },
-    'MPO101': { role: 'System Admin', designation: 'System Admin' },
-    'MPO102': { role: 'Community Admin', designation: 'Community Experience Specialist' },
+    'MP0108': { role: 'System Admin', designation: 'TPM' },
+    'MPO101': { role: 'System Admin', designation: 'TPM' },
+    'MP0664': { role: 'Community Admin', designation: 'Track Lead' },
+    'MPO102': { role: 'Community Admin', designation: 'Track Lead' },
     'MPO103': { role: 'HR Admin', designation: 'Talent Acquisition Manager' },
-    'MPO104': { role: 'Employee', designation: 'Software Engineer' },
+    'MPO105': { role: 'HR Admin', designation: 'Business Analyst' },
+    'MPO116': { role: 'HR Admin', designation: 'Business Analyst' },
+    'MPO089': { role: 'System Admin', designation: 'Associate Consultant' },
+    'MPO111': { role: 'Employee', designation: 'Software Developer' },
+    'MPO652': { role: 'Employee', designation: 'Software Developer' },
+    'mpo652': { role: 'Employee', designation: 'Software Developer' }
 };
 
 function getRoleBadgeStyle(roleName) {
@@ -573,7 +556,7 @@ export default function Network() {
     const handleRemoveConnection = async (person) => {
         const ok = await confirm({
             title: 'Remove Connection',
-            message: `Are you sure you want to remove your 1st-degree connection with ${person.name}?`,
+            message: `Are you sure you want to remove your connection with ${person.name}?`,
             confirmText: 'Remove Connection',
             cancelText: 'Cancel',
             variant: 'warning'
@@ -585,7 +568,7 @@ export default function Network() {
             setFullDirectory(prev => prev.map(p => isSameUser(p, person) ? { ...p, connectionStatus: 'NotConnected' } : p));
             
             await userApi.removeConnection(person.id || person.userId);
-            addToast && addToast(`Removed ${person.name} from 1st-degree connections.`, 'info');
+            addToast && addToast(`Removed ${person.name} from connections.`, 'info');
             await fetchAllNetworkData();
             window.dispatchEvent(new CustomEvent('network-updated'));
         } catch (err) {
@@ -621,7 +604,7 @@ export default function Network() {
                         </span>
                     </h1>
                     <p className="text-slate-600 dark:text-slate-400 text-sm md:text-[15px] font-medium leading-relaxed max-w-2xl">
-                        Manage 1st-degree connections, respond to pending connection requests, and discover colleagues across MPOnline Limited.
+                        Manage connections, respond to pending connection requests, and discover colleagues across MPOnline Limited.
                     </p>
                 </div>
                 
@@ -842,7 +825,7 @@ export default function Network() {
                                 <ScrollLoadingIndicator isVisible={visibleCount < connectionsList.length} text="Loading more connections on scroll..." />
                                 {connectionsList.length === 0 && (
                                     <div className="col-span-full py-16 text-center text-slate-500 font-medium">
-                                        You don't have any 1st-degree connections yet. Explore suggestions above to start building your network!
+                                        You don't have any connections yet. Explore suggestions above to start building your network!
                                     </div>
                                 )}
                             </div>

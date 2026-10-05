@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUser, getUserStatusConfig, KNOWN_ROSTER_NAMES } from '../components/contexts/UserContext';
-import { resolveMediaUrl, userApi, notificationsApi, mediaApi } from '../utils/apiService';
+import { resolveMediaUrl, userApi, notificationsApi } from '../utils/apiService';
 import { sendLiveMessage, subscribeToLiveMessages, playMessageChime, MESSAGES_STORAGE_KEY } from '../utils/realtimeMessenger';
 
 // Storage key for all Facebook-style 1-to-1 conversations across Knome
@@ -163,26 +163,26 @@ const DEFAULT_COLLEAGUES = [
         userId: 3,
         employeeId: 'MPO103',
         fullName: 'Sourabh Sahu',
-        designation: 'Software Developer',
-        department: 'Information Technology',
+        designation: 'Talent Acquisition Manager',
+        department: 'Human Resources',
         status: 'active',
         avatar: null
     },
     {
-        userId: 2,
-        employeeId: 'MPO102',
+        userId: 1076,
+        employeeId: 'MP0664',
         fullName: 'Vishendra Sharma',
-        designation: 'Lead Architect',
-        department: 'Engineering & Tech',
+        designation: 'Track Lead',
+        department: 'Higher Education',
         status: 'active',
         avatar: null
     },
     {
         userId: 5,
         employeeId: 'MPO105',
-        fullName: 'Meghna Tiwari',
-        designation: 'HR Specialist',
-        department: 'Human Resources',
+        fullName: 'Meghna',
+        designation: 'Business Analyst',
+        department: 'Product Design',
         status: 'idle',
         avatar: null
     },
@@ -191,16 +191,34 @@ const DEFAULT_COLLEAGUES = [
         employeeId: 'MP0108',
         fullName: 'Loveneesh Sharma',
         designation: 'Technical Program Manager',
-        department: 'Operations',
+        department: 'Higher Education',
         status: 'active',
         avatar: null
     },
     {
-        userId: 6,
-        employeeId: 'MPO106',
-        fullName: 'Mayur Verma',
-        designation: 'UI/UX Designer',
-        department: 'Product Design',
+        userId: 1036,
+        employeeId: 'MPO111',
+        fullName: 'Mayur Bansal',
+        designation: 'Software Developer',
+        department: 'Technology',
+        status: 'active',
+        avatar: null
+    },
+    {
+        userId: 1050,
+        employeeId: 'MPO089',
+        fullName: 'Vilash Deshmukh',
+        designation: 'Associate Consultant',
+        department: 'HR',
+        status: 'active',
+        avatar: null
+    },
+    {
+        userId: 1057,
+        employeeId: 'MPO652',
+        fullName: 'Deepak Simrodia',
+        designation: 'Software Developer',
+        department: 'University',
         status: 'active',
         avatar: null
     }
@@ -351,9 +369,72 @@ const generateSeedConversations = (currentUserId, currentUser) => {
 
 export default function Messages() {
     const { currentUser, users: contextUsers } = useUser();
+    const { addToast } = useToast();
     const currentUserId = Number(currentUser?.userId || currentUser?.id || 1);
     const location = useLocation();
     const navigate = useNavigate();
+
+    // ── 1st-Degree Connections State (Messaging Restriction Enforcement) ──
+    const [connectedUserIds, setConnectedUserIds] = useState(new Set());
+    const [isConnectionsLoaded, setIsConnectionsLoaded] = useState(false);
+    const [pendingConnectIds, setPendingConnectIds] = useState(new Set());
+
+    // Fetch 1st-degree connections for current user to enforce messaging restriction
+    const loadConnections = useCallback(async () => {
+        if (!currentUserId) return;
+        try {
+            const res = await userApi.getConnections(currentUserId);
+            const list = Array.isArray(res) ? res : (res?.data || []);
+            const ids = new Set(list.map(u => Number(u.id || u.userId)).filter(Boolean));
+
+            // Merge any locally accepted connections in localStorage
+            try {
+                const localAcc = JSON.parse(localStorage.getItem('knome_accepted_connections') || '[]');
+                if (Array.isArray(localAcc)) {
+                    localAcc.forEach(id => ids.add(Number(id)));
+                }
+            } catch (_) {}
+
+            setConnectedUserIds(ids);
+            setIsConnectionsLoaded(true);
+        } catch (err) {
+            console.warn('[Messages] Failed to load connections:', err);
+            setIsConnectionsLoaded(true);
+        }
+    }, [currentUserId]);
+
+    useEffect(() => {
+        loadConnections();
+        window.addEventListener('network-updated', loadConnections);
+        return () => {
+            window.removeEventListener('network-updated', loadConnections);
+        };
+    }, [loadConnections]);
+
+    // Send connection request directly from chat restriction banner
+    const handleSendConnectRequest = async (targetId, targetName) => {
+        try {
+            await userApi.connect(targetId);
+            setPendingConnectIds(prev => new Set([...prev, targetId]));
+            addToast(`Connection request sent to ${targetName}. Once accepted, you can message each other.`, 'success');
+
+            try {
+                const existing = JSON.parse(localStorage.getItem('knome_sent_connection_requests') || '[]');
+                if (!existing.some(p => Number(p.id || p.userId) === Number(targetId))) {
+                    existing.push({ id: targetId, userId: targetId, name: targetName });
+                    localStorage.setItem('knome_sent_connection_requests', JSON.stringify(existing));
+                }
+            } catch (_) {}
+        } catch (err) {
+            const msg = err?.message || '';
+            if (msg.includes('already') || msg.includes('Already')) {
+                addToast('A connection request is already pending.', 'info');
+                setPendingConnectIds(prev => new Set([...prev, targetId]));
+            } else {
+                addToast('Failed to send connection request.', 'error');
+            }
+        }
+    };
 
     // ── Global Conversations State from localStorage ──
     const [allConversations, setAllConversations] = useState(() => {
@@ -634,6 +715,13 @@ export default function Messages() {
         if (!activeConversation) return null;
         return getOtherParticipant(activeConversation, currentUserId, contextUsers);
     }, [activeConversation, currentUserId, contextUsers]);
+
+    // Check if recipient in active conversation is a 1st-degree connection
+    const isTargetConnected = useMemo(() => {
+        if (!activeOtherParticipant) return false;
+        const targetId = Number(activeOtherParticipant.userId || activeOtherParticipant.id);
+        return connectedUserIds.has(targetId);
+    }, [activeOtherParticipant, connectedUserIds]);
 
     // Auto-select initial conversation on first load if activeConvId is not set
     useEffect(() => {
@@ -1075,8 +1163,7 @@ export default function Messages() {
     const handleSendMessage = async (e) => {
         if (e) e.preventDefault();
         const text = inputMessage.trim();
-        const hasAttachments = attachedFiles.length > 0;
-        if ((!text && !hasAttachments) || !activeConversation || !activeOtherParticipant) return;
+        if (!text || !activeConversation || !activeOtherParticipant) return;
 
         const now = new Date();
         const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1171,19 +1258,25 @@ export default function Messages() {
         });
     }, [userConversations, searchQuery, filterTab, currentUserId, contextUsers]);
 
-    // Available colleagues from user roster for "New Chat" modal (excluding self)
+    // Available colleagues from user roster for "New Chat" modal (RESTRICTED to connected colleagues only)
     const availableColleagues = useMemo(() => {
         const pool = (contextUsers && contextUsers.length > 0) ? contextUsers : DEFAULT_COLLEAGUES;
         return pool.filter(u => {
             const uId = Number(u.userId || u.id);
             if (uId === currentUserId) return false;
+
+            // RESTRICTION: Only 1st-degree connected colleagues
+            if (isConnectionsLoaded && !connectedUserIds.has(uId)) {
+                return false;
+            }
+
             if (!colleagueSearch) return true;
             const q = colleagueSearch.toLowerCase();
             return (u.fullName || u.name || '').toLowerCase().includes(q) ||
                    (u.designation || '').toLowerCase().includes(q) ||
                    (u.department || '').toLowerCase().includes(q);
         });
-    }, [contextUsers, currentUserId, colleagueSearch]);
+    }, [contextUsers, currentUserId, colleagueSearch, isConnectionsLoaded, connectedUserIds]);
 
     // Total unread count for current user
     const totalUnreadCount = useMemo(() => {
@@ -1304,9 +1397,14 @@ export default function Messages() {
                                         {/* Text Info */}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between gap-1 mb-0.5">
-                                                <h2 className="text-xs font-black text-slate-900 dark:text-white truncate">
-                                                    {otherP?.fullName}
-                                                </h2>
+                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                    <h2 className="text-xs font-black text-slate-900 dark:text-white truncate">
+                                                        {otherP?.fullName}
+                                                    </h2>
+                                                    {isConnectionsLoaded && !connectedUserIds.has(Number(otherP?.userId || otherP?.id)) && (
+                                                        <span className="material-symbols-outlined text-amber-500 text-[13px] shrink-0" title="Not connected">lock</span>
+                                                    )}
+                                                </div>
                                                 <span className="text-[10px] font-semibold text-slate-400 shrink-0">
                                                     {conv.lastMessageTime}
                                                 </span>
@@ -1375,6 +1473,19 @@ export default function Messages() {
                                             <span className="hidden sm:inline px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                                                 {activeOtherParticipant.department}
                                             </span>
+                                        )}
+                                        {isConnectionsLoaded && (
+                                            isTargetConnected ? (
+                                                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                                                    <span className="material-symbols-outlined text-[12px]">how_to_reg</span>
+                                                    <span>Connected</span>
+                                                </span>
+                                            ) : (
+                                                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                                                    <span className="material-symbols-outlined text-[12px]">lock</span>
+                                                    <span>Not Connected</span>
+                                                </span>
+                                            )
                                         )}
                                     </div>
                                 </div>
@@ -1576,7 +1687,46 @@ export default function Messages() {
                             <div ref={messagesEndRef} />
                         </div>
 
-                        {/* Chat Bottom Input Area */}
+                        {/* Chat Bottom Input Area OR Connection Restriction Notice */}
+                        {isConnectionsLoaded && !isTargetConnected ? (
+                            <div className="shrink-0 p-3.5 border-t border-slate-200 dark:border-slate-800 bg-amber-50/60 dark:bg-amber-950/30 backdrop-blur-sm z-20 sticky bottom-0">
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-white dark:bg-slate-900 border border-amber-200/80 dark:border-amber-800/80 rounded-xl shadow-xs">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined text-[20px]">lock</span>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h4 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                                                <span>Messaging Restricted to Connections</span>
+                                                <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">Protected</span>
+                                            </h4>
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                                You can only message colleagues you are connected with.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {pendingConnectIds.has(Number(activeOtherParticipant.userId || activeOtherParticipant.id)) ? (
+                                        <div className="px-3.5 py-1.5 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 text-xs font-bold rounded-xl flex items-center gap-1.5 shrink-0">
+                                            <span className="material-symbols-outlined text-[15px]">schedule</span>
+                                            <span>Request Pending</span>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSendConnectRequest(
+                                                Number(activeOtherParticipant.userId || activeOtherParticipant.id),
+                                                activeOtherParticipant.fullName
+                                            )}
+                                            className="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 hover:shadow-md"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">person_add</span>
+                                            <span>Connect to Message</span>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
                         <form onSubmit={handleSendMessage} className="shrink-0 p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 relative z-20 sticky bottom-0">
                             {/* Rich Floating Emoji Picker Popover */}
                             {isEmojiPickerOpen && (
@@ -1810,6 +1960,7 @@ export default function Messages() {
                                 </div>
                             </div>
                         </form>
+                        )}
                     </div>
                 ) : (
                     <div className="flex-1 hidden md:flex flex-col items-center justify-center p-8 text-center bg-slate-50/30 dark:bg-slate-950/20 h-full min-h-0">
@@ -1838,10 +1989,13 @@ export default function Messages() {
                 <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
                         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                            <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-                                <span className="material-symbols-outlined text-cyan-600">add_comment</span>
-                                New Conversation
-                            </h2>
+                            <div>
+                                <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-cyan-600">add_comment</span>
+                                    New Conversation
+                                </h2>
+                                <p className="text-[10.5px] text-slate-400 mt-0.5">Select a connected colleague to start chatting</p>
+                            </div>
                             <button
                                 onClick={() => setIsNewChatOpen(false)}
                                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
@@ -1891,8 +2045,27 @@ export default function Messages() {
                                     );
                                 })
                             ) : (
-                                <div className="p-8 text-center text-slate-400 text-xs">
-                                    No colleagues found matching "{colleagueSearch}".
+                                <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-xs">
+                                    <div className="w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center mb-3">
+                                        <span className="material-symbols-outlined text-[24px]">group_off</span>
+                                    </div>
+                                    <p className="font-bold text-slate-800 dark:text-slate-200 mb-1">
+                                        {colleagueSearch ? `No connected colleagues matching "${colleagueSearch}"` : 'No Connected Colleagues Found'}
+                                    </p>
+                                    <p className="text-[11px] text-slate-400 max-w-xs mx-auto mb-4">
+                                        Messaging is restricted to 1st-degree connected colleagues only. Connect with colleagues in the Network directory to start chatting.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsNewChatOpen(false);
+                                            navigate('/network');
+                                        }}
+                                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all inline-flex items-center gap-1.5 cursor-pointer active:scale-95"
+                                    >
+                                        <span className="material-symbols-outlined text-[15px]">person_add</span>
+                                        <span>Find Colleagues in Network</span>
+                                    </button>
                                 </div>
                             )}
                         </div>

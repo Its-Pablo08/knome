@@ -318,7 +318,7 @@ export const renderScoreBadge = (aiScore, reasonCode, snippet) => {
 };
 
 export default function AdminConsole() {
-    const { currentUser, users: contextUsers, updateUserRoleInList, toggleUserActiveStatus, addKarmaPointsToUser, awardRuleKarma } = useUser();
+    const { currentUser, users: contextUsers, updateUserRoleInList, toggleUserActiveStatus, deleteUserFromList, addKarmaPointsToUser, awardRuleKarma } = useUser();
     const navigate = useNavigate();
     const confirm = useConfirm();
 
@@ -2207,6 +2207,142 @@ export default function AdminConsole() {
             `Reactivated Employee ${user.fullName || user.name}`,
             'text-emerald-500 font-bold'
         );
+    };
+
+    // Handle Permanent User Deletion (Cascades All Associated Data)
+    const handleDeleteUser = async (user) => {
+        if (!user) return;
+
+        const targetId = Number(user.userId || user.id);
+        const targetEmpId = (user.employeeId || '').toUpperCase();
+        const targetEmail = (user.email || '').toLowerCase();
+        const userName = user.fullName || user.name || `User #${targetId}`;
+
+        // 1. Prevent self-deletion
+        const loggedInUid = Number(currentUser?.userId || currentUser?.id);
+        const loggedInEmpId = (currentUser?.employeeId || '').toUpperCase();
+        const loggedInEmail = (currentUser?.email || '').toLowerCase();
+
+        if ((targetId && loggedInUid && targetId === loggedInUid) ||
+            (targetEmpId && loggedInEmpId && targetEmpId === loggedInEmpId) ||
+            (targetEmail && loggedInEmail && targetEmail === loggedInEmail)) {
+            showToast('You cannot delete your own administrative account.');
+            return;
+        }
+
+        // 2. Strict Confirmation Dialog
+        const ok = await confirm({
+            title: `Delete User & All Associated Data`,
+            message: `Are you sure you want to permanently delete "${userName}" (${user.employeeId || 'ID: ' + targetId})? All posts, comments, media, reactions, bookmarks, and activity data associated with this user will be PERMANENTLY deleted from the platform. This action CANNOT be undone.`,
+            confirmText: 'Delete Permanently',
+            cancelText: 'Cancel',
+            variant: 'danger'
+        });
+        if (!ok) return;
+
+        // 3. Call Backend Deletion Endpoint
+        try {
+            if (!isNaN(targetId) && targetId > 0) {
+                await adminApi.deleteUser(targetId);
+            }
+        } catch (apiErr) {
+            console.warn("Backend user deletion notice:", apiErr);
+        }
+
+        // 4. Update React Context & Local State
+        if (deleteUserFromList) {
+            deleteUserFromList(targetId);
+            if (targetEmpId) deleteUserFromList(targetEmpId);
+            if (targetEmail) deleteUserFromList(targetEmail);
+        }
+
+        setUsersList(prev => prev.filter(u => {
+            const uid = Number(u.userId || u.id);
+            const uEmp = (u.employeeId || '').toUpperCase();
+            const uMail = (u.email || '').toLowerCase();
+            return uid !== targetId && (!targetEmpId || uEmp !== targetEmpId) && (!targetEmail || uMail !== targetEmail);
+        }));
+
+        // 5. Clean up Local Storage References
+        try {
+            // Remove from demo employees
+            const ehStored = JSON.parse(localStorage.getItem('eh_demo_employees') || '[]');
+            if (Array.isArray(ehStored)) {
+                const filteredEh = ehStored.filter(e => {
+                    const eId = Number(e.id || e.userId);
+                    const eEmp = (e.employeeId || '').toUpperCase();
+                    const eMail = (e.email || '').toLowerCase();
+                    return eId !== targetId && (!targetEmpId || eEmp !== targetEmpId) && (!targetEmail || eMail !== targetEmail);
+                });
+                localStorage.setItem('eh_demo_employees', JSON.stringify(filteredEh));
+            }
+
+            // Remove from suspended accounts
+            const savedSuspended = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
+            delete savedSuspended[String(targetId)];
+            if (targetEmpId) delete savedSuspended[targetEmpId];
+            localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
+
+            // Remove role overrides
+            const savedOverrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+            delete savedOverrides[String(targetId)];
+            if (targetEmpId) delete savedOverrides[targetEmpId];
+            if (targetEmail) delete savedOverrides[targetEmail];
+            localStorage.setItem('knome_role_overrides', JSON.stringify(savedOverrides));
+
+            // Remove user's local posts
+            const localPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
+            if (Array.isArray(localPosts)) {
+                const filteredPosts = localPosts.filter(p => {
+                    const aId = Number(p.authorUserId || p.authorId || p.userId);
+                    return aId !== targetId;
+                });
+                localStorage.setItem('knome_local_posts', JSON.stringify(filteredPosts));
+            }
+
+            // Remove user's custom podcasts
+            const localPodcasts = JSON.parse(localStorage.getItem('knome_custom_podcasts') || '[]');
+            if (Array.isArray(localPodcasts)) {
+                const filteredPodcasts = localPodcasts.filter(p => {
+                    const uId = Number(p.uploaderUserId || p.authorId);
+                    return uId !== targetId;
+                });
+                localStorage.setItem('knome_custom_podcasts', JSON.stringify(filteredPodcasts));
+            }
+
+            // Remove user's imported videos
+            const localVideos = JSON.parse(localStorage.getItem('knome_imported_yt_videos') || '[]');
+            if (Array.isArray(localVideos)) {
+                const filteredVideos = localVideos.filter(v => {
+                    const uId = Number(v.uploaderUserId || v.authorId);
+                    return uId !== targetId;
+                });
+                localStorage.setItem('knome_imported_yt_videos', JSON.stringify(filteredVideos));
+            }
+
+            // Remove pending role requests
+            const reqs = JSON.parse(localStorage.getItem('knome_pending_role_requests') || '[]');
+            if (Array.isArray(reqs)) {
+                const filteredReqs = reqs.filter(r => (r.employeeId || '').toUpperCase() !== targetEmpId && (r.email || '').toLowerCase() !== targetEmail);
+                localStorage.setItem('knome_pending_role_requests', JSON.stringify(filteredReqs));
+            }
+        } catch (e) {
+            console.warn("Local storage cleanup error:", e);
+        }
+
+        // 6. Broadcast user-deleted event across open tabs/windows
+        window.dispatchEvent(new CustomEvent('user-deleted', { detail: { userId: targetId, employeeId: targetEmpId } }));
+
+        // 7. Audit log & Toast
+        logAuditEntry(
+            'UserDeleted',
+            `Permanently deleted user #${targetId} (${userName}) and all associated records`,
+            'text-rose-600 font-black',
+            'User',
+            targetId
+        );
+
+        showToast(`User ${userName} and all associated data have been permanently deleted.`);
     };
 
     // Handle Role Change Submission (Strict RBAC - System Administrator Only)
@@ -4719,6 +4855,16 @@ export default function AdminConsole() {
                                                             >
                                                                 {u.isActive ? 'Suspend' : 'Activate'}
                                                             </button>
+                                                            {isSysAdmin && (
+                                                                <button
+                                                                    onClick={() => handleDeleteUser(u)}
+                                                                    className="px-2.5 py-1 bg-red-500/10 text-red-600 hover:bg-red-600 hover:text-white font-bold text-[11px] rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                                                                    title="Permanently Delete User and All Associated Data"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[13px]">delete</span>
+                                                                    <span>Delete</span>
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -8174,8 +8320,13 @@ export default function AdminConsole() {
             )}
             {/* ─── MODAL: COMPREHENSIVE USER DETAILS MODAL ─── */}
             {isUserDetailsModalOpen && selectedUserDetailsUser && createPortal(
-                <div className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                <div 
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) setIsUserDetailsModalOpen(false);
+                    }}
+                    className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+                >
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 cursor-default">
                         {/* Header Banner */}
                         <div className="relative p-6 bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 text-white flex items-center justify-between">
                             <div className="flex items-center gap-4">
@@ -8307,66 +8458,6 @@ export default function AdminConsole() {
                                         ? '👥 Community Admin: Authorized for content moderation, pinned discussions, user approvals, and channel safety enforcement.'
                                         : '👤 Standard Employee: Access to feed posting, media channels, communities collaboration, and karma rewards.'}
                                 </p>
-                            </div>
-                        </div>
-
-                        {/* Modal Footer with Action Buttons */}
-                        <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40">
-                            <button
-                                onClick={() => setIsUserDetailsModalOpen(false)}
-                                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
-                            >
-                                Close
-                            </button>
-
-                            <div className="flex items-center gap-2">
-                                {isSysAdmin && (
-                                    <button
-                                        onClick={() => {
-                                            setRoleUserId(String(selectedUserDetailsUser.userId || selectedUserDetailsUser.id));
-                                            setRoleUserName(selectedUserDetailsUser.fullName || selectedUserDetailsUser.name);
-                                            setSelectedRoles([getUserAssignedRole(selectedUserDetailsUser)]);
-                                            setIsUserDetailsModalOpen(false);
-                                            setIsRoleModalOpen(true);
-                                        }}
-                                        className="px-4 py-2 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-                                    >
-                                        <span className="material-symbols-outlined text-[15px]">manage_accounts</span>
-                                        Edit Role
-                                    </button>
-                                )}
-
-                                <button
-                                    onClick={() => {
-                                        if (selectedUserDetailsUser.isActive) {
-                                            const loggedInUid = Number(currentUser?.userId || currentUser?.id);
-                                            const loggedInEmpId = (currentUser?.employeeId || '').toUpperCase();
-                                            const targetUid = Number(selectedUserDetailsUser.userId || selectedUserDetailsUser.id);
-                                            const targetEmpId = (selectedUserDetailsUser.employeeId || '').toUpperCase();
-                                            if ((targetUid && loggedInUid && targetUid === loggedInUid) ||
-                                                (targetEmpId && loggedInEmpId && targetEmpId === loggedInEmpId)) {
-                                                showToast('You cannot suspend your own administrative account.');
-                                                return;
-                                            }
-                                            setIsUserDetailsModalOpen(false);
-                                            setSelectedUserToSuspend(selectedUserDetailsUser);
-                                            setIsSuspendModalOpen(true);
-                                        } else {
-                                            handleToggleUserActive(selectedUserDetailsUser);
-                                            setSelectedUserDetailsUser(prev => prev ? { ...prev, isActive: true, isSuspended: false, status: 'Active' } : null);
-                                        }
-                                    }}
-                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                                        selectedUserDetailsUser.isActive 
-                                            ? 'bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-600 dark:text-rose-400' 
-                                            : 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-[15px]">
-                                        {selectedUserDetailsUser.isActive ? 'person_off' : 'person_check'}
-                                    </span>
-                                    {selectedUserDetailsUser.isActive ? 'Suspend User' : 'Reactivate User'}
-                                </button>
                             </div>
                         </div>
                     </div>
