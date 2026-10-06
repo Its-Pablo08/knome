@@ -153,6 +153,68 @@ export const isSelfNotification = (notif, currentUser) => {
 export const parseNotificationContent = (notif) => {
     let sender = notif.senderName || notif.actorName || '';
     let message = notif.message || notif.title || '';
+    let wikiTitle = notif.wikiTitle || null;
+
+    // Check for Wiki notification patterns
+    const isWiki = (notif.relatedContentType || '').toLowerCase() === 'wiki' ||
+                   (notif.type || '').toLowerCase().includes('wiki') ||
+                   Boolean(notif.wikiId) ||
+                   message.toLowerCase().includes('wiki');
+
+    if (isWiki) {
+        // Extract wiki title from any quotes if present: "...", '...', “...”, ‘...’, `...`
+        const titleMatch = message.match(/["“”'‘’`]([^"“”'‘’`]+)["“”'‘’`]/);
+        if (titleMatch && titleMatch[1]) {
+            wikiTitle = titleMatch[1].trim();
+        } else if (!wikiTitle) {
+            // Check for title following colon: e.g. ...with you: Title
+            const colonIdx = message.indexOf(':');
+            if (colonIdx !== -1) {
+                const candidate = message.substring(colonIdx + 1).trim().replace(/^["“”'‘’`]|["“”'‘’`]$/g, '').trim();
+                if (candidate && candidate.length > 1 && !candidate.startsWith('http')) {
+                    wikiTitle = candidate;
+                }
+            }
+        }
+
+        // Extract sender from message if not already given
+        if (!sender || sender === 'System' || sender === 'Colleague') {
+            const sMatch = message.match(/^(.+?)\s+(?:shared|added|invited)\b/i);
+            if (sMatch && sMatch[1] && sMatch[1].toLowerCase() !== 'you' && sMatch[1].toLowerCase() !== 'a') {
+                sender = sMatch[1].trim();
+            }
+        }
+
+        if (message.toLowerCase().includes('added as a') || message.toLowerCase().includes('added as an')) {
+            const roleMatch = message.match(/added as a[n]?\s+([a-zA-Z]+)\s+to Wiki/i);
+            const role = roleMatch ? roleMatch[1] : 'Editor';
+            const article = /^[aeiou]/i.test(role) ? 'an' : 'a';
+            return {
+                sender: sender || 'Colleague',
+                action: `added you as ${article} ${role} to Wiki`,
+                wikiTitle,
+                isWiki: true
+            };
+        }
+
+        if (message.toLowerCase().includes('shared a wiki in ') || message.toLowerCase().includes('shared a new wiki in ')) {
+            const commMatch = message.match(/shared (?:a |a new )?wiki in ([^:.]+)/i);
+            const commName = commMatch ? commMatch[1].trim() : 'Community';
+            return {
+                sender: sender || 'Colleague',
+                action: `shared a Wiki in ${commName}`,
+                wikiTitle,
+                isWiki: true
+            };
+        }
+
+        return {
+            sender: sender || 'Colleague',
+            action: 'shared a Wiki with you',
+            wikiTitle,
+            isWiki: true
+        };
+    }
 
     // If senderName is already populated, clean the message
     if (sender) {
@@ -165,7 +227,7 @@ export const parseNotificationContent = (notif) => {
                 action = action.slice(1).trim();
             }
         }
-        return { sender, action: action || 'sent an update.' };
+        return { sender, action: action || 'sent an update.', wikiTitle, isWiki };
     }
 
     // If senderName is not separate, try extracting from message e.g. "Vilash Deshmukh liked your post"
@@ -175,6 +237,7 @@ export const parseNotificationContent = (notif) => {
         ' shared a post with you',
         ' shared an article with you',
         ' shared a video with you',
+        ' shared a wiki with you',
         ' sent you a connection request',
         ' accepted your connection request',
         ' followed you',
@@ -193,13 +256,15 @@ export const parseNotificationContent = (notif) => {
         if (idx > 0) {
             sender = message.substring(0, idx).trim();
             const action = message.substring(idx).trim();
-            return { sender, action };
+            return { sender, action, wikiTitle, isWiki };
         }
     }
 
     // Fallback: Use title or first few words
     return {
         sender: notif.title || 'Knome Notification',
-        action: message
+        action: message,
+        wikiTitle,
+        isWiki
     };
 };

@@ -292,6 +292,12 @@ export default function WikiShareModal({
                     communityId: selectedCommunityId,
                     communityName: targetCommunity?.name,
                     postType: 'Wiki',
+                    wikiId: wikiId,
+                    sharedWiki: {
+                        id: wikiId,
+                        title: wikiTitle,
+                        url: wikiShareUrl
+                    },
                     likes: 0,
                     comments: 0
                 };
@@ -364,7 +370,7 @@ export default function WikiShareModal({
             try {
                 const notifsToStore = selectedUsers.map(u => ({
                     id: `local_share_wiki_${wikiId}_${u.userId || u.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                    type: 'share',
+                    type: 'wiki_share',
                     category: 'Shares',
                     icon: 'menu_book',
                     color: 'text-teal-500',
@@ -379,9 +385,14 @@ export default function WikiShareModal({
                     targetUrl: `/wiki/view?id=${wikiId}`,
                     link: `/wiki/view?id=${wikiId}`,
                     url: `/wiki/view?id=${wikiId}`,
+                    unread: true,
                     read: false,
                     recipientUserId: String(u.userId || u.id),
-                    wikiId: wikiId
+                    wikiId: wikiId,
+                    wikiTitle: wikiTitle,
+                    relatedContentType: 'Wiki',
+                    relatedContentId: wikiId,
+                    isWiki: true
                 }));
                 const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
                 localStorage.setItem('knome_notifications', JSON.stringify([...notifsToStore, ...existingNotifs]));

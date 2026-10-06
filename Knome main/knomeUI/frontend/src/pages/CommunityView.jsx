@@ -4681,8 +4681,10 @@ export default function CommunityView() {
                                         const hasExplicitVideoCard = Boolean(post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹'))));
                                         const hasExplicitProfileCard = Boolean(post.sharedProfile || post.isProfileShare || (post.content && post.content.includes('Shared Profile:')));
 
+                                        const isWikiShare = Boolean(target?.type === 'Wiki' || post.sharedWiki || post.type === 'wiki_share' || (post.postType || '').toLowerCase() === 'wiki' || (post.content && (post.content.includes('Shared Wiki:') || post.content.includes('/wiki/view') || post.content.includes('/wiki'))));
+
                                         const isSharedPost = Boolean(
-                                            !hasExplicitArticleCard && !hasExplicitPodcastCard && !hasExplicitVideoCard && !hasExplicitProfileCard &&
+                                            !hasExplicitArticleCard && !hasExplicitPodcastCard && !hasExplicitVideoCard && !hasExplicitProfileCard && !isWikiShare &&
                                             (
                                                 target ||
                                                 extractedPostId || 
@@ -4704,33 +4706,71 @@ export default function CommunityView() {
 
                                         const renderFormattedText = (text) => {
                                             if (!text) return null;
-                                            const urlRegex = /(https?:\/\/[^\s]+)/g;
+                                            const urlRegex = /(https?:\/\/[^\s]+|\/wiki(?:\/view)?\?[^\s]+)/g;
                                             const parts = text.split(urlRegex);
                                             return parts.map((part, index) => {
+                                                if (!part) return null;
                                                 if (part.match(urlRegex)) {
-                                                    const isInternal = part.includes('/posts') || part.includes('/article-view') || part.includes('/community') || part.includes('/videos') || part.includes('/podcasts');
+                                                    const cleanUrl = part.replace(/[.,;!?)]+$/, '');
+                                                    const trailingPunctuation = part.slice(cleanUrl.length);
+                                                    const isWikiUrl = cleanUrl.includes('/wiki') || cleanUrl.includes('/wiki/view');
+
+                                                    if (isWikiUrl) {
+                                                        let targetPath = '/wiki';
+                                                        try {
+                                                            const urlObj = new URL(cleanUrl, window.location.origin);
+                                                            targetPath = urlObj.pathname + urlObj.search;
+                                                        } catch {
+                                                            const match = cleanUrl.match(/\/wiki(?:\/view)?(?:\?[^\s]+)?/i);
+                                                            targetPath = match ? match[0] : '/wiki';
+                                                        }
+
+                                                        return (
+                                                            <span key={index} className="inline-block my-1.5 align-middle">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                        navigate(targetPath);
+                                                                    }}
+                                                                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-xs bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 active:scale-95 text-white shadow-sm hover:shadow-md transition-all group/wiki cursor-pointer"
+                                                                    title="Open Wiki"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[16px]">menu_book</span>
+                                                                    <span className="tracking-wide">Open Wiki</span>
+                                                                    <span className="material-symbols-outlined text-[14px] group-hover/wiki:translate-x-0.5 transition-transform">arrow_forward</span>
+                                                                </button>
+                                                                {trailingPunctuation}
+                                                            </span>
+                                                        );
+                                                    }
+
+                                                    const isInternal = cleanUrl.includes('/posts') || cleanUrl.includes('/article-view') || cleanUrl.includes('/community') || cleanUrl.includes('/videos') || cleanUrl.includes('/podcasts');
                                                     return (
-                                                        <a
-                                                            key={index}
-                                                            href={part}
-                                                            onClick={(e) => {
-                                                                if (isInternal) {
-                                                                    e.preventDefault();
-                                                                    try {
-                                                                        const urlObj = new URL(part, window.location.origin);
-                                                                        navigate(urlObj.pathname + urlObj.search);
-                                                                    } catch {
-                                                                        window.open(part, '_blank');
+                                                        <React.Fragment key={index}>
+                                                            <a
+                                                                href={cleanUrl}
+                                                                onClick={(e) => {
+                                                                    if (isInternal) {
+                                                                        e.preventDefault();
+                                                                        try {
+                                                                            const urlObj = new URL(cleanUrl, window.location.origin);
+                                                                            navigate(urlObj.pathname + urlObj.search);
+                                                                        } catch {
+                                                                            window.open(cleanUrl, '_blank');
+                                                                        }
                                                                     }
-                                                                }
-                                                            }}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-blue-600 dark:text-blue-400 hover:underline font-semibold inline-flex items-center gap-0.5 break-all cursor-pointer"
-                                                        >
-                                                            <span>{part}</span>
-                                                            <span className="material-symbols-outlined text-[13px]">open_in_new</span>
-                                                        </a>
+                                                                }}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-blue-600 dark:text-blue-400 hover:underline font-semibold inline-flex items-center gap-0.5 break-all cursor-pointer"
+                                                            >
+                                                                <span>{cleanUrl}</span>
+                                                                <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                                                            </a>
+                                                            {trailingPunctuation}
+                                                        </React.Fragment>
                                                     );
                                                 }
                                                 return part;
@@ -5194,10 +5234,11 @@ export default function CommunityView() {
                                                 <span>{post.shares || 0} {post.shares === 1 ? 'Share' : 'Shares'}</span>
                                             </button>
 
-                                            {/* Open Content Action Button (Article / Video / Podcast / Profile / Post) */}
+                                            {/* Open Content Action Button (Article / Video / Podcast / Profile / Post / Wiki) */}
                                             <button 
                                                 onClick={() => handleOpenPost(post)}
                                                 className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all shadow-xs hover:shadow-sm cursor-pointer ${
+                                                    target?.type === 'Wiki' ? 'bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/50 dark:hover:bg-teal-900/60 text-teal-600 dark:text-teal-400' :
                                                     target?.type === 'Article' ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400' :
                                                     target?.type === 'Video' ? 'bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400' :
                                                     target?.type === 'Podcast' ? 'bg-pink-50 hover:bg-pink-100 dark:bg-pink-950/50 dark:hover:bg-pink-900/60 text-pink-600 dark:text-pink-400' :

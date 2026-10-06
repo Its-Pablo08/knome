@@ -213,7 +213,8 @@ public class NotificationService : INotificationService
             Constants.NotificationTypes.Badge => "Karma Badge Earned",
             Constants.NotificationTypes.Mention => "Mentioned You",
             Constants.NotificationTypes.Reaction => dto.Message?.Contains("comment", StringComparison.OrdinalIgnoreCase) == true ? "Comment Liked" : "New Reaction",
-            Constants.NotificationTypes.Share => "Content Shared",
+            Constants.NotificationTypes.Share => dto.RelatedContentType?.Equals("Wiki", StringComparison.OrdinalIgnoreCase) == true ? "Wiki Shared" : "Content Shared",
+            Constants.NotificationTypes.Community => dto.RelatedContentType?.Equals("Wiki", StringComparison.OrdinalIgnoreCase) == true ? "Wiki Collaborator" : "Community Update",
             _ => dto.EventType ?? "Notification"
         };
 
@@ -280,6 +281,7 @@ public class NotificationService : INotificationService
 
             dto.TargetUrl = type switch
             {
+                "wiki" => $"/wiki/view?id={id}",
                 "post" => $"/posts?id={id}",
                 "comment" => $"/posts?id={id}",
                 "article" => $"/article-view?id={id}",

@@ -1486,7 +1486,26 @@ export const resolveSharedTarget = (post) => {
     const typeStr = (post.type || '').toLowerCase();
     const contentTypeStr = (post.contentType || '').toLowerCase();
 
-    // 1. Article Check
+    // 1. Wiki Check
+    const wikiUrlMatch = content.match(/(?:https?:\/\/[^\s]+)?\/wiki(?:\/view)?(?:\?id=|\/)([a-zA-Z0-9_-]+)/i) ||
+                         (post.link || '').match(/(?:https?:\/\/[^\s]+)?\/wiki(?:\/view)?(?:\?id=|\/)([a-zA-Z0-9_-]+)/i) ||
+                         (post.url || '').match(/(?:https?:\/\/[^\s]+)?\/wiki(?:\/view)?(?:\?id=|\/)([a-zA-Z0-9_-]+)/i);
+    const isWikiType = typeStr === 'wiki_share' || typeStr === 'wiki' || contentTypeStr === 'wiki' || (post.postType || '').toLowerCase() === 'wiki' || post.sharedContent?.type?.toLowerCase() === 'wiki';
+    const isWikiText = content.includes('Shared Wiki:') || title.startsWith('Shared Wiki:') || Boolean(post.wikiId) || content.includes('/wiki/view');
+
+    if (post.sharedWiki || wikiUrlMatch || isWikiType || isWikiText || post.wikiId) {
+        const id = post.sharedWiki?.id || post.wikiId || (wikiUrlMatch ? wikiUrlMatch[1] : null) || post.sharedContent?.id;
+        return {
+            type: 'Wiki',
+            id: id,
+            url: id ? `/wiki/view?id=${id}` : '/wiki',
+            label: 'Shared Wiki',
+            actionText: 'Open Wiki',
+            icon: 'menu_book'
+        };
+    }
+
+    // 2. Article Check
     const articleUrlMatch = content.match(/(?:https?:\/\/[^\s]+)?\/article-view\?id=([a-zA-Z0-9_-]+)/i);
     const isArticleType = typeStr === 'article_share' || typeStr === 'article' || contentTypeStr === 'article' || post.sharedContent?.type?.toLowerCase() === 'article';
     const isArticleText = content.includes('Shared Article:') || title.startsWith('Shared Article:');

@@ -18,6 +18,9 @@ export default function NotificationToast({ notification, onClose }) {
         onClose();
         if (notification.targetUrl) {
             navigate(notification.targetUrl);
+        } else if (notification.isWiki || notification.relatedContentType?.toLowerCase() === 'wiki' || notification.type?.includes('wiki') || (notification.message || '').toLowerCase().includes('wiki') || notification.wikiId) {
+            const wId = notification.wikiId || notification.relatedContentId || notification.referenceId;
+            navigate(wId ? `/wiki/view?id=${wId}` : '/wiki');
         } else if (notification.type === 'message' || notification.eventType === 'Message' || notification.type?.includes('chat')) {
             const uId = notification.senderUserId || notification.senderId;
             navigate(uId ? `/messages?userId=${uId}&name=${encodeURIComponent(notification.senderName || '')}` : '/messages');

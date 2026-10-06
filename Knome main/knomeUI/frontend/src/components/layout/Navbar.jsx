@@ -8,6 +8,7 @@ import HighlightText from '../ui/HighlightText';
 import knomeLogo from '../../assets/knome_logo.png';
 import knomeLogoDark from '../../assets/knome_logo_dark.png';
 import { notificationsApi, profileApi, searchApi, karmaApi, resolveMediaUrl, saveRecentSearch, getLocalRecentSearches, clearLocalRecentSearches } from '../../utils/apiService';
+import { wikiApi } from '../../utils/wikiService';
 import { useConfirm } from '../contexts/ConfirmDialogContext';
 import * as signalR from '@microsoft/signalr';
 import { getHubUrl } from '../../utils/apiClient';
@@ -514,6 +515,7 @@ export default function Navbar() {
         const isMention = type.includes('mention');
         const isShare = type.includes('share') || msg.includes('shared');
         const isCommunity = type.includes('community') || relType === 'community' || msg.includes('community');
+        const isWiki = relType === 'wiki' || type.includes('wiki') || msg.includes('wiki') || Boolean(n.wikiId);
 
         let icon = 'notifications';
         let color = 'text-slate-400';
@@ -521,7 +523,12 @@ export default function Navbar() {
         let category = 'System';
 
         const isMsg = type.includes('message') || type.includes('chat') || msg.includes('sent you a message');
-        if (isMsg) {
+        if (isWiki) {
+            icon = 'menu_book';
+            color = 'text-teal-500';
+            bg = 'bg-teal-500/10';
+            category = (isCommunity && !isShare && !msg.includes('shared')) ? 'Community' : 'Shares';
+        } else if (isMsg) {
             icon = 'chat';
             color = 'text-cyan-500';
             bg = 'bg-cyan-500/10';
@@ -571,8 +578,20 @@ export default function Navbar() {
         const dateVal = n.createdAt || n.createdDate || n.created_at;
         const refId = n.relatedContentId || n.referenceId;
 
+        let wikiId = n.wikiId || null;
+        if (!wikiId && isWiki) {
+            wikiId = refId || null;
+        }
+        if (!wikiId && isWiki) {
+            const urlSource = (n.targetUrl || n.link || n.url || n.message || n.text || '');
+            const m = urlSource.match(/\/wiki(?:\/view)?(?:\?id=|\/)(\d+)/i) || urlSource.match(/[?&]id=(\d+)/i);
+            if (m) wikiId = m[1];
+        }
+
         let targetUrl = n.targetUrl;
-        if (isConnectionReq || type.includes('connection') || msg.includes('connection request')) {
+        if (isWiki) {
+            targetUrl = wikiId ? `/wiki/view?id=${wikiId}` : '/wiki';
+        } else if (isConnectionReq || type.includes('connection') || msg.includes('connection request')) {
             targetUrl = msg.includes('accepted') ? '/network?tab=Connections' : '/network?tab=Requests';
         } else if (!targetUrl) {
             if (msg.includes('post') || type.includes('post') || type.includes('share') || relType === 'post') {
@@ -591,31 +610,40 @@ export default function Navbar() {
         }
 
         const dateFormatted = formatNotificationDate(dateVal);
-        const parsed = parseNotificationContent({ senderName, message: n.message || n.text || n.title });
+        const parsed = parseNotificationContent({
+            senderName,
+            message: n.message || n.text || n.title,
+            relatedContentType: n.relatedContentType,
+            type: n.notificationType || n.eventType || n.type,
+            wikiTitle: n.wikiTitle || (relType === 'wiki' ? n.title : null)
+        });
 
         const isAccepted = msg.includes('accepted');
 
         return {
             id: n.notificationId || n.id,
             category,
-            type: (isConnectionReq && !isAccepted) ? 'follow_request' : (isConnectionReq && isAccepted ? 'connection_accepted' : (isFollow ? 'follow' : type)),
-            title: n.title || (isAccepted ? 'Connection Accepted' : (isFollow ? 'New Follower' : (isConnectionReq ? 'Connection Request' : 'Notification'))),
+            type: isWiki ? 'wiki_share' : ((isConnectionReq && !isAccepted) ? 'follow_request' : (isConnectionReq && isAccepted ? 'connection_accepted' : (isFollow ? 'follow' : type))),
+            title: isWiki ? (parsed.wikiTitle || 'Wiki Share') : (n.title || (isAccepted ? 'Connection Accepted' : (isFollow ? 'New Follower' : (isConnectionReq ? 'Connection Request' : 'Notification')))),
             text: n.message || n.text,
             message: n.message || n.text,
             parsedSender: parsed.sender,
             parsedAction: parsed.action,
+            wikiTitle: parsed.wikiTitle || n.wikiTitle,
+            wikiId: wikiId,
+            isWiki: isWiki,
             targetUrl,
-            relatedContentType: n.relatedContentType,
-            relatedContentId: n.relatedContentId || n.referenceId,
+            relatedContentType: isWiki ? 'Wiki' : n.relatedContentType,
+            relatedContentId: isWiki ? (wikiId || refId) : refId,
             createdDate: dateVal,
             time: dateFormatted,
             displayDate: dateFormatted,
-            unread: !n.isRead,
+            unread: !n.isRead && n.unread !== false,
             icon,
             color,
             bg,
             senderUserId: n.senderUserId || n.actorUserId,
-            senderName,
+            senderName: parsed.sender || senderName,
             senderAvatar,
             handled: n.isRead || isAccepted,
             status: isAccepted ? 'approved' : 'pending'
@@ -642,31 +670,51 @@ export default function Navbar() {
                     return false;
                 })
                 .map(n => {
+                    const textLower = (n.text || n.message || '').toLowerCase();
+                    const isWiki = (n.relatedContentType || '').toLowerCase() === 'wiki' ||
+                                   (n.type || '').toLowerCase().includes('wiki') ||
+                                   textLower.includes('wiki') ||
+                                   Boolean(n.wikiId);
+                    let wId = n.wikiId || n.relatedContentId;
+                    if (!wId && isWiki) {
+                        const urlSource = (n.actionLink || n.targetUrl || n.text || n.message || '');
+                        const m = urlSource.match(/\/wiki(?:\/view)?(?:\?id=|\/)(\d+)/i) || urlSource.match(/[?&]id=(\d+)/i);
+                        if (m) wId = m[1];
+                    }
+                    const parsed = parseNotificationContent({
+                        senderName: n.senderName || 'Community Admin',
+                        message: n.text || n.message,
+                        relatedContentType: isWiki ? 'Wiki' : n.relatedContentType,
+                        type: n.type,
+                        wikiTitle: n.wikiTitle
+                    });
                     const dateVal = n.createdDate || n.createdAt || n.timestamp || n.date;
                     const dateFormatted = formatNotificationDate(dateVal);
-                    const parsed = parseNotificationContent({ senderName: n.senderName || 'Community Admin', message: n.text || n.message });
                     return {
                         id: n.id || `local_${n.communityId}_${n.targetUserId}_${n.type}`,
-                        type: n.type || 'community_invite',
-                        category: 'Community',
-                        icon: n.icon || 'group_add',
-                        color: n.color || 'text-indigo-400',
-                        bg: n.bg || 'bg-indigo-500/10',
+                        type: isWiki ? 'wiki_share' : (n.type || 'community_invite'),
+                        category: isWiki ? 'Shares' : 'Community',
+                        icon: isWiki ? 'menu_book' : (n.icon || 'group_add'),
+                        color: isWiki ? 'text-teal-500' : (n.color || 'text-indigo-400'),
+                        bg: isWiki ? 'bg-teal-500/10' : (n.bg || 'bg-indigo-500/10'),
                         text: n.text || n.message,
                         message: n.text || n.message,
                         parsedSender: parsed.sender,
                         parsedAction: parsed.action,
-                        senderName: n.senderName || 'Community Admin',
+                        wikiTitle: parsed.wikiTitle || n.wikiTitle,
+                        wikiId: wId,
+                        isWiki: isWiki,
+                        senderName: parsed.sender || n.senderName || 'Community Admin',
                         senderAvatar: n.senderAvatar || null,
                         senderUserId: n.senderUserId,
                         time: dateFormatted,
                         displayDate: dateFormatted,
                         createdDate: dateVal,
-                        unread: n.unread !== false,
+                        unread: n.unread !== false && n.read !== true,
                         isLocalNotif: true,
-                        targetUrl: n.actionLink || (n.communityId ? `/community/view?id=${n.communityId}` : '/community'),
-                        relatedContentId: n.communityId,
-                        relatedContentType: 'community',
+                        targetUrl: isWiki ? (wId ? `/wiki/view?id=${wId}` : '/wiki') : (n.actionLink || (n.communityId ? `/community/view?id=${n.communityId}` : '/community')),
+                        relatedContentId: isWiki ? wId : n.communityId,
+                        relatedContentType: isWiki ? 'Wiki' : 'community',
                         communityName: n.communityName,
                         communityId: n.communityId,
                     };
@@ -687,7 +735,7 @@ export default function Navbar() {
 
                     // Skip community-type notifications (handled by getLocalCommunityNotifs)
                     if (['community_invite', 'join_request', 'community_approved', 'community_rejected'].includes(n.type)) return false;
-                    if (n.category === 'Community') return false;
+                    if (n.category === 'Community' && !((n.text || n.message || '').toLowerCase().includes('wiki') || n.wikiId)) return false;
 
                     // Strict recipient check
                     if (!isNotificationForUser(n, currentUser)) return false;
@@ -695,18 +743,29 @@ export default function Navbar() {
                     return true;
                 })
                 .map(n => {
-                    const isVideo = n.type === 'video_shared' || n.relatedContentType === 'Video' || (n.text || '').toLowerCase().includes('video');
-                    const isPodcast = n.type === 'podcast_shared' || n.relatedContentType === 'Podcast' || (n.text || '').toLowerCase().includes('podcast');
-                    const isArticle = n.type === 'article_shared' || n.relatedContentType === 'Article' || (n.text || '').toLowerCase().includes('article');
-                    const isPost = n.type === 'post_shared' || n.relatedContentType === 'Post' || (n.text || '').toLowerCase().includes('post');
-                    const isCommunity = n.type === 'community_shared' || n.relatedContentType === 'Community' || (n.text || '').toLowerCase().includes('community');
-                    const isShare = n.type?.includes('share') || (n.text || '').toLowerCase().includes('shared');
+                    const textLower = (n.text || n.message || '').toLowerCase();
+                    const isWiki = n.type === 'wiki_share' || n.type === 'wiki_shared' || (n.relatedContentType || '').toLowerCase() === 'wiki' || textLower.includes('wiki') || Boolean(n.wikiId);
+                    const isVideo = !isWiki && (n.type === 'video_shared' || n.relatedContentType === 'Video' || textLower.includes('video'));
+                    const isPodcast = !isWiki && !isVideo && (n.type === 'podcast_shared' || n.relatedContentType === 'Podcast' || textLower.includes('podcast'));
+                    const isArticle = !isWiki && !isVideo && !isPodcast && (n.type === 'article_shared' || n.relatedContentType === 'Article' || textLower.includes('article'));
+                    const isPost = !isWiki && !isVideo && !isPodcast && !isArticle && (n.type === 'post_shared' || n.relatedContentType === 'Post' || textLower.includes('post'));
+                    const isCommunity = !isWiki && !isVideo && !isPodcast && !isArticle && (n.type === 'community_shared' || n.relatedContentType === 'Community' || textLower.includes('community'));
+                    const isShare = n.type?.includes('share') || textLower.includes('shared');
                     const vTitle = n.videoTitle || n.mediaTitle;
                     const vId = n.videoId || n.relatedContentId;
                     const vUrl = n.videoUrl || n.sourceUrl;
                     
+                    let wId = n.wikiId || n.relatedContentId || n.referenceId;
+                    if (!wId && isWiki) {
+                        const urlSource = (n.targetUrl || n.link || n.url || n.text || n.message || '');
+                        const m = urlSource.match(/\/wiki(?:\/view)?(?:\?id=|\/)(\d+)/i) || urlSource.match(/[?&]id=(\d+)/i);
+                        if (m) wId = m[1];
+                    }
+
                     let targetUrl = n.targetUrl || n.actionLink || n.linkUrl;
-                    if (!targetUrl) {
+                    if (isWiki) {
+                        targetUrl = wId ? `/wiki/view?id=${wId}` : '/wiki';
+                    } else if (!targetUrl) {
                         if (isCommunity) {
                             targetUrl = n.communityId ? `/community/view?id=${n.communityId}` : '/community';
                         } else if (isVideo) {
@@ -726,12 +785,22 @@ export default function Navbar() {
 
                     const dateVal = n.createdDate || n.createdAt || n.timestamp || n.date;
                     const dateFormatted = formatNotificationDate(dateVal);
-                    const parsed = parseNotificationContent({ senderName: n.senderName || 'Teammate', message: n.text || n.message });
+                    const parsed = parseNotificationContent({
+                        senderName: n.senderName || 'Teammate',
+                        message: n.text || n.message,
+                        relatedContentType: isWiki ? 'Wiki' : n.relatedContentType,
+                        type: n.type,
+                        wikiTitle: n.wikiTitle
+                    });
 
                     let icon = 'notifications';
                     let color = 'text-slate-400';
                     let bg = 'bg-slate-500/10';
-                    if (isVideo) {
+                    if (isWiki) {
+                        icon = 'menu_book';
+                        color = 'text-teal-500';
+                        bg = 'bg-teal-500/10';
+                    } else if (isVideo) {
                         icon = 'videocam';
                         color = 'text-rose-500';
                         bg = 'bg-rose-500/10';
@@ -759,8 +828,8 @@ export default function Navbar() {
 
                     return {
                         id: n.id,
-                        type: n.type || 'notification',
-                        category: n.category || (isCommunity ? 'Community' : (isShare ? 'Shares' : (isVideo ? 'Social' : 'System'))),
+                        type: isWiki ? 'wiki_share' : (n.type || 'notification'),
+                        category: n.category || (isWiki ? 'Shares' : (isCommunity ? 'Community' : (isShare ? 'Shares' : (isVideo ? 'Social' : 'System')))),
                         icon,
                         color,
                         bg,
@@ -768,17 +837,20 @@ export default function Navbar() {
                         message: n.text || n.message,
                         parsedSender: parsed.sender,
                         parsedAction: parsed.action,
-                        senderName: n.senderName || 'Teammate',
+                        wikiTitle: parsed.wikiTitle || n.wikiTitle,
+                        wikiId: wId,
+                        isWiki: isWiki,
+                        senderName: parsed.sender || n.senderName || 'Teammate',
                         senderAvatar: n.senderAvatar || null,
                         senderUserId: n.senderUserId,
                         time: dateFormatted,
                         displayDate: dateFormatted,
                         createdDate: dateVal,
-                        unread: n.unread !== false,
+                        unread: n.unread !== false && n.read !== true,
                         isLocalNotif: true,
                         targetUrl,
-                        relatedContentType: isVideo ? 'Video' : (isPodcast ? 'Podcast' : (isArticle ? 'Article' : (isCommunity ? 'Community' : (isPost ? 'Post' : n.relatedContentType)))),
-                        relatedContentId: n.relatedContentId || n.videoId,
+                        relatedContentType: isWiki ? 'Wiki' : (isVideo ? 'Video' : (isPodcast ? 'Podcast' : (isArticle ? 'Article' : (isCommunity ? 'Community' : (isPost ? 'Post' : n.relatedContentType))))),
+                        relatedContentId: isWiki ? wId : (n.relatedContentId || n.videoId),
                         videoId: n.videoId,
                         videoTitle: vTitle,
                         videoUrl: vUrl,
@@ -1196,27 +1268,76 @@ export default function Navbar() {
         return '/community';
     };
 
-    const handleNotificationClick = (notif) => {
+    const handleNotificationClick = async (notif) => {
         setIsNotifOpen(false);
 
         if (notif.unread && notif.id) {
-            // Mark read in localStorage for local community invite notifs
-            if (notif.isLocalNotif) {
-                try {
-                    const stored = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
-                    const updated = stored.map(n => String(n.id) === String(notif.id) ? { ...n, unread: false } : n);
-                    localStorage.setItem('knome_notifications', JSON.stringify(updated));
-                } catch (e) { /* ignore */ }
-            } else {
+            // Mark read in localStorage
+            try {
+                const stored = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
+                const updated = stored.map(n => String(n.id) === String(notif.id) ? { ...n, unread: false, read: true } : n);
+                localStorage.setItem('knome_notifications', JSON.stringify(updated));
+                window.dispatchEvent(new CustomEvent('notification-updated', { detail: { id: notif.id, unread: false } }));
+            } catch (e) { /* ignore */ }
+
+            // Mark read in backend API if real ID
+            if (!String(notif.id).startsWith('local_')) {
                 notificationsApi.markRead(notif.id).catch(err => console.error('Mark read failed:', err));
             }
-            setAllNotifs(prev => prev.map(n => n.id === notif.id ? { ...n, unread: false, handled: true } : n));
+            setAllNotifs(prev => prev.map(n => String(n.id) === String(notif.id) ? { ...n, unread: false, handled: true } : n));
         }
 
         let dest = notif.targetUrl || notif.linkUrl || notif.actionLink;
         const msg = (notif.text || notif.message || '').toLowerCase();
         const relType = (notif.relatedContentType || '').toLowerCase();
         const refId = notif.relatedContentId || notif.referenceId || notif.videoId;
+
+        // Check for Wiki notification FIRST so it is never intercepted by post or community routing
+        const isWikiNotif = notif.isWiki || relType === 'wiki' || notif.type?.toLowerCase().includes('wiki') || msg.includes('wiki') || Boolean(notif.wikiId);
+        if (isWikiNotif) {
+            let wId = notif.wikiId || (relType === 'wiki' ? refId : null);
+
+            if (!wId && dest) {
+                const match = dest.match(/\/wiki(?:\/view)?(?:\?id=|\/)(\d+)/i) || dest.match(/[?&]id=(\d+)/i);
+                if (match) wId = match[1];
+            }
+
+            if (!wId && refId && !isNaN(Number(refId))) {
+                wId = refId;
+            }
+
+            if (!wId) {
+                const msgMatch = (notif.text || notif.message || '').match(/\/wiki(?:\/view)?(?:\?id=|\/)(\d+)/i) || (notif.text || notif.message || '').match(/[?&]id=(\d+)/i);
+                if (msgMatch) wId = msgMatch[1];
+            }
+
+            // Fallback: If still no wId but we have wikiTitle, resolve ID by looking up via wikiApi
+            if (!wId && notif.wikiTitle) {
+                try {
+                    const searchRes = await wikiApi.getWikis({ search: notif.wikiTitle });
+                    const items = Array.isArray(searchRes) ? searchRes : (searchRes?.items || searchRes?.data || []);
+                    const matched = items.find(w => (w.title || '').toLowerCase() === notif.wikiTitle.toLowerCase());
+                    if (matched) {
+                        wId = matched.wikiId || matched.id;
+                    } else if (items.length > 0) {
+                        wId = items[0].wikiId || items[0].id;
+                    }
+                } catch (e) {
+                    // silently ignore lookup error
+                }
+            }
+
+            dest = wId ? `/wiki/view?id=${wId}` : '/wiki';
+
+            const currentPath = window.location.pathname + window.location.search;
+            if (currentPath === dest) {
+                window.location.reload();
+            } else {
+                navigate(dest, { state: { wikiId: wId, wikiTitle: notif.wikiTitle } });
+            }
+            return;
+        }
+
         // Ensure post notifications are never misinterpreted as profile shares
         const isPostNotif = relType === 'post' || notif.isPost || notif.type?.toLowerCase().includes('post') || (msg.includes('posted') && !msg.includes('podcast'));
         const isProfileShare = !isPostNotif && (relType === 'profile' || notif.type === 'profile_share' || (notif.type === 'share' && relType === 'user'))
@@ -1878,8 +1999,18 @@ export default function Navbar() {
                                                                     </span>
                                                                 </p>
 
+                                                                {/* Wiki Title Display (Second Line) */}
+                                                                {n.isWiki && n.wikiTitle && (
+                                                                    <div className="mt-1 flex items-center gap-1.5 text-[12px] font-semibold text-teal-700 dark:text-teal-300 bg-teal-50/90 dark:bg-teal-950/40 border border-teal-200/60 dark:border-teal-800/60 px-2.5 py-1 rounded-lg w-fit max-w-full shadow-xs">
+                                                                        <span className="material-symbols-outlined text-[14px] text-teal-600 dark:text-teal-400 shrink-0" style={{fontVariationSettings:"'FILL' 1"}}>menu_book</span>
+                                                                        <span className="truncate">
+                                                                            <HighlightText text={n.wikiTitle} query={notifSearchQuery} />
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+
                                                                 {/* Date in standard DD-MM-YYYY format */}
-                                                                <div className="flex items-center gap-2 mt-1">
+                                                                <div className="flex items-center gap-2 mt-1.5">
                                                                     <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 whitespace-nowrap">
                                                                         {n.time || n.displayDate}
                                                                     </span>
@@ -1924,12 +2055,29 @@ export default function Navbar() {
                                                                 {(() => {
                                                                     const textLower = (n.text || n.message || '').toLowerCase();
                                                                     const relType = (n.relatedContentType || '').toLowerCase();
-                                                                    const isVid = n.isVideo || relType === 'video' || n.type === 'video_share' || n.type === 'video_shared' || (textLower.includes('video') && !textLower.includes('podcast'));
-                                                                    const isPod = !isVid && (n.isPodcast || relType === 'podcast' || n.type === 'podcast_share' || n.type === 'podcast_shared' || textLower.includes('podcast'));
-                                                                    const isArt = !isVid && !isPod && (n.isArticle || relType === 'article' || n.type === 'article_share' || n.type === 'article_shared' || textLower.includes('article') || textLower.includes('blog'));
-                                                                    const isPost = !isVid && !isPod && !isArt && (n.isPost || relType === 'post' || n.type === 'post_share' || n.type === 'post_shared' || textLower.includes('post'));
-                                                                    const isComm = !isVid && !isPod && !isArt && (n.isCommunity || relType === 'community' || n.type === 'invite' || n.type === 'community_invite' || n.type === 'community_shared' || textLower.includes('community'));
+                                                                    const isWiki = n.isWiki || relType === 'wiki' || n.type?.includes('wiki') || textLower.includes('wiki') || Boolean(n.wikiId);
+                                                                    const isVid = !isWiki && (n.isVideo || relType === 'video' || n.type === 'video_share' || n.type === 'video_shared' || (textLower.includes('video') && !textLower.includes('podcast')));
+                                                                    const isPod = !isWiki && !isVid && (n.isPodcast || relType === 'podcast' || n.type === 'podcast_share' || n.type === 'podcast_shared' || textLower.includes('podcast'));
+                                                                    const isArt = !isWiki && !isVid && !isPod && (n.isArticle || relType === 'article' || n.type === 'article_share' || n.type === 'article_shared' || textLower.includes('article') || textLower.includes('blog'));
+                                                                    const isPost = !isWiki && !isVid && !isPod && !isArt && (n.isPost || relType === 'post' || n.type === 'post_share' || n.type === 'post_shared' || textLower.includes('post'));
+                                                                    const isComm = !isWiki && !isVid && !isPod && !isArt && !isPost && (n.isCommunity || relType === 'community' || n.type === 'invite' || n.type === 'community_invite' || n.type === 'community_shared' || textLower.includes('community'));
 
+                                                                    if (isWiki) {
+                                                                        return (
+                                                                            <div className="mt-2">
+                                                                                <button 
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleNotificationClick(n);
+                                                                                    }}
+                                                                                    className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                                                                >
+                                                                                    <span className="material-symbols-outlined text-[14px]">menu_book</span>
+                                                                                    Open Wiki
+                                                                                </button>
+                                                                            </div>
+                                                                        );
+                                                                    }
                                                                     if (isVid) {
                                                                         return (
                                                                             <div className="mt-2">

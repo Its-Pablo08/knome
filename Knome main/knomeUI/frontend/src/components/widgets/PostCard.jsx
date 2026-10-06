@@ -1718,8 +1718,10 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                     const hasExplicitVideoCard = Boolean(post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹'))));
                     const hasExplicitProfileCard = Boolean(post.sharedProfile || post.isProfileShare || (post.content && post.content.includes('Shared Profile:')));
 
+                    const isWikiShare = Boolean(target?.type === 'Wiki' || post.sharedWiki || post.type === 'wiki_share' || (post.postType || '').toLowerCase() === 'wiki' || (post.content && (post.content.includes('Shared Wiki:') || post.content.includes('/wiki/view') || post.content.includes('/wiki'))));
+
                     const isSharedPost = Boolean(
-                        !hasExplicitArticleCard && !hasExplicitPodcastCard && !hasExplicitVideoCard && !hasExplicitProfileCard &&
+                        !hasExplicitArticleCard && !hasExplicitPodcastCard && !hasExplicitVideoCard && !hasExplicitProfileCard && !isWikiShare &&
                         (
                             target ||
                             extractedPostId || 
@@ -1742,33 +1744,71 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
 
                     const renderFormattedText = (text) => {
                         if (!text) return null;
-                        const urlRegex = /(https?:\/\/[^\s]+)/g;
+                        const urlRegex = /(https?:\/\/[^\s]+|\/wiki(?:\/view)?\?[^\s]+)/g;
                         const parts = text.split(urlRegex);
                         return parts.map((part, index) => {
+                            if (!part) return null;
                             if (part.match(urlRegex)) {
-                                const isInternal = part.includes('/posts') || part.includes('/article-view') || part.includes('/community') || part.includes('/videos') || part.includes('/podcasts');
+                                const cleanUrl = part.replace(/[.,;!?)]+$/, '');
+                                const trailingPunctuation = part.slice(cleanUrl.length);
+                                const isWikiUrl = cleanUrl.includes('/wiki') || cleanUrl.includes('/wiki/view');
+
+                                if (isWikiUrl) {
+                                    let targetPath = '/wiki';
+                                    try {
+                                        const urlObj = new URL(cleanUrl, window.location.origin);
+                                        targetPath = urlObj.pathname + urlObj.search;
+                                    } catch {
+                                        const match = cleanUrl.match(/\/wiki(?:\/view)?(?:\?[^\s]+)?/i);
+                                        targetPath = match ? match[0] : '/wiki';
+                                    }
+
+                                    return (
+                                        <span key={index} className="inline-block my-1.5 align-middle">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    navigate(targetPath);
+                                                }}
+                                                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-xs bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 active:scale-95 text-white shadow-sm hover:shadow-md transition-all group/wiki cursor-pointer"
+                                                title="Open Wiki"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">menu_book</span>
+                                                <span className="tracking-wide">Open Wiki</span>
+                                                <span className="material-symbols-outlined text-[14px] group-hover/wiki:translate-x-0.5 transition-transform">arrow_forward</span>
+                                            </button>
+                                            {trailingPunctuation}
+                                        </span>
+                                    );
+                                }
+
+                                const isInternal = cleanUrl.includes('/posts') || cleanUrl.includes('/article-view') || cleanUrl.includes('/community') || cleanUrl.includes('/videos') || cleanUrl.includes('/podcasts');
                                 return (
-                                    <a
-                                        key={index}
-                                        href={part}
-                                        onClick={(e) => {
-                                            if (isInternal) {
-                                                e.preventDefault();
-                                                try {
-                                                    const urlObj = new URL(part, window.location.origin);
-                                                    navigate(urlObj.pathname + urlObj.search);
-                                                } catch {
-                                                    window.open(part, '_blank');
+                                    <React.Fragment key={index}>
+                                        <a
+                                            href={cleanUrl}
+                                            onClick={(e) => {
+                                                if (isInternal) {
+                                                    e.preventDefault();
+                                                    try {
+                                                        const urlObj = new URL(cleanUrl, window.location.origin);
+                                                        navigate(urlObj.pathname + urlObj.search);
+                                                    } catch {
+                                                        window.open(cleanUrl, '_blank');
+                                                    }
                                                 }
-                                            }
-                                        }}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 dark:text-blue-400 hover:underline font-semibold inline-flex items-center gap-0.5 break-all cursor-pointer"
-                                    >
-                                        <span>{part}</span>
-                                        <span className="material-symbols-outlined text-[13px]">open_in_new</span>
-                                    </a>
+                                            }}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 dark:text-blue-400 hover:underline font-semibold inline-flex items-center gap-0.5 break-all cursor-pointer"
+                                        >
+                                            <span>{cleanUrl}</span>
+                                            <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                                        </a>
+                                        {trailingPunctuation}
+                                    </React.Fragment>
                                 );
                             }
                             // Format hashtags into clickable search links
@@ -1933,6 +1973,7 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
 
                                     {/* Quote Box Body with Georgia Italic voice/accent font */}
                                     <div className={`border-l-3 pl-3.5 py-1.5 bg-white/70 dark:bg-slate-950/40 rounded-r-xl ${
+                                        target?.type === 'Wiki' ? 'border-teal-500/70 dark:border-teal-400/70' :
                                         target?.type === 'Article' ? 'border-emerald-500/70 dark:border-emerald-400/70' :
                                         target?.type === 'Video' ? 'border-rose-500/70 dark:border-rose-400/70' :
                                         target?.type === 'Podcast' ? 'border-pink-500/70 dark:border-pink-400/70' :
@@ -1947,13 +1988,15 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                                         </p>
                                         <p className="font-arial text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1.5">
                                             <span className={`material-symbols-outlined text-[14px] ${
+                                                target?.type === 'Wiki' ? 'text-teal-500/70' :
                                                 target?.type === 'Article' ? 'text-emerald-500/70' :
                                                 target?.type === 'Video' ? 'text-rose-500/70' :
                                                 target?.type === 'Podcast' ? 'text-pink-500/70' :
                                                 target?.type === 'Profile' ? 'text-indigo-500/70' :
                                                 'text-blue-500/70'
                                             }`}>{target?.icon || 'chat_bubble'}</span>
-                                            {target?.type === 'Article' ? 'Click to open and read full article' :
+                                            {target?.type === 'Wiki' ? 'Click to open and read full wiki' :
+                                             target?.type === 'Article' ? 'Click to open and read full article' :
                                              target?.type === 'Video' ? 'Click to open and watch full video' :
                                              target?.type === 'Podcast' ? 'Click to listen to podcast' :
                                              target?.type === 'Profile' ? 'Click to view employee profile' :
