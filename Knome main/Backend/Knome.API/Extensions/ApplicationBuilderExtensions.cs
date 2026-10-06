@@ -110,8 +110,17 @@ public static class ApplicationBuilderExtensions
         // Map SignalR Hubs
         app.MapHub<NotificationHub>("/hubs/notifications");
 
-        // Redirect root (/) to /swagger to prevent browser 404
-        app.MapGet("/", () => Microsoft.AspNetCore.Http.Results.Redirect("/swagger"));
+        // Initialize Wiki Tables if missing
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<Knome.API.Data.KnomeDbContext>();
+            Knome.API.Data.WikiDbInitializer.EnsureWikiTablesExistAsync(db).GetAwaiter().GetResult();
+        }
+        catch (System.Exception ex)
+        {
+            Serilog.Log.Error(ex, "Failed to initialize Wiki tables during startup.");
+        }
 
         return app;
     }

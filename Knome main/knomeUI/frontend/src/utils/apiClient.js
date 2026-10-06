@@ -126,7 +126,13 @@ export const apiClient = {
     },
 
     async request(endpoint, options = {}) {
-        let reqEndpoint = endpoint;
+        let reqEndpoint = endpoint || '';
+        while (reqEndpoint.startsWith('/api/') || reqEndpoint.startsWith('api/')) {
+            reqEndpoint = reqEndpoint.startsWith('/api/') ? reqEndpoint.substring(4) : '/' + reqEndpoint.substring(4);
+        }
+        if (!reqEndpoint.startsWith('/')) {
+            reqEndpoint = '/' + reqEndpoint;
+        }
         if (options.params && typeof options.params === 'object') {
             const searchParams = new URLSearchParams();
             Object.entries(options.params).forEach(([key, val]) => {

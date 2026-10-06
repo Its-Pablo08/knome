@@ -27,12 +27,17 @@ if (-not (Test-Path "$ScriptDir\knomeUI\frontend\node_modules")) {
     Pop-Location
 }
 
-# 0c. Database Connection Verification
+# 0c. Database Connection Verification & Wiki Tables Check
 try {
     $dbTest = New-Object System.Data.SqlClient.SqlConnection("Server=LAPTOP-458;Database=Knome;User ID=sa;Password=sa@123;TrustServerCertificate=True;Connect Timeout=5")
     $dbTest.Open()
     $dbTest.Close()
     Write-Host " SQL Server: Knome database verified & accessible on LAPTOP-458" -ForegroundColor Green
+
+    # 0d. Ensure Wiki Tables Exist
+    if (Test-Path "$ScriptDir\SETUP_WIKI_DB.ps1") {
+        & "$ScriptDir\SETUP_WIKI_DB.ps1"
+    }
 } catch {
     Write-Host " [Warning] Knome database not reachable on LAPTOP-458. Ensure SQL Server on LAPTOP-458 is running and reachable." -ForegroundColor DarkYellow
 }
@@ -80,7 +85,7 @@ Write-Host " Starting Knome Frontend UI on http://localhost:5173..." -Foreground
 $FrontendJob = Start-Job -ScriptBlock {
     param($dir)
     Set-Location "$dir\knomeUI\frontend"
-    npm run dev
+    npm.cmd run dev
 } -ArgumentList $ScriptDir
 
 Start-Sleep -Seconds 2

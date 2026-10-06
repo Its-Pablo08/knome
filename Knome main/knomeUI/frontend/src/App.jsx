@@ -30,6 +30,8 @@ const Network = lazy(() => import('./pages/Network'))
 const SavedContent = lazy(() => import('./pages/SavedContent'))
 const Posts = lazy(() => import('./pages/Posts'))
 const Messages = lazy(() => import('./pages/Messages'))
+const Wiki = lazy(() => import('./pages/Wiki'))
+const WikiView = lazy(() => import('./pages/WikiView'))
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -130,6 +132,10 @@ function App() {
                     <Route path="/podcasts"        element={<ProtectedPage><Podcasts /></ProtectedPage>} />
                     <Route path="/articles"        element={<ProtectedPage><Articles /></ProtectedPage>} />
                     <Route path="/article-view"    element={<ProtectedPage><ArticleView /></ProtectedPage>} />
+                    <Route path="/wiki"            element={<ProtectedPage><Wiki /></ProtectedPage>} />
+                    <Route path="/wikis"           element={<ProtectedPage><Wiki /></ProtectedPage>} />
+                    <Route path="/wiki/view"       element={<ProtectedPage><WikiView /></ProtectedPage>} />
+                    <Route path="/wiki/:id"        element={<ProtectedPage><WikiView /></ProtectedPage>} />
                     <Route path="/hr-analytics"    element={<ProtectedPage><HRAnalytics /></ProtectedPage>} />
                     <Route path="/analytics"       element={<ProtectedPage><HRAnalytics /></ProtectedPage>} />
                     <Route path="/admin-console"   element={<ProtectedPage><AdminConsole /></ProtectedPage>} />

@@ -24,6 +24,7 @@ const DISCOVER_CATEGORIES = [
     { id: 'Video', label: 'Videos', icon: 'videocam' },
     { id: 'Community', label: 'Communities', icon: 'group' },
     { id: 'Podcast', label: 'Audio', icon: 'podcasts' },
+    { id: 'Wiki', label: 'Wikis', icon: 'menu_book' },
 ];
 
 export default function Navbar() {

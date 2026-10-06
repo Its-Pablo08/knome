@@ -35,4 +35,5 @@ public static class NotificationContentTypes
     public const string User = "User";
     public const string Job = "Job";
     public const string Badge = "Badge";
+    public const string Wiki = "Wiki";
 }

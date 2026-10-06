@@ -54,6 +54,12 @@ export const profileApi = {
         return apiClient.get(`/Search/users?${params}`);
     },
 
+    /** GET /Search/users?query=&pageNumber=&pageSize= (for user selectors / collaborators) */
+    searchUsers: (query, pageNumber = 1, pageSize = 20) => {
+        const params = new URLSearchParams({ query: query || '', pageNumber, pageSize });
+        return apiClient.get(`/Search/users?${params}`);
+    },
+
     /** GET /users/suggestions */
     getSuggestions: () => apiClient.get('/users/suggestions'),
 
@@ -1569,6 +1575,8 @@ export const resolveSharedTarget = (post) => {
 
     return null;
 };
+
+export { wikiApi } from './wikiService';
 
 
 

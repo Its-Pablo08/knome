@@ -125,6 +125,7 @@ export default function Sidebar() {
     const quickLinks = [
         { to: '/posts',    label: 'Posts',     icon: 'dynamic_feed', color: '#6366f1' },
         { to: '/articles', label: 'Articles',  icon: 'article',      color: '#0ea5e9', matchPaths: ['/articles', '/article-view'] },
+        { to: '/wiki',     label: 'Wiki',      icon: 'menu_book',    color: '#0d9488', matchPaths: ['/wiki', '/wikis', '/wiki/view'] },
         { to: '/videos',   label: 'Videos',    icon: 'videocam',     color: '#ef4444' },
         { to: '/podcasts', label: 'Podcasts',  icon: 'podcasts',     color: '#8b5cf6' },
         { to: '/jobs',     label: 'Openings',  icon: 'work',         color: '#10b981' },

@@ -627,17 +627,23 @@ article,
    Ensures Bullet Lists, Numbered Lists & Quotes render visibly
    ═══════════════════════════════════════════════════════ */
 .rich-editor-content,
+.wiki-editor-content,
+.wiki-content,
 .article-body {
   line-height: 1.7;
 }
 
 .rich-editor-content p,
+.wiki-editor-content p,
+.wiki-content p,
 .article-body p {
   margin-bottom: 0.75rem;
   line-height: 1.7;
 }
 
 .rich-editor-content h2,
+.wiki-editor-content h2,
+.wiki-content h2,
 .article-body h2 {
   font-size: 1.5rem !important;
   font-weight: 800 !important;
@@ -646,7 +652,31 @@ article,
   line-height: 1.3 !important;
 }
 
+.rich-editor-content h3,
+.wiki-editor-content h3,
+.wiki-content h3,
+.article-body h3 {
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  margin-top: 1.25rem !important;
+  margin-bottom: 0.5rem !important;
+  line-height: 1.3 !important;
+}
+
+.rich-editor-content h4,
+.wiki-editor-content h4,
+.wiki-content h4,
+.article-body h4 {
+  font-size: 1.1rem !important;
+  font-weight: 600 !important;
+  margin-top: 1rem !important;
+  margin-bottom: 0.4rem !important;
+  line-height: 1.3 !important;
+}
+
 .rich-editor-content ul,
+.wiki-editor-content ul,
+.wiki-content ul,
 .article-body ul {
   list-style-type: disc !important;
   list-style-position: outside !important;
@@ -656,6 +686,8 @@ article,
 }
 
 .rich-editor-content ol,
+.wiki-editor-content ol,
+.wiki-content ol,
 .article-body ol {
   list-style-type: decimal !important;
   list-style-position: outside !important;
@@ -665,6 +697,8 @@ article,
 }
 
 .rich-editor-content li,
+.wiki-editor-content li,
+.wiki-content li,
 .article-body li {
   display: list-item !important;
   margin-bottom: 0.35rem !important;
@@ -672,13 +706,35 @@ article,
 }
 
 .rich-editor-content blockquote,
+.wiki-editor-content blockquote,
+.wiki-content blockquote,
 .article-body blockquote {
   display: block !important;
-  border-left: 4px solid #6366f1 !important;
+  border-left: 4px solid #0d9488 !important;
   padding: 0.75rem 1.25rem !important;
   margin: 1.25rem 0 !important;
   font-style: italic !important;
-  background: rgba(99, 102, 241, 0.08) !important;
+  background: rgba(13, 148, 136, 0.08) !important;
   border-radius: 0 0.75rem 0.75rem 0 !important;
+  color: inherit !important;
 }
+
+.rich-editor-content ul ul,
+.wiki-editor-content ul ul,
+.wiki-content ul ul,
+.article-body ul ul {
+  list-style-type: circle !important;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.rich-editor-content ol ol,
+.wiki-editor-content ol ol,
+.wiki-content ol ol,
+.article-body ol ol {
+  list-style-type: lower-alpha !important;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
 

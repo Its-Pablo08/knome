@@ -540,6 +540,10 @@ public static class ServiceCollectionExtensions
         // Abbreviations Module
         services.AddScoped<IAbbreviationRepository, AbbreviationRepository>();
         services.AddScoped<IAbbreviationService, AbbreviationService>();
+
+        // Wiki Module
+        services.AddScoped<IWikiRepository, WikiRepository>();
+        services.AddScoped<IWikiService, WikiService>();
     }
 
     private static void AddSwagger(IServiceCollection services)
