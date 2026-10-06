@@ -13,12 +13,13 @@ import {
     podcastsApi, 
     communitiesApi, 
     karmaApi,
+    messagesApi,
     getCommunityImages, 
     mapPost,
     mapArticle,
     resolveMediaUrl 
 } from '../utils/apiService';
-import { sendLiveMessage, playMessageChime } from '../utils/realtimeMessenger';
+import { playMessageChime } from '../utils/realtimeMessenger';
 import ShareProfileModal from '../components/modals/ShareProfileModal';
 import PostCard from '../components/widgets/PostCard';
 import useScrollLoading from '../hooks/useScrollLoading';
@@ -767,84 +768,23 @@ export default function Profile() {
         });
     }, [connectionsList, tabData.followers, users, currentProfileUserId, connectionSearchQuery]);
 
-    // Send instant quick message directly from connections modal
+    // Send instant quick message directly from connections modal via encrypted real API
     const handleSendQuickMessage = async (targetColleague) => {
         const text = quickMessageText.trim();
         if (!text || !targetColleague) return;
 
         setIsSendingQuickMessage(true);
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const targetId = Number(targetColleague.id || targetColleague.userId);
-        const myId = Number(currentUser?.userId || currentUser?.id || 1);
         const targetName = targetColleague.name || targetColleague.fullName || 'Colleague';
 
-        const newMessage = {
-            id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-            senderId: myId,
-            senderName: currentUser?.fullName || currentUser?.name || 'Me',
-            text,
-            time: timeStr,
-            timestamp: now.getTime()
-        };
-
-        const convKey = `conv_${Math.min(myId, targetId)}_${Math.max(myId, targetId)}`;
         try {
-            const STORAGE_KEY = 'knome_global_messenger_conversations';
-            const raw = localStorage.getItem(STORAGE_KEY);
-            let convs = raw ? JSON.parse(raw) : [];
-            let existingConv = convs.find(c => c.id === convKey);
-            if (existingConv) {
-                existingConv.lastMessage = text;
-                existingConv.lastMessageTime = timeStr;
-                existingConv.lastMessageTimestamp = now.getTime();
-                existingConv.messages = [...(existingConv.messages || []), newMessage];
-            } else {
-                convs.unshift({
-                    id: convKey,
-                    participantIds: [myId, targetId],
-                    participants: {
-                        [myId]: currentUser,
-                        [targetId]: targetColleague
-                    },
-                    participant: targetColleague,
-                    unreadCounts: { [myId]: 0, [targetId]: 1 },
-                    lastMessage: text,
-                    lastMessageTime: timeStr,
-                    lastMessageTimestamp: now.getTime(),
-                    messages: [newMessage]
-                });
-            }
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(convs));
-        } catch (err) {
-            console.warn('Storage sync warning:', err);
-        }
-
-        try {
-            await sendLiveMessage({
-                sender: {
-                    userId: myId,
-                    fullName: currentUser?.fullName || currentUser?.name || 'Colleague',
-                    designation: currentUser?.designation || 'Staff',
-                    department: currentUser?.department || 'MPOnline',
-                    avatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null
-                },
-                recipient: {
-                    userId: targetId,
-                    fullName: targetName,
-                    designation: targetColleague.designation || targetColleague.role || 'Staff',
-                    department: targetColleague.department || 'MPOnline',
-                    avatar: targetColleague.avatar || null
-                },
-                conversationId: convKey,
-                message: newMessage
-            });
+            await messagesApi.send(targetId, text);
             playMessageChime();
             addToast(`Message sent to ${targetName}! 💬`, 'success');
             setQuickMessageText('');
             setQuickMessageTarget(null);
         } catch (err) {
-            console.error('Failed to send live message:', err);
+            console.error('Failed to send message:', err);
             addToast(`Failed to send message: ${err?.message || 'Network error'}`, 'error');
         } finally {
             setIsSendingQuickMessage(false);
@@ -1148,22 +1088,20 @@ export default function Profile() {
                                     {isFollowing ? 'Following ✔' : 'Follow'}
                                 </button>
 
-                                {/* Facebook-Style Direct Message Button - restricted to connected users only */}
-                                {displayUser.connectionStatus === 'Connected' && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const targetId = displayUser.userId || displayUser.id;
-                                            const targetName = displayUser.name || displayUser.fullName || '';
-                                            navigate(`/messages?userId=${targetId}&name=${encodeURIComponent(targetName)}`);
-                                        }}
-                                        className="px-4 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold text-sm rounded-full transition-all shadow-xs flex items-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
-                                        title={`Message ${displayUser.name || 'this user'}`}
-                                    >
-                                        <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
-                                        <span>Message</span>
-                                    </button>
-                                )}
+                                {/* Direct Message Button */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const targetId = displayUser.userId || displayUser.id;
+                                        const targetName = displayUser.name || displayUser.fullName || '';
+                                        navigate(`/messages?userId=${targetId}&name=${encodeURIComponent(targetName)}`);
+                                    }}
+                                    className="px-4 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold text-sm rounded-full transition-all shadow-xs flex items-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
+                                    title={`Message ${displayUser.name || 'this user'}`}
+                                >
+                                    <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
+                                    <span>Message</span>
+                                </button>
                         </div>
                     )}
                     {/* Interactive Stats Row */}

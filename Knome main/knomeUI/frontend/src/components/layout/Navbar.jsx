@@ -2097,30 +2097,28 @@ export default function Navbar() {
                                     </div>
                                     <p className="text-[12px] text-slate-500 dark:text-slate-400 truncate mt-0.5">{currentUser?.roleName || currentUser?.role || 'Employee'}</p>
                                 </div>
-                                <div className="py-1.5">
-                                    <div className="border-t px-3 py-2" style={{borderColor: 'var(--border-mid)'}}>
-                                        <Link to="/profile" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-                                            <span className="material-symbols-outlined text-[16px]">person</span> My Profile
-                                        </Link>
-                                        <button
-                                            onClick={async () => {
-                                                setIsUserMenuOpen(false);
-                                                const ok = await confirm({
-                                                    title: 'Confirm Logout',
-                                                    message: "Are you sure you want to log out of Knome? You will be redirected to MPO Employee Hub.",
-                                                    confirmText: 'Yes, Log Out',
-                                                    cancelText: 'Cancel',
-                                                    variant: 'danger'
-                                                });
-                                                if (ok) {
-                                                    logout('https://counselling-1.mponline.demo.gov.in:3001/applications');
-                                                }
-                                            }}
-                                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors mt-0.5 cursor-pointer"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">logout</span> Log Out
-                                        </button>
-                                    </div>
+                                <div className="p-1.5">
+                                    <Link to="/profile" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[13px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                                        <span className="material-symbols-outlined text-[16px]">person</span> My Profile
+                                    </Link>
+                                    <button
+                                        onClick={async () => {
+                                            setIsUserMenuOpen(false);
+                                            const ok = await confirm({
+                                                title: 'Confirm Logout',
+                                                message: "Are you sure you want to log out of Knome? You will be redirected to MPO Employee Hub.",
+                                                confirmText: 'Yes, Log Out',
+                                                cancelText: 'Cancel',
+                                                variant: 'danger'
+                                            });
+                                            if (ok) {
+                                                logout('https://counselling-1.mponline.demo.gov.in:3001/applications');
+                                            }
+                                        }}
+                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[13px] font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors mt-0.5 cursor-pointer"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">logout</span> Log Out
+                                    </button>
                                 </div>
                             </div>
                         )}

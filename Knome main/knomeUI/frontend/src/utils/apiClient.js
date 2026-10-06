@@ -344,3 +344,11 @@ export const apiClient = {
         }
     }
 };
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => {
+        apiClient.clearCache();
+        lastReauthFailTime = 0;
+        reauthPromise = null;
+    });
+}

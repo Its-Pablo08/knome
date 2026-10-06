@@ -1,21 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useUser, getUserStatusConfig, KNOWN_ROSTER_NAMES } from '../components/contexts/UserContext';
-import { resolveMediaUrl, userApi, notificationsApi } from '../utils/apiService';
-import { sendLiveMessage, subscribeToLiveMessages, playMessageChime, MESSAGES_STORAGE_KEY } from '../utils/realtimeMessenger';
-
-// Storage key for all Facebook-style 1-to-1 conversations across Knome
-const STORAGE_KEY = MESSAGES_STORAGE_KEY;
-
-/**
- * Deterministic conversation key generator for any pair of user IDs.
- * Ensures User A -> User B and User B -> User A map to the exact same conversation.
- */
-export const getConversationKey = (id1, id2) => {
-    const a = Number(id1) || 0;
-    const b = Number(id2) || 0;
-    return `conv_${Math.min(a, b)}_${Math.max(a, b)}`;
-};
+import { useUser } from '../components/contexts/UserContext';
+import { useToast } from '../components/contexts/ToastContext';
+import { resolveMediaUrl, userApi, messagesApi, mediaApi } from '../utils/apiService';
+import { apiClient } from '../utils/apiClient';
+import {
+    initMessengerSignalR,
+    sendTypingIndicator,
+    fetchOnlineUserIds,
+    playMessageChime,
+    ensureMessengerConnected
+} from '../utils/realtimeMessenger';
 
 /**
  * Returns true if text consists exclusively of 1 to 5 emojis
@@ -36,7 +31,7 @@ export const isEmojiOnly = (text) => {
 };
 
 /**
- * Categorized emoji library for enterprise messenger
+ * Categorized emoji library
  */
 const EMOJI_CATEGORIES = {
     smileys: {
@@ -99,6 +94,7 @@ const EMOJI_CATEGORIES = {
 };
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '🔥', '🎉', '👏', '🙌', '🚀', '💯', '✨', '🤝', '😍', '🧐', '✅'];
+const MESSAGE_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
 const EMOJI_LABELS = {
     '😀': 'Grinning Face', '😃': 'Smiley Face', '😄': 'Smiling Eyes', '😁': 'Beaming Face', '😆': 'Grinning Squint',
@@ -155,246 +151,130 @@ const EMOJI_LABELS = {
     '🎾': 'Tennis Ball', '🎮': 'Video Game Controller', '🎲': 'Game Die', '🎨': 'Artist Palette', '🎵': 'Musical Note'
 };
 
-/**
- * Standard enterprise colleague pool for seed conversations and profile lookups
- */
-const DEFAULT_COLLEAGUES = [
-    {
-        userId: 3,
-        employeeId: 'MPO103',
-        fullName: 'Sourabh Sahu',
-        designation: 'Talent Acquisition Manager',
-        department: 'Human Resources',
-        status: 'active',
-        avatar: null
-    },
-    {
-        userId: 1076,
-        employeeId: 'MP0664',
-        fullName: 'Vishendra Sharma',
-        designation: 'Track Lead',
-        department: 'Higher Education',
-        status: 'active',
-        avatar: null
-    },
-    {
-        userId: 5,
-        employeeId: 'MPO105',
-        fullName: 'Meghna',
-        designation: 'Business Analyst',
-        department: 'Product Design',
-        status: 'idle',
-        avatar: null
-    },
-    {
-        userId: 1,
-        employeeId: 'MP0108',
-        fullName: 'Loveneesh Sharma',
-        designation: 'Technical Program Manager',
-        department: 'Higher Education',
-        status: 'active',
-        avatar: null
-    },
-    {
-        userId: 1036,
-        employeeId: 'MPO111',
-        fullName: 'Mayur Bansal',
-        designation: 'Software Developer',
-        department: 'Technology',
-        status: 'active',
-        avatar: null
-    },
-    {
-        userId: 1050,
-        employeeId: 'MPO089',
-        fullName: 'Vilash Deshmukh',
-        designation: 'Associate Consultant',
-        department: 'HR',
-        status: 'active',
-        avatar: null
-    },
-    {
-        userId: 1057,
-        employeeId: 'MPO652',
-        fullName: 'Deepak Simrodia',
-        designation: 'Software Developer',
-        department: 'University',
-        status: 'active',
-        avatar: null
-    }
-];
-
-/**
- * Resolves the other participant in a conversation so the logged-in user NEVER sees themselves
- */
-const getOtherParticipant = (conv, currentUserId, contextUsers = []) => {
-    const currId = Number(currentUserId);
-    
-    // 1. Check participantIds array for the ID that is not currentUserId
-    const otherId = Array.isArray(conv.participantIds) 
-        ? conv.participantIds.find(id => Number(id) !== currId)
-        : null;
-
-    // 2. Check participants map
-    if (otherId && conv.participants && conv.participants[otherId]) {
-        const p = conv.participants[otherId];
-        if (Number(p.userId) !== currId && p.fullName) {
-            return p;
-        }
-    }
-
-    // 3. Fallback to conv.participant if it's not the current user
-    if (conv.participant && Number(conv.participant.userId) !== currId && conv.participant.fullName) {
-        return conv.participant;
-    }
-
-    // 4. Look up in contextUsers pool
-    if (otherId) {
-        const found = contextUsers.find(u => Number(u.userId || u.id) === Number(otherId));
-        if (found) {
-            return {
-                userId: Number(otherId),
-                fullName: found.fullName || found.name || 'Colleague',
-                designation: found.designation || 'Staff',
-                department: found.department || 'MPOnline',
-                avatar: found.avatar || found.profilePhotoUrl || null,
-                status: 'active'
-            };
-        }
-    }
-
-    // 5. Safe colleague fallback (never current user, never generic "User")
-    const fallbackColleague = DEFAULT_COLLEAGUES.find(c => c.userId !== currId) || DEFAULT_COLLEAGUES[0];
-    return fallbackColleague;
-};
-
-/**
- * Generate initial seed conversations customized for the logged-in user
- */
-const generateSeedConversations = (currentUserId, currentUser) => {
-    const currId = Number(currentUserId) || 1;
-    const currName = currentUser?.fullName || currentUser?.name || 'You';
-    const currDesig = currentUser?.designation || 'Employee';
-    const currDept = currentUser?.department || 'MPOnline';
-    const currAvatar = currentUser?.profilePhotoUrl || currentUser?.avatar || null;
-
-    const myProfile = {
-        userId: currId,
-        fullName: currName,
-        designation: currDesig,
-        department: currDept,
-        avatar: currAvatar,
-        status: 'active'
-    };
-
-    // Filter colleagues to only include others (never self)
-    const otherColleagues = DEFAULT_COLLEAGUES.filter(c => Number(c.userId) !== currId);
-
-    const seedConfigs = [
-        {
-            colleague: otherColleagues[0] || DEFAULT_COLLEAGUES[0],
-            unread: 1,
-            time: '10:45 AM',
-            timestamp: Date.now() - 15 * 60 * 1000,
-            lastMsg: `Hey ${currName.split(' ')[0]}, did you review the Q3 enterprise architecture slides?`,
-            msgs: [
-                { id: 'm1', senderId: otherColleagues[0]?.userId || 3, text: `Hi ${currName.split(' ')[0]}, hope you are having a productive morning!`, time: '10:30 AM' },
-                { id: 'm2', senderId: currId, text: `Good morning ${otherColleagues[0]?.fullName.split(' ')[0] || 'there'}! Doing well, thank you.`, time: '10:35 AM' },
-                { id: 'm3', senderId: otherColleagues[0]?.userId || 3, text: `Hey ${currName.split(' ')[0]}, did you review the Q3 enterprise architecture slides?`, time: '10:45 AM' }
-            ]
-        },
-        {
-            colleague: otherColleagues[1] || DEFAULT_COLLEAGUES[1],
-            unread: 1,
-            time: '09:15 AM',
-            timestamp: Date.now() - 90 * 60 * 1000,
-            lastMsg: 'The API latency fix is deployed to staging. Testing looks clean.',
-            msgs: [
-                { id: 'm4', senderId: otherColleagues[1]?.userId || 2, text: 'Morning team! Database indexing optimization completed yesterday.', time: '09:00 AM' },
-                { id: 'm5', senderId: currId, text: 'Excellent! Are query response times under 50ms now?', time: '09:10 AM' },
-                { id: 'm6', senderId: otherColleagues[1]?.userId || 2, text: 'The API latency fix is deployed to staging. Testing looks clean.', time: '09:15 AM' }
-            ]
-        },
-        {
-            colleague: otherColleagues[2] || DEFAULT_COLLEAGUES[2],
-            unread: 0,
-            time: 'Yesterday',
-            timestamp: Date.now() - 24 * 3600 * 1000,
-            lastMsg: 'Thanks for submitting the quarterly team feedback form.',
-            msgs: [
-                { id: 'm7', senderId: otherColleagues[2]?.userId || 5, text: 'Hello! Just a quick reminder regarding the wellness survey.', time: 'Yesterday 3:15 PM' },
-                { id: 'm8', senderId: currId, text: 'Just completed it right now!', time: 'Yesterday 3:45 PM' },
-                { id: 'm9', senderId: otherColleagues[2]?.userId || 5, text: 'Thanks for submitting the quarterly team feedback form.', time: 'Yesterday 4:00 PM' }
-            ]
-        },
-        {
-            colleague: otherColleagues[3] || DEFAULT_COLLEAGUES[3],
-            unread: 0,
-            time: 'Sep 29',
-            timestamp: Date.now() - 48 * 3600 * 1000,
-            lastMsg: 'Townhall schedule has been finalized for next Friday at 4 PM.',
-            msgs: [
-                { id: 'm10', senderId: otherColleagues[3]?.userId || 1, text: 'Townhall schedule has been finalized for next Friday at 4 PM.', time: 'Sep 29 2:00 PM' }
-            ]
-        }
-    ];
-
-    return seedConfigs.map(cfg => {
-        const cId = Number(cfg.colleague.userId);
-        return {
-            id: getConversationKey(currId, cId),
-            participantIds: [currId, cId],
-            participants: {
-                [currId]: myProfile,
-                [cId]: cfg.colleague
-            },
-            participant: cfg.colleague,
-            unreadCounts: {
-                [currId]: cfg.unread,
-                [cId]: 0
-            },
-            lastMessage: cfg.lastMsg,
-            lastMessageTime: cfg.time,
-            lastMessageTimestamp: cfg.timestamp,
-            messages: cfg.msgs.map(m => ({
-                id: m.id,
-                senderId: Number(m.senderId),
-                text: m.text,
-                time: m.time,
-                timestamp: cfg.timestamp
-            }))
-        };
-    });
-};
-
 export default function Messages() {
     const { currentUser, users: contextUsers } = useUser();
     const { addToast } = useToast();
-    const currentUserId = Number(currentUser?.userId || currentUser?.id || 1);
+    const currentUserId = Number(currentUser?.userId || currentUser?.id || 0);
     const location = useLocation();
     const navigate = useNavigate();
 
-    // ── 1st-Degree Connections State (Messaging Restriction Enforcement) ──
+    // ── 1st-Degree Connections State ──
     const [connectedUserIds, setConnectedUserIds] = useState(new Set());
     const [isConnectionsLoaded, setIsConnectionsLoaded] = useState(false);
     const [pendingConnectIds, setPendingConnectIds] = useState(new Set());
 
-    // Fetch 1st-degree connections for current user to enforce messaging restriction
+    // ── Real-Time Online Presence State ──
+    const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+
+    // ── Real API Conversations & Messages State ──
+    const [conversations, setConversations] = useState([]);
+    const [isLoadingConversations, setIsLoadingConversations] = useState(true);
+    const [conversationsError, setConversationsError] = useState(null);
+
+    const [activePartnerId, setActivePartnerId] = useState(null);
+    const [activePartnerDraft, setActivePartnerDraft] = useState(null);
+    const [activeHistory, setActiveHistory] = useState([]);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+    const [historyError, setHistoryError] = useState(null);
+    const [isNetworkOffline, setIsNetworkOffline] = useState(() => typeof navigator !== 'undefined' ? !navigator.onLine : false);
+    const [isReconnecting, setIsReconnecting] = useState(false);
+
+    // ── Pagination State ──
+    const [historyPage, setHistoryPage] = useState(1);
+    const [hasMoreHistory, setHasMoreHistory] = useState(true);
+    const [isLoadingMoreHistory, setIsLoadingMoreHistory] = useState(false);
+
+    // ── Typing Indicator States ──
+    const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+    const partnerTypingTimerRef = useRef(null);
+    const typingDebounceTimerRef = useRef(null);
+
+    // ── Reply, Edit & Reaction States ──
+    const [replyingTo, setReplyingTo] = useState(null);
+    const [editingMessageId, setEditingMessageId] = useState(null);
+    const [editingContent, setEditingContent] = useState('');
+    const [activeReactionPickerMsgId, setActiveReactionPickerMsgId] = useState(null);
+
+    // ── Drafts State (per partner) ──
+    const [drafts, setDrafts] = useState(() => {
+        try {
+            const raw = localStorage.getItem(`knome_message_drafts_${currentUserId}`);
+            return raw ? JSON.parse(raw) : {};
+        } catch {
+            return {};
+        }
+    });
+
+    // ── New Message Candidate Search State ──
+    const [isNewChatOpen, setIsNewChatOpen] = useState(false);
+    const [colleagueSearch, setColleagueSearch] = useState('');
+    const [searchedUsers, setSearchedUsers] = useState([]);
+    const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterTab, setFilterTab] = useState('all'); // 'all' | 'unread'
+    const [inputMessage, setInputMessage] = useState('');
+    const [isSending, setIsSending] = useState(false);
+    const isSendingRef = useRef(false);
+    const [showMobileChat, setShowMobileChat] = useState(false);
+
+    // ── Emoji & File Attachment States ──
+    const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+    const [emojiCategory, setEmojiCategory] = useState('smileys');
+    const [emojiSearch, setEmojiSearch] = useState('');
+    const [hoveredEmoji, setHoveredEmoji] = useState(null);
+    const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+    const emojiPickerRef = useRef(null);
+    const chatInputRef = useRef(null);
+
+    const [attachedFiles, setAttachedFiles] = useState([]);
+    const [previewMediaModal, setPreviewMediaModal] = useState(null);
+    const fileAttachmentInputRef = useRef(null);
+
+    const messagesEndRef = useRef(null);
+    const chatFeedRef = useRef(null);
+
+    // Format raw API message to UI message
+    const formatMessageItem = useCallback((m) => {
+        if (!m) return null;
+        let parsedAttachments = [];
+        if (m.attachmentsJson) {
+            try {
+                parsedAttachments = JSON.parse(m.attachmentsJson);
+            } catch {}
+        }
+        const msgDate = m.createdDate ? new Date(m.createdDate) : new Date();
+        const rawContent = m.content || m.text || '';
+        const cleanContent = (rawContent === '\u200B' || rawContent === ' ') ? '' : rawContent;
+        return {
+            id: m.messageId,
+            messageId: m.messageId,
+            senderId: Number(m.senderId),
+            senderName: m.senderName || '',
+            receiverId: Number(m.receiverId),
+            content: cleanContent,
+            text: cleanContent,
+            attachments: Array.isArray(parsedAttachments) ? parsedAttachments : [],
+            isRead: Boolean(m.isRead),
+            isEdited: Boolean(m.isEdited),
+            isDeleted: Boolean(m.isDeleted),
+            parentMessageId: m.parentMessageId,
+            parentContent: m.parentContent,
+            parentSenderName: m.parentSenderName,
+            reactions: Array.isArray(m.reactions) ? m.reactions : [],
+            time: msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: msgDate.getTime(),
+            status: 'sent'
+        };
+    }, []);
+
+    // ── Load Connections to enforce messaging restrictions ──
     const loadConnections = useCallback(async () => {
         if (!currentUserId) return;
         try {
             const res = await userApi.getConnections(currentUserId);
             const list = Array.isArray(res) ? res : (res?.data || []);
             const ids = new Set(list.map(u => Number(u.id || u.userId)).filter(Boolean));
-
-            // Merge any locally accepted connections in localStorage
-            try {
-                const localAcc = JSON.parse(localStorage.getItem('knome_accepted_connections') || '[]');
-                if (Array.isArray(localAcc)) {
-                    localAcc.forEach(id => ids.add(Number(id)));
-                }
-            } catch (_) {}
-
             setConnectedUserIds(ids);
             setIsConnectionsLoaded(true);
         } catch (err) {
@@ -406,9 +286,7 @@ export default function Messages() {
     useEffect(() => {
         loadConnections();
         window.addEventListener('network-updated', loadConnections);
-        return () => {
-            window.removeEventListener('network-updated', loadConnections);
-        };
+        return () => window.removeEventListener('network-updated', loadConnections);
     }, [loadConnections]);
 
     // Send connection request directly from chat restriction banner
@@ -417,14 +295,6 @@ export default function Messages() {
             await userApi.connect(targetId);
             setPendingConnectIds(prev => new Set([...prev, targetId]));
             addToast(`Connection request sent to ${targetName}. Once accepted, you can message each other.`, 'success');
-
-            try {
-                const existing = JSON.parse(localStorage.getItem('knome_sent_connection_requests') || '[]');
-                if (!existing.some(p => Number(p.id || p.userId) === Number(targetId))) {
-                    existing.push({ id: targetId, userId: targetId, name: targetName });
-                    localStorage.setItem('knome_sent_connection_requests', JSON.stringify(existing));
-                }
-            } catch (_) {}
         } catch (err) {
             const msg = err?.message || '';
             if (msg.includes('already') || msg.includes('Already')) {
@@ -436,40 +306,528 @@ export default function Messages() {
         }
     };
 
-    // ── Global Conversations State from localStorage ──
-    const [allConversations, setAllConversations] = useState(() => {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    return parsed;
+    // ── Real-Time SignalR Connection & Event Subscriptions ──
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        const loadOnline = () => {
+            fetchOnlineUserIds().then(ids => {
+                if (Array.isArray(ids)) {
+                    setOnlineUserIds(new Set(ids.map(Number)));
+                }
+            });
+        };
+        initMessengerSignalR(currentUserId).then(loadOnline);
+        loadOnline();
+
+        // 1. New live message received
+        const handleLiveMessage = (e) => {
+            const data = e.detail;
+            if (!data) return;
+
+            const senderId = Number(data.senderId);
+            const receiverId = Number(data.receiverId);
+
+            // Format incoming message
+            const newMsg = formatMessageItem(data);
+
+            // Update active conversation history if currently open
+            if (activePartnerId && (senderId === activePartnerId || receiverId === activePartnerId)) {
+                setHistoryError(null);
+                setActiveHistory(prev => {
+                    // Check if this message already exists by ID
+                    const exists = prev.some(m => 
+                        String(m.id) === String(newMsg.id) || 
+                        String(m.messageId) === String(newMsg.id) ||
+                        (m.messageId && newMsg.messageId && String(m.messageId) === String(newMsg.messageId))
+                    );
+                    if (exists) return prev;
+
+                    // If sent by me, check if an optimistic temp message exists and replace it
+                    if (senderId === currentUserId) {
+                        const tempIndex = prev.findIndex(m => 
+                            String(m.id).startsWith('temp_') && 
+                            Number(m.receiverId) === receiverId &&
+                            ((m.text || '').trim() === (newMsg.text || '').trim() || !m.text || !newMsg.text)
+                        );
+                        if (tempIndex !== -1) {
+                            const next = [...prev];
+                            next[tempIndex] = newMsg;
+                            return next;
+                        }
+                    }
+
+                    return [...prev, newMsg];
+                });
+
+                // Mark read if looking at this chat and message was sent by partner
+                if (senderId === activePartnerId) {
+                    messagesApi.markAsRead(activePartnerId).catch(() => {});
                 }
             }
-        } catch (e) {}
-        return generateSeedConversations(currentUserId, currentUser);
-    });
 
-    const [activeConvId, setActiveConvId] = useState(null);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [filterTab, setFilterTab] = useState('all'); // 'all' | 'unread'
-    const [inputMessage, setInputMessage] = useState('');
-    const [isNewChatOpen, setIsNewChatOpen] = useState(false);
-    const [colleagueSearch, setColleagueSearch] = useState('');
-    const [showMobileChat, setShowMobileChat] = useState(false);
+            // Refresh conversations list to update sidebar preview and unread count
+            fetchConversations(true);
 
-    // ── Rich Emoji Picker States ──
-    const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
-    const [emojiCategory, setEmojiCategory] = useState('smileys');
-    const [emojiSearch, setEmojiSearch] = useState('');
-    const [hoveredEmoji, setHoveredEmoji] = useState(null);
-    const emojiPickerRef = useRef(null);
-    const chatInputRef = useRef(null);
-    // ── File Attachments State & Handlers ──
-    const [attachedFiles, setAttachedFiles] = useState([]);
-    const [previewMediaModal, setPreviewMediaModal] = useState(null);
-    const fileAttachmentInputRef = useRef(null);
+            // Play audio chime if received from partner
+            if (receiverId === currentUserId && senderId !== currentUserId) {
+                playMessageChime();
+            }
+        };
 
+        // 2. Message edited
+        const handleMessageEdited = (e) => {
+            const data = e.detail;
+            if (!data) return;
+            setActiveHistory(prev => prev.map(m => {
+                if (String(m.id) === String(data.messageId)) {
+                    return { ...m, text: data.content, content: data.content, isEdited: true, editedDate: data.editedDate };
+                }
+                return m;
+            }));
+            fetchConversations(true);
+        };
+
+        // 3. Message deleted
+        const handleMessageDeleted = (e) => {
+            const data = e.detail;
+            if (!data) return;
+            setActiveHistory(prev => prev.map(m => {
+                if (String(m.id) === String(data.messageId)) {
+                    return { ...m, isDeleted: true, text: 'This message was deleted', content: 'This message was deleted', attachments: [] };
+                }
+                return m;
+            }));
+            fetchConversations(true);
+        };
+
+        // 4. Message reactions updated
+        const handleReactionUpdated = (e) => {
+            const data = e.detail;
+            if (!data) return;
+            setActiveHistory(prev => prev.map(m => {
+                if (String(m.id) === String(data.messageId)) {
+                    return { ...m, reactions: data.reactions || [] };
+                }
+                return m;
+            }));
+        };
+
+        // 5. User typing indicator
+        const handleUserTyping = (e) => {
+            const data = e.detail;
+            if (!data) return;
+            if (activePartnerId && Number(data.senderId) === activePartnerId) {
+                setIsPartnerTyping(Boolean(data.isTyping));
+                if (partnerTypingTimerRef.current) clearTimeout(partnerTypingTimerRef.current);
+                if (data.isTyping) {
+                    partnerTypingTimerRef.current = setTimeout(() => {
+                        setIsPartnerTyping(false);
+                    }, 3000);
+                }
+            }
+        };
+
+        // 6. Messages marked as read by other user
+        const handleMessagesRead = (e) => {
+            const data = e.detail;
+            if (!data) return;
+            if (activePartnerId && Number(data.partnerId) === activePartnerId) {
+                setActiveHistory(prev => prev.map(m => {
+                    if (Number(m.senderId) === currentUserId) {
+                        return { ...m, isRead: true };
+                    }
+                    return m;
+                }));
+            }
+        };
+
+        // 7. Presence change
+        const handlePresenceChanged = (e) => {
+            const data = e.detail;
+            if (!data) return;
+            const uId = Number(data.userId);
+            setOnlineUserIds(prev => {
+                const next = new Set(prev);
+                if (data.isOnline) {
+                    next.add(uId);
+                } else {
+                    next.delete(uId);
+                }
+                return next;
+            });
+        };
+
+        window.addEventListener('knome_receive_direct_message', handleLiveMessage);
+        window.addEventListener('knome_message_edited', handleMessageEdited);
+        window.addEventListener('knome_message_deleted', handleMessageDeleted);
+        window.addEventListener('knome_message_reaction_updated', handleReactionUpdated);
+        window.addEventListener('knome_user_typing', handleUserTyping);
+        window.addEventListener('knome_messages_read', handleMessagesRead);
+        window.addEventListener('knome_user_presence_changed', handlePresenceChanged);
+
+        return () => {
+            window.removeEventListener('knome_receive_direct_message', handleLiveMessage);
+            window.removeEventListener('knome_message_edited', handleMessageEdited);
+            window.removeEventListener('knome_message_deleted', handleMessageDeleted);
+            window.removeEventListener('knome_message_reaction_updated', handleReactionUpdated);
+            window.removeEventListener('knome_user_typing', handleUserTyping);
+            window.removeEventListener('knome_messages_read', handleMessagesRead);
+            window.removeEventListener('knome_user_presence_changed', handlePresenceChanged);
+            if (partnerTypingTimerRef.current) clearTimeout(partnerTypingTimerRef.current);
+            if (typingDebounceTimerRef.current) clearTimeout(typingDebounceTimerRef.current);
+        };
+    }, [currentUserId, activePartnerId, formatMessageItem]);
+
+    // ── Fetch Conversations from Real API ──
+    const fetchConversations = useCallback(async (isSilent = false) => {
+        if (!currentUserId) return;
+        if (!isSilent) {
+            setIsLoadingConversations(true);
+            setConversationsError(null);
+        }
+        try {
+            const res = await messagesApi.getConversations();
+            const list = res?.data || (Array.isArray(res) ? res : []);
+            setConversations(list);
+
+            const totalUnread = list.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+            localStorage.setItem(`knome_unread_messages_count_${currentUserId}`, String(totalUnread));
+            localStorage.setItem('knome_unread_messages_count', String(totalUnread));
+            window.dispatchEvent(new CustomEvent('knome_messages_updated', { detail: { unreadCount: totalUnread } }));
+
+            if (!activePartnerId && list.length > 0 && !activePartnerDraft) {
+                setActivePartnerId(list[0].partnerId);
+            }
+        } catch (err) {
+            console.error('[Messages] Failed to load conversations from API:', err);
+            if (!isSilent) {
+                setConversationsError('Failed to load conversations from server.');
+            }
+        } finally {
+            if (!isSilent) {
+                setIsLoadingConversations(false);
+            }
+        }
+    }, [currentUserId, activePartnerId, activePartnerDraft]);
+
+    useEffect(() => {
+        fetchConversations();
+    }, [fetchConversations]);
+
+    // ── Fetch Message History for Active Conversation ──
+    const fetchActiveHistory = useCallback(async (partnerId, isSilent = false) => {
+        if (!partnerId || !currentUserId) return;
+        if (!isSilent) {
+            setIsLoadingHistory(true);
+            setHistoryError(null);
+        }
+        try {
+            const res = await messagesApi.getHistory(partnerId, 1, 50);
+            const rawList = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+            const formatted = rawList.map(formatMessageItem).filter(Boolean);
+
+            setHistoryError(null);
+            setHistoryPage(1);
+            setHasMoreHistory(rawList.length >= 50);
+
+            setActiveHistory(prev => {
+                const inFlight = prev.filter(m => m.status === 'sending' || m.status === 'failed');
+                const existingMap = new Map(formatted.map(m => [m.id, m]));
+                inFlight.forEach(ifMsg => {
+                    if (!existingMap.has(ifMsg.id)) {
+                        formatted.push(ifMsg);
+                    }
+                });
+                return formatted;
+            });
+
+            // Mark conversation as read on server
+            messagesApi.markAsRead(partnerId).then(() => {
+                setConversations(prev => prev.map(c => c.partnerId === partnerId ? { ...c, unreadCount: 0 } : c));
+            }).catch(() => {});
+        } catch (err) {
+            console.error('[Messages] Failed to fetch message history:', err);
+            if (!isSilent) {
+                setHistoryError('Failed to load message history.');
+            }
+        } finally {
+            if (!isSilent) {
+                setIsLoadingHistory(false);
+            }
+        }
+    }, [currentUserId, formatMessageItem]);
+
+    // When active partner changes, fetch history and load draft
+    useEffect(() => {
+        if (activePartnerId) {
+            fetchActiveHistory(activePartnerId);
+            setIsPartnerTyping(false);
+            setReplyingTo(null);
+            setEditingMessageId(null);
+
+            // Restore draft message
+            const savedDraft = drafts[activePartnerId] || '';
+            setInputMessage(savedDraft);
+        } else {
+            setActiveHistory([]);
+            setInputMessage('');
+        }
+    }, [activePartnerId, fetchActiveHistory]);
+
+    // ── Network Disconnect / Reconnect Auto-Healing Watchdog ──
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        const handleOffline = () => {
+            console.warn('[Messages] Network disconnected.');
+            setIsNetworkOffline(true);
+        };
+
+        const handleReconnecting = () => {
+            setIsReconnecting(true);
+        };
+
+        const handleRestored = () => {
+            console.log('[Messages] Network restored/reconnected. Auto-healing chat and resyncing messages...');
+            setIsNetworkOffline(false);
+            setIsReconnecting(false);
+            setHistoryError(null);
+            apiClient.clearCache();
+
+            // Re-ensure SignalR connection is active
+            ensureMessengerConnected(currentUserId);
+
+            // Fetch online status and conversations
+            fetchOnlineUserIds().then(ids => {
+                if (Array.isArray(ids)) {
+                    setOnlineUserIds(new Set(ids.map(Number)));
+                }
+            }).catch(() => {});
+            fetchConversations(true);
+
+            // Re-fetch active conversation history automatically
+            if (activePartnerId) {
+                fetchActiveHistory(activePartnerId, true);
+            }
+        };
+
+        window.addEventListener('online', handleRestored);
+        window.addEventListener('offline', handleOffline);
+        window.addEventListener('knome_network_restored', handleRestored);
+        window.addEventListener('knome_messenger_reconnected', handleRestored);
+        window.addEventListener('knome_messenger_reconnecting', handleReconnecting);
+
+        return () => {
+            window.removeEventListener('online', handleRestored);
+            window.removeEventListener('offline', handleOffline);
+            window.removeEventListener('knome_network_restored', handleRestored);
+            window.removeEventListener('knome_messenger_reconnected', handleRestored);
+            window.removeEventListener('knome_messenger_reconnecting', handleReconnecting);
+        };
+    }, [currentUserId, activePartnerId, fetchConversations, fetchActiveHistory]);
+
+    // ── Infinite Scrolling for Older Messages ──
+    const handleChatFeedScroll = async () => {
+        if (!chatFeedRef.current || isLoadingMoreHistory || !hasMoreHistory || !activePartnerId) return;
+        if (chatFeedRef.current.scrollTop === 0) {
+            setIsLoadingMoreHistory(true);
+            const oldScrollHeight = chatFeedRef.current.scrollHeight;
+            try {
+                const nextPage = historyPage + 1;
+                const res = await messagesApi.getHistory(activePartnerId, nextPage, 50);
+                const olderRaw = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+                if (olderRaw.length === 0) {
+                    setHasMoreHistory(false);
+                } else {
+                    const formattedOlder = olderRaw.map(formatMessageItem).filter(Boolean);
+                    setActiveHistory(prev => {
+                        const existingIds = new Set(prev.map(m => m.id));
+                        const newItems = formattedOlder.filter(m => !existingIds.has(m.id));
+                        return [...newItems, ...prev];
+                    });
+                    setHistoryPage(nextPage);
+
+                    requestAnimationFrame(() => {
+                        if (chatFeedRef.current) {
+                            chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight - oldScrollHeight;
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('[Messages] Failed to load older history:', e);
+            } finally {
+                setIsLoadingMoreHistory(false);
+            }
+        }
+    };
+
+    // ── Active Partner Info Resolution ──
+    const activePartnerSummary = useMemo(() => {
+        return conversations.find(c => c.partnerId === activePartnerId) || null;
+    }, [conversations, activePartnerId]);
+
+    const activePartner = useMemo(() => {
+        if (activePartnerSummary) {
+            return {
+                userId: activePartnerSummary.partnerId,
+                id: activePartnerSummary.partnerId,
+                fullName: activePartnerSummary.partnerName,
+                employeeId: activePartnerSummary.partnerEmployeeId,
+                designation: activePartnerSummary.partnerDesignation || 'Colleague',
+                department: activePartnerSummary.partnerDepartment || 'MPOnline',
+                avatar: activePartnerSummary.partnerAvatarUrl,
+                isConnected: activePartnerSummary.isConnected ?? connectedUserIds.has(activePartnerSummary.partnerId)
+            };
+        }
+        if (activePartnerDraft) {
+            return activePartnerDraft;
+        }
+        return null;
+    }, [activePartnerSummary, activePartnerDraft, connectedUserIds]);
+
+    const isPartnerOnline = useMemo(() => {
+        if (!activePartner) return false;
+        const partnerId = Number(activePartner.userId || activePartner.id);
+        return onlineUserIds.has(partnerId);
+    }, [activePartner, onlineUserIds]);
+
+    const isTargetConnected = useMemo(() => {
+        if (!activePartner) return false;
+        if (typeof activePartner.isConnected === 'boolean') {
+            return activePartner.isConnected;
+        }
+        return connectedUserIds.has(Number(activePartner.userId || activePartner.id));
+    }, [activePartner, connectedUserIds]);
+
+    // ── Search Candidates in "New Message" Modal ──
+    useEffect(() => {
+        if (!isNewChatOpen) return;
+        const timer = setTimeout(async () => {
+            setIsSearchingUsers(true);
+            try {
+                const res = await messagesApi.searchUsers(colleagueSearch);
+                const list = res?.data || (Array.isArray(res) ? res : []);
+                setSearchedUsers(list);
+            } catch (e) {
+                setSearchedUsers([]);
+            } finally {
+                setIsSearchingUsers(false);
+            }
+        }, 200);
+
+        return () => clearTimeout(timer);
+    }, [isNewChatOpen, colleagueSearch]);
+
+    // ── URL Query Listener: When user clicks "Message" on Profile/Network ──
+    useEffect(() => {
+        const searchParams = new URLSearchParams(location.search);
+        const queryUserId = searchParams.get('userId') || searchParams.get('user') || searchParams.get('id');
+        const queryName = searchParams.get('name');
+
+        if (!queryUserId) return;
+        const targetId = Number(queryUserId);
+        if (!targetId || targetId === currentUserId) return;
+
+        const existing = conversations.find(c => c.partnerId === targetId);
+        if (existing) {
+            setActivePartnerId(targetId);
+            setActivePartnerDraft(null);
+            setShowMobileChat(true);
+            setIsNewChatOpen(false);
+            return;
+        }
+
+        const matched = (contextUsers || []).find(u => Number(u.userId || u.id) === targetId);
+        if (matched) {
+            const draftProfile = {
+                userId: targetId,
+                id: targetId,
+                fullName: matched?.fullName || matched?.name || (queryName ? decodeURIComponent(queryName) : 'Colleague'),
+                employeeId: matched?.employeeId,
+                designation: matched?.designation || 'Colleague',
+                department: matched?.department || 'MPOnline',
+                avatar: matched?.avatar || matched?.profilePhotoUrl || null,
+                isConnected: connectedUserIds.has(targetId)
+            };
+            setActivePartnerDraft(draftProfile);
+            setActivePartnerId(targetId);
+            setShowMobileChat(true);
+            setIsNewChatOpen(false);
+        } else {
+            userApi.getById(targetId).then(res => {
+                const u = res?.data || res;
+                if (u) {
+                    const draftProfile = {
+                        userId: targetId,
+                        id: targetId,
+                        fullName: u.fullName || u.name || (queryName ? decodeURIComponent(queryName) : 'Colleague'),
+                        employeeId: u.employeeId,
+                        designation: u.designation || 'Colleague',
+                        department: u.department || 'MPOnline',
+                        avatar: u.avatar || u.profilePhotoUrl || null,
+                        isConnected: connectedUserIds.has(targetId)
+                    };
+                    setActivePartnerDraft(draftProfile);
+                    setActivePartnerId(targetId);
+                    setShowMobileChat(true);
+                    setIsNewChatOpen(false);
+                }
+            }).catch(() => {
+                const fallbackProfile = {
+                    userId: targetId,
+                    id: targetId,
+                    fullName: queryName ? decodeURIComponent(queryName) : 'Colleague',
+                    designation: 'Colleague',
+                    department: 'MPOnline',
+                    avatar: null,
+                    isConnected: connectedUserIds.has(targetId)
+                };
+                setActivePartnerDraft(fallbackProfile);
+                setActivePartnerId(targetId);
+                setShowMobileChat(true);
+                setIsNewChatOpen(false);
+            });
+        }
+    }, [location.search, currentUserId, conversations, contextUsers, connectedUserIds]);
+
+    // ── Auto-scroll chat feed to bottom ──
+    const scrollToBottom = useCallback((smooth = true) => {
+        if (chatFeedRef.current) {
+            if (smooth) {
+                chatFeedRef.current.scrollTo({
+                    top: chatFeedRef.current.scrollHeight,
+                    behavior: 'smooth'
+                });
+            } else {
+                chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight;
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        const timer = setTimeout(() => scrollToBottom(false), 50);
+        return () => clearTimeout(timer);
+    }, [activePartnerId, scrollToBottom]);
+
+    useEffect(() => {
+        scrollToBottom(true);
+    }, [activeHistory.length, scrollToBottom]);
+
+    // Scroll to specific quoted message in feed
+    const scrollToMessage = (msgId) => {
+        if (!msgId) return;
+        const el = document.getElementById(`msg_bubble_${msgId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('ring-2', 'ring-cyan-500', 'transition-all');
+            setTimeout(() => el.classList.remove('ring-2', 'ring-cyan-500'), 1500);
+        } else {
+            addToast('Quoted message is earlier in history.', 'info');
+        }
+    };
+
+    // ── File Attachments Handlers ──
     const formatFileSize = (bytes) => {
         if (!bytes || bytes === 0) return '0 B';
         const k = 1024;
@@ -523,7 +881,6 @@ export default function Messages() {
             document.body.removeChild(a);
             setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
         } catch (err) {
-            console.warn('[Messages] Blob download fallback to window.open:', err);
             window.open(attUrl, '_blank');
         }
     };
@@ -598,578 +955,82 @@ export default function Messages() {
         setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
     };
 
-    // ── Message Hover & Reaction States ──
-    const [activeHoverMsgId, setActiveHoverMsgId] = useState(null);
-    const [activeReactionPickerMsgId, setActiveReactionPickerMsgId] = useState(null);
-    const [messageReactions, setMessageReactions] = useState(() => {
-        try {
-            const raw = localStorage.getItem('knome_message_reactions');
-            return raw ? JSON.parse(raw) : {};
-        } catch {
-            return {};
-        }
-    });
-
-    const toggleReaction = (msgId, emoji) => {
-        setMessageReactions(prev => {
-            const currentForMsg = prev[msgId] || {};
-            const users = currentForMsg[emoji] || [];
-            const hasReacted = users.includes(currentUserId);
-            const nextUsers = hasReacted ? users.filter(u => u !== currentUserId) : [...users, currentUserId];
-
-            const nextForMsg = { ...currentForMsg };
-            if (nextUsers.length === 0) {
-                delete nextForMsg[emoji];
-            } else {
-                nextForMsg[emoji] = nextUsers;
-            }
-
-            const nextAll = { ...prev, [msgId]: nextForMsg };
-            try {
-                localStorage.setItem('knome_message_reactions', JSON.stringify(nextAll));
-            } catch {}
-            return nextAll;
-        });
-    };
-
-    // Auto-close emoji picker on click outside or Escape
-    useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
-                setIsEmojiPickerOpen(false);
-            }
-        };
-        const handleKeyDown = (e) => {
-            if (e.key === 'Escape') {
-                setIsEmojiPickerOpen(false);
-            }
-        };
-        if (isEmojiPickerOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-            document.addEventListener('keydown', handleKeyDown);
-        }
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [isEmojiPickerOpen]);
-
-    const handleSelectEmoji = (emoji) => {
-        setInputMessage(prev => prev + emoji);
-        chatInputRef.current?.focus();
-    };
-
-    // Smart keyword and category search
-    const displayedEmojis = useMemo(() => {
-        const q = emojiSearch.trim().toLowerCase();
-        if (!q) {
-            return EMOJI_CATEGORIES[emojiCategory]?.emojis || EMOJI_CATEGORIES.smileys.emojis;
-        }
-        const all = Object.values(EMOJI_CATEGORIES).flatMap(c => c.emojis);
-        const unique = Array.from(new Set(all));
-        return unique.filter(em => {
-            if (em.includes(q)) return true;
-            const label = (EMOJI_LABELS[em] || '').toLowerCase();
-            return label.includes(q);
-        });
-    }, [emojiCategory, emojiSearch]);
-
-    const messagesEndRef = useRef(null);
-    const chatFeedRef = useRef(null);
-
-    // Save master conversations store to localStorage & broadcast unread count
-    const saveMasterConversations = useCallback((updatedList) => {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
-            // Calculate unread count specifically for current logged-in user
-            const myUnread = updatedList.reduce((acc, c) => {
-                if (c.participantIds && c.participantIds.map(Number).includes(currentUserId)) {
-                    return acc + (c.unreadCounts?.[currentUserId] || 0);
+    // ── Input, Mention & Typing Handlers ──
+    const handleSelectMention = (user) => {
+        if (!user) return;
+        const cursor = chatInputRef.current?.selectionStart || inputMessage.length;
+        const textBeforeCursor = inputMessage.slice(0, cursor);
+        const textAfterCursor = inputMessage.slice(cursor);
+        const atIndex = textBeforeCursor.lastIndexOf('@');
+        if (atIndex !== -1) {
+            const newTextBefore = textBeforeCursor.slice(0, atIndex) + `@${user.fullName} `;
+            const newFullText = newTextBefore + textAfterCursor;
+            setInputMessage(newFullText);
+            setShowMentionSuggestions(false);
+            setTimeout(() => {
+                if (chatInputRef.current) {
+                    chatInputRef.current.focus();
+                    const newPos = newTextBefore.length;
+                    chatInputRef.current.setSelectionRange(newPos, newPos);
                 }
-                return acc;
-            }, 0);
-            localStorage.setItem(`knome_unread_messages_count_${currentUserId}`, String(myUnread));
-            localStorage.setItem('knome_unread_messages_count', String(myUnread));
-            window.dispatchEvent(new CustomEvent('knome_messages_updated', { detail: { unreadCount: myUnread } }));
-        } catch (e) {}
-    }, [currentUserId]);
-
-    // Filter conversations for the current logged-in user (reusable, 1-to-1)
-    const userConversations = useMemo(() => {
-        return allConversations.filter(c => {
-            if (!Array.isArray(c.participantIds)) return true;
-            return c.participantIds.map(Number).includes(currentUserId);
-        }).sort((a, b) => (b.lastMessageTimestamp || 0) - (a.lastMessageTimestamp || 0));
-    }, [allConversations, currentUserId]);
-
-    // Active conversation object
-    const activeConversation = useMemo(() => {
-        if (!activeConvId) {
-            return userConversations[0] || null;
+            }, 50);
         }
-        return userConversations.find(c => c.id === activeConvId) || userConversations[0] || null;
-    }, [userConversations, activeConvId]);
+    };
 
-    // Active other participant info (guaranteed to be the recipient, never self)
-    const activeOtherParticipant = useMemo(() => {
-        if (!activeConversation) return null;
-        return getOtherParticipant(activeConversation, currentUserId, contextUsers);
-    }, [activeConversation, currentUserId, contextUsers]);
+    const handleInputChange = (e) => {
+        const val = e.target.value;
+        setInputMessage(val);
+        e.target.style.height = 'auto';
+        e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
 
-    // Check if recipient in active conversation is a 1st-degree connection
-    const isTargetConnected = useMemo(() => {
-        if (!activeOtherParticipant) return false;
-        const targetId = Number(activeOtherParticipant.userId || activeOtherParticipant.id);
-        return connectedUserIds.has(targetId);
-    }, [activeOtherParticipant, connectedUserIds]);
-
-    // Auto-select initial conversation on first load if activeConvId is not set
-    useEffect(() => {
-        if (!activeConvId && userConversations.length > 0) {
-            setActiveConvId(userConversations[0].id);
-        }
-    }, [userConversations, activeConvId]);
-
-    // Auto-scroll chat feed to bottom strictly within the feed container without scrolling outer window
-    const scrollToBottom = useCallback((smooth = true) => {
-        if (chatFeedRef.current) {
-            if (smooth) {
-                chatFeedRef.current.scrollTo({
-                    top: chatFeedRef.current.scrollHeight,
-                    behavior: 'smooth'
-                });
-            } else {
-                chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight;
-            }
-        }
-    }, []);
-
-    // Instant jump to bottom when switching conversation
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            scrollToBottom(false);
-        }, 40);
-        return () => clearTimeout(timer);
-    }, [activeConversation?.id, scrollToBottom]);
-
-    // Smooth scroll when new message is appended
-    useEffect(() => {
-        scrollToBottom(true);
-    }, [activeConversation?.messages?.length, scrollToBottom]);
-
-    // Keep activeConvIdRef in sync to avoid stale closures in event listeners
-    const activeConvIdRef = useRef(activeConvId);
-    useEffect(() => {
-        activeConvIdRef.current = activeConvId;
-    }, [activeConvId]);
-
-    // Track active chat recipient so Navbar can avoid duplicate toasts when chat is open
-    useEffect(() => {
-        if (activeOtherParticipant?.userId) {
-            window.__knome_active_chat_user_id = Number(activeOtherParticipant.userId);
+        // Check for @mention trigger
+        const cursor = e.target.selectionStart || val.length;
+        const textBeforeCursor = val.slice(0, cursor);
+        const atMatch = textBeforeCursor.match(/(?:^|\s)@([a-zA-Z0-9_\s]*)$/);
+        if (atMatch && activePartner) {
+            setShowMentionSuggestions(true);
         } else {
-            window.__knome_active_chat_user_id = null;
+            setShowMentionSuggestions(false);
         }
-        return () => {
-            window.__knome_active_chat_user_id = null;
-        };
-    }, [activeOtherParticipant?.userId]);
 
-    // Cross-tab synchronization via storage event on STORAGE_KEY
-    useEffect(() => {
-        const handleStorageUpdate = (e) => {
-            if (e.key === STORAGE_KEY && e.newValue) {
+        if (activePartnerId) {
+            setDrafts(prev => {
+                const next = { ...prev, [activePartnerId]: val };
                 try {
-                    const parsed = JSON.parse(e.newValue);
-                    if (Array.isArray(parsed)) {
-                        setAllConversations(parsed);
-                    }
-                } catch (err) {}
-            }
-        };
-        window.addEventListener('storage', handleStorageUpdate);
-        return () => window.removeEventListener('storage', handleStorageUpdate);
-    }, []);
-
-    // ── Live Real-Time Message Receiver for Current Logged-In User ──
-    useEffect(() => {
-        const uId = Number(currentUser?.userId || currentUser?.id || 1);
-        if (!uId) return;
-
-        const unsubscribe = subscribeToLiveMessages(uId, (livePayload) => {
-            const { sender, message, conversationId } = livePayload;
-            if (!sender || !message) return;
-
-            const senderId = Number(sender.userId || sender.id);
-            const expectedConvKey = getConversationKey(uId, senderId);
-            const isCurrentlyActive = (
-                activeConvIdRef.current === expectedConvKey || 
-                activeConvIdRef.current === conversationId
-            );
-
-            setAllConversations(prev => {
-                let found = false;
-                const updated = prev.map(c => {
-                    const cParticipantIds = (c.participantIds || []).map(Number);
-                    const matches = c.id === expectedConvKey || c.id === conversationId ||
-                                    (cParticipantIds.includes(uId) && cParticipantIds.includes(senderId));
-
-                    if (matches) {
-                        found = true;
-                        const existingMsgs = c.messages || [];
-                        const existingIdx = existingMsgs.findIndex(m => String(m.id) === String(message.id));
-                        let nextMsgs;
-                        if (existingIdx !== -1) {
-                            if ((!existingMsgs[existingIdx].attachments || existingMsgs[existingIdx].attachments.length === 0) && (message.attachments && message.attachments.length > 0)) {
-                                nextMsgs = [...existingMsgs];
-                                nextMsgs[existingIdx] = { ...existingMsgs[existingIdx], ...message };
-                            } else {
-                                nextMsgs = existingMsgs;
-                            }
-                        } else {
-                            const isDuplicate = existingMsgs.some(m => m.timestamp === message.timestamp && m.text === message.text && (m.attachments?.length || 0) === (message.attachments?.length || 0));
-                            nextMsgs = isDuplicate ? existingMsgs : [...existingMsgs, message];
-                        }
-                        const unreadInc = isCurrentlyActive ? 0 : 1;
-
-                        const displaySummary = message.text || 
-                            (Array.isArray(message.attachments) && message.attachments.length > 0 
-                                ? (message.attachments.length === 1 ? `📎 ${message.attachments[0].name}` : `📎 ${message.attachments.length} Attachments`) 
-                                : 'Attachment');
-
-                        return {
-                            ...c,
-                            lastMessage: displaySummary || c.lastMessage || 'Attachment',
-                            lastMessageTime: message.time,
-                            lastMessageTimestamp: message.timestamp || Date.now(),
-                            unreadCounts: {
-                                ...c.unreadCounts,
-                                [uId]: (c.unreadCounts?.[uId] || 0) + unreadInc
-                            },
-                            messages: nextMsgs
-                        };
-                    }
-                    return c;
-                });
-
-                if (!found) {
-                    // Conversation doesn't exist yet: create 1-to-1 conversation on the fly
-                    const myProfile = {
-                        userId: uId,
-                        fullName: currentUser?.fullName || currentUser?.name || 'You',
-                        designation: currentUser?.designation || 'Staff',
-                        department: currentUser?.department || 'MPOnline',
-                        avatar: currentUser?.profilePhotoUrl || currentUser?.avatar || null,
-                        status: 'active'
-                    };
-                    const displaySummary = message.text || 
-                        (Array.isArray(message.attachments) && message.attachments.length > 0 
-                            ? (message.attachments.length === 1 ? `📎 ${message.attachments[0].name}` : `📎 ${message.attachments.length} Attachments`) 
-                            : 'Attachment');
-
-                    const newConv = {
-                        id: expectedConvKey,
-                        participantIds: [uId, senderId],
-                        participants: {
-                            [uId]: myProfile,
-                            [senderId]: sender
-                        },
-                        participant: sender,
-                        unreadCounts: {
-                            [uId]: isCurrentlyActive ? 0 : 1,
-                            [senderId]: 0
-                        },
-                        lastMessage: displaySummary || 'Attachment',
-                        lastMessageTime: message.time,
-                        lastMessageTimestamp: message.timestamp || Date.now(),
-                        messages: [message]
-                    };
-                    const nextList = [newConv, ...prev];
-                    saveMasterConversations(nextList);
-                    return nextList;
-                }
-
-                saveMasterConversations(updated);
-                return updated;
+                    localStorage.setItem(`knome_message_drafts_${currentUserId}`, JSON.stringify(next));
+                } catch {}
+                return next;
             });
 
-            // Smooth scroll to bottom if currently looking at this chat
-            if (isCurrentlyActive) {
-                setTimeout(() => {
-                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-                }, 50);
-            }
-        });
-
-        return () => {
-            if (unsubscribe) unsubscribe();
-        };
-    }, [currentUser, saveMasterConversations]);
-
-    // ── Remote Sync Fallback: Pull latest messages periodically & on window focus ──
-    const syncRemoteMessages = useCallback(async () => {
-        const uId = Number(currentUser?.userId || currentUser?.id);
-        if (!uId) return;
-
-        try {
-            const res = await notificationsApi.getAll(false, 1, 30);
-            const notifs = res?.data || (Array.isArray(res) ? res : []);
-            const messageNotifs = notifs.filter(n => 
-                n.eventType === 'Message' || n.notificationType === 'Message'
-            );
-            if (messageNotifs.length === 0) return;
-
-            setAllConversations(prev => {
-                let changed = false;
-                const next = [...prev];
-
-                messageNotifs.forEach(notif => {
-                    const senderId = Number(notif.relatedContentId || notif.referenceId || notif.senderUserId || 0);
-                    if (!senderId || senderId === uId) return;
-
-                    const convKey = getConversationKey(uId, senderId);
-                    let rawText = notif.message || notif.text || '';
-                    let parsedAttachments = [];
-                    const attTagIdx = rawText.indexOf(' __ATT__:');
-                    if (attTagIdx !== -1) {
-                        try {
-                            parsedAttachments = JSON.parse(rawText.substring(attTagIdx + 9));
-                        } catch (e) {}
-                        rawText = rawText.substring(0, attTagIdx);
-                    }
-
-                    const colonIdx = rawText.indexOf(': "');
-                    if (colonIdx !== -1 && rawText.endsWith('"')) {
-                        rawText = rawText.substring(colonIdx + 3, rawText.length - 1);
-                    }
-
-                    const notifMsgId = `notif_${notif.notificationId}`;
-                    const notifTimestamp = new Date(notif.createdDate || Date.now()).getTime();
-
-                    const cIdx = next.findIndex(c => 
-                        c.id === convKey || 
-                        (Array.isArray(c.participantIds) && c.participantIds.map(Number).includes(senderId) && c.participantIds.map(Number).includes(uId))
-                    );
-
-                    const displaySummary = rawText || 
-                        (parsedAttachments.length > 0 
-                            ? (parsedAttachments.length === 1 ? `📎 ${parsedAttachments[0].name}` : `📎 ${parsedAttachments.length} Attachments`) 
-                            : 'Attachment');
-
-                    if (cIdx !== -1) {
-                        const existingMsgs = next[cIdx].messages || [];
-                        const existingIdx = existingMsgs.findIndex(m => String(m.id) === notifMsgId || (m.timestamp === notifTimestamp && m.text === rawText));
-                        if (existingIdx !== -1) {
-                            if ((!existingMsgs[existingIdx].attachments || existingMsgs[existingIdx].attachments.length === 0) && parsedAttachments.length > 0) {
-                                changed = true;
-                                const updatedMsg = { ...existingMsgs[existingIdx], attachments: parsedAttachments };
-                                const updatedMsgs = [...existingMsgs];
-                                updatedMsgs[existingIdx] = updatedMsg;
-                                next[cIdx] = {
-                                    ...next[cIdx],
-                                    lastMessage: displaySummary,
-                                    messages: updatedMsgs
-                                };
-                            }
-                        } else {
-                            changed = true;
-                            const newMsgObj = {
-                                id: notifMsgId,
-                                senderId,
-                                senderName: notif.senderName || 'Colleague',
-                                text: rawText,
-                                attachments: parsedAttachments,
-                                time: new Date(notif.createdDate || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                                timestamp: notifTimestamp
-                            };
-                            next[cIdx] = {
-                                ...next[cIdx],
-                                lastMessage: displaySummary,
-                                lastMessageTime: newMsgObj.time,
-                                lastMessageTimestamp: notifTimestamp,
-                                messages: [...existingMsgs, newMsgObj]
-                            };
-                        }
-                    }
-                });
-
-                if (changed) {
-                    saveMasterConversations(next);
-                    return next;
-                }
-                return prev;
-            });
-        } catch (err) {}
-    }, [currentUser, saveMasterConversations]);
-
-    useEffect(() => {
-        syncRemoteMessages();
-        const interval = setInterval(syncRemoteMessages, 4000);
-        const handleFocus = () => syncRemoteMessages();
-        window.addEventListener('focus', handleFocus);
-        return () => {
-            clearInterval(interval);
-            window.removeEventListener('focus', handleFocus);
-        };
-    }, [syncRemoteMessages]);
-
-    // ── Handle Opening or Creating 1-to-1 Conversation with a Specific User ──
-    const openConversationWithUser = useCallback((targetUser) => {
-        const targetId = Number(targetUser.userId || targetUser.id);
-        if (!targetId || targetId === currentUserId) return;
-
-        const convKey = getConversationKey(currentUserId, targetId);
-        
-        // 1. Check if conversation already exists between current user and target user
-        const existing = allConversations.find(c => {
-            if (c.id === convKey) return true;
-            if (Array.isArray(c.participantIds)) {
-                return c.participantIds.map(Number).includes(currentUserId) &&
-                       c.participantIds.map(Number).includes(targetId);
-            }
-            return false;
-        });
-
-        if (existing) {
-            // Re-use existing conversation!
-            setActiveConvId(existing.id);
-            setShowMobileChat(true);
-            setIsNewChatOpen(false);
-
-            // Clear unread count for current user
-            const updated = allConversations.map(c => {
-                if (c.id === existing.id) {
-                    return {
-                        ...c,
-                        unreadCounts: {
-                            ...c.unreadCounts,
-                            [currentUserId]: 0
-                        }
-                    };
-                }
-                return c;
-            });
-            setAllConversations(updated);
-            saveMasterConversations(updated);
-            return;
+            sendTypingIndicator(activePartnerId, true);
+            if (typingDebounceTimerRef.current) clearTimeout(typingDebounceTimerRef.current);
+            typingDebounceTimerRef.current = setTimeout(() => {
+                sendTypingIndicator(activePartnerId, false);
+            }, 2500);
         }
-
-        // 2. Conversation does NOT exist: Create brand new 1-to-1 conversation
-        const targetName = targetUser.fullName || targetUser.name || 'Colleague';
-        const targetDesig = targetUser.designation || 'Staff';
-        const targetDept = targetUser.department || targetUser.departmentName || 'MPOnline';
-        const targetAvatar = targetUser.avatar || targetUser.profilePhotoUrl || null;
-
-        const myProfile = {
-            userId: currentUserId,
-            fullName: currentUser?.fullName || currentUser?.name || 'You',
-            designation: currentUser?.designation || 'Team Member',
-            department: currentUser?.department || 'MPOnline',
-            avatar: currentUser?.profilePhotoUrl || currentUser?.avatar || null,
-            status: 'active'
-        };
-
-        const targetProfile = {
-            userId: targetId,
-            fullName: targetName,
-            designation: targetDesig,
-            department: targetDept,
-            avatar: targetAvatar,
-            status: 'active'
-        };
-
-        const newConversation = {
-            id: convKey,
-            participantIds: [currentUserId, targetId],
-            participants: {
-                [currentUserId]: myProfile,
-                [targetId]: targetProfile
-            },
-            participant: targetProfile,
-            unreadCounts: {
-                [currentUserId]: 0,
-                [targetId]: 0
-            },
-            lastMessage: `Started conversation with ${targetName}`,
-            lastMessageTime: 'Just now',
-            lastMessageTimestamp: Date.now(),
-            messages: []
-        };
-
-        const updatedList = [newConversation, ...allConversations];
-        setAllConversations(updatedList);
-        saveMasterConversations(updatedList);
-        setActiveConvId(newConversation.id);
-        setShowMobileChat(true);
-        setIsNewChatOpen(false);
-    }, [allConversations, currentUserId, currentUser, saveMasterConversations]);
-
-    // ── URL Query Listener: When user clicks "Message" from Profile, People, Community ──
-    useEffect(() => {
-        const searchParams = new URLSearchParams(location.search);
-        const queryUserId = searchParams.get('userId') || searchParams.get('user') || searchParams.get('id');
-        const queryName = searchParams.get('name');
-
-        if (!queryUserId) return;
-
-        const targetId = Number(queryUserId);
-        if (!targetId || targetId === currentUserId) return;
-
-        // Try finding target user in contextUsers roster
-        const matchedUser = (contextUsers || []).find(u => Number(u.userId || u.id) === targetId);
-
-        if (matchedUser) {
-            openConversationWithUser(matchedUser);
-        } else {
-            // Build temporary target profile from query params & roster dictionary
-            const rosterName = KNOWN_ROSTER_NAMES?.[queryUserId] || queryName || 'Colleague';
-            const constructedUser = {
-                userId: targetId,
-                id: targetId,
-                fullName: queryName ? decodeURIComponent(queryName) : rosterName,
-                name: queryName ? decodeURIComponent(queryName) : rosterName,
-                designation: 'Staff Colleague',
-                department: 'MPOnline Enterprise',
-                avatar: null,
-                status: 'active'
-            };
-            openConversationWithUser(constructedUser);
-        }
-    }, [location.search, currentUserId, contextUsers, openConversationWithUser]);
-
-    // Select conversation from list
-    const handleSelectConversation = (convId) => {
-        setActiveConvId(convId);
-        setShowMobileChat(true);
-
-        // Mark as read for current user
-        const updated = allConversations.map(c => {
-            if (c.id === convId) {
-                return {
-                    ...c,
-                    unreadCounts: {
-                        ...c.unreadCounts,
-                        [currentUserId]: 0
-                    }
-                };
-            }
-            return c;
-        });
-        setAllConversations(updated);
-        saveMasterConversations(updated);
     };
 
-    // ── Send Message Handler ──
+    // ── SEND MESSAGE HANDLER ──
     const handleSendMessage = async (e) => {
-        if (e) e.preventDefault();
-        const text = inputMessage.trim();
-        if (!text || !activeConversation || !activeOtherParticipant) return;
+        if (e) {
+            e.preventDefault();
+            if (e.stopPropagation) e.stopPropagation();
+        }
+        if (isSendingRef.current) return;
 
+        const text = inputMessage.trim();
+        if ((!text && attachedFiles.length === 0) || !activePartner) return;
+
+        isSendingRef.current = true;
+        setIsSending(true);
         const now = new Date();
         const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const targetConvId = activeConversation.id;
+        const targetPartnerId = Number(activePartner.userId || activePartner.id);
 
-        // Resolve all attachments (wait for pending uploads if active)
+        // Stop typing indicator
+        sendTypingIndicator(targetPartnerId, false);
+
+        // Resolve attachments
         const currentAttachments = await Promise.all(attachedFiles.map(async f => {
             let finalUrl = f.uploadUrl;
             if (!finalUrl && f.uploadPromise) {
@@ -1187,101 +1048,225 @@ export default function Messages() {
             };
         }));
 
-        const displaySummary = text 
-            ? text 
-            : (currentAttachments.length === 1 
-                ? `📎 ${currentAttachments[0].name}` 
-                : `📎 ${currentAttachments.length} Attachments`);
-
-        const newMessage = {
-            id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+        const optimisticMsg = {
+            id: tempId,
+            messageId: tempId,
             senderId: currentUserId,
-            senderName: currentUser?.fullName || currentUser?.name || 'Me',
-            text,
+            senderName: currentUser?.fullName || 'Me',
+            receiverId: targetPartnerId,
+            content: text,
+            text: text,
             attachments: currentAttachments,
+            isRead: false,
+            parentMessageId: replyingTo?.id || null,
+            parentContent: replyingTo?.text || null,
+            parentSenderName: replyingTo?.senderName || null,
             time: timeStr,
-            timestamp: now.getTime()
+            timestamp: now.getTime(),
+            status: 'sending'
         };
 
-        const updatedWithMyMsg = allConversations.map(c => {
-            if (c.id === targetConvId) {
-                const existingMsgs = c.messages || [];
-                return {
-                    ...c,
-                    lastMessage: displaySummary,
-                    lastMessageTime: timeStr,
-                    lastMessageTimestamp: now.getTime(),
-                    messages: [...existingMsgs, newMessage]
-                };
-            }
-            return c;
-        });
-
-        setAllConversations(updatedWithMyMsg);
-        saveMasterConversations(updatedWithMyMsg);
+        setActiveHistory(prev => [...prev, optimisticMsg]);
         setInputMessage('');
         setAttachedFiles([]);
+        setIsEmojiPickerOpen(false);
+        setReplyingTo(null);
 
-        // Real-Time Delivery: Broadcast to recipient across tabs, windows, and backend SignalR
+        // Clear stored draft for this partner
+        setDrafts(prev => {
+            const next = { ...prev };
+            delete next[targetPartnerId];
+            try {
+                localStorage.setItem(`knome_message_drafts_${currentUserId}`, JSON.stringify(next));
+            } catch {}
+            return next;
+        });
+
+        if (chatInputRef.current) {
+            chatInputRef.current.style.height = 'auto';
+        }
+
         try {
-            await sendLiveMessage({
-                sender: {
-                    userId: currentUserId,
-                    fullName: currentUser?.fullName || currentUser?.name || 'Colleague',
-                    designation: currentUser?.designation || 'Staff',
-                    department: currentUser?.department || 'MPOnline',
-                    avatar: currentUser?.profilePhotoUrl || currentUser?.avatar || null
-                },
-                recipient: activeOtherParticipant,
-                conversationId: targetConvId,
-                message: newMessage
+            const attJson = currentAttachments.length > 0 ? JSON.stringify(currentAttachments) : null;
+            const payloadText = text || (currentAttachments.length > 0 ? '\u200B' : '');
+            const res = await messagesApi.send(targetPartnerId, payloadText, attJson, replyingTo?.id);
+            const serverMsg = res?.data || res;
+
+            setActiveHistory(prev => {
+                // If SignalR handleLiveMessage already added or replaced the message with serverMsg.messageId:
+                const alreadyHasServerId = prev.some(m => 
+                    (String(m.id) === String(serverMsg.messageId) || String(m.messageId) === String(serverMsg.messageId)) && 
+                    m.id !== tempId
+                );
+                if (alreadyHasServerId) {
+                    // Remove optimistic temp message to avoid duplicate display
+                    return prev.filter(m => m.id !== tempId);
+                }
+                // Otherwise update optimistic temp message with real server ID
+                return prev.map(m => m.id === tempId ? {
+                    ...m,
+                    id: serverMsg.messageId || tempId,
+                    messageId: serverMsg.messageId,
+                    status: 'sent'
+                } : m);
             });
+
+            fetchConversations(true);
+            setActivePartnerDraft(null);
         } catch (err) {
-            console.error('[Messages] Failed to send live message:', err);
+            console.error('[Messages] Failed to send message:', err);
+            setActiveHistory(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
+            const msg = err?.data?.message || err?.message || 'Failed to deliver message.';
+            addToast(`Delivery failed: ${msg}`, 'error');
+        } finally {
+            isSendingRef.current = false;
+            setIsSending(false);
         }
     };
 
-    // Filter conversations based on search and unread tab
+    // Retry sending a previously failed message
+    const handleRetrySend = async (failedMsg) => {
+        if (!failedMsg || !activePartner) return;
+        const targetPartnerId = Number(activePartner.userId || activePartner.id);
+
+        setActiveHistory(prev => prev.map(m => m.id === failedMsg.id ? { ...m, status: 'sending' } : m));
+
+        try {
+            const attJson = failedMsg.attachments?.length > 0 ? JSON.stringify(failedMsg.attachments) : null;
+            const rawFailedText = (failedMsg.text || failedMsg.content || '').trim();
+            const payloadText = rawFailedText || (failedMsg.attachments?.length > 0 ? '\u200B' : '');
+            const res = await messagesApi.send(targetPartnerId, payloadText, attJson, failedMsg.parentMessageId);
+            const serverMsg = res?.data || res;
+
+            setActiveHistory(prev => prev.map(m => m.id === failedMsg.id ? {
+                ...m,
+                id: serverMsg.messageId || failedMsg.id,
+                messageId: serverMsg.messageId,
+                status: 'sent'
+            } : m));
+
+            fetchConversations(true);
+        } catch (err) {
+            console.error('[Messages] Retry failed:', err);
+            setActiveHistory(prev => prev.map(m => m.id === failedMsg.id ? { ...m, status: 'failed' } : m));
+            const msg = err?.data?.message || err?.message || 'Failed to deliver message.';
+            addToast(`Retry failed: ${msg}`, 'error');
+        }
+    };
+
+    // Edit message
+    const handleSaveEdit = async (messageId) => {
+        const text = editingContent.trim();
+        if (!text) return;
+        try {
+            const res = await messagesApi.editMessage(messageId, text);
+            const updated = res?.data || res;
+            setActiveHistory(prev => prev.map(m => m.id === messageId ? {
+                ...m,
+                text: text,
+                content: text,
+                isEdited: true,
+                editedDate: updated.editedDate || new Date().toISOString()
+            } : m));
+            setEditingMessageId(null);
+            setEditingContent('');
+            addToast('Message edited.', 'success');
+            fetchConversations(true);
+        } catch (err) {
+            addToast('Failed to save edited message.', 'error');
+        }
+    };
+
+    // Delete message (soft-delete)
+    const handleDeleteMessage = async (messageId) => {
+        if (!messageId) return;
+        if (!window.confirm('Are you sure you want to delete this message?')) return;
+        try {
+            await messagesApi.deleteMessage(messageId);
+            setActiveHistory(prev => prev.map(m => (m.id === messageId || m.messageId === messageId) ? {
+                ...m,
+                isDeleted: true,
+                text: 'This message was deleted',
+                content: 'This message was deleted',
+                attachments: []
+            } : m));
+            addToast('Message deleted.', 'info');
+            fetchConversations(true);
+        } catch (err) {
+            console.error('[Messages] Failed to delete message:', err);
+            addToast('Failed to delete message.', 'error');
+        }
+    };
+
+    // Toggle reaction
+    const handleToggleReaction = async (messageId, reactionType) => {
+        if (!messageId || !reactionType) return;
+        setActiveReactionPickerMsgId(null);
+        try {
+            const res = await messagesApi.toggleReaction(messageId, reactionType);
+            const list = res?.data || (Array.isArray(res) ? res : []);
+            setActiveHistory(prev => prev.map(m => (m.id === messageId || m.messageId === messageId) ? {
+                ...m,
+                reactions: list
+            } : m));
+        } catch (err) {
+            addToast('Failed to update reaction.', 'error');
+        }
+    };
+
+    // Copy message text to clipboard
+    const handleCopyMessage = (text) => {
+        if (!text) return;
+        navigator.clipboard?.writeText(text);
+        addToast('Message copied to clipboard', 'info');
+    };
+
+    // ── Filter Conversations ──
     const filteredConversations = useMemo(() => {
-        return userConversations.filter(c => {
-            const otherP = getOtherParticipant(c, currentUserId, contextUsers);
-            const otherName = (otherP?.fullName || '').toLowerCase();
+        return conversations.filter(c => {
+            const partnerName = (c.partnerName || '').toLowerCase();
             const lastMsg = (c.lastMessage || '').toLowerCase();
             const q = searchQuery.toLowerCase();
 
-            const matchesSearch = !q || otherName.includes(q) || lastMsg.includes(q);
+            const matchesSearch = !q || partnerName.includes(q) || lastMsg.includes(q);
             if (!matchesSearch) return false;
 
-            const myUnread = c.unreadCounts?.[currentUserId] || 0;
-            if (filterTab === 'unread') return myUnread > 0;
+            if (filterTab === 'unread') return (c.unreadCount || 0) > 0;
             return true;
         });
-    }, [userConversations, searchQuery, filterTab, currentUserId, contextUsers]);
+    }, [conversations, searchQuery, filterTab]);
 
-    // Available colleagues from user roster for "New Chat" modal (RESTRICTED to connected colleagues only)
-    const availableColleagues = useMemo(() => {
-        const pool = (contextUsers && contextUsers.length > 0) ? contextUsers : DEFAULT_COLLEAGUES;
-        return pool.filter(u => {
-            const uId = Number(u.userId || u.id);
-            if (uId === currentUserId) return false;
+    const totalUnreadCount = useMemo(() => {
+        return conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+    }, [conversations]);
 
-            // RESTRICTION: Only 1st-degree connected colleagues
-            if (isConnectionsLoaded && !connectedUserIds.has(uId)) {
-                return false;
+    // ── Deduplicated Display History for Active Conversation ──
+    const displayHistory = useMemo(() => {
+        const seenKeys = new Set();
+        const serverMessages = activeHistory.filter(m => m.messageId && !String(m.messageId).startsWith('temp_'));
+
+        return activeHistory.filter(m => {
+            // Deduplicate by messageId or id
+            const idKey = m.messageId ? `msg_${m.messageId}` : (m.id ? `id_${m.id}` : null);
+            if (idKey) {
+                if (seenKeys.has(idKey)) return false;
+                seenKeys.add(idKey);
             }
 
-            if (!colleagueSearch) return true;
-            const q = colleagueSearch.toLowerCase();
-            return (u.fullName || u.name || '').toLowerCase().includes(q) ||
-                   (u.designation || '').toLowerCase().includes(q) ||
-                   (u.department || '').toLowerCase().includes(q);
-        });
-    }, [contextUsers, currentUserId, colleagueSearch, isConnectionsLoaded, connectedUserIds]);
+            // If this is a pending temp message, but a real server message with matching text and sender/receiver already exists, filter it out
+            if (m.id && String(m.id).startsWith('temp_')) {
+                const hasMatchingServerMsg = serverMessages.some(sm => 
+                    Number(sm.senderId) === Number(m.senderId) && 
+                    Number(sm.receiverId) === Number(m.receiverId) && 
+                    (sm.text || '').trim() === (m.text || '').trim()
+                );
+                if (hasMatchingServerMsg) return false;
+            }
 
-    // Total unread count for current user
-    const totalUnreadCount = useMemo(() => {
-        return userConversations.reduce((acc, c) => acc + (c.unreadCounts?.[currentUserId] || 0), 0);
-    }, [userConversations, currentUserId]);
+            return true;
+        });
+    }, [activeHistory]);
 
     return (
         <div className="w-full flex-1 flex flex-col h-full min-h-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden animate-in fade-in duration-200">
@@ -1305,12 +1290,15 @@ export default function Messages() {
                         </div>
 
                         <button
-                            onClick={() => setIsNewChatOpen(true)}
+                            onClick={() => {
+                                setIsNewChatOpen(true);
+                                setColleagueSearch('');
+                            }}
                             className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-1 text-xs font-bold cursor-pointer"
-                            title="Start New Chat"
+                            title="Start New Message"
                         >
                             <span className="material-symbols-outlined text-[18px]">edit_square</span>
-                            <span className="hidden sm:inline">New Chat</span>
+                            <span className="hidden sm:inline">New Message</span>
                         </button>
                     </div>
 
@@ -1322,7 +1310,7 @@ export default function Messages() {
                                 type="text"
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                placeholder="Search messages or colleagues..."
+                                placeholder="Search conversations..."
                                 className="w-full bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-white outline-none focus:border-cyan-500 transition-colors"
                             />
                             {searchQuery && (
@@ -1345,7 +1333,7 @@ export default function Messages() {
                                         : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
                                 }`}
                             >
-                                All ({userConversations.length})
+                                All ({conversations.length})
                             </button>
                             <button
                                 onClick={() => setFilterTab('unread')}
@@ -1365,33 +1353,55 @@ export default function Messages() {
 
                     {/* Conversations Scroll List */}
                     <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 custom-scrollbar overscroll-contain">
-                        {filteredConversations.length > 0 ? (
+                        {isLoadingConversations ? (
+                            <div className="p-8 text-center text-slate-400 text-xs flex flex-col items-center">
+                                <span className="material-symbols-outlined animate-spin text-2xl text-cyan-600 mb-2">progress_activity</span>
+                                <span>Loading messages...</span>
+                            </div>
+                        ) : conversationsError ? (
+                            <div className="p-6 text-center text-rose-500 text-xs flex flex-col items-center">
+                                <span className="material-symbols-outlined text-2xl mb-1">error_outline</span>
+                                <p className="mb-2 font-semibold">{conversationsError}</p>
+                                <button
+                                    onClick={() => fetchConversations()}
+                                    className="px-3 py-1 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-lg text-[11px] font-bold cursor-pointer hover:bg-rose-100"
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        ) : filteredConversations.length > 0 ? (
                             filteredConversations.map(conv => {
-                                const isSelected = conv.id === activeConversation?.id;
-                                const otherP = getOtherParticipant(conv, currentUserId, contextUsers);
-                                const myUnread = conv.unreadCounts?.[currentUserId] || 0;
-                                const avatarUrl = resolveMediaUrl(otherP?.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(otherP?.fullName || 'Colleague')}&background=06b6d4&color=fff`;
+                                const isSelected = conv.partnerId === activePartnerId;
+                                const avatarUrl = resolveMediaUrl(conv.partnerAvatarUrl) || `https://ui-avatars.com/api/?name=${encodeURIComponent(conv.partnerName || 'Colleague')}&background=06b6d4&color=fff`;
+                                const isOnline = onlineUserIds.has(Number(conv.partnerId));
+                                const hasDraft = Boolean(drafts[conv.partnerId]);
 
                                 return (
                                     <div
-                                        key={conv.id}
-                                        onClick={() => handleSelectConversation(conv.id)}
+                                        key={conv.partnerId}
+                                        onClick={() => {
+                                            setActivePartnerId(conv.partnerId);
+                                            setActivePartnerDraft(null);
+                                            setShowMobileChat(true);
+                                        }}
                                         className={`p-3 flex items-center gap-3 cursor-pointer transition-all ${
                                             isSelected
                                                 ? 'bg-indigo-50/90 dark:bg-indigo-950/40 border-l-4 border-l-cyan-500'
                                                 : 'hover:bg-slate-100/70 dark:hover:bg-slate-800/40'
                                         }`}
                                     >
-                                        {/* Avatar with Status Dot */}
+                                        {/* Avatar with Status */}
                                         <div className="relative shrink-0">
                                             <img
                                                 src={avatarUrl}
-                                                alt={otherP?.fullName || 'Colleague'}
+                                                alt={conv.partnerName || 'Colleague'}
                                                 className="w-11 h-11 rounded-full object-cover border border-slate-200 dark:border-slate-700"
                                             />
-                                            <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-slate-900 ${
-                                                otherP?.status === 'active' ? 'bg-emerald-500' : (otherP?.status === 'idle' ? 'bg-amber-500' : 'bg-slate-400')
-                                            }`}></span>
+                                            {isOnline ? (
+                                                <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" title="Online" />
+                                            ) : (
+                                                <span className="absolute bottom-0 right-0 w-3 h-3 bg-slate-300 dark:bg-slate-600 border-2 border-white dark:border-slate-900 rounded-full" title="Offline" />
+                                            )}
                                         </div>
 
                                         {/* Text Info */}
@@ -1399,30 +1409,34 @@ export default function Messages() {
                                             <div className="flex items-center justify-between gap-1 mb-0.5">
                                                 <div className="flex items-center gap-1.5 min-w-0">
                                                     <h2 className="text-xs font-black text-slate-900 dark:text-white truncate">
-                                                        {otherP?.fullName}
+                                                        {conv.partnerName}
                                                     </h2>
-                                                    {isConnectionsLoaded && !connectedUserIds.has(Number(otherP?.userId || otherP?.id)) && (
-                                                        <span className="material-symbols-outlined text-amber-500 text-[13px] shrink-0" title="Not connected">lock</span>
-                                                    )}
                                                 </div>
                                                 <span className="text-[10px] font-semibold text-slate-400 shrink-0">
                                                     {conv.lastMessageTime}
                                                 </span>
                                             </div>
                                             <p className="text-[10.5px] text-slate-400 dark:text-slate-500 truncate mb-1">
-                                                {otherP?.designation} • {otherP?.department}
+                                                {conv.partnerDesignation || 'Colleague'} {conv.partnerDepartment ? `• ${conv.partnerDepartment}` : ''}
                                             </p>
                                             <div className="flex items-center justify-between gap-2">
                                                 <p className={`text-[11.5px] truncate ${
-                                                    myUnread > 0 
+                                                    conv.unreadCount > 0 
                                                         ? 'font-bold text-slate-900 dark:text-white' 
                                                         : 'text-slate-500 dark:text-slate-400'
                                                 }`}>
-                                                    {conv.lastMessage || 'No messages yet'}
+                                                    {hasDraft ? (
+                                                        <span>
+                                                            <span className="text-amber-500 dark:text-amber-400 font-bold">Draft: </span>
+                                                            <span>{drafts[conv.partnerId]}</span>
+                                                        </span>
+                                                    ) : (
+                                                        conv.lastMessage || 'No messages yet'
+                                                    )}
                                                 </p>
-                                                {myUnread > 0 && (
+                                                {conv.unreadCount > 0 && (
                                                     <span className="px-1.5 py-0.5 text-[9.5px] font-black rounded-full bg-cyan-500 text-white shrink-0">
-                                                        {myUnread}
+                                                        {conv.unreadCount}
                                                     </span>
                                                 )}
                                             </div>
@@ -1431,20 +1445,40 @@ export default function Messages() {
                                 );
                             })
                         ) : (
-                            <div className="p-8 text-center text-slate-400 text-xs">
-                                <span className="material-symbols-outlined text-3xl mb-2 text-slate-300 dark:text-slate-600 block">chat_bubble_outline</span>
-                                No conversations found.
+                            /* Empty State */
+                            <div className="p-8 text-center text-slate-400 text-xs flex flex-col items-center">
+                                <div className="w-12 h-12 rounded-2xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mb-3">
+                                    <span className="material-symbols-outlined text-[24px]">chat_bubble_outline</span>
+                                </div>
+                                <p className="font-bold text-slate-800 dark:text-slate-200 mb-1">
+                                    {searchQuery ? 'No matching conversations' : 'No conversations yet'}
+                                </p>
+                                <p className="text-[11px] text-slate-400 max-w-xs mb-4">
+                                    {searchQuery ? 'Try searching another colleague name.' : 'Start messaging colleagues on Knome.'}
+                                </p>
+                                {!searchQuery && (
+                                    <button
+                                        onClick={() => {
+                                            setIsNewChatOpen(true);
+                                            setColleagueSearch('');
+                                        }}
+                                        className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">edit_square</span>
+                                        <span>New Message</span>
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* ── RIGHT PANE: Active Chat View (Facebook Messenger Style) ── */}
-                {activeConversation && activeOtherParticipant ? (
+                {/* ── RIGHT PANE: Active Chat View ── */}
+                {activePartner ? (
                     <div className={`flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-white dark:bg-slate-900 ${
                         showMobileChat ? 'flex' : 'hidden md:flex'
                     }`}>
-                        {/* Chat Top Header: User B Profile & Status */}
+                        {/* Chat Top Header: Partner Profile & Online Status */}
                         <div className="shrink-0 p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-white dark:bg-slate-900 sticky top-0 z-20 shadow-xs">
                             <div className="flex items-center gap-3 min-w-0">
                                 {/* Mobile Back Button */}
@@ -1458,108 +1492,376 @@ export default function Messages() {
 
                                 <div className="relative shrink-0">
                                     <img
-                                        src={resolveMediaUrl(activeOtherParticipant.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeOtherParticipant.fullName)}&background=06b6d4&color=fff`}
-                                        alt={activeOtherParticipant.fullName}
+                                        src={resolveMediaUrl(activePartner.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(activePartner.fullName)}&background=06b6d4&color=fff`}
+                                        alt={activePartner.fullName}
                                         className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700"
                                     />
+                                    {isPartnerOnline ? (
+                                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
+                                    ) : (
+                                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-slate-400 border-2 border-white dark:border-slate-900 rounded-full" />
+                                    )}
                                 </div>
 
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
                                         <h2 className="text-sm font-black text-slate-900 dark:text-white truncate">
-                                            {activeOtherParticipant.fullName}
+                                            {activePartner.fullName}
                                         </h2>
-                                        {activeOtherParticipant.department && (
+                                        {activePartner.department && (
                                             <span className="hidden sm:inline px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                                                {activeOtherParticipant.department}
+                                                {activePartner.department}
                                             </span>
                                         )}
-                                        {isConnectionsLoaded && (
-                                            isTargetConnected ? (
-                                                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                                                    <span className="material-symbols-outlined text-[12px]">how_to_reg</span>
-                                                    <span>Connected</span>
-                                                </span>
-                                            ) : (
-                                                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-                                                    <span className="material-symbols-outlined text-[12px]">lock</span>
-                                                    <span>Not Connected</span>
-                                                </span>
-                                            )
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                                        <span>{activePartner.designation}</span>
+                                        <span>•</span>
+                                        {isPartnerOnline ? (
+                                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                <span>Online</span>
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 text-slate-400 font-medium">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                                                <span>Offline</span>
+                                            </span>
                                         )}
                                     </div>
                                 </div>
                             </div>
-
                         </div>
 
+                        {/* Offline / Reconnecting Network Status Alert */}
+                        {isNetworkOffline && (
+                            <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-amber-500/10 border-b border-amber-500/20 text-amber-600 dark:text-amber-400 text-[11px] font-semibold animate-in fade-in duration-150">
+                                <span className="material-symbols-outlined text-[15px]">wifi_off</span>
+                                <span>Network connection lost. Messages will automatically sync once restored.</span>
+                            </div>
+                        )}
+                        {isReconnecting && !isNetworkOffline && (
+                            <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-blue-500/10 border-b border-blue-500/20 text-blue-600 dark:text-blue-400 text-[11px] font-semibold animate-in fade-in duration-150">
+                                <span className="material-symbols-outlined text-[15px] animate-spin">sync</span>
+                                <span>Reconnecting to Knome messenger...</span>
+                            </div>
+                        )}
+
                         {/* Chat Messages Feed */}
-                        <div ref={chatFeedRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3.5 bg-slate-50/40 dark:bg-slate-950/20 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 overscroll-contain">
-                            {/* Day Separator Pill */}
+                        <div
+                            ref={chatFeedRef}
+                            onScroll={handleChatFeedScroll}
+                            className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 bg-slate-50/40 dark:bg-slate-950/20 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 overscroll-contain"
+                        >
+                            {/* Infinite Scroll Top Loader */}
+                            {isLoadingMoreHistory && (
+                                <div className="py-2 text-center text-xs text-slate-400 flex items-center justify-center gap-1.5">
+                                    <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                                    <span>Loading older messages...</span>
+                                </div>
+                            )}
+
+                            {/* Floating history refresh error bar if messages already present */}
+                            {historyError && displayHistory.length > 0 && (
+                                <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-xs mb-2">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <span className="material-symbols-outlined text-[16px] shrink-0">error_outline</span>
+                                        <span className="truncate">{historyError}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setHistoryError(null);
+                                            apiClient.clearCache();
+                                            ensureMessengerConnected(currentUserId);
+                                            fetchActiveHistory(activePartnerId || activePartner?.userId);
+                                        }}
+                                        className="px-2.5 py-1 bg-rose-600 text-white rounded-lg text-[10.5px] font-bold hover:bg-rose-700 shrink-0 cursor-pointer shadow-xs"
+                                    >
+                                        Retry
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Encryption Badge Indicator */}
                             <div className="flex items-center justify-center my-2">
-                                <span className="px-3 py-1 rounded-full bg-slate-200/70 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10.5px] font-bold shadow-xs">
-                                    Direct Messenger Conversation
+                                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10.5px] font-bold shadow-xs">
+                                    <span className="material-symbols-outlined text-[13px] text-emerald-600 dark:text-emerald-400">lock</span>
+                                    <span>Private 1-to-1 Encrypted Messaging</span>
                                 </span>
                             </div>
 
-                            {(activeConversation.messages || []).map((msg, i) => {
-                                const isMe = Number(msg.senderId) === currentUserId;
-                                const isOnlyEm = isEmojiOnly(msg.text) && (!msg.attachments || msg.attachments.length === 0);
-                                const reactions = messageReactions[msg.id] || msg.reactions || {};
-                                const hasReactions = Object.keys(reactions).length > 0;
-                                const isHovered = activeHoverMsgId === (msg.id || i);
-                                const isPickerOpenForMsg = activeReactionPickerMsgId === (msg.id || i);
-
-                                return (
-                                    <div
-                                        key={msg.id || i}
-                                        onMouseEnter={() => setActiveHoverMsgId(msg.id || i)}
-                                        onMouseLeave={() => setActiveHoverMsgId(null)}
-                                        className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'} my-1`}
+                            {isLoadingHistory ? (
+                                <div className="p-8 text-center text-slate-400 text-xs flex flex-col items-center">
+                                    <span className="material-symbols-outlined animate-spin text-2xl text-cyan-600 mb-2">progress_activity</span>
+                                    <span>Loading conversation...</span>
+                                </div>
+                            ) : historyError && displayHistory.length === 0 ? (
+                                <div className="p-6 text-center text-rose-500 text-xs flex flex-col items-center">
+                                    <span className="material-symbols-outlined text-2xl mb-1">error_outline</span>
+                                    <p className="mb-2 font-semibold">{historyError}</p>
+                                    <button
+                                        onClick={() => {
+                                            setHistoryError(null);
+                                            apiClient.clearCache();
+                                            ensureMessengerConnected(currentUserId);
+                                            fetchActiveHistory(activePartnerId || activePartner?.userId);
+                                        }}
+                                        className="px-3 py-1 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-lg text-[11px] font-bold cursor-pointer hover:bg-rose-100"
                                     >
-                                        <div className={`relative flex items-center gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                                            {/* Main message bubble or standalone emoji */}
-                                            {isOnlyEm ? (
-                                                <div className={`py-1 px-1.5 select-none transition-transform duration-200 hover:scale-110 cursor-default ${
-                                                    isMe ? 'text-right' : 'text-left'
-                                                }`}>
-                                                    <span className="emoji-font text-5xl sm:text-6xl leading-none inline-block drop-shadow-md filter">
-                                                        {msg.text}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <div
-                                                    className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 shadow-xs text-xs font-medium leading-relaxed ${
-                                                        isMe
-                                                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-xs'
-                                                            : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-700/80 rounded-bl-xs'
-                                                    }`}
-                                                >
-                                                    {/* Render Attachments if present */}
-                                                    {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
-                                                        <div className={`flex flex-col gap-2 ${msg.text ? 'mb-2' : ''}`}>
-                                                            {msg.attachments.map(att => {
-                                                                const isImg = att.isImage || (att.type && att.type.startsWith('image/')) || /\.(png|jpe?g|gif|webp|svg)$/i.test(att.name || '');
-                                                                const rawUrl = att.url || att.dataUrl || att.uploadUrl;
-                                                                const attUrl = resolveMediaUrl(rawUrl) || rawUrl;
-                                                                const fileStyle = getFileIcon(att.name, att.type);
+                                        Retry
+                                    </button>
+                                </div>
+                            ) : displayHistory.length === 0 ? (
+                                <div className="p-12 text-center text-slate-400 text-xs flex flex-col items-center justify-center">
+                                    <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-2">
+                                        <span className="material-symbols-outlined text-2xl">waving_hand</span>
+                                    </div>
+                                    <p className="font-bold text-slate-700 dark:text-slate-300 mb-0.5">Say hello to {activePartner.fullName}!</p>
+                                    <p className="text-[11px] text-slate-400">Your direct messages are private and encrypted.</p>
+                                </div>
+                            ) : (
+                                displayHistory.map((msg, i) => {
+                                    const isMe = Number(msg.senderId) === currentUserId;
+                                    const isOnlyEm = isEmojiOnly(msg.text) && (!msg.attachments || msg.attachments.length === 0);
+                                    const isEditing = editingMessageId === msg.id;
 
-                                                                if (isImg) {
+                                    return (
+                                        <div
+                                            key={msg.id || i}
+                                            id={`msg_bubble_${msg.id}`}
+                                            className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'} my-1`}
+                                        >
+                                            <div className={`relative flex items-center gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                {/* Action Bar on Hover */}
+                                                {!msg.isDeleted && !isEditing && (
+                                                    <div className={`opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 px-0.5 shrink-0 ${isMe ? 'order-first' : 'order-last'}`}>
+                                                        {/* Reply Action */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setReplyingTo({
+                                                                    id: msg.id,
+                                                                    text: msg.text,
+                                                                    senderName: isMe ? 'You' : (msg.senderName || activePartner.fullName)
+                                                                });
+                                                                chatInputRef.current?.focus();
+                                                            }}
+                                                            className="p-1 rounded-md text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                                            title="Reply"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[15px]">reply</span>
+                                                        </button>
+
+                                                        {/* React Popover Trigger */}
+                                                        <div className="relative">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setActiveReactionPickerMsgId(prev => prev === msg.id ? null : msg.id)}
+                                                                className="p-1 rounded-md text-slate-400 hover:text-amber-500 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                                                title="React"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[15px]">add_reaction</span>
+                                                            </button>
+
+                                                            {/* Mini Reaction Bar */}
+                                                            {activeReactionPickerMsgId === msg.id && (
+                                                                <div className="absolute bottom-full mb-1 z-30 flex items-center gap-1 p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-lg animate-in zoom-in-95 duration-100">
+                                                                    {MESSAGE_REACTIONS.map(em => (
+                                                                        <button
+                                                                            key={em}
+                                                                            type="button"
+                                                                            onClick={() => handleToggleReaction(msg.id, em)}
+                                                                            className="w-7 h-7 flex items-center justify-center hover:scale-130 transition-transform rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer emoji-font text-base"
+                                                                        >
+                                                                            {em}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Copy Action */}
+                                                        {msg.text && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleCopyMessage(msg.text)}
+                                                                className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                                                title="Copy text"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[15px]">content_copy</span>
+                                                            </button>
+                                                        )}
+
+                                                        {/* Edit Action (Sender only) */}
+                                                        {isMe && msg.status !== 'sending' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setEditingMessageId(msg.id);
+                                                                    setEditingContent(msg.text || '');
+                                                                }}
+                                                                className="p-1 rounded-md text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                                                title="Edit message"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[15px]">edit</span>
+                                                            </button>
+                                                        )}
+
+                                                        {/* Delete Action (Sender only) */}
+                                                        {isMe && msg.status !== 'sending' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteMessage(msg.id || msg.messageId)}
+                                                                className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                                                title="Delete message"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[15px]">delete</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Message Content Bubble */}
+                                                {msg.isDeleted ? (
+                                                    <div className="px-3 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 text-xs italic text-slate-400 dark:text-slate-500 flex items-center gap-1.5 select-none">
+                                                        <span className="material-symbols-outlined text-[15px]">block</span>
+                                                        <span>This message was deleted</span>
+                                                    </div>
+                                                ) : isEditing ? (
+                                                    /* Inline Edit Box */
+                                                    <div className="w-72 sm:w-80 p-2.5 bg-white dark:bg-slate-800 border border-cyan-500 rounded-2xl shadow-md flex flex-col gap-2">
+                                                        <textarea
+                                                            value={editingContent}
+                                                            onChange={e => setEditingContent(e.target.value)}
+                                                            rows={2}
+                                                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs text-slate-900 dark:text-white outline-none resize-none"
+                                                            autoFocus
+                                                        />
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setEditingMessageId(null)}
+                                                                className="px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleSaveEdit(msg.id)}
+                                                                className="px-3 py-1 bg-cyan-600 text-white rounded-lg text-[11px] font-bold hover:bg-cyan-700 cursor-pointer shadow-xs"
+                                                            >
+                                                                Save
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : isOnlyEm ? (
+                                                    <div className={`py-1 px-1.5 select-none transition-transform duration-200 hover:scale-110 cursor-default ${
+                                                        isMe ? 'text-right' : 'text-left'
+                                                    }`}>
+                                                        <span className="emoji-font text-5xl sm:text-6xl leading-none inline-block drop-shadow-md filter">
+                                                            {msg.text}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 shadow-xs text-xs font-medium leading-relaxed ${
+                                                            isMe
+                                                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-xs'
+                                                                : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-700/80 rounded-bl-xs'
+                                                        }`}
+                                                    >
+                                                        {/* Quoted Replying Context */}
+                                                        {msg.parentMessageId && (
+                                                            <div
+                                                                onClick={() => scrollToMessage(msg.parentMessageId)}
+                                                                className={`mb-2 p-2 rounded-xl text-[11px] border-l-2 cursor-pointer transition-opacity hover:opacity-90 ${
+                                                                    isMe
+                                                                        ? 'bg-black/15 border-white/60 text-blue-100'
+                                                                        : 'bg-slate-100 dark:bg-slate-700/60 border-indigo-500 text-slate-700 dark:text-slate-200'
+                                                                }`}
+                                                            >
+                                                                <p className="font-bold text-[10px] uppercase tracking-wider opacity-90">
+                                                                    {msg.parentSenderName || 'Colleague'}
+                                                                </p>
+                                                                <p className="truncate opacity-80 mt-0.5">
+                                                                    {msg.parentContent || 'Message'}
+                                                                </p>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Attachments */}
+                                                        {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                                                            <div className={`flex flex-col gap-2 ${msg.text ? 'mb-2' : ''}`}>
+                                                                {msg.attachments.map(att => {
+                                                                    const isImg = att.isImage || (att.type && att.type.startsWith('image/')) || /\.(png|jpe?g|gif|webp|svg)$/i.test(att.name || '');
+                                                                    const rawUrl = att.url || att.dataUrl || att.uploadUrl;
+                                                                    const attUrl = resolveMediaUrl(rawUrl) || rawUrl;
+                                                                    const fileStyle = getFileIcon(att.name, att.type);
+
+                                                                    if (isImg) {
+                                                                        return (
+                                                                            <div key={att.id || att.name} className="relative group/att rounded-xl overflow-hidden border border-white/20 dark:border-slate-700/60 max-w-xs shadow-xs">
+                                                                                <img 
+                                                                                    src={attUrl} 
+                                                                                    alt={att.name} 
+                                                                                    onClick={() => setPreviewMediaModal({ url: attUrl, name: att.name, isImage: true })}
+                                                                                    className="w-full max-h-60 object-cover cursor-pointer transition-transform hover:scale-[1.02]" 
+                                                                                    loading="lazy"
+                                                                                />
+                                                                                <div className="absolute bottom-0 inset-x-0 p-1.5 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-center justify-between text-white text-[11px] opacity-90 group-hover/att:opacity-100 transition-opacity">
+                                                                                    <span className="truncate max-w-[170px]" title={att.name}>{att.name}</span>
+                                                                                    <button 
+                                                                                        type="button"
+                                                                                        onClick={e => handleDownloadAttachment(e, att)} 
+                                                                                        className="p-1 rounded hover:bg-white/20 transition-colors flex items-center cursor-pointer"
+                                                                                        title={`Download ${att.name}`}
+                                                                                    >
+                                                                                        <span className="material-symbols-outlined text-[16px]">download</span>
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    }
+
                                                                     return (
-                                                                        <div key={att.id || att.name} className="relative group/att rounded-xl overflow-hidden border border-white/20 dark:border-slate-700/60 max-w-xs shadow-xs">
-                                                                            <img 
-                                                                                src={attUrl} 
-                                                                                alt={att.name}
-                                                                                onClick={() => setPreviewMediaModal({ url: attUrl, name: att.name, isImage: true })}
-                                                                                className="w-full max-h-60 object-cover cursor-pointer transition-transform hover:scale-[1.02]" 
-                                                                                loading="lazy"
-                                                                            />
-                                                                            <div className="absolute bottom-0 inset-x-0 p-1.5 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-center justify-between text-white text-[11px] opacity-90 group-hover/att:opacity-100 transition-opacity">
-                                                                                <span className="truncate max-w-[170px]" title={att.name}>{att.name}</span>
-                                                                                <button 
+                                                                        <div 
+                                                                            key={att.id || att.name} 
+                                                                            className={`flex items-center gap-2.5 p-2 rounded-xl border transition-all ${
+                                                                                isMe 
+                                                                                    ? 'bg-white/15 border-white/25 text-white hover:bg-white/20' 
+                                                                                    : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-850'
+                                                                            }`}
+                                                                        >
+                                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 ${fileStyle.color}`}>
+                                                                                <span className="material-symbols-outlined text-[18px]">{fileStyle.icon}</span>
+                                                                            </div>
+                                                                            <div className="flex-1 min-w-0 flex flex-col text-left">
+                                                                                <span className="text-xs font-bold truncate leading-tight" title={att.name}>
+                                                                                    {att.name}
+                                                                                </span>
+                                                                                <span className={`text-[10.5px] mt-0.5 ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
+                                                                                    {formatFileSize(att.size)}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-1 shrink-0">
+                                                                                <a
+                                                                                    href={attUrl}
+                                                                                    target="_blank"
+                                                                                    rel="noreferrer"
+                                                                                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                                                                        isMe ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-200'
+                                                                                    }`}
+                                                                                    title="View / Open document"
+                                                                                >
+                                                                                    <span className="material-symbols-outlined text-[16px]">visibility</span>
+                                                                                </a>
+                                                                                <button
                                                                                     type="button"
-                                                                                    onClick={e => handleDownloadAttachment(e, att)} 
-                                                                                    className="p-1 rounded hover:bg-white/20 transition-colors flex items-center cursor-pointer"
+                                                                                    onClick={e => handleDownloadAttachment(e, att)}
+                                                                                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                                                                        isMe ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-200'
+                                                                                    }`}
                                                                                     title={`Download ${att.name}`}
                                                                                 >
                                                                                     <span className="material-symbols-outlined text-[16px]">download</span>
@@ -1567,168 +1869,138 @@ export default function Messages() {
                                                                             </div>
                                                                         </div>
                                                                     );
-                                                                }
+                                                                })}
+                                                            </div>
+                                                        )}
 
-                                                                return (
-                                                                    <div 
-                                                                        key={att.id || att.name} 
-                                                                        className={`flex items-center gap-2.5 p-2 rounded-xl border transition-all ${
-                                                                            isMe 
-                                                                                ? 'bg-white/15 border-white/25 text-white hover:bg-white/20' 
-                                                                                : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-850'
-                                                                        }`}
-                                                                    >
-                                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 ${fileStyle.color}`}>
-                                                                            <span className="material-symbols-outlined text-[18px]">{fileStyle.icon}</span>
-                                                                        </div>
-                                                                        <div className="flex-1 min-w-0 flex flex-col text-left">
-                                                                            <span className="text-xs font-bold truncate leading-tight" title={att.name}>
-                                                                                {att.name}
+                                                        {msg.text && (
+                                                            <p className="break-words whitespace-pre-wrap emoji-font text-[13px] leading-relaxed">
+                                                                {msg.text.split(/(@[a-zA-Z0-9_\s]+?(?=\s|[.,!?]|$))/g).map((part, idx) => {
+                                                                    if (part.startsWith('@') && part.length > 1) {
+                                                                        return (
+                                                                            <span
+                                                                                key={idx}
+                                                                                className={`font-bold px-1 py-0.5 rounded ${
+                                                                                    isMe
+                                                                                        ? 'bg-black/20 text-white underline decoration-white/40'
+                                                                                        : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800'
+                                                                                }`}
+                                                                            >
+                                                                                {part}
                                                                             </span>
-                                                                            <span className={`text-[10.5px] mt-0.5 ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
-                                                                                {formatFileSize(att.size)}
-                                                                            </span>
-                                                                        </div>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={e => handleDownloadAttachment(e, att)}
-                                                                            className={`p-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
-                                                                                isMe 
-                                                                                    ? 'bg-white/20 hover:bg-white/30 text-white' 
-                                                                                    : 'bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
-                                                                            }`}
-                                                                            title={`Download ${att.name}`}
-                                                                        >
-                                                                            <span className="material-symbols-outlined text-[16px]">download</span>
-                                                                        </button>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-
-                                                    {msg.text && (
-                                                        <p className="break-words whitespace-pre-wrap emoji-font text-[13px] leading-relaxed">{msg.text}</p>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {/* Quick reaction hover button */}
-                                            <div className={`opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 ${
-                                                isPickerOpenForMsg ? '!opacity-100' : ''
-                                            }`}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveReactionPickerMsgId(prev => prev === (msg.id || i) ? null : (msg.id || i))}
-                                                    className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 flex items-center justify-center text-xs shadow-xs cursor-pointer transition-all hover:scale-110"
-                                                    title="Add reaction"
-                                                >
-                                                    <span className="material-symbols-outlined text-[15px]">add_reaction</span>
-                                                </button>
+                                                                        );
+                                                                    }
+                                                                    return part;
+                                                                })}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
 
-                                            {/* Floating mini reaction picker popover */}
-                                            {isPickerOpenForMsg && (
-                                                <div className={`absolute bottom-full mb-1.5 z-30 flex items-center gap-1 p-1 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-full shadow-xl border border-slate-200/80 dark:border-slate-700/80 animate-in fade-in zoom-in-95 duration-100 ${
-                                                    isMe ? 'right-0' : 'left-0'
-                                                }`}>
-                                                    {['👍', '❤️', '😂', '🔥', '🎉', '👏', '🚀', '🧐'].map(rEm => (
+                                            {/* Reactions Pill Display */}
+                                            {Array.isArray(msg.reactions) && msg.reactions.length > 0 && !msg.isDeleted && (
+                                                <div className={`flex flex-wrap items-center gap-1 mt-1 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                                    {msg.reactions.map(r => (
                                                         <button
-                                                            key={rEm}
+                                                            key={r.reactionType}
                                                             type="button"
-                                                            onClick={() => {
-                                                                toggleReaction(msg.id || i, rEm);
-                                                                setActiveReactionPickerMsgId(null);
-                                                            }}
-                                                            className="w-7 h-7 flex items-center justify-center text-base rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 hover:scale-130 transition-transform cursor-pointer emoji-font select-none"
-                                                            title={EMOJI_LABELS[rEm] || rEm}
+                                                            onClick={() => handleToggleReaction(msg.id, r.reactionType)}
+                                                            className={`px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+                                                                r.hasReacted
+                                                                    ? 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 shadow-2xs'
+                                                                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                                                            }`}
+                                                            title={r.hasReacted ? 'Click to remove reaction' : 'Click to react'}
                                                         >
-                                                            {rEm}
+                                                            <span className="emoji-font text-sm">{r.reactionType}</span>
+                                                            <span className="text-[11px]">{r.count}</span>
                                                         </button>
                                                     ))}
                                                 </div>
                                             )}
-                                        </div>
 
-                                        {/* Reactions Badges Pill Row */}
-                                        {hasReactions && (
-                                            <div className={`flex flex-wrap items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                                {Object.entries(reactions).map(([rEm, uIds]) => {
-                                                    const count = Array.isArray(uIds) ? uIds.length : (typeof uIds === 'number' ? uIds : 1);
-                                                    if (count <= 0) return null;
-                                                    const reactedByMe = Array.isArray(uIds) && uIds.includes(currentUserId);
-                                                    return (
-                                                        <button
-                                                            key={rEm}
-                                                            type="button"
-                                                            onClick={() => toggleReaction(msg.id || i, rEm)}
-                                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border transition-all cursor-pointer select-none ${
-                                                                reactedByMe
-                                                                    ? 'bg-cyan-50 dark:bg-cyan-950/80 border-cyan-400 dark:border-cyan-600 text-cyan-700 dark:text-cyan-300 shadow-2xs'
-                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
-                                                            }`}
-                                                        >
-                                                            <span className="emoji-font text-sm">{rEm}</span>
-                                                            <span className="text-[10px] font-black">{count}</span>
-                                                        </button>
-                                                    );
-                                                })}
+                                            {/* Status, Timestamp & Edited Badge */}
+                                            <div className="flex items-center gap-1.5 mt-0.5 px-1 text-[10px] text-slate-400 font-semibold">
+                                                <span>{msg.time}</span>
+                                                {msg.isEdited && !msg.isDeleted && (
+                                                    <span className="italic text-slate-400">Edited</span>
+                                                )}
+                                                {isMe && !msg.isDeleted && (
+                                                    msg.status === 'sending' ? (
+                                                        <span className="text-slate-400 flex items-center gap-0.5 italic">
+                                                            <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
+                                                            <span>Sending</span>
+                                                        </span>
+                                                    ) : msg.status === 'failed' ? (
+                                                        <span className="text-rose-500 font-bold flex items-center gap-1">
+                                                            <span>Failed</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => handleRetrySend(msg)}
+                                                                className="underline hover:text-rose-600 cursor-pointer"
+                                                            >
+                                                                Retry
+                                                            </button>
+                                                        </span>
+                                                    ) : msg.isRead ? (
+                                                        <span className="material-symbols-outlined text-[14px] text-cyan-500 font-bold" title="Read">
+                                                            done_all
+                                                        </span>
+                                                    ) : (
+                                                        <span className="material-symbols-outlined text-[13px] text-slate-400" title="Delivered">
+                                                            done
+                                                        </span>
+                                                    )
+                                                )}
                                             </div>
-                                        )}
-
-                                        {/* Timestamp */}
-                                        <div className="flex items-center gap-1 mt-0.5 px-1 text-[10px] text-slate-400 font-semibold">
-                                            <span>{msg.time}</span>
                                         </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })
+                            )}
 
                             <div ref={messagesEndRef} />
                         </div>
 
-                        {/* Chat Bottom Input Area OR Connection Restriction Notice */}
-                        {isConnectionsLoaded && !isTargetConnected ? (
-                            <div className="shrink-0 p-3.5 border-t border-slate-200 dark:border-slate-800 bg-amber-50/60 dark:bg-amber-950/30 backdrop-blur-sm z-20 sticky bottom-0">
-                                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-white dark:bg-slate-900 border border-amber-200/80 dark:border-amber-800/80 rounded-xl shadow-xs">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                                            <span className="material-symbols-outlined text-[20px]">lock</span>
-                                        </div>
-                                        <div className="min-w-0">
-                                            <h4 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-                                                <span>Messaging Restricted to Connections</span>
-                                                <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">Protected</span>
-                                            </h4>
-                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                                                You can only message colleagues you are connected with.
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {pendingConnectIds.has(Number(activeOtherParticipant.userId || activeOtherParticipant.id)) ? (
-                                        <div className="px-3.5 py-1.5 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 text-xs font-bold rounded-xl flex items-center gap-1.5 shrink-0">
-                                            <span className="material-symbols-outlined text-[15px]">schedule</span>
-                                            <span>Request Pending</span>
-                                        </div>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleSendConnectRequest(
-                                                Number(activeOtherParticipant.userId || activeOtherParticipant.id),
-                                                activeOtherParticipant.fullName
-                                            )}
-                                            className="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 hover:shadow-md"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">person_add</span>
-                                            <span>Connect to Message</span>
-                                        </button>
-                                    )}
-                                </div>
+                        {/* Real-time Typing Indicator Bar */}
+                        {isPartnerTyping && (
+                            <div className="px-4 py-1.5 flex items-center gap-2 text-xs text-cyan-600 dark:text-cyan-400 font-semibold bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+                                <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                                <span>{activePartner.fullName} is typing</span>
+                                <span className="flex gap-0.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-bounce"></span>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-bounce [animation-delay:0.2s]"></span>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-bounce [animation-delay:0.4s]"></span>
+                                </span>
                             </div>
-                        ) : (
-                        <form onSubmit={handleSendMessage} className="shrink-0 p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 relative z-20 sticky bottom-0">
-                            {/* Rich Floating Emoji Picker Popover */}
+                        )}
+
+                        {/* Chat Bottom Composer Form */}
+                        <form onSubmit={handleSendMessage} className="shrink-0 p-3 sm:pr-16 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 relative z-20 sticky bottom-0">
+                            
+                            {/* Replying Context Bar */}
+                            {replyingTo && (
+                                <div className="flex items-center justify-between p-2 mb-2 bg-indigo-50/90 dark:bg-indigo-950/70 border-l-4 border-indigo-500 rounded-r-xl animate-in fade-in duration-150">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                                            Replying to {replyingTo.senderName}
+                                        </p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 truncate">
+                                            {replyingTo.text || 'Attachment'}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReplyingTo(null)}
+                                        className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                                        title="Cancel reply"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">close</span>
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Floating Emoji Picker Popover */}
                             {isEmojiPickerOpen && (
                                 <div 
                                     ref={emojiPickerRef}
@@ -1743,8 +2015,8 @@ export default function Messages() {
                                                 type="text"
                                                 value={emojiSearch}
                                                 onChange={e => setEmojiSearch(e.target.value)}
-                                                placeholder="Search emojis (e.g. think, fire, rocket)..."
-                                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-7 py-1 text-xs text-slate-800 dark:text-slate-100 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 transition-all placeholder:text-slate-400"
+                                                placeholder="Search emojis..."
+                                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-7 py-1 text-xs text-slate-800 dark:text-slate-100 outline-none focus:border-cyan-500 transition-all placeholder:text-slate-400"
                                                 autoFocus
                                             />
                                             {emojiSearch && (
@@ -1779,7 +2051,10 @@ export default function Messages() {
                                                     type="button"
                                                     onMouseEnter={() => setHoveredEmoji(em)}
                                                     onMouseLeave={() => setHoveredEmoji(null)}
-                                                    onClick={() => handleSelectEmoji(em)}
+                                                    onClick={() => {
+                                                        setInputMessage(prev => prev + em);
+                                                        chatInputRef.current?.focus();
+                                                    }}
                                                     className="w-7 h-7 shrink-0 flex items-center justify-center text-lg hover:scale-130 transition-transform rounded-lg hover:bg-white dark:hover:bg-slate-700/90 cursor-pointer emoji-font select-none"
                                                     title={EMOJI_LABELS[em] || em}
                                                 >
@@ -1813,41 +2088,20 @@ export default function Messages() {
 
                                     {/* Emoji Grid */}
                                     <div className="p-2.5 overflow-y-auto grid grid-cols-7 sm:grid-cols-8 gap-1.5 max-h-[200px] scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
-                                        {displayedEmojis.length > 0 ? (
-                                            displayedEmojis.map((em, idx) => (
-                                                <button
-                                                    key={`${em}-${idx}`}
-                                                    type="button"
-                                                    onMouseEnter={() => setHoveredEmoji(em)}
-                                                    onMouseLeave={() => setHoveredEmoji(null)}
-                                                    onClick={() => handleSelectEmoji(em)}
-                                                    className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-2xl sm:text-[26px] hover:scale-130 transition-transform rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer emoji-font select-none active:scale-95"
-                                                    title={EMOJI_LABELS[em] || em}
-                                                >
-                                                    {em}
-                                                </button>
-                                            ))
-                                        ) : (
-                                            <div className="col-span-full py-6 text-center text-xs text-slate-400 font-medium">
-                                                No emojis match "{emojiSearch}"
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Bottom Live Preview & Info Bar */}
-                                    <div className="px-3 py-1.5 bg-slate-50/80 dark:bg-slate-850/60 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 min-h-[32px]">
-                                        {hoveredEmoji ? (
-                                            <>
-                                                <span className="emoji-font text-2xl leading-none">{hoveredEmoji}</span>
-                                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
-                                                    {EMOJI_LABELS[hoveredEmoji] || 'Emoji'}
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-                                                Click any emoji to insert into message
-                                            </span>
-                                        )}
+                                        {(EMOJI_CATEGORIES[emojiCategory]?.emojis || []).map((em, idx) => (
+                                            <button
+                                                key={`${em}-${idx}`}
+                                                type="button"
+                                                onClick={() => {
+                                                    setInputMessage(prev => prev + em);
+                                                    chatInputRef.current?.focus();
+                                                }}
+                                                className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-2xl sm:text-[26px] hover:scale-130 transition-transform rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer emoji-font select-none active:scale-95"
+                                                title={EMOJI_LABELS[em] || em}
+                                            >
+                                                {em}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                             )}
@@ -1895,15 +2149,46 @@ export default function Messages() {
                                 </div>
                             )}
 
+                            {/* @Mention Autocomplete Popover */}
+                            {showMentionSuggestions && activePartner && (
+                                <div className="absolute bottom-full mb-2 left-3 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg p-1.5 w-64 animate-in fade-in duration-100">
+                                    <p className="text-[10px] uppercase font-bold text-slate-400 px-2 py-0.5">Mention Colleague</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSelectMention(activePartner)}
+                                        className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-left cursor-pointer transition-colors"
+                                    >
+                                        <img
+                                            src={resolveMediaUrl(activePartner.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(activePartner.fullName)}&background=06b6d4&color=fff`}
+                                            alt={activePartner.fullName}
+                                            className="w-6 h-6 rounded-full object-cover"
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">@{activePartner.fullName}</p>
+                                            <p className="text-[10px] text-slate-400 truncate">{activePartner.designation}</p>
+                                        </div>
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Chat Input Bar */}
                             <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-1.5 focus-within:border-cyan-500 transition-colors">
-                                <input
+                                <textarea
                                     ref={chatInputRef}
-                                    type="text"
+                                    rows={1}
                                     value={inputMessage}
-                                    onChange={e => setInputMessage(e.target.value)}
+                                    onChange={handleInputChange}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleSendMessage(e);
+                                        }
+                                    }}
                                     onPaste={handlePaste}
-                                    placeholder={`Message ${activeOtherParticipant.fullName}...`}
-                                    className="flex-1 bg-transparent px-3 py-1.5 text-xs text-slate-900 dark:text-white outline-none emoji-font"
+                                    placeholder={`Message ${activePartner.fullName}... (Enter to send, Shift+Enter for new line)`}
+                                    className="flex-1 bg-transparent px-3 py-1.5 text-xs text-slate-900 dark:text-white outline-none emoji-font resize-none max-h-28 overflow-y-auto leading-relaxed custom-scrollbar"
+                                    disabled={isSending}
                                 />
 
                                 <div className="flex items-center gap-1 shrink-0">
@@ -1924,7 +2209,7 @@ export default function Messages() {
                                                 ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400'
                                                 : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700'
                                         }`}
-                                        title="Attach files (images, documents, PDFs, etc.)"
+                                        title="Attach files"
                                     >
                                         <span className="material-symbols-outlined text-[20px]">attach_file</span>
                                         {attachedFiles.length > 0 && (
@@ -1951,7 +2236,7 @@ export default function Messages() {
                                     {/* Send Button */}
                                     <button
                                         type="submit"
-                                        disabled={!inputMessage.trim() && attachedFiles.length === 0}
+                                        disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isSending}
                                         className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all disabled:opacity-40 cursor-pointer shadow-xs active:scale-95"
                                     >
                                         <span>Send</span>
@@ -1960,9 +2245,9 @@ export default function Messages() {
                                 </div>
                             </div>
                         </form>
-                        )}
                     </div>
                 ) : (
+                    /* Initial Empty State on Desktop */
                     <div className="flex-1 hidden md:flex flex-col items-center justify-center p-8 text-center bg-slate-50/30 dark:bg-slate-950/20 h-full min-h-0">
                         <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 text-cyan-600 flex items-center justify-center mb-4">
                             <span className="material-symbols-outlined text-4xl">chat</span>
@@ -1971,39 +2256,43 @@ export default function Messages() {
                             Your Messages
                         </h2>
                         <p className="text-xs text-slate-400 max-w-sm mb-6">
-                            Send direct messages, files, and notes to your MPOnline colleagues. Pick a conversation or start a new chat.
+                            Send direct private messages, documents, and notes to your Knome colleagues. Pick a conversation or start a new message.
                         </p>
                         <button
-                            onClick={() => setIsNewChatOpen(true)}
+                            onClick={() => {
+                                setIsNewChatOpen(true);
+                                setColleagueSearch('');
+                            }}
                             className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                         >
                             <span className="material-symbols-outlined text-[16px]">add_comment</span>
-                            Start a Conversation
+                            <span>Start a Conversation</span>
                         </button>
                     </div>
                 )}
             </div>
 
-            {/* ── MODAL: Start New Conversation with a Colleague ── */}
+            {/* ── MODAL: Start New Direct Message (User Candidate Search) ── */}
             {isNewChatOpen && (
                 <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                            <div>
-                                <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-cyan-600">add_comment</span>
-                                    New Conversation
-                                </h2>
-                                <p className="text-[10.5px] text-slate-400 mt-0.5">Select a connected colleague to start chatting</p>
+                    <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-cyan-600">edit_square</span>
+                                <h3 className="font-black text-sm text-slate-900 dark:text-white">New Message</h3>
                             </div>
                             <button
-                                onClick={() => setIsNewChatOpen(false)}
+                                onClick={() => {
+                                    setIsNewChatOpen(false);
+                                    setColleagueSearch('');
+                                }}
                                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                             >
-                                <span className="material-symbols-outlined text-[20px]">close</span>
+                                <span className="material-symbols-outlined">close</span>
                             </button>
                         </div>
 
+                        {/* Search Input in Modal */}
                         <div className="p-3 border-b border-slate-100 dark:border-slate-800">
                             <div className="relative">
                                 <span className="material-symbols-outlined absolute left-2.5 top-2 text-slate-400 text-[18px]">search</span>
@@ -2011,68 +2300,103 @@ export default function Messages() {
                                     type="text"
                                     value={colleagueSearch}
                                     onChange={e => setColleagueSearch(e.target.value)}
-                                    placeholder="Search colleague by name or department..."
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs outline-none focus:border-cyan-500"
+                                    placeholder="Search by name, employee ID, email, role, department..."
+                                    className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-white outline-none focus:border-cyan-500"
                                     autoFocus
                                 />
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[380px]">
-                            {availableColleagues.length > 0 ? (
-                                availableColleagues.map(user => {
-                                    const uName = user.fullName || user.name || 'Colleague';
-                                    const uId = Number(user.userId || user.id);
-                                    const avatarUrl = resolveMediaUrl(user.profilePhotoUrl || user.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(uName)}&background=06b6d4&color=fff`;
+                        {/* Candidates List */}
+                        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 p-2 custom-scrollbar">
+                            {isSearchingUsers ? (
+                                <div className="p-8 text-center text-slate-400 text-xs flex flex-col items-center">
+                                    <span className="material-symbols-outlined animate-spin text-2xl text-cyan-600 mb-2">progress_activity</span>
+                                    <span>Searching Knome colleagues...</span>
+                                </div>
+                            ) : searchedUsers.length > 0 ? (
+                                searchedUsers.map(colleague => {
+                                    const cId = Number(colleague.userId);
+                                    const avatarUrl = resolveMediaUrl(colleague.avatarUrl) || `https://ui-avatars.com/api/?name=${encodeURIComponent(colleague.fullName || 'Colleague')}&background=06b6d4&color=fff`;
+                                    const isOnline = onlineUserIds.has(cId);
 
                                     return (
                                         <div
-                                            key={uId}
-                                            onClick={() => openConversationWithUser(user)}
-                                            className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors"
+                                            key={cId}
+                                            onClick={() => {
+                                                const draft = {
+                                                    userId: cId,
+                                                    id: cId,
+                                                    fullName: colleague.fullName,
+                                                    employeeId: colleague.employeeId,
+                                                    designation: colleague.designation || 'Colleague',
+                                                    department: colleague.department || 'MPOnline',
+                                                    avatar: colleague.avatarUrl,
+                                                    isConnected: colleague.isConnected
+                                                };
+                                                setActivePartnerDraft(draft);
+                                                setActivePartnerId(cId);
+                                                setShowMobileChat(true);
+                                                setIsNewChatOpen(false);
+                                                setColleagueSearch('');
+                                            }}
+                                            className="p-2.5 flex items-center gap-3 rounded-xl hover:bg-slate-100/70 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
                                         >
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <img src={avatarUrl} alt={uName} className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0" />
-                                                <div className="min-w-0">
-                                                    <h3 className="text-xs font-bold text-slate-900 dark:text-white truncate">{uName}</h3>
-                                                    <p className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
-                                                        {user.designation || 'Staff'} • {user.department || user.departmentName || 'MPOnline'}
-                                                    </p>
-                                                </div>
+                                            <div className="relative shrink-0">
+                                                <img
+                                                    src={avatarUrl}
+                                                    alt={colleague.fullName}
+                                                    className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                                                />
+                                                {isOnline ? (
+                                                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
+                                                ) : (
+                                                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-slate-300 dark:bg-slate-600 border-2 border-white dark:border-slate-900 rounded-full" />
+                                                )}
                                             </div>
-                                            <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[18px]">chat</span>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-1.5">
+                                                    <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                                        {colleague.fullName}
+                                                    </h4>
+                                                    {colleague.employeeId && (
+                                                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono">
+                                                            {colleague.employeeId}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-[10.5px] text-slate-400 truncate">
+                                                    {colleague.designation || 'Colleague'} {colleague.department ? `• ${colleague.department}` : ''}
+                                                </p>
+                                                {colleague.email && (
+                                                    <p className="text-[10px] text-slate-400 truncate">
+                                                        {colleague.email}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <span className="material-symbols-outlined text-[16px] text-slate-400">arrow_forward_ios</span>
                                         </div>
                                     );
                                 })
                             ) : (
-                                <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-xs">
-                                    <div className="w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center mb-3">
-                                        <span className="material-symbols-outlined text-[24px]">group_off</span>
+                                <div className="p-8 text-center text-slate-400 text-xs">
+                                    <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center mb-3">
+                                        <span className="material-symbols-outlined text-[24px]">person_search</span>
                                     </div>
                                     <p className="font-bold text-slate-800 dark:text-slate-200 mb-1">
-                                        {colleagueSearch ? `No connected colleagues matching "${colleagueSearch}"` : 'No Connected Colleagues Found'}
+                                        {colleagueSearch ? `No colleagues found matching "${colleagueSearch}"` : 'Search for a Colleague'}
                                     </p>
-                                    <p className="text-[11px] text-slate-400 max-w-xs mx-auto mb-4">
-                                        Messaging is restricted to 1st-degree connected colleagues only. Connect with colleagues in the Network directory to start chatting.
+                                    <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                                        Type a name, employee ID, role, or department to find anyone at Knome.
                                     </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setIsNewChatOpen(false);
-                                            navigate('/network');
-                                        }}
-                                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all inline-flex items-center gap-1.5 cursor-pointer active:scale-95"
-                                    >
-                                        <span className="material-symbols-outlined text-[15px]">person_add</span>
-                                        <span>Find Colleagues in Network</span>
-                                    </button>
                                 </div>
                             )}
                         </div>
                     </div>
                 </div>
             )}
-            {/* Full-screen Media Preview Lightbox Modal */}
+
+            {/* ── Full-screen Media Preview Lightbox Modal ── */}
             {previewMediaModal && (
                 <div 
                     className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
@@ -2088,8 +2412,9 @@ export default function Messages() {
                             >
                                 <span className="material-symbols-outlined text-[20px]">download</span>
                             </button>
-                            <button
-                                onClick={() => setPreviewMediaModal(null)}
+                            <button 
+                                type="button"
+                                onClick={() => setPreviewMediaModal(null)} 
                                 className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors cursor-pointer"
                                 title="Close"
                             >

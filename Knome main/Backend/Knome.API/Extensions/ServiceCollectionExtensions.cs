@@ -540,6 +540,11 @@ public static class ServiceCollectionExtensions
         // Abbreviations Module
         services.AddScoped<IAbbreviationRepository, AbbreviationRepository>();
         services.AddScoped<IAbbreviationService, AbbreviationService>();
+
+        // Encrypted 1-to-1 Messaging Module
+        services.AddSingleton<IMessageEncryptionService, MessageEncryptionService>();
+        services.AddScoped<IUserMessageRepository, UserMessageRepository>();
+        services.AddScoped<IUserMessageService, UserMessageService>();
     }
 
     private static void AddSwagger(IServiceCollection services)

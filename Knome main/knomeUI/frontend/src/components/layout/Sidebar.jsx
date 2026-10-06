@@ -102,7 +102,6 @@ export default function Sidebar() {
 
     const navItems = [
         { to: '/',                 icon: 'home',         label: 'Home',          color: '#6366f1' },
-        { to: '/messages',         icon: 'chat',         label: 'Messages',      color: '#06b6d4', matchPaths: ['/messages', '/chat'], badge: unreadMessages },
         { to: '/community',        icon: 'group',        label: 'Communities',   color: '#0ea5e9', matchPaths: ['/community', '/communities'] },
         { to: '/suggested-people', icon: 'person_add',   label: 'People',        color: '#10b981', matchPaths: ['/suggested-people', '/network'] },
         { to: '/saved-content',    icon: 'bookmark',     label: 'Saved',         color: '#f59e0b' },
@@ -227,19 +226,7 @@ export default function Sidebar() {
                 })}
             </nav>
 
-            {/* Create Post CTA */}
-            {currentUser?.role !== 'SYSADM' && (
-                <button
-                    onClick={() => {
-                        if (isMobile) setIsMobileOpen(false);
-                        openPostModal();
-                    }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-extrabold text-[13.5px] text-white tracking-wide transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/25 active:translate-y-0 active:scale-[0.99] cursor-pointer group bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 border border-white/10"
-                >
-                    <span className="material-symbols-outlined text-[19px] transition-transform group-hover:rotate-90 duration-300" style={{fontVariationSettings:"'FILL' 1"}}>add_circle</span>
-                    <span>Create Post</span>
-                </button>
-            )}
+
 
             {/* Quick Links */}
             <div className="rounded-2xl p-2.5 bg-theme-60-surface border border-theme-30 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] flex flex-col gap-1">
