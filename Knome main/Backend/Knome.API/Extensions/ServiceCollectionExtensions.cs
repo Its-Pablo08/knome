@@ -544,6 +544,11 @@ public static class ServiceCollectionExtensions
         // Wiki Module
         services.AddScoped<IWikiRepository, WikiRepository>();
         services.AddScoped<IWikiService, WikiService>();
+
+        // Encrypted 1-to-1 Messaging Module
+        services.AddSingleton<IMessageEncryptionService, MessageEncryptionService>();
+        services.AddScoped<IUserMessageRepository, UserMessageRepository>();
+        services.AddScoped<IUserMessageService, UserMessageService>();
     }
 
     private static void AddSwagger(IServiceCollection services)

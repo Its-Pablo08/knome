@@ -4,6 +4,7 @@
  * Replaces all scattered mock utilities.
  */
 import { apiClient, getApiBaseUrl } from './apiClient';
+export { apiClient, getApiBaseUrl };
 
 // ─────────────────────────────────────────────
 //  AUTH
@@ -1578,5 +1579,45 @@ export const resolveSharedTarget = (post) => {
 
 export { wikiApi } from './wikiService';
 
+// ─────────────────────────────────────────────
+//  MESSAGES (Encrypted Real Data API)
+// ─────────────────────────────────────────────
+export const messagesApi = {
+    /** GET /api/Messages/users?query= */
+    searchUsers: (query = '') =>
+        apiClient.get(`/Messages/users?query=${encodeURIComponent(query || '')}`),
 
+    /** GET /api/Messages/conversations */
+    getConversations: () => apiClient.get('/Messages/conversations', { noCache: true }),
+
+    /** GET /api/Messages/history/{otherUserId} */
+    getHistory: (otherUserId, pageNumber = 1, pageSize = 50) =>
+        apiClient.get(`/Messages/history/${otherUserId}?pageNumber=${pageNumber}&pageSize=${pageSize}`, { noCache: true }),
+
+    /** POST /api/Messages/send */
+    send: (receiverId, content, attachmentsJson = null, parentMessageId = null) =>
+        apiClient.post('/Messages/send', {
+            receiverId: Number(receiverId),
+            content: content ?? '',
+            attachmentsJson: attachmentsJson ? (typeof attachmentsJson === 'string' ? attachmentsJson : JSON.stringify(attachmentsJson)) : null,
+            parentMessageId: parentMessageId ? Number(parentMessageId) : null
+        }),
+
+    /** PUT /api/Messages/{messageId} */
+    editMessage: (messageId, content) =>
+        apiClient.put(`/Messages/${messageId}`, { content }),
+
+    /** POST /api/Messages/{messageId}/reactions */
+    toggleReaction: (messageId, reactionType) =>
+        apiClient.post(`/Messages/${messageId}/reactions`, { reactionType }),
+
+    /** POST /api/Messages/read/{otherUserId} */
+    markAsRead: (otherUserId) => apiClient.post(`/Messages/read/${otherUserId}`),
+
+    /** DELETE /api/Messages/{messageId} */
+    deleteMessage: (messageId) => apiClient.delete(`/Messages/${messageId}`),
+
+    /** GET /api/Messages/online-users */
+    getOnlineUsers: () => apiClient.get('/Messages/online-users')
+};
 

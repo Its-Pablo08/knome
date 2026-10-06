@@ -4,6 +4,7 @@ import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 import PageLoader from './PageLoader';
 import Footer from './Footer';
+import FloatingMessagesButton from '../widgets/FloatingMessagesButton';
 
 export default function Layout({ children }) {
     const location = useLocation();
@@ -39,6 +40,7 @@ export default function Layout({ children }) {
                 </div>
             </div>
 
+            <FloatingMessagesButton />
             {!isMessagesPage && <Footer />}
         </div>
     );

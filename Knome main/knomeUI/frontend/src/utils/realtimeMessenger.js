@@ -1,5 +1,5 @@
 import * as signalR from '@microsoft/signalr';
-import { notificationsApi } from './apiService';
+import { notificationsApi, messagesApi } from './apiService';
 import { getHubUrl } from './apiClient';
 
 // Storage key for master messenger conversations
@@ -81,6 +81,11 @@ export const appendMessageToGlobalStorage = (payload, currentUserId = null) => {
         const isSelf = currId && Number(senderId) === currId;
         const isLookingAtChat = typeof window !== 'undefined' && window.__knome_active_chat_user_id === Number(senderId);
 
+        const displaySummary = message.text || 
+            (Array.isArray(message.attachments) && message.attachments.length > 0 
+                ? (message.attachments.length === 1 ? `📎 ${message.attachments[0].name}` : `📎 ${message.attachments.length} Attachments`) 
+                : 'Attachment');
+
         let found = false;
         const updated = list.map(c => {
             const pIds = (c.participantIds || []).map(Number);
@@ -88,15 +93,26 @@ export const appendMessageToGlobalStorage = (payload, currentUserId = null) => {
             if (matches) {
                 found = true;
                 const existingMsgs = c.messages || [];
-                const isDuplicate = existingMsgs.some(m => String(m.id) === String(message.id) || (m.timestamp === message.timestamp && m.text === message.text));
-                const nextMsgs = isDuplicate ? existingMsgs : [...existingMsgs, message];
+                const existingIdx = existingMsgs.findIndex(m => String(m.id) === String(message.id));
+                let nextMsgs;
+                if (existingIdx !== -1) {
+                    if ((!existingMsgs[existingIdx].attachments || existingMsgs[existingIdx].attachments.length === 0) && (message.attachments && message.attachments.length > 0)) {
+                        nextMsgs = [...existingMsgs];
+                        nextMsgs[existingIdx] = { ...existingMsgs[existingIdx], ...message };
+                    } else {
+                        nextMsgs = existingMsgs;
+                    }
+                } else {
+                    const isDuplicate = existingMsgs.some(m => m.timestamp === message.timestamp && m.text === message.text && (m.attachments?.length || 0) === (message.attachments?.length || 0));
+                    nextMsgs = isDuplicate ? existingMsgs : [...existingMsgs, message];
+                }
                 
                 const unreadInc = (currId && !isSelf && !isLookingAtChat) ? 1 : 0;
                 const currentUnread = c.unreadCounts?.[currId] || 0;
 
                 return {
                     ...c,
-                    lastMessage: message.text,
+                    lastMessage: displaySummary || c.lastMessage || 'Attachment',
                     lastMessageTime: message.time,
                     lastMessageTimestamp: message.timestamp || Date.now(),
                     unreadCounts: {
@@ -121,7 +137,7 @@ export const appendMessageToGlobalStorage = (payload, currentUserId = null) => {
                 unreadCounts: {
                     ...(currId ? { [currId]: (!isSelf && !isLookingAtChat) ? 1 : 0 } : {})
                 },
-                lastMessage: message.text,
+                lastMessage: displaySummary || 'Attachment',
                 lastMessageTime: message.time,
                 lastMessageTimestamp: message.timestamp || Date.now(),
                 messages: [message]
@@ -181,21 +197,33 @@ const deliverMessageToListeners = (payload, currentUserId) => {
         try { fn(payload); } catch (e) { console.error('[RealtimeMessenger] Subscriber error:', e); }
     });
 };
+let activeRegisteredUserId = null;
+let watchdogReconnectTimer = null;
+let reconnectAttemptCount = 0;
 
 /**
  * Initializes or returns active SignalR connection for the current user
  */
-export const initMessengerSignalR = (userId) => {
+export const initMessengerSignalR = (userId, forceReconnect = false) => {
     if (typeof window === 'undefined') return Promise.resolve(null);
     const uId = Number(userId);
     if (!uId) return Promise.resolve(null);
 
-    if (messengerHubConnection && messengerHubConnection.state === signalR.HubConnectionState.Connected) {
+    activeRegisteredUserId = uId;
+
+    if (!forceReconnect && messengerHubConnection && messengerHubConnection.state === signalR.HubConnectionState.Connected) {
         messengerHubConnection.invoke("JoinUserGroup", uId).catch(() => {});
         return Promise.resolve(messengerHubConnection);
     }
 
-    if (connectionPromise) return connectionPromise;
+    if (connectionPromise && !forceReconnect) return connectionPromise;
+
+    if (forceReconnect && messengerHubConnection) {
+        try {
+            messengerHubConnection.stop().catch(() => {});
+        } catch {}
+        messengerHubConnection = null;
+    }
 
     const hubUrl = getHubUrl ? getHubUrl() : `http://${window.location.hostname}:5096/hubs/notifications`;
 
@@ -205,17 +233,79 @@ export const initMessengerSignalR = (userId) => {
             transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling
         })
         .configureLogging(signalR.LogLevel.None)
-        .withAutomaticReconnect([0, 1000, 3000, 5000, 10000, 30000])
+        .withAutomaticReconnect({
+            nextRetryDelayInMilliseconds: retryContext => {
+                // Exponential backoff: 0s, 1s, 2s, 4s, 8s, up to 15s max
+                return Math.min(1000 * Math.pow(1.8, retryContext.previousRetryCount), 15000);
+            }
+        })
         .build();
 
     // 1. Direct message handler
     conn.on("ReceiveDirectMessage", (data) => {
         try {
             const payload = typeof data === 'string' ? JSON.parse(data) : data;
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('knome_receive_direct_message', { detail: payload }));
+            }
             deliverMessageToListeners(payload, uId);
         } catch (e) {
             console.error('[RealtimeMessenger] Parse error for ReceiveDirectMessage:', e);
         }
+    });
+
+    conn.on("MessageEdited", (data) => {
+        try {
+            const payload = typeof data === 'string' ? JSON.parse(data) : data;
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('knome_message_edited', { detail: payload }));
+            }
+        } catch (e) {}
+    });
+
+    conn.on("MessageDeleted", (data) => {
+        try {
+            const payload = typeof data === 'string' ? JSON.parse(data) : data;
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('knome_message_deleted', { detail: payload }));
+            }
+        } catch (e) {}
+    });
+
+    conn.on("MessageReactionUpdated", (data) => {
+        try {
+            const payload = typeof data === 'string' ? JSON.parse(data) : data;
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('knome_message_reaction_updated', { detail: payload }));
+            }
+        } catch (e) {}
+    });
+
+    conn.on("UserTyping", (data) => {
+        try {
+            const payload = typeof data === 'string' ? JSON.parse(data) : data;
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('knome_user_typing', { detail: payload }));
+            }
+        } catch (e) {}
+    });
+
+    conn.on("MessagesRead", (data) => {
+        try {
+            const payload = typeof data === 'string' ? JSON.parse(data) : data;
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('knome_messages_read', { detail: payload }));
+            }
+        } catch (e) {}
+    });
+
+    conn.on("UserPresenceChanged", (data) => {
+        try {
+            const payload = typeof data === 'string' ? JSON.parse(data) : data;
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('knome_user_presence_changed', { detail: payload }));
+            }
+        } catch (e) {}
     });
 
     // 2. Notification fallback handler (for messages pushed as notifications)
@@ -230,6 +320,15 @@ export const initMessengerSignalR = (userId) => {
 
             // Strip "SenderName: " prefix if present in the raw text
             let rawText = notif.message || notif.text || '';
+            let parsedAttachments = [];
+            const attTagIdx = rawText.indexOf(' __ATT__:');
+            if (attTagIdx !== -1) {
+                try {
+                    parsedAttachments = JSON.parse(rawText.substring(attTagIdx + 9));
+                } catch (e) {}
+                rawText = rawText.substring(0, attTagIdx);
+            }
+
             const colonIdx = rawText.indexOf(': "');
             if (colonIdx !== -1 && rawText.endsWith('"')) {
                 rawText = rawText.substring(colonIdx + 3, rawText.length - 1);
@@ -250,6 +349,7 @@ export const initMessengerSignalR = (userId) => {
                     senderId,
                     senderName: notif.senderName || 'Colleague',
                     text: rawText,
+                    attachments: parsedAttachments,
                     time: new Date(notif.createdDate || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     timestamp: new Date(notif.createdDate || Date.now()).getTime()
                 }
@@ -261,16 +361,47 @@ export const initMessengerSignalR = (userId) => {
         }
     });
 
-    conn.onreconnected(() => {
+    conn.onreconnecting((error) => {
+        console.warn('[RealtimeMessenger] SignalR connection dropped. Reconnecting...', error);
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('knome_messenger_reconnecting', { detail: { error, userId: uId } }));
+        }
+    });
+
+    conn.onreconnected((connectionId) => {
+        console.log('[RealtimeMessenger] SignalR connection restored! Re-joining user group for user:', uId);
+        reconnectAttemptCount = 0;
         conn.invoke("JoinUserGroup", uId).catch(() => {});
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('knome_messenger_reconnected', { detail: { connectionId, userId: uId } }));
+        }
+    });
+
+    conn.onclose((error) => {
+        console.warn('[RealtimeMessenger] SignalR connection closed completely:', error);
+        messengerHubConnection = null;
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('knome_messenger_disconnected', { detail: { error, userId: uId } }));
+        }
+        // If closed while browser is online, schedule automatic watchdog reconnection
+        if (activeRegisteredUserId && typeof navigator !== 'undefined' && navigator.onLine) {
+            scheduleWatchdogReconnect(activeRegisteredUserId);
+        }
     });
 
     connectionPromise = conn.start().then(() => {
         messengerHubConnection = conn;
+        reconnectAttemptCount = 0;
         conn.invoke("JoinUserGroup", uId).catch(() => {});
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('knome_messenger_reconnected', { detail: { userId: uId } }));
+        }
         return conn;
     }).catch(err => {
         console.warn('[RealtimeMessenger] SignalR start warning (fallback to broadcast/polling):', err);
+        if (activeRegisteredUserId && typeof navigator !== 'undefined' && navigator.onLine) {
+            scheduleWatchdogReconnect(activeRegisteredUserId);
+        }
         return null;
     }).finally(() => {
         connectionPromise = null;
@@ -280,11 +411,60 @@ export const initMessengerSignalR = (userId) => {
 };
 
 /**
+ * Watchdog timer that persistently attempts to re-establish SignalR connection if disconnected
+ */
+function scheduleWatchdogReconnect(userId) {
+    if (watchdogReconnectTimer) clearTimeout(watchdogReconnectTimer);
+    const delay = Math.min(2000 * Math.pow(1.5, reconnectAttemptCount), 15000);
+    reconnectAttemptCount++;
+
+    watchdogReconnectTimer = setTimeout(() => {
+        if (!activeRegisteredUserId) return;
+        if (!messengerHubConnection || messengerHubConnection.state === signalR.HubConnectionState.Disconnected) {
+            console.log(`[RealtimeMessenger] Watchdog attempting SignalR reconnect (attempt ${reconnectAttemptCount})...`);
+            initMessengerSignalR(userId);
+        }
+    }, delay);
+}
+
+/**
+ * Ensures SignalR is connected and actively joined to the user group
+ */
+export const ensureMessengerConnected = (userId) => {
+    const uId = Number(userId || activeRegisteredUserId);
+    if (!uId) return Promise.resolve(null);
+    if (messengerHubConnection && messengerHubConnection.state === signalR.HubConnectionState.Connected) {
+        messengerHubConnection.invoke("JoinUserGroup", uId).catch(() => {});
+        return Promise.resolve(messengerHubConnection);
+    }
+    return initMessengerSignalR(uId, true);
+};
+
+// Global Browser Online / Offline Watchdogs
+if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => {
+        console.log('[RealtimeMessenger] Browser went ONLINE. Resuming realtime messaging and SignalR connection...');
+        reconnectAttemptCount = 0;
+        if (activeRegisteredUserId) {
+            initMessengerSignalR(activeRegisteredUserId, true);
+        }
+        window.dispatchEvent(new CustomEvent('knome_network_restored', { detail: { timestamp: Date.now() } }));
+    });
+
+    window.addEventListener('offline', () => {
+        console.warn('[RealtimeMessenger] Browser went OFFLINE. Network lost.');
+        window.dispatchEvent(new CustomEvent('knome_network_lost', { detail: { timestamp: Date.now() } }));
+    });
+}
+
+/**
  * Broadcasts a live message to all open tabs/windows, backend SignalR, and local storage
  */
 export const sendLiveMessage = async ({ sender, recipient, conversationId, message }) => {
     const senderId = Number(sender.userId || sender.id);
     const recipientId = Number(recipient.userId || recipient.id);
+
+    const attachmentsList = Array.isArray(message.attachments) ? message.attachments : [];
 
     const payload = {
         type: 'NEW_LIVE_MESSAGE',
@@ -311,7 +491,8 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
             id: message.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
             senderId,
             senderName: sender.fullName || sender.name || 'Colleague',
-            text: message.text,
+            text: message.text || '',
+            attachments: attachmentsList,
             time: message.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             timestamp: message.timestamp || Date.now()
         }
@@ -364,9 +545,24 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
     try {
         const createFn = notificationsApi.createNotification || notificationsApi.create;
         if (createFn) {
+            let notificationBody = `${sender.fullName || sender.name || 'Colleague'}: "${message.text || ''}"`;
+            if (attachmentsList.length > 0) {
+                if (!message.text) {
+                    notificationBody = `${sender.fullName || sender.name || 'Colleague'}: "📎 ${attachmentsList[0]?.name || 'Sent an attachment'}"`;
+                }
+                const compactAtts = attachmentsList.map(a => ({
+                    id: a.id,
+                    name: a.name,
+                    size: a.size,
+                    type: a.type,
+                    isImage: Boolean(a.isImage),
+                    url: a.url || a.uploadUrl || a.dataUrl
+                }));
+                notificationBody += ` __ATT__:${JSON.stringify(compactAtts)}`;
+            }
             createFn({
                 recipientUserId: recipientId,
-                message: `${sender.fullName || sender.name || 'Colleague'}: "${message.text}"`,
+                message: notificationBody,
                 notificationType: 'Message',
                 referenceId: senderId,
                 relatedContentType: 'User'
@@ -443,3 +639,33 @@ export const subscribeToLiveMessages = (currentUserId, onMessageReceived) => {
         }
     };
 };
+
+/**
+ * Sends a real-time typing indicator to the recipient
+ */
+export const sendTypingIndicator = (recipientId, isTyping) => {
+    if (messengerHubConnection && messengerHubConnection.state === signalR.HubConnectionState.Connected) {
+        messengerHubConnection.invoke("SendTyping", Number(recipientId), Boolean(isTyping)).catch(() => {});
+    }
+};
+
+/**
+ * Fetches the active list of currently online user IDs from SignalR
+ */
+export const fetchOnlineUserIds = async () => {
+    if (messengerHubConnection && messengerHubConnection.state === signalR.HubConnectionState.Connected) {
+        try {
+            const list = await messengerHubConnection.invoke("GetOnlineUsers");
+            if (Array.isArray(list) && list.length > 0) return list;
+        } catch (e) {
+            // fallback to REST API
+        }
+    }
+    try {
+        const res = await messagesApi.getOnlineUsers();
+        return res?.data || (Array.isArray(res) ? res : []);
+    } catch (e) {
+        return [];
+    }
+};
+
