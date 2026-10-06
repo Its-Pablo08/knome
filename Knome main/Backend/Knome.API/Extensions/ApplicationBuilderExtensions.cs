@@ -110,16 +110,17 @@ public static class ApplicationBuilderExtensions
         // Map SignalR Hubs
         app.MapHub<NotificationHub>("/hubs/notifications");
 
-        // Initialize Wiki Tables if missing
+        // Initialize Database Tables if missing (Wiki and UserMessages)
         try
         {
             using var scope = app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<Knome.API.Data.KnomeDbContext>();
             Knome.API.Data.WikiDbInitializer.EnsureWikiTablesExistAsync(db).GetAwaiter().GetResult();
+            Knome.API.Data.UserMessageDbInitializer.EnsureUserMessageTablesExistAsync(db).GetAwaiter().GetResult();
         }
         catch (System.Exception ex)
         {
-            Serilog.Log.Error(ex, "Failed to initialize Wiki tables during startup.");
+            Serilog.Log.Error(ex, "Failed to initialize database tables during startup.");
         }
 
         return app;

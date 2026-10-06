@@ -8,7 +8,7 @@ public partial class KnomeDbContext
     public virtual DbSet<UserMessage> UserMessages { get; set; }
     public virtual DbSet<UserMessageReaction> UserMessageReactions { get; set; }
 
-    partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
+    public static void ConfigureUserMessageEntities(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<UserMessage>(entity =>
         {

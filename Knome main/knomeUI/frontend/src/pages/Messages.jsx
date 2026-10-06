@@ -490,6 +490,9 @@ export default function Messages() {
             const res = await messagesApi.getConversations();
             const list = res?.data || (Array.isArray(res) ? res : []);
             setConversations(list);
+            try {
+                localStorage.setItem(`knome_cached_conversations_${currentUserId}`, JSON.stringify(list));
+            } catch (_) {}
 
             const totalUnread = list.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
             localStorage.setItem(`knome_unread_messages_count_${currentUserId}`, String(totalUnread));
@@ -500,9 +503,20 @@ export default function Messages() {
                 setActivePartnerId(list[0].partnerId);
             }
         } catch (err) {
-            console.error('[Messages] Failed to load conversations from API:', err);
-            if (!isSilent) {
-                setConversationsError('Failed to load conversations from server.');
+            console.warn('[Messages] Notice: Server conversations temporarily unavailable:', err);
+            try {
+                const cached = JSON.parse(localStorage.getItem(`knome_cached_conversations_${currentUserId}`) || '[]');
+                if (cached.length > 0) {
+                    setConversations(cached);
+                    setConversationsError(null);
+                } else {
+                    setConversations([]);
+                    // Do not show fatal error block; let user start new conversation
+                    setConversationsError(null);
+                }
+            } catch (_) {
+                setConversations([]);
+                setConversationsError(null);
             }
         } finally {
             if (!isSilent) {

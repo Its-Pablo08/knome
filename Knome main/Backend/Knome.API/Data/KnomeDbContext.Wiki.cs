@@ -14,6 +14,12 @@ public partial class KnomeDbContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
     {
+        ConfigureUserMessageEntities(modelBuilder);
+        ConfigureWikiEntities(modelBuilder);
+    }
+
+    private static void ConfigureWikiEntities(ModelBuilder modelBuilder)
+    {
         modelBuilder.Entity<Wiki>(entity =>
         {
             entity.HasKey(e => e.WikiId);

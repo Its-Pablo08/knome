@@ -303,9 +303,8 @@ export default function WikiShareModal({
             } catch (_) {}
 
             addToast(`Wiki successfully shared to ${targetCommunity?.name || 'Community'}!`, 'success');
-            await loadShares();
             onSharesUpdated && onSharesUpdated();
-            setShareTab('menu');
+            onClose && onClose();
         } catch (err) {
             console.error('Error sharing wiki to community:', err);
             addToast(err?.response?.data?.message || err?.message || 'Failed to share Wiki to community.', 'error');
@@ -394,9 +393,8 @@ export default function WikiShareModal({
             addToast(`Wiki shared with ${selectedUsers.length} colleague(s)!`, 'success');
             setSelectedUsers([]);
             setUserSearchQuery('');
-            await loadShares();
             onSharesUpdated && onSharesUpdated();
-            setShareTab('menu');
+            onClose && onClose();
         } catch (err) {
             console.error('Error sharing wiki with users:', err);
             addToast(err?.response?.data?.message || err?.message || 'Failed to share Wiki with users.', 'error');
@@ -428,9 +426,8 @@ export default function WikiShareModal({
             }
 
             addToast(`Wiki shared with ${targetDept?.name || 'Department'} Sphere!`, 'success');
-            await loadShares();
             onSharesUpdated && onSharesUpdated();
-            setShareTab('menu');
+            onClose && onClose();
         } catch (err) {
             console.error('Error sharing wiki with department:', err);
             addToast(err?.response?.data?.message || err?.message || 'Failed to share Wiki with department.', 'error');
