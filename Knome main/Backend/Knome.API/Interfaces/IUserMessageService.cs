@@ -14,7 +14,7 @@ public interface IUserMessageService
 
     Task<UserMessageDto> EditMessageAsync(long messageId, int currentUserId, string newContent);
 
-    Task<bool> DeleteMessageAsync(long messageId, int currentUserId);
+    Task<bool> DeleteMessageAsync(long messageId, int currentUserId, bool deleteForEveryone = false);
 
     Task<List<MessageReactionDto>> ToggleReactionAsync(long messageId, int currentUserId, string reactionType);
 

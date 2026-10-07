@@ -1634,7 +1634,8 @@ export const messagesApi = {
     markAsRead: (otherUserId) => apiClient.post(`/Messages/read/${otherUserId}`),
 
     /** DELETE /api/Messages/{messageId} */
-    deleteMessage: (messageId) => apiClient.delete(`/Messages/${messageId}`),
+    deleteMessage: (messageId, deleteForEveryone = false) =>
+        apiClient.delete(`/Messages/${messageId}?deleteForEveryone=${Boolean(deleteForEveryone)}`),
 
     /** GET /api/Messages/online-users */
     getOnlineUsers: () => apiClient.get('/Messages/online-users')

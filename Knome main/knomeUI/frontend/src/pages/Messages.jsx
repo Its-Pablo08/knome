@@ -5,6 +5,7 @@ import { useToast } from '../components/contexts/ToastContext';
 import { resolveMediaUrl, userApi, messagesApi, mediaApi } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
 import { useSystemConfig } from '../utils/systemConfig';
+import DeleteMessageModal from '../components/modals/DeleteMessageModal';
 import {
     initMessengerSignalR,
     sendTypingIndicator,
@@ -195,6 +196,7 @@ export default function Messages() {
     const [replyingTo, setReplyingTo] = useState(null);
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editingContent, setEditingContent] = useState('');
+    const [messageToDelete, setMessageToDelete] = useState(null);
     const [activeReactionPickerMsgId, setActiveReactionPickerMsgId] = useState(null);
 
     // ── Drafts State (per partner) ──
@@ -266,8 +268,18 @@ export default function Messages() {
             reactions: Array.isArray(m.reactions) ? m.reactions : [],
             time: msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             timestamp: msgDate.getTime(),
+            createdDate: m.createdDate || msgDate.toISOString(),
             status: 'sent'
         };
+    }, []);
+
+    // ── Helper to check if a message can be edited (within 15 minutes of sending) ──
+    const canEditMessage = useCallback((msg) => {
+        if (!msg || msg.status === 'sending' || msg.isDeleted) return false;
+        const msgTime = msg.timestamp || (msg.createdDate ? new Date(msg.createdDate).getTime() : 0);
+        if (!msgTime) return false;
+        const diffMinutes = (Date.now() - msgTime) / (1000 * 60);
+        return diffMinutes <= 15;
     }, []);
 
     // ── Load Connections to enforce messaging restrictions ──
@@ -390,16 +402,21 @@ export default function Messages() {
             fetchConversations(true);
         };
 
-        // 3. Message deleted
+        // 3. Message deleted (WhatsApp style: Delete for Everyone vs Delete for Me)
         const handleMessageDeleted = (e) => {
             const data = e.detail;
             if (!data) return;
-            setActiveHistory(prev => prev.map(m => {
-                if (String(m.id) === String(data.messageId)) {
-                    return { ...m, isDeleted: true, text: 'This message was deleted', content: 'This message was deleted', attachments: [] };
-                }
-                return m;
-            }));
+            if (data.deleteForEveryone) {
+                setActiveHistory(prev => prev.map(m => {
+                    if (String(m.id) === String(data.messageId)) {
+                        return { ...m, isDeleted: true, text: 'This message was deleted', content: 'This message was deleted', attachments: [] };
+                    }
+                    return m;
+                }));
+            } else {
+                // Delete for me: remove message completely for the deleting user
+                setActiveHistory(prev => prev.filter(m => String(m.id) !== String(data.messageId)));
+            }
             fetchConversations(true);
         };
 
@@ -1171,10 +1188,17 @@ export default function Messages() {
         }
     };
 
-    // Edit message
+    // Edit message (restricted to 15 minutes from sending)
     const handleSaveEdit = async (messageId) => {
         const text = editingContent.trim();
         if (!text) return;
+        const targetMsg = activeHistory.find(m => m.id === messageId || m.messageId === messageId);
+        if (targetMsg && !canEditMessage(targetMsg)) {
+            addToast('Messages can only be edited within 15 minutes of sending.', 'warning');
+            setEditingMessageId(null);
+            setEditingContent('');
+            return;
+        }
         try {
             const res = await messagesApi.editMessage(messageId, text);
             const updated = res?.data || res;
@@ -1190,28 +1214,42 @@ export default function Messages() {
             addToast('Message edited.', 'success');
             fetchConversations(true);
         } catch (err) {
-            addToast('Failed to save edited message.', 'error');
+            const errMsg = err?.data?.message || err?.response?.data?.message || err?.message || 'Failed to save edited message.';
+            addToast(errMsg, 'error');
         }
     };
 
-    // Delete message (soft-delete)
-    const handleDeleteMessage = async (messageId) => {
-        if (!messageId) return;
-        if (!window.confirm('Are you sure you want to delete this message?')) return;
+    // Open delete confirmation modal (WhatsApp style)
+    const handleDeleteMessageClick = (msg) => {
+        if (!msg) return;
+        setMessageToDelete(msg);
+    };
+
+    // Confirm delete execution (Delete for Me vs Delete for Everyone)
+    const confirmDeleteMessage = async (msg, deleteForEveryone = false) => {
+        if (!msg) return;
+        const msgId = msg.id || msg.messageId;
         try {
-            await messagesApi.deleteMessage(messageId);
-            setActiveHistory(prev => prev.map(m => (m.id === messageId || m.messageId === messageId) ? {
-                ...m,
-                isDeleted: true,
-                text: 'This message was deleted',
-                content: 'This message was deleted',
-                attachments: []
-            } : m));
-            addToast('Message deleted.', 'info');
+            await messagesApi.deleteMessage(msgId, deleteForEveryone);
+            if (deleteForEveryone) {
+                setActiveHistory(prev => prev.map(m => (m.id === msgId || m.messageId === msgId) ? {
+                    ...m,
+                    isDeleted: true,
+                    text: 'This message was deleted',
+                    content: 'This message was deleted',
+                    attachments: []
+                } : m));
+                addToast('Message deleted for everyone.', 'info');
+            } else {
+                setActiveHistory(prev => prev.filter(m => m.id !== msgId && m.messageId !== msgId));
+                addToast('Message deleted for you.', 'info');
+            }
+            setMessageToDelete(null);
             fetchConversations(true);
         } catch (err) {
             console.error('[Messages] Failed to delete message:', err);
-            addToast('Failed to delete message.', 'error');
+            const errMsg = err?.data?.message || err?.response?.data?.message || err?.message || 'Failed to delete message.';
+            addToast(errMsg, 'error');
         }
     };
 
@@ -1730,8 +1768,8 @@ export default function Messages() {
                                                             </button>
                                                         )}
 
-                                                        {/* Edit Action (Sender only) */}
-                                                        {isMe && msg.status !== 'sending' && (
+                                                        {/* Edit Action (Sender only, allowed up to 15 mins) */}
+                                                        {isMe && msg.status !== 'sending' && !msg.isDeleted && canEditMessage(msg) && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
@@ -1739,19 +1777,19 @@ export default function Messages() {
                                                                     setEditingContent(msg.text || '');
                                                                 }}
                                                                 className="p-1 rounded-md text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                                                                title="Edit message"
+                                                                title="Edit message (available up to 15 mins)"
                                                             >
                                                                 <span className="material-symbols-outlined text-[15px]">edit</span>
                                                             </button>
                                                         )}
 
-                                                        {/* Delete Action (Sender only) */}
-                                                        {isMe && msg.status !== 'sending' && (
+                                                        {/* Delete Action (Sender or Receiver - WhatsApp functionality) */}
+                                                        {msg.status !== 'sending' && !msg.isDeleted && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => handleDeleteMessage(msg.id || msg.messageId)}
+                                                                onClick={() => handleDeleteMessageClick(msg)}
                                                                 className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                                                                title="Delete message"
+                                                                title={isMe ? "Delete message" : "Delete message for me"}
                                                             >
                                                                 <span className="material-symbols-outlined text-[15px]">delete</span>
                                                             </button>
@@ -2468,6 +2506,18 @@ export default function Messages() {
                         </p>
                     </div>
                 </div>
+            )}
+
+            {/* ── WhatsApp-Style Delete Message Confirmation Modal ── */}
+            {messageToDelete && (
+                <DeleteMessageModal
+                    isOpen={Boolean(messageToDelete)}
+                    message={messageToDelete}
+                    isMe={Boolean(messageToDelete && Number(messageToDelete.senderId) === Number(currentUserId))}
+                    onClose={() => setMessageToDelete(null)}
+                    onDeleteForMe={() => confirmDeleteMessage(messageToDelete, false)}
+                    onDeleteForEveryone={() => confirmDeleteMessage(messageToDelete, true)}
+                />
             )}
         </div>
     );
