@@ -545,6 +545,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IWikiRepository, WikiRepository>();
         services.AddScoped<IWikiService, WikiService>();
 
+        // Clips Module
+        services.AddScoped<IClipRepository, ClipRepository>();
+        services.AddScoped<IClipService, ClipService>();
+
         // Encrypted 1-to-1 Messaging Module
         services.AddSingleton<IMessageEncryptionService, MessageEncryptionService>();
         services.AddScoped<IUserMessageRepository, UserMessageRepository>();

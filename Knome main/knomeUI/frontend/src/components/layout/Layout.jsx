@@ -10,10 +10,12 @@ export default function Layout({ children }) {
     const location = useLocation();
     const isNoSidebarPage = location.pathname.startsWith('/admin-console');
     const isMessagesPage = location.pathname.startsWith('/messages') || location.pathname.startsWith('/chat');
+    const isClipsPage = location.pathname.startsWith('/clips');
+    const isFullScreenPage = isMessagesPage || isClipsPage;
 
     return (
         <div className={`relative flex flex-col bg-theme-60 text-theme-30-text ${
-            isMessagesPage ? 'h-screen max-h-screen overflow-hidden' : 'min-h-screen justify-between'
+            isFullScreenPage ? 'h-screen max-h-screen overflow-hidden' : 'min-h-screen justify-between'
         }`}>
             {/* Ambient High-Tech Atmospheric Background */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
@@ -27,9 +29,13 @@ export default function Layout({ children }) {
 
             <Navbar />
 
-            <div className={`w-full flex-1 flex flex-col relative min-h-0 ${isMessagesPage ? 'pt-[76px] pb-3 h-full overflow-hidden' : 'pt-20 md:pt-24 pb-20 md:pb-10'}`}>
+            <div className={`w-full flex-1 flex flex-col relative min-h-0 ${
+                isFullScreenPage 
+                    ? (isClipsPage ? 'pt-[74px] pb-2 h-full overflow-hidden' : 'pt-[76px] pb-3 h-full overflow-hidden')
+                    : 'pt-20 md:pt-24 pb-20 md:pb-10'
+            }`}>
                 <div className={`w-full ${isNoSidebarPage ? 'px-3 sm:px-4 md:px-6 max-w-[1920px]' : 'px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 max-w-[1720px]'} ${
-                    isMessagesPage ? 'h-full min-h-0 overflow-hidden' : ''
+                    isFullScreenPage ? 'h-full min-h-0 overflow-hidden' : ''
                 } flex gap-4 lg:gap-6 mx-auto flex-1 min-w-0`}>
                     {!isNoSidebarPage && <Sidebar />}
                     <main className="flex-1 flex flex-col min-w-0 min-h-0 w-full h-full overflow-hidden">
@@ -41,7 +47,7 @@ export default function Layout({ children }) {
             </div>
 
             <FloatingMessagesButton />
-            {!isMessagesPage && <Footer />}
+            {!isFullScreenPage && <Footer />}
         </div>
     );
 }

@@ -14,6 +14,7 @@ import {
     communitiesApi, 
     karmaApi,
     messagesApi,
+    clipsApi,
     getCommunityImages, 
     mapPost,
     mapArticle,
@@ -21,6 +22,7 @@ import {
 } from '../utils/apiService';
 import { playMessageChime } from '../utils/realtimeMessenger';
 import ShareProfileModal from '../components/modals/ShareProfileModal';
+import EditClipModal from '../components/modals/EditClipModal';
 import PostCard from '../components/widgets/PostCard';
 import useScrollLoading from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
@@ -240,6 +242,7 @@ export default function Profile() {
     const [networkFilter, setNetworkFilter] = useState('All');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [editingClip, setEditingClip] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const fileInputRef = useRef(null);
@@ -577,6 +580,7 @@ export default function Profile() {
 
     const [tabData, setTabData] = useState({
         posts: [],
+        clips: [],
         articles: [],
         videos: [],
         podcasts: [],
@@ -601,6 +605,16 @@ export default function Profile() {
                         const rawPosts = Array.isArray(postsRes) ? postsRes : (postsRes?.data || postsRes?.items || []);
                         if (!isCancelled) {
                             setTabData(prev => ({ ...prev, posts: rawPosts.map(mapPost) }));
+                        }
+                        break;
+                    }
+                    case 'Clips': {
+                        const clipsRes = isOwnProfile
+                            ? await clipsApi.getMyClips(1, 50)
+                            : await clipsApi.getUserClips(currentProfileUserId, 1, 50);
+                        const rawClips = Array.isArray(clipsRes) ? clipsRes : (clipsRes?.data || clipsRes?.items || []);
+                        if (!isCancelled) {
+                            setTabData(prev => ({ ...prev, clips: rawClips }));
                         }
                         break;
                     }
@@ -718,6 +732,7 @@ export default function Profile() {
 
     const activeTabCount = 
         activeTab === 'Posts' ? tabData.posts.length :
+        activeTab === 'Clips' ? tabData.clips.length :
         activeTab === 'Articles' ? tabData.articles.length :
         activeTab === 'Videos' ? tabData.videos.length :
         (activeTab === 'Podcasts' || activeTab === 'Audio') ? tabData.podcasts.length :
@@ -801,7 +816,7 @@ export default function Profile() {
 
     const tabs = isSysAdmin 
         ? ['About', 'Communities', 'Network'] 
-        : ['About', 'Posts', 'Articles', 'Videos', 'Audio', 'Communities', 'Network', 'Karma'];
+        : ['About', 'Posts', 'Clips', 'Articles', 'Videos', 'Audio', 'Communities', 'Network', 'Karma'];
 
     const avatarSource = resolveImageUrl(displayUser?.avatar || displayUser?.profilePhotoUrl, displayUser?.name || displayUser?.fullName);
 
@@ -1424,6 +1439,156 @@ export default function Profile() {
                                     />
                                 ))}
                                 <ScrollLoadingIndicator isVisible={visibleCount < tabData.posts.length} text="Loading more posts on scroll..." />
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'Clips' && (
+                    <div className="w-full">
+                        {isTabLoading ? (
+                            <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-500">
+                                <div className="w-8 h-8 border-3 border-pink-500/30 border-t-pink-500 rounded-full animate-spin"></div>
+                                <p className="font-semibold text-sm">Loading clips...</p>
+                            </div>
+                        ) : tabData.clips.length === 0 ? (
+                            <div className="text-center py-16 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
+                                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-pink-50 dark:bg-pink-950/40 text-pink-500 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-3xl">movie</span>
+                                </div>
+                                <h3 className="text-lg font-black text-slate-900 dark:text-white mb-1">No Clips Uploaded Yet</h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto mb-5">
+                                    Short-form video clips published by this user will appear here in high-definition vertical view.
+                                </p>
+                                {isOwnProfile && (
+                                    <button
+                                        onClick={() => navigate('/clips')}
+                                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-600 via-rose-600 to-indigo-600 hover:opacity-95 text-white font-black text-xs shadow-md transition-all cursor-pointer"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                                        <span>Create Your First Clip</span>
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                    {tabData.clips.slice(0, visibleCount).map(clip => {
+                                        const cId = clip.clipId || clip.id;
+                                        return (
+                                            <div
+                                                key={cId}
+                                                onClick={() => navigate(`/clips?id=${cId}`)}
+                                                className="group relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-pink-500/50 transition-all duration-300 cursor-pointer flex flex-col aspect-[9/16]"
+                                            >
+                                                {/* Video Thumbnail Cover */}
+                                                <div className="absolute inset-0 bg-slate-950">
+                                                    {clip.thumbnailUrl ? (
+                                                        <img
+                                                            src={resolveMediaUrl(clip.thumbnailUrl)}
+                                                            alt={clip.title || clip.caption || 'Clip'}
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full bg-gradient-to-b from-indigo-950 via-slate-900 to-black flex items-center justify-center">
+                                                            <span className="material-symbols-outlined text-4xl text-slate-700">movie</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/30 pointer-events-none" />
+                                                </div>
+
+                                                {/* Top Badges & Management Menu */}
+                                                <div className="relative z-10 p-3 flex items-start justify-between">
+                                                    <div className="flex flex-col gap-1">
+                                                        {clip.status === 'Draft' ? (
+                                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500 text-slate-950 shadow-xs">
+                                                                Draft
+                                                            </span>
+                                                        ) : clip.visibility === 'Community' ? (
+                                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-500/90 text-white backdrop-blur-xs">
+                                                                Community
+                                                            </span>
+                                                        ) : null}
+                                                        {clip.durationSeconds > 0 && (
+                                                            <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-black/60 text-white/90 backdrop-blur-xs self-start">
+                                                                {Math.floor(clip.durationSeconds / 60)}:{(clip.durationSeconds % 60).toString().padStart(2, '0')}
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Edit & Delete Controls for Owner or Admin */}
+                                                    {(isOwnProfile || isSysAdmin) && (
+                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setEditingClip(clip); }}
+                                                                className="w-7 h-7 rounded-full bg-black/70 hover:bg-black text-white flex items-center justify-center backdrop-blur-sm transition-all shadow-md"
+                                                                title="Edit Clip"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[14px]">edit</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    const confirmed = await confirm({
+                                                                        title: 'Delete Clip',
+                                                                        message: 'Are you sure you want to permanently delete this clip? This cannot be undone.',
+                                                                        confirmText: 'Delete',
+                                                                        confirmVariant: 'danger'
+                                                                    });
+                                                                    if (!confirmed) return;
+                                                                    try {
+                                                                        await clipsApi.delete(cId);
+                                                                        setTabData(prev => ({
+                                                                            ...prev,
+                                                                            clips: prev.clips.filter(c => (c.clipId || c.id) !== cId)
+                                                                        }));
+                                                                        addToast('Clip deleted successfully.', 'success');
+                                                                    } catch (err) {
+                                                                        console.error('Failed to delete clip:', err);
+                                                                        addToast('Failed to delete clip. Please try again.', 'error');
+                                                                    }
+                                                                }}
+                                                                className="w-7 h-7 rounded-full bg-rose-600/80 hover:bg-rose-600 text-white flex items-center justify-center backdrop-blur-sm transition-all shadow-md"
+                                                                title="Delete Clip"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[14px]">delete</span>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Center Play Icon Hover Effect */}
+                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                    <div className="w-11 h-11 rounded-full bg-pink-600/90 text-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-110 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                                                        <span className="material-symbols-outlined text-2xl pl-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>play_arrow</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Bottom Metadata */}
+                                                <div className="relative z-10 mt-auto p-3 text-white">
+                                                    <p className="font-bold text-xs line-clamp-2 leading-snug drop-shadow-md mb-2">
+                                                        {clip.title || clip.caption || 'Untitled Clip'}
+                                                    </p>
+                                                    <div className="flex items-center justify-between text-[10px] font-bold text-white/80">
+                                                        <span className="flex items-center gap-1">
+                                                            <span className="material-symbols-outlined text-[13px]">visibility</span>
+                                                            {clip.viewCount || 0}
+                                                        </span>
+                                                        <span className="flex items-center gap-1">
+                                                            <span className="material-symbols-outlined text-[13px] text-pink-400">favorite</span>
+                                                            {clip.likesCount || clip.likeCount || 0}
+                                                        </span>
+                                                        <span className="flex items-center gap-1">
+                                                            <span className="material-symbols-outlined text-[13px]">chat_bubble</span>
+                                                            {clip.commentsCount || clip.commentCount || 0}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <ScrollLoadingIndicator isVisible={visibleCount < tabData.clips.length} text="Loading more clips on scroll..." />
                             </>
                         )}
                     </div>
@@ -2648,6 +2813,23 @@ export default function Profile() {
 
                     </div>
                 </div>
+            )}
+
+            {/* Edit Clip Modal */}
+            {editingClip && (
+                <EditClipModal
+                    clip={editingClip}
+                    isOpen={Boolean(editingClip)}
+                    onClose={() => setEditingClip(null)}
+                    onSuccess={(updatedClip) => {
+                        setTabData(prev => ({
+                            ...prev,
+                            clips: prev.clips.map(c => (c.clipId || c.id) === (updatedClip.clipId || updatedClip.id) ? { ...c, ...updatedClip } : c)
+                        }));
+                        setEditingClip(null);
+                        addToast('Clip updated successfully! ✨', 'success');
+                    }}
+                />
             )}
         </main>
     );

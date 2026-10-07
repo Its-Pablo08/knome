@@ -38,6 +38,11 @@ try {
     if (Test-Path "$ScriptDir\SETUP_WIKI_DB.ps1") {
         & "$ScriptDir\SETUP_WIKI_DB.ps1"
     }
+
+    # 0e. Ensure Clips Tables Exist
+    if (Test-Path "$ScriptDir\SETUP_CLIPS_DB.ps1") {
+        & "$ScriptDir\SETUP_CLIPS_DB.ps1"
+    }
 } catch {
     Write-Host " [Warning] Knome database not reachable on LAPTOP-458. Ensure SQL Server on LAPTOP-458 is running and reachable." -ForegroundColor DarkYellow
 }

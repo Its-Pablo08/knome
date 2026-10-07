@@ -12,8 +12,9 @@ public static class ContentTypes
     public const string Profile = "Profile";
     public const string Comment = "Comment";
     public const string Wiki = "Wiki";
+    public const string Clip = "Clip";
 
-    public static readonly string[] All = { Post, Article, Video, Podcast, Community, Job, Document, Profile, Comment, Wiki };
+    public static readonly string[] All = { Post, Article, Video, Podcast, Community, Job, Document, Profile, Comment, Wiki, Clip };
 
     public static string Normalize(string? contentType)
     {
@@ -29,6 +30,7 @@ public static class ContentTypes
         if (trimmed.Equals(Profile, StringComparison.OrdinalIgnoreCase)) return Profile;
         if (trimmed.Equals(Comment, StringComparison.OrdinalIgnoreCase)) return Comment;
         if (trimmed.Equals(Wiki, StringComparison.OrdinalIgnoreCase)) return Wiki;
+        if (trimmed.Equals(Clip, StringComparison.OrdinalIgnoreCase)) return Clip;
         return trimmed;
     }
 
@@ -36,7 +38,7 @@ public static class ContentTypes
     {
         if (string.IsNullOrWhiteSpace(contentType)) return false;
         var norm = Normalize(contentType);
-        return norm == Post || norm == Article || norm == Video || norm == Podcast || norm == Community || norm == Job || norm == Document || norm == Profile || norm == Comment || norm == Wiki;
+        return norm == Post || norm == Article || norm == Video || norm == Podcast || norm == Community || norm == Job || norm == Document || norm == Profile || norm == Comment || norm == Wiki || norm == Clip;
     }
 }
 

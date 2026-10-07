@@ -34,15 +34,23 @@ If implementation differs from the FRD due to an approved architectural decision
 
 ## Build & Run
 
+### Single Terminal Launcher (Recommended - One Command Runs Everything)
+From the workspace root or `Knome main`:
+```powershell
+.\start          # (or npm start, or .\start.bat, or .\start.ps1)
+```
+This single command automatically clears stale ports, tests SQL connectivity, starts the Backend API (port 5096), starts the Frontend UI (port 5173), verifies IIS sites, and streams color-coded logs in real time. Pressing `Ctrl+C` cleanly shuts down all services.
+
+### Manual Individual Commands (If running separately)
 ```powershell
 # Backend API
 cd Backend/Knome.API
 dotnet build -nologo
-dotnet run        # → http://localhost:5095/swagger
+dotnet run --launch-profile http    # → http://localhost:5096/swagger
 
 # Frontend
-cd Frontend/knome-web
-npm run dev       # Vite dev server
+cd knomeUI/frontend
+npm run dev                         # → http://localhost:5173
 ```
 
 ## Verification (No Unit Tests)

@@ -1338,6 +1338,27 @@ export default function Navbar() {
             return;
         }
 
+        // Check for Clip notification FIRST before generic post/video routing
+        const isClipNotif = notif.isClip || relType === 'clip' || notif.type?.toLowerCase().includes('clip') || msg.includes('clip') || Boolean(notif.clipId);
+        if (isClipNotif) {
+            let cId = notif.clipId || (relType === 'clip' ? refId : null);
+            if (!cId && dest) {
+                const match = dest.match(/\/clips(?:\?id=|\/)(\d+)/i) || dest.match(/[?&]id=(\d+)/i);
+                if (match) cId = match[1];
+            }
+            if (!cId && refId && !isNaN(Number(refId))) {
+                cId = refId;
+            }
+            dest = cId ? `/clips?id=${cId}` : '/clips';
+            const currentPath = window.location.pathname + window.location.search;
+            if (currentPath === dest) {
+                window.location.reload();
+            } else {
+                navigate(dest, { state: { clipId: cId } });
+            }
+            return;
+        }
+
         // Ensure post notifications are never misinterpreted as profile shares
         const isPostNotif = relType === 'post' || notif.isPost || notif.type?.toLowerCase().includes('post') || (msg.includes('posted') && !msg.includes('podcast'));
         const isProfileShare = !isPostNotif && (relType === 'profile' || notif.type === 'profile_share' || (notif.type === 'share' && relType === 'user'))

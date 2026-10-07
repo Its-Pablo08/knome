@@ -1640,3 +1640,81 @@ export const messagesApi = {
     getOnlineUsers: () => apiClient.get('/Messages/online-users')
 };
 
+// ─────────────────────────────────────────────
+//  CLIPS (Short-Form Vertical Videos)
+// ─────────────────────────────────────────────
+export const clipsApi = {
+    getFeed: (pageNumber = 1, pageSize = 20, hashtag = null, communityId = null) => {
+        const params = new URLSearchParams({ pageNumber, pageSize });
+        if (hashtag) params.append('hashtag', hashtag);
+        if (communityId) params.append('communityId', communityId);
+        return apiClient.get(`/clips?${params}`);
+    },
+
+    getById: (id) => apiClient.get(`/clips/${id}`),
+
+    create: (data) => apiClient.post('/clips', data),
+
+    update: (id, data) => apiClient.put(`/clips/${id}`, data),
+
+    delete: (id) => apiClient.delete(`/clips/${id}`),
+
+    recordView: (id) => apiClient.post(`/clips/${id}/view`, {}),
+
+    react: (id, reactionType = 'Like') => apiClient.post(`/clips/${id}/react`, { reactionType }),
+
+    bookmark: (id) => apiClient.post(`/clips/${id}/bookmark`, {}),
+
+    share: (id, data) => apiClient.post(`/clips/${id}/share`, data),
+
+    getUserClips: (userId, pageNumber = 1, pageSize = 50) =>
+        apiClient.get(`/clips/user/${userId}?pageNumber=${pageNumber}&pageSize=${pageSize}`),
+
+    getMyClips: (pageNumber = 1, pageSize = 50) =>
+        apiClient.get(`/clips/me?pageNumber=${pageNumber}&pageSize=${pageSize}`),
+
+    getSavedClips: async (pageNumber = 1, pageSize = 50) => {
+        try {
+            const res = await apiClient.get(`/clips/saved?pageNumber=${pageNumber}&pageSize=${pageSize}`);
+            if (res) return res;
+        } catch {
+            try {
+                const res = await apiClient.get(`/interactions/saved-content?pageNumber=${pageNumber}&pageSize=${pageSize}&contentType=Clip`);
+                const payload = res?.data ?? res;
+                const items = payload ? (Array.isArray(payload.items) ? payload.items : (Array.isArray(payload) ? payload : [])) : [];
+                return items.map(i => ({
+                    clipId: i.contentId,
+                    title: i.title,
+                    description: i.summary,
+                    videoUrl: i.thumbnailUrl || '',
+                    thumbnailUrl: i.thumbnailUrl || '',
+                    creatorName: i.authorName || 'Employee',
+                    createdByUserId: i.authorId,
+                    likesCount: i.likesCount || 0,
+                    commentsCount: i.commentsCount || 0,
+                    isBookmarkedByCurrentUser: true,
+                }));
+            } catch {
+                return [];
+            }
+        }
+        return [];
+    },
+
+    getAllForAdmin: (pageNumber = 1, pageSize = 50, search = null, status = null) => {
+        const params = new URLSearchParams({ pageNumber, pageSize });
+        if (search) params.append('search', search);
+        if (status && status !== 'All') params.append('status', status);
+        return apiClient.get(`/clips/admin/all?${params}`);
+    },
+
+    adminUpdateStatus: (id, status) => apiClient.put(`/clips/admin/${id}/status`, { status }),
+
+    report: (id, data) => apiClient.post(`/interactions/Clip/${id}/report`, data),
+
+    getComments: (id) => apiClient.get(`/interactions/Clip/${id}/comments`),
+
+    addComment: (id, commentText, parentCommentId = null) =>
+        apiClient.post(`/interactions/Clip/${id}/comments`, { commentText, parentCommentId })
+};
+

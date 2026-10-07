@@ -332,6 +332,30 @@ public class ContentInteractionRepository : IContentInteractionRepository
                     item.TargetUrl = "/jobs";
                 }
             }
+            else if (normalizedType.Equals("Clip", StringComparison.OrdinalIgnoreCase))
+            {
+                var clip = await _db.Clips.Include(c => c.CreatedByUser).FirstOrDefaultAsync(c => c.ClipId == b.ContentId);
+                if (clip == null || clip.IsDeleted)
+                {
+                    item.IsAvailable = false;
+                    item.UnavailabilityReason = "Clip has been deleted or is unavailable.";
+                    item.Title = "Deleted Clip";
+                }
+                else
+                {
+                    item.Title = clip.Title;
+                    item.Summary = clip.Description ?? clip.Hashtags ?? string.Empty;
+                    item.ThumbnailUrl = clip.ThumbnailUrl ?? clip.VideoUrl;
+                    item.AuthorId = clip.CreatedByUserId;
+                    item.AuthorName = clip.CreatedByUser?.FullName ?? string.Empty;
+                    item.AuthorAvatar = clip.CreatedByUser?.ProfilePhotoUrl;
+                    item.AuthorRole = clip.CreatedByUser?.Designation;
+                    item.CreatedAt = clip.CreatedDate;
+                    item.TargetUrl = $"/clips?id={clip.ClipId}";
+                    item.LikesCount = clip.LikesCount;
+                    item.CommentsCount = clip.CommentsCount;
+                }
+            }
 
             items.Add(item);
         }
@@ -489,6 +513,7 @@ public class ContentInteractionRepository : IContentInteractionRepository
             ContentTypes.Podcast => await _db.Podcasts.Where(p => p.PodcastId == contentId).Select(p => (int?)p.UploaderUserId).FirstOrDefaultAsync(),
             ContentTypes.Job => await _db.Jobs.Where(j => j.JobId == (int)contentId).Select(j => (int?)j.PostedByUserId).FirstOrDefaultAsync(),
             ContentTypes.Comment => await _db.Comments.Where(c => c.CommentId == contentId).Select(c => (int?)c.UserId).FirstOrDefaultAsync(),
+            ContentTypes.Clip => await _db.Clips.Where(c => c.ClipId == contentId).Select(c => (int?)c.CreatedByUserId).FirstOrDefaultAsync(),
             _ => null
         };
     }
@@ -515,6 +540,11 @@ public class ContentInteractionRepository : IContentInteractionRepository
         {
             var podcast = await _db.Podcasts.AsNoTracking().FirstOrDefaultAsync(p => p.PodcastId == contentId);
             return podcast?.ViewCount ?? 0;
+        }
+        else if (norm == ContentTypes.Clip)
+        {
+            var clip = await _db.Clips.AsNoTracking().FirstOrDefaultAsync(c => c.ClipId == contentId);
+            return clip?.ViewCount ?? 0;
         }
         return 0;
     }
@@ -596,6 +626,15 @@ public class ContentInteractionRepository : IContentInteractionRepository
             {
                 podcast.ViewCount++;
                 newCount = podcast.ViewCount;
+            }
+        }
+        else if (norm == ContentTypes.Clip)
+        {
+            var clip = await _db.Clips.FindAsync(contentId);
+            if (clip != null)
+            {
+                clip.ViewCount++;
+                newCount = clip.ViewCount;
             }
         }
 

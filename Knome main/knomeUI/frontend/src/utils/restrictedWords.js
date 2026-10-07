@@ -122,3 +122,7 @@ export const checkRestrictedContent = (text) => {
 export const getRestrictedWarningMessage = (keyword) => {
     return `Security Alert: Your content contains the restricted term ("${keyword}"). Content containing abusive words, spam, threats, or sensitive data cannot be posted.`;
 };
+
+export const containsRestrictedWord = (text) => {
+    return Boolean(checkRestrictedContent(text));
+};

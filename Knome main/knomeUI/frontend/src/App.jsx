@@ -18,6 +18,7 @@ const Communities = lazy(() => import('./pages/Communities'))
 const CommunityView = lazy(() => import('./pages/CommunityView'))
 const Jobs = lazy(() => import('./pages/Jobs'))
 const Videos = lazy(() => import('./pages/Videos'))
+const Clips = lazy(() => import('./pages/Clips'))
 const Podcasts = lazy(() => import('./pages/Podcasts'))
 const Articles = lazy(() => import('./pages/Articles'))
 const ArticleView = lazy(() => import('./pages/ArticleView'))
@@ -129,6 +130,7 @@ function App() {
                     <Route path="/community/view"  element={<ProtectedPage><CommunityView /></ProtectedPage>} />
                     <Route path="/jobs"            element={<ProtectedPage><Jobs /></ProtectedPage>} />
                     <Route path="/videos"          element={<ProtectedPage><Videos /></ProtectedPage>} />
+                    <Route path="/clips"           element={<ProtectedPage><Clips /></ProtectedPage>} />
                     <Route path="/podcasts"        element={<ProtectedPage><Podcasts /></ProtectedPage>} />
                     <Route path="/articles"        element={<ProtectedPage><Articles /></ProtectedPage>} />
                     <Route path="/article-view"    element={<ProtectedPage><ArticleView /></ProtectedPage>} />

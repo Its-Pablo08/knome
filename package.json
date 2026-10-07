@@ -1,0 +1,9 @@
+{
+  "name": "knome-enterprise-platform",
+  "version": "1.0.0",
+  "description": "Knome Enterprise Knowledge Platform",
+  "scripts": {
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File \"./Knome main/START_KNOME.ps1\"",
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File \"./Knome main/START_KNOME.ps1\""
+  }
+}

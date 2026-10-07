@@ -117,6 +117,7 @@ public static class ApplicationBuilderExtensions
             var db = scope.ServiceProvider.GetRequiredService<Knome.API.Data.KnomeDbContext>();
             Knome.API.Data.WikiDbInitializer.EnsureWikiTablesExistAsync(db).GetAwaiter().GetResult();
             Knome.API.Data.UserMessageDbInitializer.EnsureUserMessageTablesExistAsync(db).GetAwaiter().GetResult();
+            Knome.API.Data.ClipDbInitializer.EnsureClipTablesExistAsync(db).GetAwaiter().GetResult();
         }
         catch (System.Exception ex)
         {

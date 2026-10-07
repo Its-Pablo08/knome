@@ -55,6 +55,72 @@ public class MediaController : KnomeControllerBase
         return Ok(ApiResponse<object>.SuccessResponse(200, "File uploaded successfully.", new { url }));
     }
 
+    [HttpGet("video-info")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetVideoInfo([FromQuery] string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return BadRequest(ApiResponse<object>.ErrorResponse(400, "URL is required."));
+
+        try
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                url, 
+                @"(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([a-zA-Z0-9_-]{11})"
+            );
+
+            if (match.Success)
+            {
+                var videoId = match.Groups[1].Value;
+                using var client = new System.Net.Http.HttpClient();
+                client.Timeout = TimeSpan.FromSeconds(6);
+                client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                client.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
+
+                var html = await client.GetStringAsync($"https://www.youtube.com/watch?v={videoId}");
+
+                int durationSeconds = 0;
+                var durMatch = System.Text.RegularExpressions.Regex.Match(html, @"\""approxDurationMs\""\s*:\s*\""(\d+)\""");
+                if (durMatch.Success && long.TryParse(durMatch.Groups[1].Value, out var ms))
+                {
+                    durationSeconds = (int)Math.Round(ms / 1000.0);
+                }
+
+                if (durationSeconds <= 0)
+                {
+                    var secMatch = System.Text.RegularExpressions.Regex.Match(html, @"\""lengthSeconds\""\s*:\s*\""(\d+)\""");
+                    if (secMatch.Success && int.TryParse(secMatch.Groups[1].Value, out var sec))
+                    {
+                        durationSeconds = sec;
+                    }
+                }
+
+                string? title = null;
+                var titleMatch = System.Text.RegularExpressions.Regex.Match(html, @"\""title\""\s*:\s*\""([^\""]+)\""");
+                if (titleMatch.Success)
+                {
+                    title = System.Text.RegularExpressions.Regex.Unescape(titleMatch.Groups[1].Value);
+                }
+
+                return Ok(ApiResponse<object>.SuccessResponse(200, "Video info retrieved successfully.", new
+                {
+                    videoId,
+                    durationSeconds,
+                    title,
+                    thumbnailUrl = $"https://img.youtube.com/vi/{videoId}/hqdefault.jpg"
+                }));
+            }
+
+            return Ok(ApiResponse<object>.SuccessResponse(200, "Unrecognized platform.", new { durationSeconds = 0 }));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed fetching video info for {Url}", url);
+            return Ok(ApiResponse<object>.SuccessResponse(200, "Fallback.", new { durationSeconds = 0 }));
+        }
+    }
+
     private string GetPendingFilePath()
     {
         var basePath = _configuration["StorageSettings:BasePath"];

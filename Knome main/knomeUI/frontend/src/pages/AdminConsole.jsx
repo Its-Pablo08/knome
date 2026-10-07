@@ -13,7 +13,7 @@ const localRoleMap = {
     'System Administrator': 'SYSADM',
     'System Admin': 'SYSADM'
 };
-import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, communitiesApi, mediaApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
+import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, communitiesApi, mediaApi, clipsApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
 import * as XLSX from 'xlsx';
 
@@ -1846,11 +1846,15 @@ export default function AdminConsole() {
 
         try {
             await interactionsApi.resolveReport(reportId, isDismiss || isReinstate ? 'Dismiss' : 'Removed Content', `Resolved by ${currentUser?.name || 'Admin'}`);
-            if (isDelete && (contentType === 'Post' || !contentType) && contentId) {
+            if (isDelete && contentId) {
                 try {
-                    await postsApi.delete(contentId);
+                    if (contentType === 'Clip') {
+                        await clipsApi.delete(contentId);
+                    } else if (contentType === 'Post' || !contentType) {
+                        await postsApi.delete(contentId);
+                    }
                 } catch {
-                    /* Silently handle demo post deletion */
+                    /* Silently handle deletion */
                 }
             }
         } catch (err) {
@@ -2010,6 +2014,35 @@ export default function AdminConsole() {
                     isVideo: true,
                     createdDate: foundVid?.uploadedDate || report.reportedDate
                 });
+            } else if (report.contentType === 'Clip') {
+                let clip = null;
+                try {
+                    const res = await clipsApi.getById(report.contentId).catch(() => null);
+                    clip = res?.data || res;
+                } catch (e) {}
+
+                if (clip) {
+                    const targetAuthorId = clip.uploaderUserId || clip.authorUserId || report.reportedUserId;
+                    const foundUser = usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId));
+                    const rawSrc = clip.videoUrl || clip.sourceUrl || '';
+                    const vidUrl = rawSrc ? (rawSrc.startsWith('http://') || rawSrc.startsWith('https://') ? rawSrc : resolveMediaUrl(rawSrc)) : 'https://vjs.zencdn.net/v/oceans.mp4';
+                    setPreviewPost({
+                        authorName: clip.uploaderFullName || foundUser?.fullName || report.reportedUserName || 'Clip Creator',
+                        authorFullName: clip.uploaderFullName || foundUser?.fullName || report.reportedUserName || 'Clip Creator',
+                        authorUserId: targetAuthorId,
+                        authorDesignation: foundUser?.designation || 'Content Creator',
+                        content: `🎬 Clip #${report.contentId}: "${clip.title || clip.caption || 'Reported Clip'}"`,
+                        videoUrl: vidUrl,
+                        sourceUrl: vidUrl,
+                        thumbnail: clip.thumbnailUrl,
+                        title: clip.title || clip.caption || `Clip #${report.contentId}`,
+                        isClip: true,
+                        isVideo: true,
+                        createdDate: clip.createdAt || report.reportedDate
+                    });
+                } else {
+                    setPreviewPost(getFallbackPostContent(report));
+                }
             } else if (report.contentType === 'Podcast') {
                 const allPodcasts = JSON.parse(localStorage.getItem('knome_custom_podcasts') || '[]');
                 const foundPod = allPodcasts.find(p => String(p.id) === String(report.contentId));
@@ -7555,10 +7588,10 @@ export default function AdminConsole() {
                                         })()}
                                     </div>
 
-                                    {/* Video Player Preview if Content is Video */}
-                                    {(previewPost.videoUrl || previewPost.isVideo || previewReport.contentType === 'Video' || (previewReport.postContentSnippet || '').includes('Video') || String(previewReport.contentId).includes('10019')) && (
+                                    {/* Video Player Preview if Content is Video or Clip */}
+                                    {(previewPost.videoUrl || previewPost.isVideo || previewPost.isClip || previewReport.contentType === 'Video' || previewReport.contentType === 'Clip' || (previewReport.postContentSnippet || '').includes('Video') || String(previewReport.contentId).includes('10019')) && (
                                         <div className="rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl p-3 space-y-3">
-                                            <div className="relative aspect-video w-full bg-black rounded-xl overflow-hidden group">
+                                            <div className={`relative ${previewPost.isClip ? 'aspect-[9/16] max-w-[280px] mx-auto' : 'aspect-video w-full'} bg-black rounded-xl overflow-hidden group`}>
                                                 {(() => {
                                                     const rawUrl = previewPost.videoUrl || previewPost.sourceUrl || '';
                                                     const isYT = rawUrl && (rawUrl.includes('youtube.com') || rawUrl.includes('youtu.be'));

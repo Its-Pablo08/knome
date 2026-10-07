@@ -36,4 +36,5 @@ public static class NotificationContentTypes
     public const string Job = "Job";
     public const string Badge = "Badge";
     public const string Wiki = "Wiki";
+    public const string Clip = "Clip";
 }
