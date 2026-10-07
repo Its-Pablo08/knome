@@ -72,7 +72,7 @@ export default function Articles() {
     // List Filtering States
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
-    const [showFilterBar, setShowFilterBar] = useState(false);
+    const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest'
     
     const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) || 
                        ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) || 
@@ -634,13 +634,39 @@ export default function Articles() {
         return matchesCategory && matchesSearch;
     });
 
-    const filteredArticles = rawFiltered;
+    const getArticleTimestamp = (art) => {
+        const raw = art.publishedDate || art.createdDate || art.scheduledDate;
+        if (raw) {
+            const t = new Date(raw).getTime();
+            if (!isNaN(t)) return t;
+        }
+        if (art.date && typeof art.date === 'string') {
+            const parts = art.date.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+            if (parts) {
+                const parsed = new Date(`${parts[3]}-${parts[2]}-${parts[1]}`).getTime();
+                if (!isNaN(parsed)) return parsed;
+            }
+            const t = new Date(art.date).getTime();
+            if (!isNaN(t)) return t;
+        }
+        const numId = Number(art.id || art.articleId);
+        return isNaN(numId) ? 0 : numId;
+    };
+
+    const filteredArticles = [...rawFiltered].sort((a, b) => {
+        const timeA = getArticleTimestamp(a);
+        const timeB = getArticleTimestamp(b);
+        if (sortBy === 'oldest') {
+            return timeA !== timeB ? timeA - timeB : (Number(a.id || 0) - Number(b.id || 0));
+        }
+        return timeB !== timeA ? timeB - timeA : (Number(b.id || 0) - Number(a.id || 0));
+    });
 
     const { visibleCount, reset: resetScrollLoading } = useScrollLoading(filteredArticles.length, 6, 6);
 
     useEffect(() => {
         resetScrollLoading();
-    }, [selectedCategory, searchQuery, resetScrollLoading]);
+    }, [selectedCategory, searchQuery, sortBy, resetScrollLoading]);
 
     const categories = [
         'All', 
@@ -685,17 +711,6 @@ export default function Articles() {
 
                         {/* Action Right */}
                         <div className="relative z-10 shrink-0 flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
-                            <button 
-                                onClick={() => setShowFilterBar(!showFilterBar)}
-                                className={`w-full sm:w-auto px-5 py-3 font-bold rounded-xl transition-all flex items-center justify-center gap-2 border cursor-pointer ${
-                                    showFilterBar || searchQuery || selectedCategory !== 'All'
-                                        ? 'bg-teal-600 text-white border-teal-600 shadow-md shadow-teal-600/20'
-                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                }`}
-                            >
-                                <span className="material-symbols-outlined text-[18px]">filter_list</span>
-                                Filter { (searchQuery || selectedCategory !== 'All') && '• Active' }
-                            </button>
                             {currentUser?.role !== 'SYSADM' && (
                                 <button 
                                     onClick={() => setViewMode('create')}
@@ -708,36 +723,50 @@ export default function Articles() {
                         </div>
                     </div>
 
-                    {/* Interactive Filter Control Bar */}
-                    {showFilterBar && (
-                        <div className="p-5 rounded-2xl border border-teal-500/30 bg-white dark:bg-slate-900 shadow-xl mb-6 animate-in fade-in slide-in-from-top-4 duration-300 flex flex-col md:flex-row items-center gap-4">
-                            {/* Search Input */}
-                            <div className="relative flex-1 w-full">
-                                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
-                                <input 
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Search articles by title, content, or author..."
-                                    className="w-full pl-10 pr-8 py-2.5 text-xs font-bold rounded-xl outline-none border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500/30"
-                                />
-                                {searchQuery && (
-                                    <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
-                                        <span className="material-symbols-outlined text-[16px]">close</span>
-                                    </button>
-                                )}
-                            </div>
-                            {/* Reset Filters button if active */}
-                            {(searchQuery || selectedCategory !== 'All') && (
-                                <button 
-                                    onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}
-                                    className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline shrink-0 cursor-pointer"
-                                >
-                                    Reset Filters
+                    {/* Search & Sort Bar */}
+                    <div className="p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm mb-6 flex flex-col md:flex-row items-center gap-3">
+                        {/* Search Input */}
+                        <div className="relative flex-1 w-full">
+                            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none">search</span>
+                            <input 
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search articles by title, content, or author..."
+                                className="w-full pl-10 pr-8 py-2.5 text-xs font-bold rounded-xl outline-none border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500/30 transition-all"
+                            />
+                            {searchQuery && (
+                                <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer">
+                                    <span className="material-symbols-outlined text-[16px]">close</span>
                                 </button>
                             )}
                         </div>
-                    )}
+
+                        {/* Sort Dropdown & Reset */}
+                        <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0 justify-between md:justify-end">
+                            <div className="relative flex-1 md:flex-initial">
+                                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px] pointer-events-none">swap_vert</span>
+                                <select 
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    className="w-full md:w-auto appearance-none pl-9 pr-8 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl outline-none cursor-pointer focus:ring-2 focus:ring-teal-500/30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                                >
+                                    <option value="newest">Newest posted</option>
+                                    <option value="oldest">Oldest posted</option>
+                                </select>
+                                <span className="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px] pointer-events-none">expand_more</span>
+                            </div>
+
+                            {(searchQuery || selectedCategory !== 'All' || sortBy !== 'newest') && (
+                                <button 
+                                    onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setSortBy('newest'); }}
+                                    className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline shrink-0 cursor-pointer px-1 py-1"
+                                >
+                                    Reset
+                                </button>
+                            )}
+                        </div>
+                    </div>
 
                     {/* Categories Chips */}
                     <div className="flex flex-wrap gap-1.5 w-full items-center mb-2">
