@@ -109,14 +109,14 @@ public class MessagesController : KnomeControllerBase
     }
 
     /// <summary>
-    /// Soft-deletes a message.
+    /// Soft-deletes a message with options: delete for me or delete for everyone.
     /// </summary>
     [HttpDelete("{messageId:long}")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> DeleteMessage([FromRoute] long messageId)
+    public async Task<IActionResult> DeleteMessage([FromRoute] long messageId, [FromQuery] bool deleteForEveryone = false)
     {
         var currentUserId = GetCurrentUserId();
-        var result = await _messageService.DeleteMessageAsync(messageId, currentUserId);
+        var result = await _messageService.DeleteMessageAsync(messageId, currentUserId, deleteForEveryone);
         return Ok(ApiResponse<bool>.SuccessResponse(200, "Message deleted successfully.", result));
     }
 

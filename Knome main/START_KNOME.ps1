@@ -95,7 +95,7 @@ Write-Host " ALL SERVICES ARE ACTIVE AND RUNNING!" -ForegroundColor Green
 Write-Host "  -> IIS Knome Portal:     http://localhost:8080" -ForegroundColor Cyan
 Write-Host "  -> IIS EmployeeHub:      http://localhost:8081" -ForegroundColor Cyan
 Write-Host "  -> Knome Dev UI:         http://localhost:5173" -ForegroundColor Cyan
-Write-Host "  -> Knome Backend API:    http://localhost:5095" -ForegroundColor Cyan
+Write-Host "  -> Knome Backend API:    http://localhost:5096 (or 5095)" -ForegroundColor Cyan
 Write-Host "  -> Network / WiFi IP:    http://172.16.17.46:8080" -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host "Press Ctrl+C in this terminal to stop all Knome services." -ForegroundColor Gray
