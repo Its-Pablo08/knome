@@ -540,149 +540,190 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                 />
 
                 {/* Status & Cover Banner Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                    {/* Publication Status */}
+                    <div className="space-y-1.5">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                             Publication Status
                         </label>
                         <select
                             value={status}
                             onChange={(e) => setStatus(e.target.value)}
-                            className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 shadow-2xs"
                         >
                             <option value="Published">🌐 Published (Organization Visible)</option>
                             <option value="Draft">🔒 Draft (Authors & Collaborators Only)</option>
                             {isEditMode && <option value="Archived">📦 Archived (Read-Only Archive)</option>}
                         </select>
+                        <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-relaxed">
+                            {status === 'Published'
+                                ? 'Published wikis are visible to all employees across the organization.'
+                                : status === 'Draft'
+                                    ? 'Draft wikis are restricted to authors and designated collaborators.'
+                                    : 'Archived wikis are preserved in read-only mode.'}
+                        </p>
                     </div>
 
-                    <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                                Cover Banner Preset & Attachments
+                    {/* Cover Banner Preset & Attachments Card */}
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[15px] text-teal-600 dark:text-teal-400">image</span>
+                                <span>Cover Banner</span>
                             </label>
-                            <div className="flex items-center gap-1">
+                            <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+                                Preset or Custom
+                            </span>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/90 dark:border-slate-700/60 space-y-2.5">
+                            {/* Toolbar: Quick Presets Label & Action Buttons */}
+                            <div className="flex items-center justify-between gap-1.5">
+                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                    Quick Presets
+                                </span>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPresetGalleryOpen(true)}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all shadow-2xs hover:text-teal-600 dark:hover:text-teal-400 cursor-pointer"
+                                        title="Browse full preset gallery"
+                                    >
+                                        <span className="material-symbols-outlined text-[14px] text-teal-600 dark:text-teal-400">photo_library</span>
+                                        <span>Presets</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => coverFileInputRef.current?.click()}
+                                        disabled={isUploadingCover}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all shadow-2xs hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-50 cursor-pointer"
+                                        title="Upload custom banner image from device (JPG, PNG, WebP)"
+                                    >
+                                        {isUploadingCover ? (
+                                            <span className="w-3 h-3 border-2 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
+                                        ) : (
+                                            <span className="material-symbols-outlined text-[14px] text-indigo-600 dark:text-indigo-400">cloud_upload</span>
+                                        )}
+                                        <span>Upload</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleAttachUrl}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all shadow-2xs hover:text-cyan-600 dark:hover:text-cyan-400 cursor-pointer"
+                                        title="Attach banner from direct image URL"
+                                    >
+                                        <span className="material-symbols-outlined text-[14px] text-slate-500 dark:text-slate-400">link</span>
+                                        <span>URL</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Quick Presets Strip */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 custom-scrollbar">
+                                {PRESET_COVER_BANNERS.slice(0, 6).map((preset) => {
+                                    const isSel = coverImageUrl === preset.url;
+                                    return (
+                                        <button
+                                            key={preset.id}
+                                            type="button"
+                                            onClick={() => handleSelectPreset(preset.url, preset.name)}
+                                            className={`w-10 h-10 rounded-xl overflow-hidden shrink-0 border-2 transition-all relative group cursor-pointer ${
+                                                isSel
+                                                    ? 'border-teal-500 ring-2 ring-teal-500/30 scale-105 shadow-sm'
+                                                    : 'border-transparent opacity-80 hover:opacity-100 hover:scale-105'
+                                            }`}
+                                            title={`${preset.name} (${preset.category})`}
+                                        >
+                                            <img
+                                                src={preset.url}
+                                                alt={preset.name}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                    e.target.style.display = 'none';
+                                                    if (e.target.parentElement) {
+                                                        e.target.parentElement.style.background = 'linear-gradient(135deg, #0d9488 0%, #065f46 100%)';
+                                                    }
+                                                }}
+                                            />
+                                            {isSel && (
+                                                <div className="absolute inset-0 bg-teal-900/40 backdrop-blur-[0.5px] flex items-center justify-center">
+                                                    <span className="material-symbols-outlined text-[14px] text-white font-bold drop-shadow">check</span>
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                })}
                                 <button
                                     type="button"
                                     onClick={() => setIsPresetGalleryOpen(true)}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors cursor-pointer border border-teal-200/80 dark:border-teal-800/60"
-                                    title="Open Cover Banner Preset Attachment catalog"
+                                    className="w-10 h-10 rounded-xl shrink-0 border border-dashed border-teal-500/50 hover:border-teal-500 bg-teal-50/40 dark:bg-teal-950/30 hover:bg-teal-50 text-teal-600 dark:text-teal-400 flex flex-col items-center justify-center transition-all cursor-pointer group"
+                                    title="Browse all 12 Cover Banner Presets"
                                 >
-                                    <span className="material-symbols-outlined text-[13px]">photo_library</span>
-                                    <span>Presets</span>
+                                    <span className="material-symbols-outlined text-[16px] group-hover:scale-110 transition-transform">add_photo_alternate</span>
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => coverFileInputRef.current?.click()}
-                                    disabled={isUploadingCover}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors cursor-pointer border border-indigo-200/80 dark:border-indigo-800/60 disabled:opacity-50"
-                                    title="Upload custom cover photo from device (JPG, PNG, WebP)"
-                                >
-                                    {isUploadingCover ? (
-                                        <span className="w-3 h-3 border-2 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
-                                    ) : (
-                                        <span className="material-symbols-outlined text-[13px]">cloud_upload</span>
-                                    )}
-                                    <span>Upload</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleAttachUrl}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
-                                    title="Attach image from web URL"
-                                >
-                                    <span className="material-symbols-outlined text-[13px]">link</span>
-                                    <span>URL</span>
-                                </button>
-                                {coverImageUrl && (
-                                    <button
-                                        type="button"
-                                        onClick={handleRemoveCover}
-                                        className="p-0.5 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-                                        title="Remove cover banner"
-                                    >
-                                        <span className="material-symbols-outlined text-[15px]">close</span>
-                                    </button>
-                                )}
                             </div>
-                        </div>
 
-                        {/* Quick Presets Strip */}
-                        <div className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scrollbar">
-                            {PRESET_COVER_BANNERS.slice(0, 6).map((preset) => {
-                                const isSel = coverImageUrl === preset.url;
-                                return (
-                                    <button
-                                        key={preset.id}
-                                        type="button"
-                                        onClick={() => handleSelectPreset(preset.url, preset.name)}
-                                        className={`w-10 h-10 rounded-lg overflow-hidden shrink-0 border-2 transition-all relative group cursor-pointer ${
-                                            isSel
-                                                ? 'border-teal-500 scale-105 shadow-md ring-2 ring-teal-500/30'
-                                                : 'border-transparent opacity-75 hover:opacity-100 hover:scale-105'
-                                        }`}
-                                        title={`Attach Preset: ${preset.name} (${preset.category})`}
-                                    >
+                            {/* Active Attached Banner Badge / Preview */}
+                            {coverImageUrl ? (
+                                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs text-[11px]">
+                                    <div className="flex items-center gap-2.5 min-w-0">
                                         <img
-                                            src={preset.url}
-                                            alt={preset.name}
-                                            className="w-full h-full object-cover"
+                                            src={resolveMediaUrl(coverImageUrl)}
+                                            alt="Active Cover"
+                                            className="w-8 h-6 rounded-md object-cover shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs"
                                             onError={(e) => {
                                                 e.target.style.display = 'none';
-                                                if (e.target.parentElement) {
-                                                    e.target.parentElement.style.background = 'linear-gradient(135deg, #0d9488 0%, #065f46 100%)';
-                                                }
                                             }}
                                         />
-                                        {isSel && (
-                                            <div className="absolute inset-0 bg-teal-900/30 flex items-center justify-center">
-                                                <span className="material-symbols-outlined text-[14px] text-white font-bold drop-shadow">check</span>
-                                            </div>
-                                        )}
-                                    </button>
-                                );
-                            })}
-                            <button
-                                type="button"
-                                onClick={() => setIsPresetGalleryOpen(true)}
-                                className="w-10 h-10 rounded-lg shrink-0 border border-dashed border-teal-500/50 hover:border-teal-500 bg-teal-50/50 dark:bg-teal-950/30 hover:bg-teal-50 text-teal-600 dark:text-teal-400 flex flex-col items-center justify-center transition-all cursor-pointer"
-                                title="Browse all Cover Banner Presets"
-                            >
-                                <span className="material-symbols-outlined text-[16px]">add_photo_alternate</span>
-                            </button>
-                        </div>
-
-                        {/* Active Attached Banner Badge / Preview */}
-                        {coverImageUrl && (
-                            <div className="mt-1.5 flex items-center justify-between px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-[11px]">
-                                <div className="flex items-center gap-2 min-w-0">
-                                    <img
-                                        src={resolveMediaUrl(coverImageUrl)}
-                                        alt="Current Cover"
-                                        className="w-5 h-5 rounded object-cover shrink-0 border border-slate-300 dark:border-slate-600"
-                                        onError={(e) => {
-                                            e.target.style.display = 'none';
-                                        }}
-                                    />
-                                    <span className="truncate text-slate-700 dark:text-slate-300 font-medium">
-                                        {PRESET_COVER_BANNERS.find(p => p.url === coverImageUrl)?.name
-                                            ? `Preset: ${PRESET_COVER_BANNERS.find(p => p.url === coverImageUrl).name}`
-                                            : coverImageUrl.startsWith('data:')
-                                                ? 'Local Image Attached'
-                                                : coverImageUrl.includes('/Media/') || coverImageUrl.includes('/uploads/')
-                                                    ? 'Uploaded Image Attached'
-                                                    : 'External Image URL Attached'}
-                                    </span>
+                                        <div className="min-w-0">
+                                            <p className="truncate font-semibold text-slate-800 dark:text-slate-200 leading-tight">
+                                                {PRESET_COVER_BANNERS.find(p => p.url === coverImageUrl)?.name ||
+                                                    (coverImageUrl.startsWith('data:')
+                                                        ? 'Custom Local Image'
+                                                        : coverImageUrl.includes('/Media/') || coverImageUrl.includes('/uploads/')
+                                                            ? 'Uploaded Custom Image'
+                                                            : 'External Image URL')}
+                                            </p>
+                                            <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                                <span>Attached Banner</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsPresetGalleryOpen(true)}
+                                            className="text-teal-600 dark:text-teal-400 hover:text-teal-700 font-semibold cursor-pointer px-1.5 py-0.5 rounded hover:bg-teal-50 dark:hover:bg-teal-950/60 transition-colors"
+                                        >
+                                            Change
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleRemoveCover}
+                                            className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors cursor-pointer"
+                                            title="Remove cover banner"
+                                        >
+                                            <span className="material-symbols-outlined text-[14px]">close</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsPresetGalleryOpen(true)}
-                                    className="text-teal-600 dark:text-teal-400 hover:underline font-bold shrink-0 ml-2 cursor-pointer"
-                                >
-                                    Change
-                                </button>
-                            </div>
-                        )}
+                            ) : (
+                                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-white/60 dark:bg-slate-800/60 border border-dashed border-slate-300 dark:border-slate-700 text-[11px] text-slate-400">
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="material-symbols-outlined text-[14px]">info</span>
+                                        <span>No cover banner attached</span>
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPresetGalleryOpen(true)}
+                                        className="text-teal-600 dark:text-teal-400 font-semibold hover:underline cursor-pointer"
+                                    >
+                                        Pick Preset
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 

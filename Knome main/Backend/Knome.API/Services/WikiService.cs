@@ -332,99 +332,103 @@ public class WikiService : IWikiService
 
         var sanitizedContent = HtmlSanitizerHelper.Sanitize(dto.ContentHtml);
 
-        var wiki = new Wiki
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            Title = dto.Title.Trim(),
-            Description = dto.Description?.Trim(),
-            ContentHtml = sanitizedContent,
-            Status = string.IsNullOrWhiteSpace(dto.Status) ? "Published" : dto.Status,
-            CreatedByUserId = currentUserId,
-            CategoryId = dto.CategoryId > 0 ? dto.CategoryId : null,
-            CoverImageUrl = dto.CoverImageUrl,
-            IsArchived = false,
-            IsDeleted = false,
-            ViewCount = 0
-        };
-
-        using var tx = await _db.Database.BeginTransactionAsync();
-        try
-        {
-            var created = await _repo.AddWikiAsync(wiki, dto.Tags);
-
-            // Record initial version 1
-            var initialVersion = new WikiVersion
+            var wiki = new Wiki
             {
-                WikiId = created.WikiId,
-                SectionId = null,
-                VersionNumber = 1,
-                Title = created.Title,
-                Description = created.Description,
+                Title = dto.Title.Trim(),
+                Description = dto.Description?.Trim(),
                 ContentHtml = sanitizedContent,
-                ChangeSummary = "Initial creation",
-                CreatedByUserId = currentUserId
+                Status = string.IsNullOrWhiteSpace(dto.Status) ? "Published" : dto.Status,
+                CreatedByUserId = currentUserId,
+                CategoryId = dto.CategoryId > 0 ? dto.CategoryId : null,
+                CoverImageUrl = dto.CoverImageUrl,
+                IsArchived = false,
+                IsDeleted = false,
+                ViewCount = 0
             };
-            await _repo.AddVersionAsync(initialVersion);
 
-            // Add creator as Wiki Owner collaborator
-            await _repo.AddOrUpdateCollaboratorAsync(new WikiCollaborator
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
             {
-                WikiId = created.WikiId,
-                SectionId = null,
-                UserId = currentUserId,
-                Role = "Owner",
-                AddedByUserId = currentUserId
-            });
+                var created = await _repo.AddWikiAsync(wiki, dto.Tags);
 
-            // Add initial collaborators if provided
-            if (dto.InitialCollaborators != null && dto.InitialCollaborators.Count > 0)
-            {
-                foreach (var c in dto.InitialCollaborators.Where(c => c.UserId != currentUserId))
+                // Record initial version 1
+                var initialVersion = new WikiVersion
                 {
-                    await _repo.AddOrUpdateCollaboratorAsync(new WikiCollaborator
-                    {
-                        WikiId = created.WikiId,
-                        SectionId = c.SectionId,
-                        UserId = c.UserId,
-                        Role = string.IsNullOrWhiteSpace(c.Role) ? "Viewer" : c.Role,
-                        AddedByUserId = currentUserId
-                    });
-                }
-            }
+                    WikiId = created.WikiId,
+                    SectionId = null,
+                    VersionNumber = 1,
+                    Title = created.Title,
+                    Description = created.Description,
+                    ContentHtml = sanitizedContent,
+                    ChangeSummary = "Initial creation",
+                    CreatedByUserId = currentUserId
+                };
+                await _repo.AddVersionAsync(initialVersion);
 
-            // Add initial shares if provided
-            if (dto.InitialShares != null && dto.InitialShares.Count > 0)
-            {
-                foreach (var s in dto.InitialShares)
+                // Add creator as Wiki Owner collaborator
+                await _repo.AddOrUpdateCollaboratorAsync(new WikiCollaborator
                 {
-                    await _repo.AddShareAsync(new WikiShare
+                    WikiId = created.WikiId,
+                    SectionId = null,
+                    UserId = currentUserId,
+                    Role = "Owner",
+                    AddedByUserId = currentUserId
+                });
+
+                // Add initial collaborators if provided
+                if (dto.InitialCollaborators != null && dto.InitialCollaborators.Count > 0)
+                {
+                    foreach (var c in dto.InitialCollaborators.Where(c => c.UserId != currentUserId))
                     {
-                        WikiId = created.WikiId,
-                        ShareType = s.ShareType,
-                        TargetId = s.TargetId,
-                        AccessLevel = string.IsNullOrWhiteSpace(s.AccessLevel) ? "Viewer" : s.AccessLevel,
-                        SharedByUserId = currentUserId
-                    });
+                        await _repo.AddOrUpdateCollaboratorAsync(new WikiCollaborator
+                        {
+                            WikiId = created.WikiId,
+                            SectionId = c.SectionId,
+                            UserId = c.UserId,
+                            Role = string.IsNullOrWhiteSpace(c.Role) ? "Viewer" : c.Role,
+                            AddedByUserId = currentUserId
+                        });
+                    }
                 }
+
+                // Add initial shares if provided
+                if (dto.InitialShares != null && dto.InitialShares.Count > 0)
+                {
+                    foreach (var s in dto.InitialShares)
+                    {
+                        await _repo.AddShareAsync(new WikiShare
+                        {
+                            WikiId = created.WikiId,
+                            ShareType = s.ShareType,
+                            TargetId = s.TargetId,
+                            AccessLevel = string.IsNullOrWhiteSpace(s.AccessLevel) ? "Viewer" : s.AccessLevel,
+                            SharedByUserId = currentUserId
+                        });
+                    }
+                }
+
+                // Log audit activity
+                await _auditLog.RecordAsync(currentUserId, "WikiCreated", "Wiki", created.WikiId, $"Created Wiki '{created.Title}'");
+
+                await tx.CommitAsync();
+
+                var result = await _repo.GetWikiByIdAsync(created.WikiId);
+                var resultDto = _mapper.Map<WikiDto>(result);
+                resultDto.UserPermission = "Owner";
+                resultDto.CanEdit = true;
+                resultDto.CanDelete = true;
+                resultDto.CanManageCollaborators = true;
+                return resultDto;
             }
-
-            // Log audit activity
-            await _auditLog.RecordAsync(currentUserId, "WikiCreated", "Wiki", created.WikiId, $"Created Wiki '{created.Title}'");
-
-            await tx.CommitAsync();
-
-            var result = await _repo.GetWikiByIdAsync(created.WikiId);
-            var resultDto = _mapper.Map<WikiDto>(result);
-            resultDto.UserPermission = "Owner";
-            resultDto.CanEdit = true;
-            resultDto.CanDelete = true;
-            resultDto.CanManageCollaborators = true;
-            return resultDto;
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        });
     }
 
     public async Task<WikiDto> UpdateWikiAsync(long wikiId, int currentUserId, UpdateWikiDto dto)
