@@ -12,4 +12,5 @@ public class UpdateWikiDto
     public string? CoverImageUrl { get; set; }
     public List<string> Tags { get; set; } = new();
     public string? ChangeSummary { get; set; }
+    public System.DateTime? ExpectedUpdatedDate { get; set; }
 }

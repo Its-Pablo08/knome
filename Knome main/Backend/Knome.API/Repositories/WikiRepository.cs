@@ -59,6 +59,16 @@ public class WikiRepository : IWikiRepository
         int currentUserId,
         bool isAdministrator)
     {
+        var userCommunityIds = await _db.CommunityMembers
+            .Where(m => m.UserId == currentUserId && (m.Status == "Active" || m.Status == "Approved"))
+            .Select(m => (long)m.CommunityId)
+            .ToListAsync();
+
+        var userDeptId = await _db.Users
+            .Where(u => u.UserId == currentUserId)
+            .Select(u => u.DepartmentId)
+            .FirstOrDefaultAsync();
+
         var query = _db.Wikis
             .Include(w => w.CreatedByUser)
             .Include(w => w.Category)
@@ -87,14 +97,16 @@ public class WikiRepository : IWikiRepository
             query = query.Where(w => w.WikiTags.Any(t => t.Tag.ToLower() == tag.ToLower()));
         }
 
-        // Search filter (Title, Description, or ContentHtml)
+        // Search filter (Title, Description, ContentHtml, Tags, and Subsections)
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
             query = query.Where(w =>
                 w.Title.ToLower().Contains(s) ||
                 (w.Description != null && w.Description.ToLower().Contains(s)) ||
-                w.WikiTags.Any(t => t.Tag.ToLower().Contains(s)));
+                w.ContentHtml.ToLower().Contains(s) ||
+                w.WikiTags.Any(t => t.Tag.ToLower().Contains(s)) ||
+                w.WikiSections.Any(sec => !sec.IsDeleted && (sec.Title.ToLower().Contains(s) || sec.ContentHtml.ToLower().Contains(s))));
         }
 
         // Tab filter
@@ -109,7 +121,10 @@ public class WikiRepository : IWikiRepository
             query = query.Where(w =>
                 w.CreatedByUserId != currentUserId &&
                 (w.WikiCollaborators.Any(c => c.UserId == currentUserId) ||
-                 w.WikiShares.Any(s => (s.ShareType == "User" && s.TargetId == currentUserId))));
+                 w.WikiShares.Any(s =>
+                    (s.ShareType == "User" && s.TargetId == currentUserId) ||
+                    (s.ShareType == "Community" && userCommunityIds.Contains(s.TargetId)) ||
+                    (s.ShareType == "Group" && userDeptId != null && s.TargetId == userDeptId.Value))));
         }
         else if (tabLower == "archived")
         {
@@ -117,13 +132,18 @@ public class WikiRepository : IWikiRepository
         }
         else
         {
-            // "all" or general list: regular users see Published wikis OR their own Drafts/Shared items
+            // "all" or general list: regular users see Published/Archived wikis OR their own Drafts/Shared items
             if (!isAdministrator)
             {
                 query = query.Where(w =>
                     w.Status == "Published" ||
+                    w.Status == "Archived" ||
                     w.CreatedByUserId == currentUserId ||
-                    w.WikiCollaborators.Any(c => c.UserId == currentUserId));
+                    w.WikiCollaborators.Any(c => c.UserId == currentUserId) ||
+                    w.WikiShares.Any(s =>
+                        (s.ShareType == "User" && s.TargetId == currentUserId) ||
+                        (s.ShareType == "Community" && userCommunityIds.Contains(s.TargetId)) ||
+                        (s.ShareType == "Group" && userDeptId != null && s.TargetId == userDeptId.Value)));
             }
         }
 
@@ -145,6 +165,11 @@ public class WikiRepository : IWikiRepository
         int count = 10,
         bool isAdministrator = false)
     {
+        var userDeptId = await _db.Users
+            .Where(u => u.UserId == currentUserId)
+            .Select(u => u.DepartmentId)
+            .FirstOrDefaultAsync();
+
         var query = _db.Wikis
             .Include(w => w.CreatedByUser)
             .Include(w => w.Category)
@@ -163,7 +188,8 @@ public class WikiRepository : IWikiRepository
                 w.WikiCollaborators.Any(c => c.UserId == currentUserId) ||
                 w.WikiShares.Any(s =>
                     (s.ShareType == "User" && s.TargetId == currentUserId) ||
-                    (s.ShareType == "Community" && userCommunityIds.Contains(s.TargetId))));
+                    (s.ShareType == "Community" && userCommunityIds.Contains(s.TargetId)) ||
+                    (s.ShareType == "Group" && userDeptId != null && s.TargetId == userDeptId.Value)));
         }
 
         return await query
@@ -181,12 +207,19 @@ public class WikiRepository : IWikiRepository
 
         if (tags != null && tags.Count > 0)
         {
-            foreach (var t in tags.Where(s => !string.IsNullOrWhiteSpace(s)).Distinct())
+            var cleanTags = tags
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s.Trim().TrimStart('#'))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var t in cleanTags)
             {
                 _db.WikiTags.Add(new WikiTag
                 {
                     WikiId = wiki.WikiId,
-                    Tag = t.Trim().TrimStart('#')
+                    Tag = t
                 });
             }
             await _db.SaveChangesAsync();
@@ -205,12 +238,19 @@ public class WikiRepository : IWikiRepository
             var existingTags = await _db.WikiTags.Where(t => t.WikiId == wiki.WikiId).ToListAsync();
             _db.WikiTags.RemoveRange(existingTags);
 
-            foreach (var t in tags.Where(s => !string.IsNullOrWhiteSpace(s)).Distinct())
+            var cleanTags = tags
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s.Trim().TrimStart('#'))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var t in cleanTags)
             {
                 _db.WikiTags.Add(new WikiTag
                 {
                     WikiId = wiki.WikiId,
-                    Tag = t.Trim().TrimStart('#')
+                    Tag = t
                 });
             }
         }
@@ -221,6 +261,14 @@ public class WikiRepository : IWikiRepository
     public async Task DeleteWikiAsync(Wiki wiki)
     {
         wiki.IsDeleted = true;
+        wiki.UpdatedDate = KnomeTime.Now;
+        _db.Wikis.Update(wiki);
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task RestoreWikiAsync(Wiki wiki)
+    {
+        wiki.IsDeleted = false;
         wiki.UpdatedDate = KnomeTime.Now;
         _db.Wikis.Update(wiki);
         await _db.SaveChangesAsync();
@@ -237,12 +285,9 @@ public class WikiRepository : IWikiRepository
 
     public async Task IncrementViewCountAsync(long wikiId)
     {
-        var wiki = await _db.Wikis.FindAsync(wikiId);
-        if (wiki != null)
-        {
-            wiki.ViewCount += 1;
-            await _db.SaveChangesAsync();
-        }
+        await _db.Wikis
+            .Where(w => w.WikiId == wikiId)
+            .ExecuteUpdateAsync(s => s.SetProperty(w => w.ViewCount, w => w.ViewCount + 1));
     }
 
     public async Task<List<string>> GetPopularTagsAsync(int count = 20)
@@ -268,14 +313,21 @@ public class WikiRepository : IWikiRepository
             .ToListAsync();
     }
 
-    public async Task<WikiSection?> GetSectionByIdAsync(long sectionId)
+    public async Task<WikiSection?> GetSectionByIdAsync(long sectionId, bool includeDeleted = false)
     {
-        return await _db.WikiSections
+        var query = _db.WikiSections
             .Include(s => s.CreatedByUser)
-            .Include(s => s.Subsections.Where(sub => !sub.IsDeleted))
+            .Include(s => s.Subsections.Where(sub => includeDeleted || !sub.IsDeleted))
             .Include(s => s.WikiCollaborators)
                 .ThenInclude(c => c.User)
-            .FirstOrDefaultAsync(s => s.SectionId == sectionId && !s.IsDeleted);
+            .AsQueryable();
+
+        if (!includeDeleted)
+        {
+            query = query.Where(s => !s.IsDeleted);
+        }
+
+        return await query.FirstOrDefaultAsync(s => s.SectionId == sectionId);
     }
 
     public async Task<WikiSection> AddSectionAsync(WikiSection section)
@@ -343,13 +395,32 @@ public class WikiRepository : IWikiRepository
             .Where(s => s.WikiId == wikiId && sectionIds.Contains(s.SectionId))
             .ToListAsync();
 
+        var validSectionIdsInWiki = await _db.WikiSections
+            .Where(s => s.WikiId == wikiId && !s.IsDeleted)
+            .Select(s => s.SectionId)
+            .ToListAsync();
+
         foreach (var s in sections)
         {
             var match = items.FirstOrDefault(i => i.SectionId == s.SectionId);
             if (match != null)
             {
                 s.SortOrder = match.SortOrder;
-                s.ParentSectionId = match.ParentSectionId;
+                if (match.ParentSectionId.HasValue && match.ParentSectionId.Value > 0)
+                {
+                    if (validSectionIdsInWiki.Contains(match.ParentSectionId.Value) && match.ParentSectionId.Value != s.SectionId)
+                    {
+                        s.ParentSectionId = match.ParentSectionId;
+                    }
+                    else
+                    {
+                        s.ParentSectionId = null;
+                    }
+                }
+                else
+                {
+                    s.ParentSectionId = null;
+                }
                 s.UpdatedDate = KnomeTime.Now;
             }
         }
@@ -479,10 +550,16 @@ public class WikiRepository : IWikiRepository
 
     public async Task<bool> IsWikiSharedWithUserAsync(long wikiId, int userId, List<long> userCommunityIds, string? userDepartment)
     {
+        var userDeptId = await _db.Users
+            .Where(u => u.UserId == userId)
+            .Select(u => u.DepartmentId)
+            .FirstOrDefaultAsync();
+
         return await _db.WikiShares.AnyAsync(s =>
             s.WikiId == wikiId && (
                 (s.ShareType == "User" && s.TargetId == userId) ||
-                (s.ShareType == "Community" && userCommunityIds.Contains(s.TargetId))
+                (s.ShareType == "Community" && userCommunityIds.Contains(s.TargetId)) ||
+                (s.ShareType == "Group" && userDeptId != null && s.TargetId == userDeptId.Value)
             ));
     }
 

@@ -93,6 +93,10 @@ export default function Wiki() {
     };
 
     useEffect(() => {
+        setPageNumber(1);
+    }, [activeTab, searchQuery, selectedTag, selectedStatus]);
+
+    useEffect(() => {
         loadWikis();
     }, [activeTab, searchQuery, selectedTag, selectedStatus, pageNumber]);
 
@@ -158,7 +162,10 @@ export default function Wiki() {
                             <span className="material-symbols-outlined text-[16px]">menu_book</span>
                             Institutional Knowledge & Living Playbooks
                         </div>
-                        <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                        <h1
+                            className="text-2xl sm:text-3xl font-black tracking-tight text-white !text-white"
+                            style={{ color: '#ffffff' }}
+                        >
                             Enterprise Wiki Library
                         </h1>
                         <p className="text-xs sm:text-sm text-teal-100/80 leading-relaxed">
@@ -183,8 +190,8 @@ export default function Wiki() {
             </div>
 
             {/* Navigation Tabs Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-2">
-                <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto custom-scrollbar min-w-0 pr-1">
                     {[
                         { id: 'all', label: 'All Wikis', icon: 'public' },
                         { id: 'my', label: 'My Wikis', icon: 'person' },
@@ -198,7 +205,7 @@ export default function Wiki() {
                                 setActiveTab(tab.id);
                                 setPageNumber(1);
                             }}
-                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                                 activeTab === tab.id
                                     ? 'bg-teal-600 text-white shadow-md shadow-teal-500/20'
                                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -210,27 +217,33 @@ export default function Wiki() {
                     ))}
                 </div>
 
-                {/* View switcher */}
-                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                {/* View switcher (Always visible, distinct, and firmly anchored) */}
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/90 dark:border-slate-700/80 shrink-0 shadow-2xs">
                     <button
                         type="button"
                         onClick={() => setViewMode('grid')}
-                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                            viewMode === 'grid' ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-400 shadow-xs' : 'text-slate-400 hover:text-slate-600'
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            viewMode === 'grid'
+                                ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-300 shadow-xs'
+                                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                         }`}
-                        title="Grid View"
+                        title="Switch to Card Grid View"
                     >
                         <span className="material-symbols-outlined text-[18px]">grid_view</span>
+                        <span>Grid</span>
                     </button>
                     <button
                         type="button"
                         onClick={() => setViewMode('list')}
-                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                            viewMode === 'list' ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-400 shadow-xs' : 'text-slate-400 hover:text-slate-600'
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            viewMode === 'list'
+                                ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-300 shadow-xs'
+                                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                         }`}
-                        title="Directory List View"
+                        title="Switch to Directory List View"
                     >
                         <span className="material-symbols-outlined text-[18px]">view_list</span>
+                        <span>List</span>
                     </button>
                 </div>
             </div>
@@ -263,8 +276,8 @@ export default function Wiki() {
                     )}
                 </div>
 
-                {/* Status Selector */}
-                <div className="flex items-center gap-2">
+                {/* Status Selector & Toolbar View Switcher */}
+                <div className="flex items-center gap-2 shrink-0">
                     <select
                         value={selectedStatus}
                         onChange={(e) => {
@@ -289,6 +302,34 @@ export default function Wiki() {
                             <span className="material-symbols-outlined text-[14px]">close</span>
                         </button>
                     )}
+
+                    {/* Compact View Switcher in Toolbar */}
+                    <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('grid')}
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                                viewMode === 'grid'
+                                    ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-300 shadow-xs'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                            }`}
+                            title="Grid View"
+                        >
+                            <span className="material-symbols-outlined text-[18px]">grid_view</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('list')}
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                                viewMode === 'list'
+                                    ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-300 shadow-xs'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                            }`}
+                            title="Directory List View"
+                        >
+                            <span className="material-symbols-outlined text-[18px]">view_list</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -381,9 +422,13 @@ export default function Wiki() {
                                 {/* Cover Banner */}
                                 <div className="relative h-32 w-full overflow-hidden bg-slate-100 dark:bg-slate-900">
                                     <img
-                                        src={wiki.coverImageUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800'}
+                                        src={resolveMediaUrl(wiki.coverImageUrl) || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800'}
                                         alt=""
                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.src = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800';
+                                        }}
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/30 to-transparent" />
 
@@ -506,51 +551,195 @@ export default function Wiki() {
             ) : (
                 /* Directory List View */
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 overflow-hidden shadow-xs">
-                    <div className="divide-y divide-slate-200 dark:divide-slate-800">
-                        {wikis.map(wiki => (
-                            <div
-                                key={wiki.wikiId}
-                                onClick={() => handleCardClick(wiki.wikiId)}
-                                className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
-                            >
-                                <div className="flex items-center gap-3.5 min-w-0">
-                                    <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 border border-teal-200/60 dark:border-teal-800/60">
-                                        <span className="material-symbols-outlined text-[22px]">menu_book</span>
-                                    </div>
+                    {/* Directory Header Bar */}
+                    <div className="hidden md:grid md:grid-cols-12 gap-4 px-5 py-3 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <div className="md:col-span-5">Document Title & Overview</div>
+                        <div className="md:col-span-3">Status & Permissions</div>
+                        <div className="md:col-span-2">Metrics & Activity</div>
+                        <div className="md:col-span-2 text-right">Actions</div>
+                    </div>
 
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate hover:text-teal-600 transition-colors">
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {wikis.map(wiki => {
+                            const statusColors = {
+                                Published: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+                                Draft: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+                                Archived: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                            };
+
+                            const permBadges = {
+                                Owner: 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200',
+                                Editor: 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-200',
+                                Viewer: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200'
+                            };
+
+                            return (
+                                <div
+                                    key={wiki.wikiId}
+                                    onClick={() => handleCardClick(wiki.wikiId)}
+                                    className="p-4 sm:px-5 flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 items-start md:items-center hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group"
+                                >
+                                    {/* Column 1: Thumbnail & Title & Description */}
+                                    <div className="md:col-span-5 flex items-center gap-3.5 min-w-0 w-full">
+                                        <div className="w-12 h-10 sm:w-14 sm:h-10 rounded-xl overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 group-hover:scale-105 transition-transform duration-300">
+                                            {wiki.coverImageUrl ? (
+                                                <img
+                                                    src={resolveMediaUrl(wiki.coverImageUrl)}
+                                                    alt=""
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                        e.target.style.display = 'none';
+                                                    }}
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400">
+                                                    <span className="material-symbols-outlined text-[20px]">menu_book</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="min-w-0 flex-1">
+                                            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
                                                 <HighlightText text={wiki.title} highlight={searchQuery} />
                                             </h3>
-                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                                                {wiki.status}
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                                {wiki.description || 'Enterprise documentation and living playbook.'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Column 2: Status & Permissions & Tags */}
+                                    <div className="md:col-span-3 flex flex-wrap items-center gap-1.5 w-full">
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusColors[wiki.status] || statusColors.Published}`}>
+                                            {wiki.status}
+                                        </span>
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${permBadges[wiki.userPermission] || permBadges.Viewer}`}>
+                                            {wiki.userPermission}
+                                        </span>
+                                        {wiki.tags && wiki.tags.slice(0, 2).map((t, idx) => (
+                                            <span key={idx} className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                                #{t}
+                                            </span>
+                                        ))}
+                                    </div>
+
+                                    {/* Column 3: Metrics & Activity */}
+                                    <div className="md:col-span-2 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 w-full">
+                                        <span className="flex items-center gap-1" title="Sections">
+                                            <span className="material-symbols-outlined text-[15px] text-teal-500">format_list_bulleted</span>
+                                            {wiki.sectionsCount || 0}
+                                        </span>
+                                        <span className="flex items-center gap-1" title="Collaborators">
+                                            <span className="material-symbols-outlined text-[15px] text-indigo-500">group</span>
+                                            {wiki.collaboratorsCount || 0}
+                                        </span>
+                                        <span className="text-[11px] text-slate-400 ml-auto md:ml-0">
+                                            {new Date(wiki.updatedDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                        </span>
+                                    </div>
+
+                                    {/* Column 4: Author & Action Buttons */}
+                                    <div className="md:col-span-2 flex items-center justify-between md:justify-end gap-2 w-full pt-1 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-1.5 min-w-0 md:hidden">
+                                            <img
+                                                src={resolveMediaUrl(wiki.createdByUserAvatar) || 'https://ui-avatars.com/api/?name=User'}
+                                                alt=""
+                                                className="w-5 h-5 rounded-full object-cover shrink-0"
+                                            />
+                                            <span className="text-[11px] font-medium text-slate-600 dark:text-slate-400 truncate">
+                                                {wiki.createdByUserName}
                                             </span>
                                         </div>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                                            {wiki.description || 'Documentation space'}
-                                        </p>
+
+                                        <div className="flex items-center gap-1 shrink-0 ml-auto">
+                                            {wiki.canEdit && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => handleOpenEdit(wiki, e)}
+                                                    className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                    title="Edit Overview"
+                                                >
+                                                    <span className="material-symbols-outlined text-[17px]">edit</span>
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={(e) => handleOpenShare(wiki, e)}
+                                                className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                title="Share"
+                                            >
+                                                <span className="material-symbols-outlined text-[17px]">share</span>
+                                            </button>
+                                            {wiki.canDelete && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => handleDeleteWiki(wiki, e)}
+                                                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                                                    title="Delete Wiki"
+                                                >
+                                                    <span className="material-symbols-outlined text-[17px]">delete</span>
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
-                                <div className="flex items-center gap-4 shrink-0">
-                                    <div className="hidden sm:flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                                        <span>{wiki.sectionsCount || 0} sections</span>
-                                        <span>•</span>
-                                        <span>{wiki.createdByUserName}</span>
-                                    </div>
+            {/* Pagination Controls (WIKI-011) */}
+            {activeTab !== 'recent' && totalCount > pageSize && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-200 dark:border-slate-800 pt-4 px-2">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Showing <span className="font-semibold text-slate-700 dark:text-slate-200">{(pageNumber - 1) * pageSize + 1}</span> to{' '}
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">{Math.min(pageNumber * pageSize, totalCount)}</span> of{' '}
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">{totalCount}</span> Wikis
+                    </p>
 
-                                    <button
-                                        type="button"
-                                        onClick={(e) => handleOpenShare(wiki, e)}
-                                        className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                        title="Share"
-                                    >
-                                        <span className="material-symbols-outlined text-[18px]">share</span>
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            disabled={pageNumber <= 1}
+                            onClick={() => setPageNumber(prev => Math.max(1, prev - 1))}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+                            Previous
+                        </button>
+
+                        {Array.from({ length: Math.ceil(totalCount / pageSize) }, (_, i) => i + 1)
+                            .filter(p => p === 1 || p === Math.ceil(totalCount / pageSize) || Math.abs(p - pageNumber) <= 1)
+                            .map((p, idx, arr) => {
+                                const showEllipsis = idx > 0 && p - arr[idx - 1] > 1;
+                                return (
+                                    <React.Fragment key={p}>
+                                        {showEllipsis && <span className="px-1 text-xs text-slate-400">...</span>}
+                                        <button
+                                            type="button"
+                                            onClick={() => setPageNumber(p)}
+                                            className={`w-7 h-7 text-xs font-semibold rounded-lg flex items-center justify-center transition-colors ${
+                                                pageNumber === p
+                                                    ? 'bg-teal-600 text-white shadow-xs'
+                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
+                                        >
+                                            {p}
+                                        </button>
+                                    </React.Fragment>
+                                );
+                            })}
+
+                        <button
+                            type="button"
+                            disabled={pageNumber >= Math.ceil(totalCount / pageSize)}
+                            onClick={() => setPageNumber(prev => Math.min(Math.ceil(totalCount / pageSize), prev + 1))}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Next
+                            <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                        </button>
                     </div>
                 </div>
             )}

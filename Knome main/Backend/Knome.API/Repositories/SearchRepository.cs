@@ -41,6 +41,7 @@ public class SearchRepository : ISearchRepository
         if (types.Contains("Video")) all.AddRange(await QueryVideos(request));
         if (types.Contains("Podcast")) all.AddRange(await QueryPodcasts(request));
         if (types.Contains("Job")) all.AddRange(await QueryJobs(request));
+        if (types.Contains("Wiki")) all.AddRange(await QueryWikis(request));
 
         var typeCounts = all
             .GroupBy(x => x.ContentType)
@@ -538,6 +539,75 @@ public class SearchRepository : ISearchRepository
         }).ToListAsync();
     }
 
+    private async Task<List<SearchItemDto>> QueryWikis(GlobalSearchRequestDto req)
+    {
+        var (ql, cleanQ) = GetQueryTerms(req);
+        var query = _context.Wikis
+            .Include(w => w.CreatedByUser)
+            .Include(w => w.Category)
+            .Include(w => w.WikiTags)
+            .Include(w => w.WikiSections)
+            .Where(w => !w.IsDeleted && (w.Status == "Published" || w.Status == "Archived"))
+            .AsQueryable();
+
+        if (HasTags(req))
+        {
+            var lowerTags = req.Tags!.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim().ToLower().TrimStart('#')).ToList();
+            query = query.Where(w => w.WikiTags.Any(t => lowerTags.Contains(t.Tag.ToLower())));
+        }
+
+        if (!string.IsNullOrEmpty(ql))
+        {
+            query = query.Where(w =>
+                w.Title.ToLower().Contains(ql) ||
+                (w.Description != null && w.Description.ToLower().Contains(ql)) ||
+                w.ContentHtml.ToLower().Contains(ql) ||
+                w.WikiTags.Any(t => t.Tag.ToLower().Contains(ql)) ||
+                w.WikiSections.Any(s => !s.IsDeleted && (s.Title.ToLower().Contains(ql) || s.ContentHtml.ToLower().Contains(ql))) ||
+                (!string.IsNullOrEmpty(cleanQ) && (
+                    w.Title.ToLower().Contains(cleanQ) ||
+                    (w.Description != null && w.Description.ToLower().Contains(cleanQ)) ||
+                    w.ContentHtml.ToLower().Contains(cleanQ) ||
+                    w.WikiTags.Any(t => t.Tag.ToLower().Contains(cleanQ)) ||
+                    w.WikiSections.Any(s => !s.IsDeleted && (s.Title.ToLower().Contains(cleanQ) || s.ContentHtml.ToLower().Contains(cleanQ)))
+                ))
+            );
+        }
+
+        if (!string.IsNullOrWhiteSpace(req.Author))
+        {
+            var authorQ = req.Author.Trim().ToLower();
+            query = query.Where(w => w.CreatedByUser != null && w.CreatedByUser.FullName.ToLower().Contains(authorQ));
+        }
+
+        if (req.CategoryId.HasValue)
+            query = query.Where(w => w.CategoryId == req.CategoryId);
+
+        if (req.DepartmentId.HasValue)
+            query = query.Where(w => w.CreatedByUser != null && w.CreatedByUser.DepartmentId == req.DepartmentId);
+
+        if (req.DateFrom.HasValue) query = query.Where(w => w.CreatedDate >= req.DateFrom.Value);
+        if (req.DateTo.HasValue) query = query.Where(w => w.CreatedDate <= req.DateTo.Value);
+
+        return await query.Select(w => new SearchItemDto
+        {
+            ContentType = "Wiki",
+            Id = w.WikiId,
+            Title = w.Title,
+            Summary = w.Description ?? (w.ContentHtml.Length > 200 ? w.ContentHtml.Substring(0, 200) : w.ContentHtml),
+            AuthorFullName = w.CreatedByUser != null ? w.CreatedByUser.FullName : string.Empty,
+            AuthorEmployeeId = w.CreatedByUser != null ? w.CreatedByUser.EmployeeId : string.Empty,
+            CreatedDate = w.CreatedDate,
+            EngagementScore = w.ViewCount,
+            PopularityScore = w.ViewCount,
+            ThumbnailUrl = w.CoverImageUrl,
+            AuthorProfilePhotoUrl = w.CreatedByUser != null ? w.CreatedByUser.ProfilePhotoUrl : null,
+            CategoryName = w.Category != null ? w.Category.Name : null,
+            DepartmentName = w.CreatedByUser != null && w.CreatedByUser.Department != null ? w.CreatedByUser.Department.Name : null,
+            Tags = w.WikiTags.Select(t => t.Tag).ToList()
+        }).ToListAsync();
+    }
+
     // ------------------------------------------------------------------ //
     // Shared helpers
     // ------------------------------------------------------------------ //
@@ -557,16 +627,16 @@ public class SearchRepository : ISearchRepository
 
     private static List<string> ResolveTypes(string? contentType)
     {
-        var all = new[] { "User", "Community", "Post", "Article", "Video", "Podcast", "Job" };
+        var all = new[] { "User", "Community", "Post", "Article", "Video", "Podcast", "Job", "Wiki" };
 
         if (string.Equals(contentType, ContentGroup, StringComparison.OrdinalIgnoreCase))
-            return new List<string> { "Post", "Article", "Video", "Podcast" };
+            return new List<string> { "Post", "Article", "Video", "Podcast", "Wiki" };
 
         if (string.Equals(contentType, "People", StringComparison.OrdinalIgnoreCase) || string.Equals(contentType, "User", StringComparison.OrdinalIgnoreCase) || string.Equals(contentType, "Users", StringComparison.OrdinalIgnoreCase))
             return new List<string> { "User" };
 
         if (string.Equals(contentType, "Documents", StringComparison.OrdinalIgnoreCase))
-            return new List<string> { "Article", "Post" };
+            return new List<string> { "Article", "Post", "Wiki" };
 
         if (string.Equals(contentType, "Hashtags", StringComparison.OrdinalIgnoreCase))
             return new List<string> { "Post", "Article", "Video" };
@@ -588,6 +658,9 @@ public class SearchRepository : ISearchRepository
 
         if (string.Equals(contentType, "Jobs", StringComparison.OrdinalIgnoreCase))
             return new List<string> { "Job" };
+
+        if (string.Equals(contentType, "Wikis", StringComparison.OrdinalIgnoreCase) || string.Equals(contentType, "Wiki", StringComparison.OrdinalIgnoreCase))
+            return new List<string> { "Wiki" };
 
         if (!string.IsNullOrWhiteSpace(contentType) && Array.IndexOf(all, contentType) >= 0)
             return new List<string> { contentType! };

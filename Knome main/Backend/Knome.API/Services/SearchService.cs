@@ -34,6 +34,7 @@ public class SearchService : ISearchService
                 "Article" => ContentTypes.Article,
                 "Video" => ContentTypes.Video,
                 "Podcast" => ContentTypes.Podcast,
+                "Wiki" => ContentTypes.Wiki,
                 _ => null
             };
 

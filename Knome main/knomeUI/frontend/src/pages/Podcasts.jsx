@@ -546,88 +546,66 @@ export default function Podcasts() {
 
                     {/* Action Right */}
                     <div className="relative z-10 shrink-0 flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
-                        <button 
-                            onClick={() => setShowFilterBar(!showFilterBar)}
-                            className={`w-full sm:w-auto px-5 py-3 font-bold rounded-xl transition-all flex items-center justify-center gap-2 border ${
-                                showFilterBar || filterKeyword || filterCategory !== 'All' || filterSort !== 'Newest First'
-                                    ? 'bg-pink-500 text-white border-pink-500 shadow-md shadow-pink-500/20'
-                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
-                            }`}
-                        >
-                            <span className="material-symbols-outlined text-[18px]">filter_list</span>
-                            Filter { (filterKeyword || filterCategory !== 'All' || filterSort !== 'Newest First') && '• Active' }
-                        </button>
                         {currentUser?.role !== 'SYSADM' && (
                             <button 
                                 onClick={() => setIsUploadOpen(true)}
-                                className="w-full sm:w-auto px-6 py-3 bg-pink-500 text-white font-bold rounded-xl hover:bg-pink-600 transition-colors shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2"
+                                className="w-full sm:w-auto px-6 py-3 bg-pink-500 text-white font-bold rounded-xl hover:bg-pink-600 transition-colors shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 cursor-pointer"
                             >
                                 <span className="material-symbols-outlined text-[20px]">podcasts</span>
-                                Publish Podcast
+                                Create Podcast
                             </button>
                         )}
                     </div>
                 </div>
 
-                {/* Interactive Filter Control Bar */}
-                {showFilterBar && (
-                    <div className="p-5 rounded-2xl border border-pink-500/30 bg-white dark:bg-slate-900 shadow-xl mb-6 animate-in fade-in slide-in-from-top-4 duration-300 flex flex-col md:flex-row items-center gap-4">
-                        {/* Keyword Search */}
-                        <div className="relative flex-1 w-full">
-                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
-                            <input 
-                                type="text"
-                                value={filterKeyword}
-                                onChange={(e) => setFilterKeyword(e.target.value)}
-                                placeholder="Search by title, author, series..."
-                                className="w-full pl-9 pr-8 py-2 text-xs font-bold rounded-xl outline-none border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                            />
-                            {filterKeyword && (
-                                <button onClick={() => setFilterKeyword('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
-                                    <span className="material-symbols-outlined text-[16px]">close</span>
-                                </button>
-                            )}
-                        </div>
+                {/* Search & Sort Bar */}
+                <div className="p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm mb-6 flex flex-col md:flex-row items-center gap-3">
+                    {/* Keyword Search */}
+                    <div className="relative flex-1 w-full">
+                        <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none">search</span>
+                        <input 
+                            type="text"
+                            value={filterKeyword}
+                            onChange={(e) => setFilterKeyword(e.target.value)}
+                            placeholder="Search by title, author, series..."
+                            className="w-full pl-10 pr-8 py-2.5 text-xs font-bold rounded-xl outline-none border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 transition-all"
+                        />
+                        {filterKeyword && (
+                            <button onClick={() => setFilterKeyword('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer">
+                                <span className="material-symbols-outlined text-[16px]">close</span>
+                            </button>
+                        )}
+                    </div>
 
-                        {/* Category Dropdown */}
-                        <div className="flex items-center gap-2 w-full md:w-auto">
-                            <span className="text-xs font-bold text-slate-400 shrink-0">Category:</span>
-                            <select
-                                value={filterCategory}
-                                onChange={(e) => setFilterCategory(e.target.value)}
-                                className="w-full md:w-auto text-xs font-bold p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none cursor-pointer"
-                            >
-                                <option value="All">All Categories</option>
-                                <option value="General">General</option>
-                                <option value="Tech">Tech</option>
-                                <option value="Leadership">Leadership</option>
-                                <option value="Engineering">Engineering</option>
-                            </select>
-                        </div>
-
-                        {/* Sort Dropdown */}
-                        <div className="flex items-center gap-2 w-full md:w-auto">
+                    {/* Sort Dropdown & Reset */}
+                    <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0 justify-between md:justify-end">
+                        <div className="relative flex-1 md:flex-initial flex items-center gap-2">
                             <span className="text-xs font-bold text-slate-400 shrink-0">Sort:</span>
-                            <select
-                                value={filterSort}
-                                onChange={(e) => setFilterSort(e.target.value)}
-                                className="w-full md:w-auto text-xs font-bold p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none cursor-pointer"
-                            >
-                                <option value="Newest First">Newest First</option>
-                                <option value="Oldest First">Oldest First</option>
-                                <option value="Duration (Longest)">Duration (Longest)</option>
-                            </select>
+                            <div className="relative">
+                                <select
+                                    value={filterSort}
+                                    onChange={(e) => setFilterSort(e.target.value)}
+                                    className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold rounded-xl outline-none cursor-pointer focus:ring-2 focus:ring-pink-500/30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                                >
+                                    <option value="Newest First">Newest First</option>
+                                    <option value="Oldest First">Oldest First</option>
+                                    <option value="Duration (Longest)">Duration (Longest)</option>
+                                </select>
+                                <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 text-[18px] pointer-events-none">expand_more</span>
+                            </div>
                         </div>
 
                         {/* Reset Button */}
-                        <button
-                            onClick={resetFilters}
-                            className="px-4 py-2 text-xs font-bold text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20 rounded-xl transition-colors shrink-0"
-                        >
-                            Reset Filters
-                        </button>
+                        {(filterKeyword || filterSort !== 'Newest First' || selectedSeries) && (
+                            <button
+                                onClick={resetFilters}
+                                className="px-3 py-1.5 text-xs font-bold text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20 rounded-xl transition-colors shrink-0 cursor-pointer"
+                            >
+                                Reset Filters
+                            </button>
+                        )}
                     </div>
-                )}
+                </div>
 
                 {/* Tabs */}
                 <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto custom-scrollbar">

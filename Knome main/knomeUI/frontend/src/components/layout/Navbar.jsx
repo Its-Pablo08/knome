@@ -16,6 +16,7 @@ import { formatNotificationDate, getTimeGroup, isNotificationForUser, isSelfNoti
 import { subscribeToLiveMessages } from '../../utils/realtimeMessenger';
 import { getKarmaLevelInfo } from '../../utils/karmaEngine';
 import { KarmaLevelMedal } from '../ui/KarmaBadge';
+import { isMessagingEnabled } from '../../utils/systemConfig';
 
 const DISCOVER_CATEGORIES = [
     { id: 'All', label: 'All', icon: 'grid_view' },
@@ -1421,6 +1422,7 @@ export default function Navbar() {
         } else if (isCommNotif) {
             dest = resolveCommunityTarget(notif);
         } else if (notif.type === 'message' || notif.type === 'chat' || notif.eventType === 'Message' || relType === 'message' || msg.includes('message') || msg.includes('sent you a message')) {
+            if (!isMessagingEnabled()) return;
             const senderId = notif.senderUserId || notif.senderId || refId;
             const senderName = notif.senderName || notif.parsedSender || '';
             dest = senderId ? `/messages?userId=${senderId}&name=${encodeURIComponent(senderName)}` : '/messages';

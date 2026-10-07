@@ -87,6 +87,8 @@ export function mapArticle(art) {
         description: art.description,
         status: art.status || 'Published',
         scheduledDate: art.scheduledDate || null,
+        publishedDate: art.publishedDate || null,
+        createdDate: art.createdDate || null,
         isScheduledFuture: isScheduledFuture,
         authorUserId: art.authorUserId,
         author: {

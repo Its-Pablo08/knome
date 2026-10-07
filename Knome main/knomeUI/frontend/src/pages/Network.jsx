@@ -7,12 +7,14 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useScrollLoading } from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
+import { useSystemConfig } from '../utils/systemConfig';
 
 const KNOWN_ROSTER_NAMES = {
     'MP0108': 'Loveneesh Sharma',
     'MPO101': 'Loveneesh Sharma',
     'MP0664': 'Vishendra Sharma',
     'MPO102': 'Vishendra Sharma',
+    'EMP052': 'Sourabh Sahu',
     'MPO103': 'Sourabh Sahu',
     'MPO105': 'Meghna',
     'MPO116': 'Meghna',
@@ -28,6 +30,7 @@ const KNOWN_ROSTER_ROLES = {
     'MPO101': { role: 'System Admin', designation: 'TPM' },
     'MP0664': { role: 'Community Admin', designation: 'Track Lead' },
     'MPO102': { role: 'Community Admin', designation: 'Track Lead' },
+    'EMP052': { role: 'HR Admin', designation: 'Talent Acquisition Manager' },
     'MPO103': { role: 'HR Admin', designation: 'Talent Acquisition Manager' },
     'MPO105': { role: 'HR Admin', designation: 'Business Analyst' },
     'MPO116': { role: 'HR Admin', designation: 'Business Analyst' },
@@ -52,6 +55,7 @@ function getRoleBadgeStyle(roleName) {
 }
 
 export default function Network() {
+    const { isMessagingEnabled } = useSystemConfig();
     const { currentUser, users } = useUser();
     const { addToast } = useToast();
     const confirm = useConfirm();
@@ -1000,17 +1004,24 @@ function PersonCard({ person, searchQuery = '', onConnect, onCancel, onAccept, o
                 ) : status === 'Connected' ? (
                     <div className="relative w-full">
                         <div className="flex gap-2">
-                            <button
-                                onClick={() => {
-                                    const targetId = person.id || person.userId;
-                                    navigate(`/messages?userId=${targetId}&name=${encodeURIComponent(person.name)}`);
-                                }}
-                                className="flex-1 py-2 rounded-xl font-bold text-[12.5px] bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
-                                title={`Send message to ${person.name}`}
-                            >
-                                <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
-                                <span>Message</span>
-                            </button>
+                            {isMessagingEnabled ? (
+                                <button
+                                    onClick={() => {
+                                        const targetId = person.id || person.userId;
+                                        navigate(`/messages?userId=${targetId}&name=${encodeURIComponent(person.name)}`);
+                                    }}
+                                    className="flex-1 py-2 rounded-xl font-bold text-[12.5px] bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
+                                    title={`Send message to ${person.name}`}
+                                >
+                                    <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
+                                    <span>Message</span>
+                                </button>
+                            ) : (
+                                <div className="flex-1 py-2 rounded-xl font-bold text-[12.5px] bg-slate-100 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center gap-1.5 select-none">
+                                    <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                                    <span>Connected</span>
+                                </div>
+                            )}
                             <button
                                 onClick={() => setShowMenu(!showMenu)}
                                 className="w-9 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-200 transition-colors flex items-center justify-center cursor-pointer"

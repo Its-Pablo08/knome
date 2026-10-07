@@ -167,11 +167,13 @@
 /* ═══════════════════════
    TYPOGRAPHY
    ═══════════════════════ */
-h1, h2, h3, h4, h5, h6 {
-  font-family: 'Source Sans 3', 'Source Sans Pro', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-  color: var(--text-primary);
-  font-weight: 700;
-  line-height: 1.2;
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Source Sans 3', 'Source Sans Pro', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+    color: var(--text-primary);
+    font-weight: 700;
+    line-height: 1.2;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════

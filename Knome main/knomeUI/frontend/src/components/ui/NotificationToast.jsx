@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatNotificationDate } from '../../utils/notificationHelpers';
+import { isMessagingEnabled } from '../../utils/systemConfig';
 
 export default function NotificationToast({ notification, onClose }) {
     const navigate = useNavigate();
@@ -17,11 +18,13 @@ export default function NotificationToast({ notification, onClose }) {
     const handleToastClick = () => {
         onClose();
         if (notification.targetUrl) {
+            if (notification.targetUrl.startsWith('/messages') && !isMessagingEnabled()) return;
             navigate(notification.targetUrl);
         } else if (notification.isWiki || notification.relatedContentType?.toLowerCase() === 'wiki' || notification.type?.includes('wiki') || (notification.message || '').toLowerCase().includes('wiki') || notification.wikiId) {
             const wId = notification.wikiId || notification.relatedContentId || notification.referenceId;
             navigate(wId ? `/wiki/view?id=${wId}` : '/wiki');
         } else if (notification.type === 'message' || notification.eventType === 'Message' || notification.type?.includes('chat')) {
+            if (!isMessagingEnabled()) return;
             const uId = notification.senderUserId || notification.senderId;
             navigate(uId ? `/messages?userId=${uId}&name=${encodeURIComponent(notification.senderName || '')}` : '/messages');
         } else if (notification.type?.includes('follow') && notification.senderUserId) {

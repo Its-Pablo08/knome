@@ -19,6 +19,7 @@ public static class NotificationTypes
     public const string CommunityJoin = "CommunityJoin";
     public const string Share = "Share";
     public const string ConnectionRequest = "ConnectionRequest";
+    public const string Wiki = "Wiki";
 }
 
 /// <summary>

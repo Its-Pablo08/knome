@@ -85,6 +85,15 @@ public class WikiService : IWikiService
             .Any(s => s.ShareType == "Community" && userCommunities.Contains(s.TargetId) && s.AccessLevel == "Editor");
         if (commEditor) return "Editor";
 
+        // Check department sphere editor share
+        var userDeptId = await _db.Users.Where(u => u.UserId == userId).Select(u => u.DepartmentId).FirstOrDefaultAsync();
+        if (userDeptId.HasValue)
+        {
+            var deptEditor = wiki.WikiShares
+                .Any(s => s.ShareType == "Group" && s.TargetId == userDeptId.Value && s.AccessLevel == "Editor");
+            if (deptEditor) return "Editor";
+        }
+
         return "Viewer";
     }
 
@@ -112,12 +121,13 @@ public class WikiService : IWikiService
         var commIds = await GetUserCommunityIdsAsync(userId);
         if (wiki.WikiShares.Any(s => s.ShareType == "Community" && commIds.Contains(s.TargetId))) return;
 
-        // If Published and no restricted target shares, public to organization
-        var hasRestrictedShares = wiki.WikiShares.Any(s => s.ShareType == "User" || s.ShareType == "Community");
-        if (wiki.Status == "Published" && !hasRestrictedShares) return;
+        // Check department sphere ("Group") share
+        var userDeptId = await _db.Users.Where(u => u.UserId == userId).Select(u => u.DepartmentId).FirstOrDefaultAsync();
+        if (userDeptId.HasValue && wiki.WikiShares.Any(s => s.ShareType == "Group" && s.TargetId == userDeptId.Value)) return;
 
-        // Also check if any share exists
-        if (wiki.Status == "Published") return;
+        // If Published or Archived and no restricted target shares, public to organization
+        var hasRestrictedShares = wiki.WikiShares.Any(s => s.ShareType == "User" || s.ShareType == "Community" || s.ShareType == "Group");
+        if ((wiki.Status == "Published" || wiki.Status == "Archived") && !hasRestrictedShares) return;
 
         throw new ForbiddenException("You do not have permission to view this Wiki.");
     }
@@ -221,37 +231,14 @@ public class WikiService : IWikiService
         dto.CanDelete = perm == "Owner";
         dto.CanManageCollaborators = perm == "Owner";
 
-        // Map Sections hierarchically (Top-level + Subsections)
+        // Map Sections hierarchically (recursive n-tier nesting)
         var allSections = wiki.WikiSections.Where(s => !s.IsDeleted).OrderBy(s => s.SortOrder).ToList();
-        var topSections = allSections.Where(s => s.ParentSectionId == null).ToList();
-
-        dto.Sections = topSections.Select(s =>
-        {
-            var secDto = _mapper.Map<WikiSectionDto>(s);
-            var secPerm = ResolveSectionPermission(wiki, s, currentUserId, perm, isAdmin);
-            secDto.UserPermission = secPerm;
-            secDto.CanEdit = secPerm == "Owner" || secPerm == "Editor";
-            secDto.CanDelete = secPerm == "Owner";
-
-            secDto.Subsections = allSections
-                .Where(sub => sub.ParentSectionId == s.SectionId)
-                .Select(sub =>
-                {
-                    var subDto = _mapper.Map<WikiSectionDto>(sub);
-                    var subPerm = ResolveSectionPermission(wiki, sub, currentUserId, secPerm, isAdmin);
-                    subDto.UserPermission = subPerm;
-                    subDto.CanEdit = subPerm == "Owner" || subPerm == "Editor";
-                    subDto.CanDelete = subPerm == "Owner";
-                    return subDto;
-                }).ToList();
-
-            return secDto;
-        }).ToList();
+        dto.Sections = BuildHierarchicalSections(allSections, null, wiki, currentUserId, perm, isAdmin);
 
         // Collaborators
         dto.Collaborators = wiki.WikiCollaborators.Select(c => _mapper.Map<WikiCollaboratorDto>(c)).ToList();
 
-        // Shares
+        // Shares (filter out orphaned deleted entities WIKI-023)
         var shares = new List<WikiShareDto>();
         foreach (var s in wiki.WikiShares)
         {
@@ -259,21 +246,24 @@ public class WikiService : IWikiService
             if (s.ShareType == "Community")
             {
                 var comm = await _db.Communities.FindAsync((int)s.TargetId);
-                shareDto.TargetName = comm?.Name ?? $"Community #{s.TargetId}";
-                shareDto.TargetDescription = comm?.Description;
-                shareDto.TargetAvatarUrl = comm?.ThumbnailUrl;
+                if (comm == null || !comm.IsActive) continue;
+                shareDto.TargetName = comm.Name;
+                shareDto.TargetDescription = comm.Description;
+                shareDto.TargetAvatarUrl = comm.ThumbnailUrl;
             }
             else if (s.ShareType == "User")
             {
                 var u = await _db.Users.Include(usr => usr.Department).FirstOrDefaultAsync(usr => usr.UserId == (int)s.TargetId);
-                shareDto.TargetName = u?.FullName ?? $"User #{s.TargetId}";
-                shareDto.TargetDescription = u?.Designation ?? u?.Department?.Name;
-                shareDto.TargetAvatarUrl = u?.ProfilePhotoUrl;
+                if (u == null || !u.IsActive) continue;
+                shareDto.TargetName = u.FullName;
+                shareDto.TargetDescription = u.Designation ?? u.Department?.Name;
+                shareDto.TargetAvatarUrl = u.ProfilePhotoUrl;
             }
             else if (s.ShareType == "Group")
             {
                 var dept = await _db.Departments.FindAsync((int)s.TargetId);
-                shareDto.TargetName = dept?.Name ?? $"Group #{s.TargetId}";
+                if (dept == null) continue;
+                shareDto.TargetName = dept.Name;
                 shareDto.TargetDescription = "Department Sphere";
             }
             shares.Add(shareDto);
@@ -301,92 +291,144 @@ public class WikiService : IWikiService
         return "Viewer";
     }
 
+    private List<WikiSectionDto> BuildHierarchicalSections(
+        List<WikiSection> allSections,
+        long? parentId,
+        Wiki wiki,
+        int currentUserId,
+        string parentPerm,
+        bool isAdmin)
+    {
+        var children = allSections
+            .Where(s => s.ParentSectionId == parentId)
+            .OrderBy(s => s.SortOrder)
+            .ThenBy(s => s.SectionId)
+            .ToList();
+
+        var result = new List<WikiSectionDto>();
+        foreach (var c in children)
+        {
+            var secDto = _mapper.Map<WikiSectionDto>(c);
+            var secPerm = ResolveSectionPermission(wiki, c, currentUserId, parentPerm, isAdmin);
+            secDto.UserPermission = secPerm;
+            secDto.CanEdit = secPerm == "Owner" || secPerm == "Editor";
+            secDto.CanDelete = secPerm == "Owner";
+            secDto.Subsections = BuildHierarchicalSections(allSections, c.SectionId, wiki, currentUserId, secPerm, isAdmin);
+            result.Add(secDto);
+        }
+        return result;
+    }
+
     public async Task<WikiDto> CreateWikiAsync(int currentUserId, CreateWikiDto dto)
     {
         await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
 
-        var wiki = new Wiki
+        if (dto.CategoryId.HasValue && dto.CategoryId.Value > 0)
         {
-            Title = dto.Title.Trim(),
-            Description = dto.Description?.Trim(),
-            ContentHtml = dto.ContentHtml,
-            Status = string.IsNullOrWhiteSpace(dto.Status) ? "Published" : dto.Status,
-            CreatedByUserId = currentUserId,
-            CategoryId = dto.CategoryId > 0 ? dto.CategoryId : null,
-            CoverImageUrl = dto.CoverImageUrl,
-            IsArchived = false,
-            IsDeleted = false,
-            ViewCount = 0
-        };
+            var catExists = await _db.Categories.AnyAsync(c => c.CategoryId == dto.CategoryId.Value);
+            if (!catExists)
+                throw new BadRequestException($"Category with ID {dto.CategoryId.Value} does not exist.");
+        }
 
-        var created = await _repo.AddWikiAsync(wiki, dto.Tags);
+        var sanitizedContent = HtmlSanitizerHelper.Sanitize(dto.ContentHtml);
 
-        // Record initial version 1
-        var initialVersion = new WikiVersion
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            WikiId = created.WikiId,
-            SectionId = null,
-            VersionNumber = 1,
-            Title = created.Title,
-            Description = created.Description,
-            ContentHtml = created.ContentHtml,
-            ChangeSummary = "Initial creation",
-            CreatedByUserId = currentUserId
-        };
-        await _repo.AddVersionAsync(initialVersion);
-
-        // Add creator as Wiki Owner collaborator
-        await _repo.AddOrUpdateCollaboratorAsync(new WikiCollaborator
-        {
-            WikiId = created.WikiId,
-            SectionId = null,
-            UserId = currentUserId,
-            Role = "Owner",
-            AddedByUserId = currentUserId
-        });
-
-        // Add initial collaborators if provided
-        if (dto.InitialCollaborators != null && dto.InitialCollaborators.Count > 0)
-        {
-            foreach (var c in dto.InitialCollaborators.Where(c => c.UserId != currentUserId))
+            var wiki = new Wiki
             {
+                Title = dto.Title.Trim(),
+                Description = dto.Description?.Trim(),
+                ContentHtml = sanitizedContent,
+                Status = string.IsNullOrWhiteSpace(dto.Status) ? "Published" : dto.Status,
+                CreatedByUserId = currentUserId,
+                CategoryId = dto.CategoryId > 0 ? dto.CategoryId : null,
+                CoverImageUrl = dto.CoverImageUrl,
+                IsArchived = false,
+                IsDeleted = false,
+                ViewCount = 0
+            };
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var created = await _repo.AddWikiAsync(wiki, dto.Tags);
+
+                // Record initial version 1
+                var initialVersion = new WikiVersion
+                {
+                    WikiId = created.WikiId,
+                    SectionId = null,
+                    VersionNumber = 1,
+                    Title = created.Title,
+                    Description = created.Description,
+                    ContentHtml = sanitizedContent,
+                    ChangeSummary = "Initial creation",
+                    CreatedByUserId = currentUserId
+                };
+                await _repo.AddVersionAsync(initialVersion);
+
+                // Add creator as Wiki Owner collaborator
                 await _repo.AddOrUpdateCollaboratorAsync(new WikiCollaborator
                 {
                     WikiId = created.WikiId,
-                    SectionId = c.SectionId,
-                    UserId = c.UserId,
-                    Role = string.IsNullOrWhiteSpace(c.Role) ? "Viewer" : c.Role,
+                    SectionId = null,
+                    UserId = currentUserId,
+                    Role = "Owner",
                     AddedByUserId = currentUserId
                 });
-            }
-        }
 
-        // Add initial shares if provided
-        if (dto.InitialShares != null && dto.InitialShares.Count > 0)
-        {
-            foreach (var s in dto.InitialShares)
-            {
-                await _repo.AddShareAsync(new WikiShare
+                // Add initial collaborators if provided
+                if (dto.InitialCollaborators != null && dto.InitialCollaborators.Count > 0)
                 {
-                    WikiId = created.WikiId,
-                    ShareType = s.ShareType,
-                    TargetId = s.TargetId,
-                    AccessLevel = string.IsNullOrWhiteSpace(s.AccessLevel) ? "Viewer" : s.AccessLevel,
-                    SharedByUserId = currentUserId
-                });
+                    foreach (var c in dto.InitialCollaborators.Where(c => c.UserId != currentUserId))
+                    {
+                        await _repo.AddOrUpdateCollaboratorAsync(new WikiCollaborator
+                        {
+                            WikiId = created.WikiId,
+                            SectionId = c.SectionId,
+                            UserId = c.UserId,
+                            Role = string.IsNullOrWhiteSpace(c.Role) ? "Viewer" : c.Role,
+                            AddedByUserId = currentUserId
+                        });
+                    }
+                }
+
+                // Add initial shares if provided
+                if (dto.InitialShares != null && dto.InitialShares.Count > 0)
+                {
+                    foreach (var s in dto.InitialShares)
+                    {
+                        await _repo.AddShareAsync(new WikiShare
+                        {
+                            WikiId = created.WikiId,
+                            ShareType = s.ShareType,
+                            TargetId = s.TargetId,
+                            AccessLevel = string.IsNullOrWhiteSpace(s.AccessLevel) ? "Viewer" : s.AccessLevel,
+                            SharedByUserId = currentUserId
+                        });
+                    }
+                }
+
+                // Log audit activity
+                await _auditLog.RecordAsync(currentUserId, "WikiCreated", "Wiki", created.WikiId, $"Created Wiki '{created.Title}'");
+
+                await tx.CommitAsync();
+
+                var result = await _repo.GetWikiByIdAsync(created.WikiId);
+                var resultDto = _mapper.Map<WikiDto>(result);
+                resultDto.UserPermission = "Owner";
+                resultDto.CanEdit = true;
+                resultDto.CanDelete = true;
+                resultDto.CanManageCollaborators = true;
+                return resultDto;
             }
-        }
-
-        // Log audit activity
-        await _auditLog.RecordAsync(currentUserId, "WikiCreated", "Wiki", created.WikiId, $"Created Wiki '{created.Title}'");
-
-        var result = await _repo.GetWikiByIdAsync(created.WikiId);
-        var resultDto = _mapper.Map<WikiDto>(result);
-        resultDto.UserPermission = "Owner";
-        resultDto.CanEdit = true;
-        resultDto.CanDelete = true;
-        resultDto.CanManageCollaborators = true;
-        return resultDto;
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        });
     }
 
     public async Task<WikiDto> UpdateWikiAsync(long wikiId, int currentUserId, UpdateWikiDto dto)
@@ -399,11 +441,30 @@ public class WikiService : IWikiService
         var isAdmin = await IsAdministratorAsync(currentUserId);
         await EnsureCanEditWikiAsync(wiki, currentUserId, isAdmin);
 
+        // Optimistic concurrency check (WIKI-014)
+        if (dto.ExpectedUpdatedDate.HasValue && wiki.UpdatedDate > dto.ExpectedUpdatedDate.Value.AddSeconds(1))
+        {
+            throw new ConflictException("This Wiki overview has been modified by another collaborator since you loaded it. Please reload the latest changes to avoid overwriting them.");
+        }
+
+        if (dto.CategoryId.HasValue && dto.CategoryId.Value > 0)
+        {
+            var catExists = await _db.Categories.AnyAsync(c => c.CategoryId == dto.CategoryId.Value);
+            if (!catExists)
+                throw new BadRequestException($"Category with ID {dto.CategoryId.Value} does not exist.");
+        }
+
         wiki.Title = dto.Title.Trim();
         wiki.Description = dto.Description?.Trim();
-        wiki.ContentHtml = dto.ContentHtml;
-        if (!string.IsNullOrWhiteSpace(dto.Status))
+        wiki.ContentHtml = HtmlSanitizerHelper.Sanitize(dto.ContentHtml);
+
+        if (!string.IsNullOrWhiteSpace(dto.Status) && dto.Status != wiki.Status)
         {
+            // Only Owner or Admin can archive or unarchive a Wiki (WIKI-005)
+            if (dto.Status == "Archived" || wiki.Status == "Archived")
+            {
+                await EnsureCanManageWikiAsync(wiki, currentUserId, isAdmin);
+            }
             wiki.Status = dto.Status;
             wiki.IsArchived = dto.Status == "Archived";
         }
@@ -441,6 +502,7 @@ public class WikiService : IWikiService
 
     public async Task DeleteWikiAsync(long wikiId, int currentUserId)
     {
+        await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
         var wiki = await _repo.GetWikiByIdAsync(wikiId);
         if (wiki == null)
             throw new NotFoundException($"Wiki with ID {wikiId} not found.");
@@ -452,8 +514,23 @@ public class WikiService : IWikiService
         await _auditLog.RecordAsync(currentUserId, "WikiDeleted", "Wiki", wikiId, $"Deleted Wiki '{wiki.Title}'");
     }
 
+    public async Task RestoreWikiAsync(long wikiId, int currentUserId)
+    {
+        await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
+        var wiki = await _repo.GetWikiByIdAsync(wikiId, includeDeleted: true);
+        if (wiki == null)
+            throw new NotFoundException($"Wiki with ID {wikiId} not found.");
+
+        var isAdmin = await IsAdministratorAsync(currentUserId);
+        await EnsureCanManageWikiAsync(wiki, currentUserId, isAdmin);
+
+        await _repo.RestoreWikiAsync(wiki);
+        await _auditLog.RecordAsync(currentUserId, "WikiRestored", "Wiki", wikiId, $"Restored Wiki '{wiki.Title}' from trash");
+    }
+
     public async Task<WikiDto> ToggleArchiveWikiAsync(long wikiId, int currentUserId, bool isArchived)
     {
+        await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
         var wiki = await _repo.GetWikiByIdAsync(wikiId);
         if (wiki == null)
             throw new NotFoundException($"Wiki with ID {wikiId} not found.");
@@ -480,6 +557,9 @@ public class WikiService : IWikiService
         var wiki = await _repo.GetWikiByIdAsync(wikiId);
         if (wiki == null) return 0;
 
+        var isAdmin = await IsAdministratorAsync(currentUserId);
+        await EnsureCanViewWikiAsync(wiki, currentUserId, isAdmin);
+
         await _repo.IncrementViewCountAsync(wikiId);
         return wiki.ViewCount + 1;
     }
@@ -502,27 +582,7 @@ public class WikiService : IWikiService
         var perm = await ResolveUserPermissionForWikiAsync(wiki, currentUserId, isAdmin);
         var sections = await _repo.GetSectionsByWikiIdAsync(wikiId);
 
-        var top = sections.Where(s => s.ParentSectionId == null).ToList();
-        return top.Select(s =>
-        {
-            var sDto = _mapper.Map<WikiSectionDto>(s);
-            var secPerm = ResolveSectionPermission(wiki, s, currentUserId, perm, isAdmin);
-            sDto.UserPermission = secPerm;
-            sDto.CanEdit = secPerm == "Owner" || secPerm == "Editor";
-            sDto.CanDelete = secPerm == "Owner";
-
-            sDto.Subsections = sections.Where(sub => sub.ParentSectionId == s.SectionId).Select(sub =>
-            {
-                var subDto = _mapper.Map<WikiSectionDto>(sub);
-                var subPerm = ResolveSectionPermission(wiki, sub, currentUserId, secPerm, isAdmin);
-                subDto.UserPermission = subPerm;
-                subDto.CanEdit = subPerm == "Owner" || subPerm == "Editor";
-                subDto.CanDelete = subPerm == "Owner";
-                return subDto;
-            }).ToList();
-
-            return sDto;
-        }).ToList();
+        return BuildHierarchicalSections(sections, null, wiki, currentUserId, perm, isAdmin);
     }
 
     public async Task<WikiSectionDto> GetSectionAsync(long wikiId, long sectionId, int currentUserId)
@@ -558,12 +618,23 @@ public class WikiService : IWikiService
         var isAdmin = await IsAdministratorAsync(currentUserId);
         await EnsureCanEditWikiAsync(wiki, currentUserId, isAdmin);
 
+        if (dto.ParentSectionId.HasValue && dto.ParentSectionId.Value > 0)
+        {
+            var parentSection = await _repo.GetSectionByIdAsync(dto.ParentSectionId.Value);
+            if (parentSection == null || parentSection.WikiId != wikiId || parentSection.IsDeleted)
+            {
+                throw new BadRequestException("The specified parent section does not exist in this Wiki.");
+            }
+        }
+
+        var sanitizedContent = HtmlSanitizerHelper.Sanitize(dto.ContentHtml);
+
         var section = new WikiSection
         {
             WikiId = wikiId,
             ParentSectionId = dto.ParentSectionId,
             Title = dto.Title.Trim(),
-            ContentHtml = dto.ContentHtml,
+            ContentHtml = sanitizedContent,
             SortOrder = dto.SortOrder,
             CreatedByUserId = currentUserId,
             IsDeleted = false
@@ -578,7 +649,7 @@ public class WikiService : IWikiService
             SectionId = created.SectionId,
             VersionNumber = 1,
             Title = created.Title,
-            ContentHtml = created.ContentHtml,
+            ContentHtml = sanitizedContent,
             ChangeSummary = dto.ChangeSummary ?? "Initial section creation",
             CreatedByUserId = currentUserId
         });
@@ -611,13 +682,49 @@ public class WikiService : IWikiService
         if (secPerm != "Owner" && secPerm != "Editor")
             throw new ForbiddenException("You do not have Editor permissions for this section.");
 
-        section.Title = dto.Title.Trim();
-        section.ContentHtml = dto.ContentHtml;
-        section.SortOrder = dto.SortOrder;
-        if (dto.ParentSectionId != section.SectionId)
+        // Optimistic concurrency check (WIKI-014)
+        if (dto.ExpectedUpdatedDate.HasValue && section.UpdatedDate > dto.ExpectedUpdatedDate.Value.AddSeconds(1))
         {
+            throw new ConflictException("This section has been modified by another collaborator since you loaded it. Please reload the latest changes to avoid overwriting them.");
+        }
+
+        if (dto.ParentSectionId.HasValue && dto.ParentSectionId.Value > 0)
+        {
+            if (dto.ParentSectionId.Value == sectionId)
+            {
+                throw new BadRequestException("A section cannot be its own parent.");
+            }
+
+            var parentSection = await _repo.GetSectionByIdAsync(dto.ParentSectionId.Value);
+            if (parentSection == null || parentSection.WikiId != wikiId || parentSection.IsDeleted)
+            {
+                throw new BadRequestException("The specified parent section does not exist in this Wiki.");
+            }
+
+            // Cycle detection: ensure sectionId is not an ancestor of parentSection
+            var visited = new HashSet<long> { sectionId };
+            var currParentId = (long?)dto.ParentSectionId.Value;
+            while (currParentId.HasValue)
+            {
+                if (visited.Contains(currParentId.Value))
+                {
+                    throw new BadRequestException("Circular section hierarchy detected. A section cannot be child of its own descendant.");
+                }
+                visited.Add(currParentId.Value);
+                var ancestor = await _repo.GetSectionByIdAsync(currParentId.Value);
+                currParentId = ancestor?.ParentSectionId;
+            }
+
             section.ParentSectionId = dto.ParentSectionId;
         }
+        else
+        {
+            section.ParentSectionId = null;
+        }
+
+        section.Title = dto.Title.Trim();
+        section.ContentHtml = HtmlSanitizerHelper.Sanitize(dto.ContentHtml);
+        section.SortOrder = dto.SortOrder;
 
         await _repo.UpdateSectionAsync(section);
 
@@ -646,6 +753,7 @@ public class WikiService : IWikiService
 
     public async Task DeleteSectionAsync(long wikiId, long sectionId, int currentUserId)
     {
+        await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
         var wiki = await _repo.GetWikiByIdAsync(wikiId);
         if (wiki == null)
             throw new NotFoundException($"Wiki with ID {wikiId} not found.");
@@ -667,6 +775,7 @@ public class WikiService : IWikiService
 
     public async Task ReorderSectionsAsync(long wikiId, int currentUserId, ReorderSectionsDto dto)
     {
+        await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
         var wiki = await _repo.GetWikiByIdAsync(wikiId);
         if (wiki == null)
             throw new NotFoundException($"Wiki with ID {wikiId} not found.");
@@ -694,6 +803,7 @@ public class WikiService : IWikiService
 
     public async Task<WikiCollaboratorDto> AddOrUpdateCollaboratorAsync(long wikiId, int currentUserId, AddCollaboratorDto dto)
     {
+        await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
         var wiki = await _repo.GetWikiByIdAsync(wikiId);
         if (wiki == null)
             throw new NotFoundException($"Wiki with ID {wikiId} not found.");
@@ -723,7 +833,7 @@ public class WikiService : IWikiService
         {
             await _notificationService.PublishAsync(
                 dto.UserId,
-                NotificationTypes.Community,
+                NotificationTypes.Wiki,
                 $"You have been added as a {saved.Role} to Wiki: '{wiki.Title}'",
                 ContentTypes.Wiki,
                 wikiId);
@@ -736,6 +846,7 @@ public class WikiService : IWikiService
 
     public async Task RemoveCollaboratorAsync(long wikiId, long collaboratorId, int currentUserId)
     {
+        await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
         var wiki = await _repo.GetWikiByIdAsync(wikiId);
         if (wiki == null)
             throw new NotFoundException($"Wiki with ID {wikiId} not found.");
@@ -773,21 +884,24 @@ public class WikiService : IWikiService
             if (s.ShareType == "Community")
             {
                 var comm = await _db.Communities.FindAsync((int)s.TargetId);
-                dto.TargetName = comm?.Name ?? $"Community #{s.TargetId}";
-                dto.TargetDescription = comm?.Description;
-                dto.TargetAvatarUrl = comm?.ThumbnailUrl;
+                if (comm == null || !comm.IsActive) continue;
+                dto.TargetName = comm.Name;
+                dto.TargetDescription = comm.Description;
+                dto.TargetAvatarUrl = comm.ThumbnailUrl;
             }
             else if (s.ShareType == "User")
             {
                 var u = await _db.Users.Include(usr => usr.Department).FirstOrDefaultAsync(usr => usr.UserId == (int)s.TargetId);
-                dto.TargetName = u?.FullName ?? $"User #{s.TargetId}";
-                dto.TargetDescription = u?.Designation ?? u?.Department?.Name;
-                dto.TargetAvatarUrl = u?.ProfilePhotoUrl;
+                if (u == null || !u.IsActive) continue;
+                dto.TargetName = u.FullName;
+                dto.TargetDescription = u.Designation ?? u.Department?.Name;
+                dto.TargetAvatarUrl = u.ProfilePhotoUrl;
             }
             else if (s.ShareType == "Group")
             {
                 var dept = await _db.Departments.FindAsync((int)s.TargetId);
-                dto.TargetName = dept?.Name ?? $"Group #{s.TargetId}";
+                if (dept == null) continue;
+                dto.TargetName = dept.Name;
                 dto.TargetDescription = "Department Sphere";
             }
             dtos.Add(dto);
@@ -797,6 +911,7 @@ public class WikiService : IWikiService
 
     public async Task<WikiShareDto> ShareWikiAsync(long wikiId, int currentUserId, ShareWikiDto dto)
     {
+        await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
         var wiki = await _repo.GetWikiByIdAsync(wikiId);
         if (wiki == null)
             throw new NotFoundException($"Wiki with ID {wikiId} not found.");
@@ -811,20 +926,63 @@ public class WikiService : IWikiService
             canEdit = (role == "Owner" || role == "Editor");
         }
 
-        // Editors/Owners/Admins can grant Editor access; regular viewers default to Viewer access
-        var requestedAccess = string.IsNullOrWhiteSpace(dto.AccessLevel) ? "Viewer" : dto.AccessLevel;
-        var finalAccess = (canEdit || requestedAccess == "Viewer") ? requestedAccess : "Viewer";
-
-        var share = new WikiShare
+        if (!canEdit)
         {
-            WikiId = wikiId,
-            ShareType = dto.ShareType,
-            TargetId = dto.TargetId,
-            AccessLevel = finalAccess,
-            SharedByUserId = currentUserId
-        };
+            throw new ForbiddenException("Only document Owners and Editors have permission to share this Wiki.");
+        }
 
-        var saved = await _repo.AddShareAsync(share);
+        // Validate target entity existence (WIKI-023)
+        if (dto.ShareType == "User")
+        {
+            var userExists = await _db.Users.AnyAsync(u => u.UserId == dto.TargetId && u.IsActive);
+            if (!userExists)
+                throw new BadRequestException($"Target User #{dto.TargetId} does not exist or has been deactivated.");
+        }
+        else if (dto.ShareType == "Community")
+        {
+            var commExists = await _db.Communities.AnyAsync(c => c.CommunityId == dto.TargetId && c.IsActive);
+            if (!commExists)
+                throw new BadRequestException($"Target Community #{dto.TargetId} does not exist or has been deleted.");
+        }
+        else if (dto.ShareType == "Group")
+        {
+            var deptExists = await _db.Departments.AnyAsync(d => d.DepartmentId == dto.TargetId);
+            if (!deptExists)
+                throw new BadRequestException($"Target Department #{dto.TargetId} does not exist.");
+        }
+        else
+        {
+            throw new BadRequestException($"Invalid share type '{dto.ShareType}'. Must be User, Community, or Group.");
+        }
+
+        var requestedAccess = string.IsNullOrWhiteSpace(dto.AccessLevel) ? "Viewer" : dto.AccessLevel;
+        var finalAccess = (requestedAccess == "Editor" || requestedAccess == "Owner") ? requestedAccess : "Viewer";
+
+        // Check if share already exists to update access level instead of creating duplicate
+        var existingShares = await _repo.GetSharesByWikiIdAsync(wikiId);
+        var existingShare = existingShares.FirstOrDefault(s => s.ShareType == dto.ShareType && s.TargetId == dto.TargetId);
+
+        WikiShare saved;
+        if (existingShare != null)
+        {
+            existingShare.AccessLevel = finalAccess;
+            _db.WikiShares.Update(existingShare);
+            await _db.SaveChangesAsync();
+            saved = existingShare;
+        }
+        else
+        {
+            var share = new WikiShare
+            {
+                WikiId = wikiId,
+                ShareType = dto.ShareType,
+                TargetId = dto.TargetId,
+                AccessLevel = finalAccess,
+                SharedByUserId = currentUserId
+            };
+            saved = await _repo.AddShareAsync(share);
+        }
+
         await _auditLog.RecordAsync(currentUserId, "WikiShared", "Wiki", wikiId, $"Shared Wiki with {dto.ShareType} #{dto.TargetId} ({saved.AccessLevel})");
 
         var resultDto = _mapper.Map<WikiShareDto>(saved);
@@ -865,6 +1023,7 @@ public class WikiService : IWikiService
 
     public async Task RemoveShareAsync(long wikiId, long shareId, int currentUserId)
     {
+        await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
         var wiki = await _repo.GetWikiByIdAsync(wikiId);
         if (wiki == null)
             throw new NotFoundException($"Wiki with ID {wikiId} not found.");
@@ -949,11 +1108,15 @@ public class WikiService : IWikiService
 
         if (targetVersion.SectionId.HasValue)
         {
-            // Restore section
-            var section = await _repo.GetSectionByIdAsync(targetVersion.SectionId.Value);
+            // Restore section (supports restoring soft-deleted sections)
+            var section = await _repo.GetSectionByIdAsync(targetVersion.SectionId.Value, includeDeleted: true);
             if (section == null)
                 throw new NotFoundException($"Section #{targetVersion.SectionId.Value} no longer exists.");
 
+            if (section.IsDeleted)
+            {
+                section.IsDeleted = false;
+            }
             section.Title = targetVersion.Title;
             section.ContentHtml = targetVersion.ContentHtml;
             await _repo.UpdateSectionAsync(section);

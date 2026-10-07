@@ -11,6 +11,119 @@ import WikiCollaboratorsModal from '../components/modals/WikiCollaboratorsModal'
 import WikiShareModal from '../components/modals/WikiShareModal';
 import WikiVersionHistoryModal from '../components/modals/WikiVersionHistoryModal';
 import WikiActivityModal from '../components/modals/WikiActivityModal';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
+
+function OutlineSectionItem({
+    section,
+    numberPrefix,
+    level,
+    activeSectionId,
+    onSelect,
+    wiki,
+    onMove,
+    onAddSub,
+    onEdit,
+    onDelete
+}) {
+    const isActive = activeSectionId === section.sectionId;
+
+    return (
+        <div className="space-y-1">
+            <div
+                onClick={() => onSelect(section.sectionId)}
+                className={`group flex items-center justify-between py-1.5 px-2.5 rounded-xl text-xs transition-all cursor-pointer ${
+                    level > 0 ? 'ml-3 pl-2.5 border-l-2' : ''
+                } ${
+                    isActive
+                        ? 'border-teal-500 bg-teal-50/80 dark:bg-teal-950/60 text-teal-800 dark:text-teal-200 font-bold'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-400 font-medium'
+                }`}
+            >
+                <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[10px] text-slate-400 shrink-0 font-bold">
+                        {numberPrefix}
+                    </span>
+                    <span className="truncate">{section.title}</span>
+                </div>
+
+                {/* Action buttons on hover */}
+                <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+                    {wiki.canEdit && (
+                        <>
+                            {level === 0 && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => onMove(section, 'up', e)}
+                                        className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                                        title="Move Up"
+                                    >
+                                        <span className="material-symbols-outlined text-[13px]">arrow_upward</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => onMove(section, 'down', e)}
+                                        className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                                        title="Move Down"
+                                    >
+                                        <span className="material-symbols-outlined text-[13px]">arrow_downward</span>
+                                    </button>
+                                </>
+                            )}
+                            <button
+                                type="button"
+                                onClick={(e) => onAddSub(section, e)}
+                                className="p-1 rounded text-slate-400 hover:text-teal-600"
+                                title="Add Subsection"
+                            >
+                                <span className="material-symbols-outlined text-[13px]">add_circle</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => onEdit(section, e)}
+                                className="p-1 rounded text-slate-400 hover:text-teal-600"
+                                title="Edit Section"
+                            >
+                                <span className="material-symbols-outlined text-[13px]">edit</span>
+                            </button>
+                        </>
+                    )}
+                    {section.canDelete && (
+                        <button
+                            type="button"
+                            onClick={(e) => onDelete(section, e)}
+                            className="p-1 rounded text-slate-400 hover:text-red-500"
+                            title="Delete Section"
+                        >
+                            <span className="material-symbols-outlined text-[13px]">delete</span>
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Recursively render subsections */}
+            {section.subsections && section.subsections.length > 0 && (
+                <div className="space-y-1">
+                    {section.subsections.map((sub, sIdx) => (
+                        <OutlineSectionItem
+                            key={sub.sectionId}
+                            section={sub}
+                            numberPrefix={`${numberPrefix}.${sIdx + 1}`}
+                            level={level + 1}
+                            activeSectionId={activeSectionId}
+                            onSelect={onSelect}
+                            wiki={wiki}
+                            onMove={onMove}
+                            onAddSub={onAddSub}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function WikiView() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -322,128 +435,27 @@ export default function WikiView() {
                                 </span>
                             </button>
 
-                            {/* Sections Tree */}
+                            {/* Sections Tree (Recursive N-Tier WIKI-004) */}
                             {wiki.sections && wiki.sections.map((section, idx) => (
-                                <div key={section.sectionId} className="space-y-1">
-                                    {/* Top-Level Section */}
-                                    <div
-                                        onClick={() => handleSelectSection(section.sectionId)}
-                                        className={`group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-                                            activeSectionId === section.sectionId
-                                                ? 'bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-200 border border-teal-500/40 font-bold'
-                                                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                        }`}
-                                    >
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <span className="text-[11px] font-bold text-slate-400 shrink-0">
-                                                {idx + 1}.
-                                            </span>
-                                            <span className="truncate">{section.title}</span>
-                                        </div>
-
-                                        {/* Action buttons on hover */}
-                                        <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
-                                            {wiki.canEdit && (
-                                                <>
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => handleMoveSection(section, 'up', e)}
-                                                        className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                                                        title="Move Up"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => handleMoveSection(section, 'down', e)}
-                                                        className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                                                        title="Move Down"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[14px]">arrow_downward</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSectionModalState({ isOpen: true, data: null, defaultParentId: section.sectionId });
-                                                        }}
-                                                        className="p-1 rounded text-slate-400 hover:text-teal-600"
-                                                        title="Add Subsection"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[14px]">add_circle</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSectionModalState({ isOpen: true, data: section, defaultParentId: section.parentSectionId });
-                                                        }}
-                                                        className="p-1 rounded text-slate-400 hover:text-teal-600"
-                                                        title="Edit Section"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[14px]">edit</span>
-                                                    </button>
-                                                </>
-                                            )}
-                                            {section.canDelete && (
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => handleDeleteSection(section, e)}
-                                                    className="p-1 rounded text-slate-400 hover:text-red-500"
-                                                    title="Delete Section"
-                                                >
-                                                    <span className="material-symbols-outlined text-[14px]">delete</span>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Subsections */}
-                                    {section.subsections && section.subsections.map((sub, subIdx) => (
-                                        <div
-                                            key={sub.sectionId}
-                                            onClick={() => handleSelectSection(sub.sectionId)}
-                                            className={`group ml-4 pl-3 border-l-2 flex items-center justify-between py-1.5 pr-2 rounded-r-lg text-xs transition-all cursor-pointer ${
-                                                activeSectionId === sub.sectionId
-                                                    ? 'border-teal-500 bg-teal-50/60 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-bold'
-                                                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400'
-                                            }`}
-                                        >
-                                            <div className="flex items-center gap-1.5 min-w-0">
-                                                <span className="text-[10px] text-slate-400 shrink-0">
-                                                    {idx + 1}.{subIdx + 1}
-                                                </span>
-                                                <span className="truncate">{sub.title}</span>
-                                            </div>
-
-                                            <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
-                                                {sub.canEdit && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSectionModalState({ isOpen: true, data: sub, defaultParentId: section.sectionId });
-                                                        }}
-                                                        className="p-1 rounded text-slate-400 hover:text-teal-600"
-                                                        title="Edit Subsection"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[12px]">edit</span>
-                                                    </button>
-                                                )}
-                                                {sub.canDelete && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => handleDeleteSection(sub, e)}
-                                                        className="p-1 rounded text-slate-400 hover:text-red-500"
-                                                        title="Delete Subsection"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[12px]">delete</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                <OutlineSectionItem
+                                    key={section.sectionId}
+                                    section={section}
+                                    numberPrefix={`${idx + 1}`}
+                                    level={0}
+                                    activeSectionId={activeSectionId}
+                                    onSelect={handleSelectSection}
+                                    wiki={wiki}
+                                    onMove={handleMoveSection}
+                                    onAddSub={(sec, e) => {
+                                        e.stopPropagation();
+                                        setSectionModalState({ isOpen: true, data: null, defaultParentId: sec.sectionId });
+                                    }}
+                                    onEdit={(sec, e) => {
+                                        e.stopPropagation();
+                                        setSectionModalState({ isOpen: true, data: sec, defaultParentId: sec.parentSectionId });
+                                    }}
+                                    onDelete={handleDeleteSection}
+                                />
                             ))}
                         </div>
                     </div>
@@ -452,6 +464,42 @@ export default function WikiView() {
                 {/* Right Area: Main Article / Section Reader */}
                 <div className="md:col-span-8 lg:col-span-9 space-y-4">
                     <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+                        {/* Attached Cover Banner for Wiki Overview */}
+                        {isCurrentOverview && wiki.coverImageUrl && (
+                            <div className="relative h-44 sm:h-56 w-full rounded-2xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800 group">
+                                <img
+                                    src={resolveMediaUrl(wiki.coverImageUrl)}
+                                    alt={wiki.title}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                    }}
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/25 to-transparent" />
+                                <div className="absolute bottom-3.5 left-4 right-4 flex items-end justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/90 text-white backdrop-blur-md mb-1 inline-block shadow-xs">
+                                            Cover Banner
+                                        </span>
+                                        <h2 className="text-base sm:text-lg font-black text-white line-clamp-1 drop-shadow-md">
+                                            {wiki.title}
+                                        </h2>
+                                    </div>
+                                    {wiki.canEdit && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsEditWikiModalOpen(true)}
+                                            className="px-2.5 py-1 rounded-xl text-xs font-bold text-white bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/25 transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+                                            title="Change Attached Cover Banner"
+                                        >
+                                            <span className="material-symbols-outlined text-[14px]">edit</span>
+                                            <span>Cover</span>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Section Header */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
                             <div className="space-y-1.5">
@@ -501,7 +549,7 @@ export default function WikiView() {
                             className="rich-editor-content wiki-content prose dark:prose-invert max-w-none text-sm sm:text-base text-slate-800 dark:text-slate-200 leading-relaxed font-normal custom-scrollbar"
                             style={{ wordBreak: 'break-word' }}
                             dangerouslySetInnerHTML={{
-                                __html: isCurrentOverview ? wiki.contentHtml : (currentActiveSection?.contentHtml || '<p>No content provided for this section yet.</p>')
+                                __html: sanitizeHtml(isCurrentOverview ? wiki.contentHtml : (currentActiveSection?.contentHtml || '<p>No content provided for this section yet.</p>'))
                             }}
                         />
 

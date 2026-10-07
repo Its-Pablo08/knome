@@ -3,6 +3,8 @@ import Modal from './Modal';
 import { wikiApi } from '../../utils/wikiService';
 import { resolveMediaUrl } from '../../utils/apiService';
 import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmDialogContext';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 export default function WikiVersionHistoryModal({
     isOpen,
@@ -14,11 +16,13 @@ export default function WikiVersionHistoryModal({
     onVersionRestored
 }) {
     const { addToast } = useToast();
+    const confirm = useConfirm();
 
     const [versions, setVersions] = useState([]);
     const [selectedVersion, setSelectedVersion] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isRestoring, setIsRestoring] = useState(false);
+    const [viewMode, setViewMode] = useState('preview'); // 'preview' | 'compare'
 
     useEffect(() => {
         if (isOpen && wikiId) {
@@ -42,8 +46,13 @@ export default function WikiVersionHistoryModal({
 
     const handleRestore = async (version) => {
         if (!canRestore) return;
-        const confirmMsg = `Are you sure you want to restore Version ${version.versionNumber}? This will revert the current content to this snapshot.`;
-        if (!window.confirm(confirmMsg)) return;
+        const ok = await confirm({
+            title: `Restore Version ${version.versionNumber}`,
+            message: `Are you sure you want to restore Version ${version.versionNumber}? This will revert the current document content to this historical snapshot.`,
+            confirmText: 'Restore Version',
+            confirmButtonClass: 'bg-teal-600 hover:bg-teal-700 text-white'
+        });
+        if (!ok) return;
 
         setIsRestoring(true);
         try {
@@ -132,18 +141,18 @@ export default function WikiVersionHistoryModal({
                             })}
                         </div>
 
-                        {/* Snapshot Preview Area */}
+                        {/* Snapshot Preview & Comparison Area */}
                         <div className="md:col-span-7 flex flex-col max-h-[60vh]">
                             {selectedVersion ? (
                                 <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800">
-                                    {/* Preview Header */}
-                                    <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-800">
+                                    {/* Preview Header with Compare Toggle */}
+                                    <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-slate-800">
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs font-bold text-teal-600 dark:text-teal-400">
                                                     Version {selectedVersion.versionNumber}
                                                 </span>
-                                                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[160px] sm:max-w-xs">
                                                     {selectedVersion.title}
                                                 </span>
                                             </div>
@@ -152,28 +161,97 @@ export default function WikiVersionHistoryModal({
                                             </p>
                                         </div>
 
-                                        {canRestore && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRestore(selectedVersion)}
-                                                disabled={isRestoring}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-                                            >
-                                                <span className="material-symbols-outlined text-[16px]">history_toggle_off</span>
-                                                Restore This
-                                            </button>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {versions.length > 1 && selectedVersion.versionId !== versions[0].versionId && (
+                                                <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-900 text-[11px]">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setViewMode('preview')}
+                                                        className={`px-2 py-1 rounded-md font-bold transition-colors ${
+                                                            viewMode === 'preview'
+                                                                ? 'bg-white dark:bg-slate-800 text-teal-600 shadow-xs'
+                                                                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                                        }`}
+                                                    >
+                                                        Preview
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setViewMode('compare')}
+                                                        className={`px-2 py-1 rounded-md font-bold transition-colors ${
+                                                            viewMode === 'compare'
+                                                                ? 'bg-white dark:bg-slate-800 text-teal-600 shadow-xs'
+                                                                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                                        }`}
+                                                    >
+                                                        Compare with v{versions[0].versionNumber}
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {canRestore && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRestore(selectedVersion)}
+                                                    disabled={isRestoring}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                                                >
+                                                    <span className="material-symbols-outlined text-[16px]">history_toggle_off</span>
+                                                    Restore
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
 
-                                    {/* Snapshot HTML Content */}
-                                    <div className="p-4 overflow-y-auto custom-scrollbar flex-1 text-sm text-slate-800 dark:text-slate-200 prose dark:prose-invert max-w-none">
-                                        {selectedVersion.description && (
-                                            <p className="text-xs italic text-slate-500 mb-3 border-l-2 border-slate-300 dark:border-slate-700 pl-2">
-                                                {selectedVersion.description}
-                                            </p>
-                                        )}
-                                        <div className="rich-editor-content wiki-content" dangerouslySetInnerHTML={{ __html: selectedVersion.contentHtml }} />
-                                    </div>
+                                    {/* Content View: Preview Mode vs Side-by-Side Comparison Diff Mode */}
+                                    {viewMode === 'compare' && versions.length > 1 && selectedVersion.versionId !== versions[0].versionId ? (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 dark:divide-slate-800 overflow-y-auto custom-scrollbar flex-1 text-xs">
+                                            {/* Historical Snapshot */}
+                                            <div className="p-3.5 space-y-2">
+                                                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-800">
+                                                    <span className="font-bold text-teal-600 dark:text-teal-400">
+                                                        v{selectedVersion.versionNumber} (Historical)
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-400">
+                                                        {new Date(selectedVersion.createdDate).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                                <div
+                                                    className="rich-editor-content wiki-content prose dark:prose-invert max-w-none text-xs"
+                                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedVersion.contentHtml) }}
+                                                />
+                                            </div>
+
+                                            {/* Current Active Version */}
+                                            <div className="p-3.5 space-y-2 bg-white dark:bg-slate-900/40">
+                                                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-800">
+                                                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                                        v{versions[0].versionNumber} (Current)
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-400">
+                                                        {new Date(versions[0].createdDate).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                                <div
+                                                    className="rich-editor-content wiki-content prose dark:prose-invert max-w-none text-xs"
+                                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(versions[0].contentHtml) }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* Snapshot HTML Content */
+                                        <div className="p-4 overflow-y-auto custom-scrollbar flex-1 text-sm text-slate-800 dark:text-slate-200 prose dark:prose-invert max-w-none">
+                                            {selectedVersion.description && (
+                                                <p className="text-xs italic text-slate-500 mb-3 border-l-2 border-slate-300 dark:border-slate-700 pl-2">
+                                                    {selectedVersion.description}
+                                                </p>
+                                            )}
+                                            <div
+                                                className="rich-editor-content wiki-content"
+                                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedVersion.contentHtml) }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="py-12 text-center text-slate-400">

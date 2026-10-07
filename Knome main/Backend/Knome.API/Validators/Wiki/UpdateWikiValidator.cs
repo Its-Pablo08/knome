@@ -20,5 +20,10 @@ public class UpdateWikiValidator : AbstractValidator<UpdateWikiDto>
         RuleFor(x => x.Status)
             .Must(s => s == "Draft" || s == "Published" || s == "Archived")
             .WithMessage("Status must be 'Draft', 'Published', or 'Archived'.");
+
+        RuleFor(x => x.CategoryId)
+            .GreaterThan(0)
+            .When(x => x.CategoryId.HasValue)
+            .WithMessage("CategoryId must be greater than 0.");
     }
 }

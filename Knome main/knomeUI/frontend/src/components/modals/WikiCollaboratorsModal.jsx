@@ -4,6 +4,7 @@ import { wikiApi } from '../../utils/wikiService';
 import { profileApi, resolveMediaUrl } from '../../utils/apiService';
 import { useToast } from '../contexts/ToastContext';
 import { useUser } from '../contexts/UserContext';
+import { useConfirm } from '../contexts/ConfirmDialogContext';
 
 export default function WikiCollaboratorsModal({
     isOpen,
@@ -15,6 +16,7 @@ export default function WikiCollaboratorsModal({
 }) {
     const { currentUser } = useUser();
     const { addToast } = useToast();
+    const confirm = useConfirm();
 
     const [collaborators, setCollaborators] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -147,7 +149,13 @@ export default function WikiCollaboratorsModal({
     };
 
     const handleRemove = async (collabId, userName) => {
-        if (!window.confirm(`Remove ${userName} from collaborators?`)) return;
+        const ok = await confirm({
+            title: 'Remove Collaborator',
+            message: `Are you sure you want to remove ${userName} from collaborators?`,
+            confirmText: 'Remove Collaborator',
+            confirmButtonClass: 'bg-red-600 hover:bg-red-700 text-white'
+        });
+        if (!ok) return;
 
         try {
             await wikiApi.removeCollaborator(wikiId, collabId);

@@ -333,6 +333,13 @@ public class UserMessageService : IUserMessageService
             throw new BadRequestException("Cannot edit a deleted message.");
         }
 
+        // Enforce 15-minute edit window (WhatsApp style)
+        var messageAge = DateTime.UtcNow - message.CreatedDate;
+        if (messageAge.TotalMinutes > 15)
+        {
+            throw new BadRequestException("Messages can only be edited within 15 minutes of sending.");
+        }
+
         var trimmedText = (newContent ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(trimmedText))
         {
@@ -378,7 +385,7 @@ public class UserMessageService : IUserMessageService
         return resultDto;
     }
 
-    public async Task<bool> DeleteMessageAsync(long messageId, int currentUserId)
+    public async Task<bool> DeleteMessageAsync(long messageId, int currentUserId, bool deleteForEveryone = false)
     {
         var message = await _messageRepo.GetByIdAsync(messageId);
         if (message == null)
@@ -386,21 +393,33 @@ public class UserMessageService : IUserMessageService
             throw new NotFoundException("Message not found.");
         }
 
-        if (message.SenderId == currentUserId)
+        if (message.SenderId != currentUserId && message.ReceiverId != currentUserId)
         {
+            throw new ForbiddenException("You do not have permission to delete this message.");
+        }
+
+        if (deleteForEveryone)
+        {
+            // Only the sender can delete for everyone (WhatsApp functionality)
+            if (message.SenderId != currentUserId)
+            {
+                throw new ForbiddenException("Only the sender can delete a message for everyone.");
+            }
+
             message.IsDeleted = true;
-            message.IsDeletedBySender = true;
             message.UpdatedDate = DateTime.UtcNow;
             await _messageRepo.UpdateAsync(message);
 
-            // Broadcast real-time deletion event
+            // Broadcast real-time deletion event to both receiver and sender
             try
             {
                 var delPayload = new
                 {
                     messageId = message.MessageId,
                     partnerId = message.ReceiverId,
-                    isDeleted = true
+                    senderId = message.SenderId,
+                    isDeleted = true,
+                    deleteForEveryone = true
                 };
                 await _hubContext.Clients.Group($"User_{message.ReceiverId}").SendAsync("MessageDeleted", delPayload);
                 await _hubContext.Clients.Group($"User_{currentUserId}").SendAsync("MessageDeleted", delPayload);
@@ -412,16 +431,41 @@ public class UserMessageService : IUserMessageService
 
             return true;
         }
-
-        if (message.ReceiverId == currentUserId)
+        else
         {
-            message.IsDeletedByReceiver = true;
+            // Delete for me
+            if (message.SenderId == currentUserId)
+            {
+                message.IsDeletedBySender = true;
+            }
+            else if (message.ReceiverId == currentUserId)
+            {
+                message.IsDeletedByReceiver = true;
+            }
+
             message.UpdatedDate = DateTime.UtcNow;
             await _messageRepo.UpdateAsync(message);
+
+            // Broadcast to the deleting user's connections so their client removes the message
+            try
+            {
+                var delPayload = new
+                {
+                    messageId = message.MessageId,
+                    partnerId = message.SenderId == currentUserId ? message.ReceiverId : message.SenderId,
+                    senderId = message.SenderId,
+                    isDeleted = true,
+                    deleteForEveryone = false
+                };
+                await _hubContext.Clients.Group($"User_{currentUserId}").SendAsync("MessageDeleted", delPayload);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to broadcast MessageDeleted event for message {MessageId}", messageId);
+            }
+
             return true;
         }
-
-        throw new ForbiddenException("You do not have permission to delete this message.");
     }
 
     public async Task<List<MessageReactionDto>> ToggleReactionAsync(long messageId, int currentUserId, string reactionType)

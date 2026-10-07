@@ -29,6 +29,7 @@ import SuspendUserModal from '../components/modals/SuspendUserModal';
 import CreateCommunityModal from '../components/modals/CreateCommunityModal';
 import HighlightText from '../components/ui/HighlightText';
 import { addRestrictedWord } from '../utils/restrictedWords';
+import { getSystemConfig, saveSystemConfig, DEFAULT_SYSTEM_CONFIG } from '../utils/systemConfig';
 
 // Helper to provide realistic reported post content if live API call returns empty/404
 const getFallbackPostContent = (report) => {
@@ -546,35 +547,7 @@ export default function AdminConsole() {
 
     // System Config State
     const [configState, setConfigState] = useState(() => {
-        try {
-            const saved = localStorage.getItem('knome_system_config');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                return {
-                    maintenanceMode: false,
-                    autoModeration: true,
-                    moderationSensitivity: 'High (Strict AI)',
-                    aiToxicityThreshold: 80,
-                    aiAutoQuarantine: true,
-                    aiDeepScan: true,
-                    maxUploadMb: 100,
-                    jwtTtlHours: 24,
-                    notifyAdminsOnReport: true,
-                    ...parsed
-                };
-            }
-        } catch (e) {}
-        return {
-            maintenanceMode: false,
-            autoModeration: true,
-            moderationSensitivity: 'High (Strict AI)',
-            aiToxicityThreshold: 80,
-            aiAutoQuarantine: true,
-            aiDeepScan: true,
-            maxUploadMb: 100,
-            jwtTtlHours: 24,
-            notifyAdminsOnReport: true,
-        };
+        return getSystemConfig();
     });
     const [configToast, setConfigToast] = useState(false);
     const [suspendSearchTerm, setSuspendSearchTerm] = useState('');
@@ -2467,7 +2440,7 @@ export default function AdminConsole() {
 
     // Handle System Config Save
     const handleSaveConfig = () => {
-        localStorage.setItem('knome_system_config', JSON.stringify(configState));
+        saveSystemConfig(configState);
         setConfigToast(true);
         setTimeout(() => setConfigToast(false), 4000);
         showToast('System configuration saved & published successfully.');
@@ -2478,7 +2451,7 @@ export default function AdminConsole() {
                 time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
                 moderator: currentUser?.name || 'System Admin',
                 action: 'ConfigUpdate',
-                target: 'Updated Platform Parameters & Moderation Sensitivity',
+                target: `Parameters Updated (Messaging: ${configState.enableMessaging !== false ? 'ON' : 'OFF'}, Email: ${configState.enableEmail !== false ? 'ON' : 'OFF'})`,
                 color: 'text-emerald-500'
             },
             ...prev
@@ -4122,7 +4095,7 @@ export default function AdminConsole() {
 
             {/* TAB 7: SYSTEM PARAMETERS QUICK TOGGLES */}
             {activeTab === 'system' && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 mb-3">
                     {/* 1. Platform Online */}
                     <div className="p-2.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
                         <div className="flex items-center justify-between text-emerald-500 mb-1">
@@ -4137,7 +4110,9 @@ export default function AdminConsole() {
                     <div 
                         onClick={() => {
                             const next = !configState.maintenanceMode;
-                            setConfigState({ ...configState, maintenanceMode: next });
+                            const updated = { ...configState, maintenanceMode: next };
+                            setConfigState(updated);
+                            saveSystemConfig(updated);
                             showToast(`Maintenance mode ${next ? 'activated' : 'deactivated'}`);
                         }}
                         className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
@@ -4160,7 +4135,9 @@ export default function AdminConsole() {
                     <div 
                         onClick={() => {
                             const next = !configState.autoModeration;
-                            setConfigState({ ...configState, autoModeration: next });
+                            const updated = { ...configState, autoModeration: next };
+                            setConfigState(updated);
+                            saveSystemConfig(updated);
                             showToast(`Auto-moderation ${next ? 'activated' : 'deactivated'}`);
                         }}
                         className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
@@ -4184,7 +4161,9 @@ export default function AdminConsole() {
                         onClick={() => {
                             const cur = configState.maxUploadMb || 100;
                             const next = cur === 100 ? 200 : (cur === 200 ? 50 : 100);
-                            setConfigState({ ...configState, maxUploadMb: next });
+                            const updated = { ...configState, maxUploadMb: next };
+                            setConfigState(updated);
+                            saveSystemConfig(updated);
                             showToast(`Max upload limit set to ${next} MB`);
                         }}
                         className="p-2.5 rounded-xl transition-all cursor-pointer group border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs"
@@ -4202,7 +4181,9 @@ export default function AdminConsole() {
                         onClick={() => {
                             const cur = configState.jwtTtlHours || 24;
                             const next = cur === 24 ? 48 : (cur === 48 ? 12 : 24);
-                            setConfigState({ ...configState, jwtTtlHours: next });
+                            const updated = { ...configState, jwtTtlHours: next };
+                            setConfigState(updated);
+                            saveSystemConfig(updated);
                             showToast(`Session TTL set to ${next} Hours`);
                         }}
                         className="p-2.5 rounded-xl transition-all cursor-pointer group border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs"
@@ -4213,6 +4194,58 @@ export default function AdminConsole() {
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{configState.jwtTtlHours || 24}h</p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Session Duration</p>
+                    </div>
+
+                    {/* 6. Toggle Direct Messaging */}
+                    <div 
+                        onClick={() => {
+                            const next = configState.enableMessaging === false ? true : false;
+                            const updated = { ...configState, enableMessaging: next };
+                            setConfigState(updated);
+                            saveSystemConfig(updated);
+                            showToast(`Direct messaging ${next ? 'enabled' : 'disabled'}`);
+                        }}
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                            configState.enableMessaging !== false
+                                ? 'bg-blue-500/10 border-blue-500 ring-2 ring-blue-500/50 shadow-md scale-[1.02]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-500/40 shadow-xs'
+                        }`}
+                        title="Click to toggle Direct Messaging on/off"
+                    >
+                        <div className="flex items-center justify-between text-blue-500 mb-1">
+                            <span className="material-symbols-outlined text-[18px]">chat</span>
+                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.enableMessaging !== false ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                                {configState.enableMessaging !== false ? 'ACTIVE' : 'OFF'}
+                            </span>
+                        </div>
+                        <p className="text-base font-black text-slate-900 dark:text-white leading-none mt-1">Messaging</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Click to Toggle</p>
+                    </div>
+
+                    {/* 7. Toggle Email Service */}
+                    <div 
+                        onClick={() => {
+                            const next = configState.enableEmail === false ? true : false;
+                            const updated = { ...configState, enableEmail: next };
+                            setConfigState(updated);
+                            saveSystemConfig(updated);
+                            showToast(`Email service ${next ? 'enabled' : 'disabled'}`);
+                        }}
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                            configState.enableEmail !== false
+                                ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/50 shadow-md scale-[1.02]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-500/40 shadow-xs'
+                        }`}
+                        title="Click to toggle Email Service on/off"
+                    >
+                        <div className="flex items-center justify-between text-purple-500 mb-1">
+                            <span className="material-symbols-outlined text-[18px]">mail</span>
+                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.enableEmail !== false ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                                {configState.enableEmail !== false ? 'ACTIVE' : 'OFF'}
+                            </span>
+                        </div>
+                        <p className="text-base font-black text-slate-900 dark:text-white leading-none mt-1">Email Service</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Click to Toggle</p>
                     </div>
                 </div>
             )}
@@ -5664,6 +5697,57 @@ export default function AdminConsole() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-semibold">
+                        {/* Direct Messaging ON/OFF Toggle */}
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-[18px] text-blue-500">chat</span>
+                                    <p className="font-bold text-slate-900 dark:text-white">Direct Messaging (1-to-1 Chat)</p>
+                                    <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${configState.enableMessaging !== false ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-200 text-slate-500 dark:bg-slate-700'}`}>
+                                        {configState.enableMessaging !== false ? 'Enabled' : 'Disabled'}
+                                    </span>
+                                </div>
+                                <p className="text-slate-400 font-normal text-[11px] mt-0.5">Enable or disable 1-to-1 direct messaging, chat routes, and floating launcher for all users</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={configState.enableMessaging !== false}
+                                onChange={e => {
+                                    const next = e.target.checked;
+                                    const updated = { ...configState, enableMessaging: next };
+                                    setConfigState(updated);
+                                    saveSystemConfig(updated);
+                                    showToast(`Direct messaging ${next ? 'enabled' : 'disabled'}`);
+                                }}
+                                className="w-4 h-4 accent-blue-600 cursor-pointer"
+                            />
+                        </div>
+
+                        {/* Email Service ON/OFF Toggle */}
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-[18px] text-purple-500">mail</span>
+                                    <p className="font-bold text-slate-900 dark:text-white">Email Service & Contact Visibility</p>
+                                    <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${configState.enableEmail !== false ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-slate-200 text-slate-500 dark:bg-slate-700'}`}>
+                                        {configState.enableEmail !== false ? 'Enabled' : 'Disabled'}
+                                    </span>
+                                </div>
+                                <p className="text-slate-400 font-normal text-[11px] mt-0.5">Enable or disable employee official email address visibility and contact links platform-wide</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={configState.enableEmail !== false}
+                                onChange={e => {
+                                    const next = e.target.checked;
+                                    const updated = { ...configState, enableEmail: next };
+                                    setConfigState(updated);
+                                    saveSystemConfig(updated);
+                                    showToast(`Email service ${next ? 'enabled' : 'disabled'}`);
+                                }}
+                                className="w-4 h-4 accent-purple-600 cursor-pointer"
+                            />
+                        </div>
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
                             <div>
                                 <p className="font-bold text-slate-900 dark:text-white">Maintenance Mode</p>
