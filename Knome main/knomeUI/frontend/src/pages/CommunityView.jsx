@@ -11,6 +11,7 @@ import { ImageGrid, ImageLightbox } from '../components/widgets/PostCard';
 import useScrollLoading from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
+import { useSystemConfig } from '../utils/systemConfig';
 
 const ENTERPRISE_CHANNELS_SEED = {
     '1': {
@@ -179,6 +180,7 @@ const normalizeMemberData = (m, contextUsers = []) => {
 };
 
 export default function CommunityView() {
+    const { isMessagingEnabled } = useSystemConfig();
     const { currentUser, users: contextUsers, awardRuleKarma, refreshKarma } = useUser();
     const confirm = useConfirm();
     const navigate = useNavigate();
@@ -1570,12 +1572,21 @@ export default function CommunityView() {
             const isPureMockId = communityId && (isNaN(communityId) || Number(communityId) > 1000000000);
             const isValidInt32 = communityId && !isNaN(communityId) && Number(communityId) > 0 && Number(communityId) <= 2147483647 && !isPureMockId;
 
-            const [commData, postsData, rawMembers, apiFiles] = await Promise.all([
-                isValidInt32 ? communitiesApi.getById(communityId, { noCache: true }).catch(() => null) : null,
-                isValidInt32 ? communitiesApi.getPosts(communityId).catch(() => []) : [],
-                isValidInt32 ? communitiesApi.getMembers(communityId, null, 1, 200, { noCache: true }).catch(() => []) : [],
-                isValidInt32 ? communitiesApi.getFiles(communityId).catch(() => null) : null
-            ]);
+            let commData = null;
+            let postsData = [];
+            let rawMembers = [];
+            let apiFiles = null;
+
+            if (isValidInt32) {
+                commData = await communitiesApi.getById(communityId, { noCache: true }).catch(() => null);
+                if (commData) {
+                    [postsData, rawMembers, apiFiles] = await Promise.all([
+                        communitiesApi.getPosts(communityId).catch(() => []),
+                        communitiesApi.getMembers(communityId, null, 1, 200, { noCache: true }).catch(() => []),
+                        communitiesApi.getFiles(communityId).catch(() => null)
+                    ]);
+                }
+            }
             
             if (commData) {
                 const imgs = getCommunityImages(commData.name, commData.categoryName);
@@ -5468,7 +5479,7 @@ export default function CommunityView() {
                                                                  </button>
                                                              </>
                                                          )}
-                                                         {String(m.userId || m.id) !== String(currentUser?.userId || currentUser?.id) && (
+                                                         {isMessagingEnabled && String(m.userId || m.id) !== String(currentUser?.userId || currentUser?.id) && (
                                                              <button 
                                                                  onClick={() => navigate(`/messages?userId=${m.userId || m.id}&name=${encodeURIComponent(m.displayName || '')}`)}
                                                                  className="px-2.5 py-1 rounded-lg border border-cyan-200 dark:border-cyan-800/60 bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 text-[11px] font-semibold transition-all shrink-0 flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"

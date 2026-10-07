@@ -52,6 +52,11 @@ export const wikiApi = {
         return res?.data || res;
     },
 
+    async restoreWiki(id) {
+        const res = await apiClient.post(`/wikis/${id}/restore`);
+        return res?.data || res;
+    },
+
     async toggleArchiveWiki(id, isArchived = true) {
         const res = await apiClient.post(`/wikis/${id}/archive`, { isArchived });
         return res?.data || res;

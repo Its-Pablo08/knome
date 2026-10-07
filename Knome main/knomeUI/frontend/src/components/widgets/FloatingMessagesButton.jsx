@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
+import { useSystemConfig } from '../../utils/systemConfig';
 
 export default function FloatingMessagesButton() {
+    const { isMessagingEnabled } = useSystemConfig();
     const { currentUser } = useUser();
     const location = useLocation();
     const isMessagesPage = location.pathname.startsWith('/messages') || location.pathname.startsWith('/chat');
-
-    if (isMessagesPage) return null;
 
     const [unreadCount, setUnreadCount] = useState(() => {
         try {
@@ -45,6 +45,8 @@ export default function FloatingMessagesButton() {
             window.removeEventListener('storage', handleMsgUpdate);
         };
     }, [currentUser]);
+
+    if (!isMessagingEnabled || isMessagesPage) return null;
 
     return (
         <Link

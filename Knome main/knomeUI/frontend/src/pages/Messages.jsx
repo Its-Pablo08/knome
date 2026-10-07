@@ -4,6 +4,7 @@ import { useUser } from '../components/contexts/UserContext';
 import { useToast } from '../components/contexts/ToastContext';
 import { resolveMediaUrl, userApi, messagesApi, mediaApi } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
+import { useSystemConfig } from '../utils/systemConfig';
 import {
     initMessengerSignalR,
     sendTypingIndicator,
@@ -152,6 +153,7 @@ const EMOJI_LABELS = {
 };
 
 export default function Messages() {
+    const { isMessagingEnabled } = useSystemConfig();
     const { currentUser, users: contextUsers } = useUser();
     const { addToast } = useToast();
     const currentUserId = Number(currentUser?.userId || currentUser?.id || 0);
@@ -308,7 +310,7 @@ export default function Messages() {
 
     // ── Real-Time SignalR Connection & Event Subscriptions ──
     useEffect(() => {
-        if (!currentUserId) return;
+        if (!currentUserId || !isMessagingEnabled) return;
 
         const loadOnline = () => {
             fetchOnlineUserIds().then(ids => {
@@ -481,7 +483,7 @@ export default function Messages() {
 
     // ── Fetch Conversations from Real API ──
     const fetchConversations = useCallback(async (isSilent = false) => {
-        if (!currentUserId) return;
+        if (!currentUserId || !isMessagingEnabled) return;
         if (!isSilent) {
             setIsLoadingConversations(true);
             setConversationsError(null);
@@ -1281,6 +1283,27 @@ export default function Messages() {
             return true;
         });
     }, [activeHistory]);
+
+    if (!isMessagingEnabled) {
+        return (
+            <div className="w-full flex-1 flex flex-col items-center justify-center min-h-[60vh] p-6 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4 shadow-sm border border-blue-100 dark:border-blue-900/60">
+                    <span className="material-symbols-outlined text-[36px]">chat_bubble_outline</span>
+                </div>
+                <h2 className="text-xl font-black text-slate-900 dark:text-white mb-2">Direct Messaging is Disabled</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mb-6 leading-relaxed">
+                    Direct messaging is currently turned off by the System Administrator. The messaging service and chat channels are temporarily inaccessible.
+                </p>
+                <button
+                    onClick={() => navigate('/')}
+                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer flex items-center gap-2 active:scale-95"
+                >
+                    <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+                    <span>Return to Home</span>
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="w-full flex-1 flex flex-col h-full min-h-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden animate-in fade-in duration-200">

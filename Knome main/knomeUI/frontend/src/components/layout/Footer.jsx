@@ -2,8 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import knomeLogoDark from '../../assets/knome_logo_dark.png';
 import mponlineLogo from '../../assets/mponline_logo.png';
+import { useSystemConfig } from '../../utils/systemConfig';
 
 export default function Footer() {
+    const { isEmailEnabled } = useSystemConfig();
     return (
         <footer className="relative w-full mt-0 bg-[#070c1b]/98 backdrop-blur-md text-slate-200 font-sans border-t border-slate-800/80 shadow-2xl">
             
@@ -61,11 +63,15 @@ export default function Footer() {
                             <span className="material-symbols-outlined text-[13px] text-sky-400">call</span>
                             <span>0755-6720200</span>
                         </a>
-                        <span className="text-slate-700 hidden sm:inline">•</span>
-                        <a href="mailto:knome-support@mponline.gov.in" className="flex items-center gap-1 text-slate-300 hover:text-sky-400 font-medium transition-colors">
-                            <span className="material-symbols-outlined text-[13px] text-sky-400">mail</span>
-                            <span>knome-support@mponline.gov.in</span>
-                        </a>
+                        {isEmailEnabled && (
+                            <>
+                                <span className="text-slate-700 hidden sm:inline">•</span>
+                                <a href="mailto:knome-support@mponline.gov.in" className="flex items-center gap-1 text-slate-300 hover:text-sky-400 font-medium transition-colors">
+                                    <span className="material-symbols-outlined text-[13px] text-sky-400">mail</span>
+                                    <span>knome-support@mponline.gov.in</span>
+                                </a>
+                            </>
+                        )}
                     </div>
 
                 </div>

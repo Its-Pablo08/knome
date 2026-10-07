@@ -146,7 +146,7 @@ BEGIN TRY
     -- 5. Sourabh Sahu
     UPDATE [Users]
     SET [Email] = 'sourabhsahu45@gmail.com',
-        [EmployeeId] = 'MPO103',
+        [EmployeeId] = 'EMP052',
         [FullName] = 'Sourabh Sahu',
         [Designation] = 'Talent Acquisition Manager',
         [IsActive] = 1

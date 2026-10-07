@@ -103,6 +103,14 @@ public class WikiController : KnomeControllerBase
         return Ok(ApiResponse.SuccessResponse(200, "Wiki deleted successfully."));
     }
 
+    [HttpPost("{id:long}/restore")]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RestoreWiki(long id)
+    {
+        await _wikiService.RestoreWikiAsync(id, GetCurrentUserId());
+        return Ok(ApiResponse.SuccessResponse(200, "Wiki restored successfully."));
+    }
+
     [HttpPost("{id:long}/archive")]
     [ProducesResponseType(typeof(ApiResponse<WikiDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ToggleArchive(long id, [FromBody] ArchiveRequestDto? request = null)

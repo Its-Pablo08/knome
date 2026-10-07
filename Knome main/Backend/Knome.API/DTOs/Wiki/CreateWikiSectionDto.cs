@@ -16,4 +16,5 @@ public class UpdateWikiSectionDto
     public string ContentHtml { get; set; } = string.Empty;
     public int SortOrder { get; set; }
     public string? ChangeSummary { get; set; }
+    public System.DateTime? ExpectedUpdatedDate { get; set; }
 }

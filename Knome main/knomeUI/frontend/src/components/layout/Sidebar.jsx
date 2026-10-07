@@ -3,11 +3,14 @@ import { Link, useLocation } from 'react-router-dom';
 import { useModal } from '../contexts/ModalContext';
 import { useUser, getUserStatusConfig } from '../contexts/UserContext';
 import { resolveMediaUrl } from '../../utils/apiService';
+import { useSystemConfig } from '../../utils/systemConfig';
 
 export default function Sidebar() {
+    const { isMessagingEnabled } = useSystemConfig();
     const { openPostModal } = useModal();
     const { currentUser } = useUser();
     const { pathname } = useLocation();
+    const isMessagesPage = pathname.startsWith('/messages') || pathname.startsWith('/chat');
     const [isMobileOpen, setIsMobileOpen] = useState(false);
 
     // Listen for mobile sidebar open/toggle events
@@ -290,7 +293,11 @@ export default function Sidebar() {
         <>
             {/* 1. Desktop Static Sidebar — static position with no internal scroll bar */}
             <aside
-                className="hidden md:flex flex-col shrink-0 sticky top-24 self-start max-h-[calc(100vh-6.5rem)] overflow-y-auto scrollbar-none"
+                className={`hidden md:flex flex-col shrink-0 ${
+                    isMessagesPage 
+                        ? 'h-full max-h-full' 
+                        : 'sticky top-24 self-start max-h-[calc(100vh-6.5rem)]'
+                } overflow-y-auto scrollbar-none`}
                 style={{ width: '260px' }}
             >
                 {/* Inner wrapper with clean gap — static without scrollbar */}
@@ -356,17 +363,19 @@ export default function Sidebar() {
                     </button>
                 )}
 
-                <Link to="/messages" className={`relative flex flex-col items-center gap-0.5 p-1 rounded-xl transition-colors ${pathname.startsWith('/messages') || pathname.startsWith('/chat') ? 'text-cyan-600 dark:text-cyan-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
-                    <div className="relative">
-                        <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: pathname.startsWith('/messages') || pathname.startsWith('/chat') ? "'FILL' 1" : "'FILL' 0" }}>chat</span>
-                        {unreadMessages > 0 && (
-                            <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full text-[8.5px] font-black bg-cyan-500 text-white leading-none">
-                                {unreadMessages > 99 ? '99+' : unreadMessages}
-                            </span>
-                        )}
-                    </div>
-                    <span className="text-[10px]">Messages</span>
-                </Link>
+                {isMessagingEnabled && (
+                    <Link to="/messages" className={`relative flex flex-col items-center gap-0.5 p-1 rounded-xl transition-colors ${pathname.startsWith('/messages') || pathname.startsWith('/chat') ? 'text-cyan-600 dark:text-cyan-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
+                        <div className="relative">
+                            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: pathname.startsWith('/messages') || pathname.startsWith('/chat') ? "'FILL' 1" : "'FILL' 0" }}>chat</span>
+                            {unreadMessages > 0 && (
+                                <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full text-[8.5px] font-black bg-cyan-500 text-white leading-none">
+                                    {unreadMessages > 99 ? '99+' : unreadMessages}
+                                </span>
+                            )}
+                        </div>
+                        <span className="text-[10px]">Messages</span>
+                    </Link>
+                )}
 
                 <button
                     onClick={() => setIsMobileOpen(true)}

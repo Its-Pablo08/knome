@@ -4,15 +4,76 @@ import { wikiApi } from '../../utils/wikiService';
 import { useUser } from '../contexts/UserContext';
 import { useToast } from '../contexts/ToastContext';
 import { checkRestrictedContent } from '../../utils/restrictedWords';
+import { apiClient } from '../../utils/apiClient';
+import { resolveMediaUrl } from '../../utils/apiService';
 
-const PRESET_COVERS = [
-    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=1200',
-    'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80&w=1200',
-    'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=1200',
-    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=1200',
-    'https://images.unsplash.com/photo-1507842229451-7f01be8610ce?auto=format&fit=crop&q=80&w=1200',
-    'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&q=80&w=1200'
+export const PRESET_COVER_BANNERS = [
+    {
+        id: 'space-cloud',
+        name: 'Cloud & System Architecture',
+        category: 'Technology',
+        description: 'Global infrastructure, network mesh, and high-availability architecture',
+        url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+        id: 'tech-team',
+        name: 'Enterprise Strategy & Planning',
+        category: 'Business',
+        description: 'Cross-functional product planning, agile roadmaps, and delivery',
+        url: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+        id: 'collaboration',
+        name: 'Cross-Functional Collaboration',
+        category: 'Operations',
+        description: 'Interactive team workshops, collaborative knowledge, and syncs',
+        url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+        id: 'code-dev',
+        name: 'Software Engineering & Codebase',
+        category: 'Engineering',
+        description: 'Software design patterns, engineering standards, and clean code',
+        url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+        id: 'analytics-desk',
+        name: 'Digital Workspace & Analytics',
+        category: 'Technology',
+        description: 'Executive dashboards, performance metrics, and system analytics',
+        url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+        id: 'books-knowledge',
+        name: 'Knowledge Library & Governance',
+        category: 'Documentation',
+        description: 'Official enterprise policies, standard operating playbooks, and SOPs',
+        url: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+        id: 'cyber-defense',
+        name: 'Cybersecurity & Compliance Standards',
+        category: 'Security',
+        description: 'Zero-trust protocols, enterprise encryption, and regulatory audits',
+        url: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+        id: 'data-platform',
+        name: 'Data Science & Metrics Engine',
+        category: 'Data',
+        description: 'Data pipelines, distributed processing, and AI/ML metrics',
+        url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+        id: 'corporate-labs',
+        name: 'Corporate Innovation & Labs',
+        category: 'Operations',
+        description: 'R&D initiatives, prototyping labs, and future-forward design',
+        url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200'
+    }
 ];
+
+export const PRESET_COVERS = PRESET_COVER_BANNERS.map(p => p.url);
 
 export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData = null }) {
     const { currentUser } = useUser();
@@ -27,6 +88,14 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
     const [changeSummary, setChangeSummary] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
+    // Cover banner attachment states
+    const [isPresetGalleryOpen, setIsPresetGalleryOpen] = useState(false);
+    const [selectedPresetCategory, setSelectedPresetCategory] = useState('All');
+    const [presetSearch, setPresetSearch] = useState('');
+    const [isUploadingCover, setIsUploadingCover] = useState(false);
+
+    const coverFileInputRef = useRef(null);
+    const editorImageInputRef = useRef(null);
     const editorRef = useRef(null);
 
     const isEditMode = Boolean(initialData && initialData.wikiId);
@@ -46,20 +115,64 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     }
                 }, 50);
             } else {
-                setTitle('');
-                setDescription('');
-                setStatus('Published');
-                setTags(['Wiki', 'Knowledge', 'Documentation']);
-                setCoverImageUrl(PRESET_COVERS[0]);
-                setChangeSummary('');
-                setTimeout(() => {
-                    if (editorRef.current) {
-                        editorRef.current.innerHTML = '';
-                    }
-                }, 50);
+                const savedDraftStr = localStorage.getItem('wiki_draft_create');
+                let restored = false;
+                if (savedDraftStr) {
+                    try {
+                        const d = JSON.parse(savedDraftStr);
+                        if (d && (d.title || d.contentHtml)) {
+                            setTitle(d.title || '');
+                            setDescription(d.description || '');
+                            setStatus(d.status || 'Published');
+                            setTags(Array.isArray(d.tags) ? d.tags : ['Wiki', 'Knowledge', 'Documentation']);
+                            setCoverImageUrl(d.coverImageUrl || PRESET_COVERS[0]);
+                            setChangeSummary('');
+                            setTimeout(() => {
+                                if (editorRef.current) {
+                                    editorRef.current.innerHTML = d.contentHtml || '';
+                                }
+                            }, 50);
+                            restored = true;
+                        }
+                    } catch {}
+                }
+                if (!restored) {
+                    setTitle('');
+                    setDescription('');
+                    setStatus('Published');
+                    setTags(['Wiki', 'Knowledge', 'Documentation']);
+                    setCoverImageUrl(PRESET_COVERS[0]);
+                    setChangeSummary('');
+                    setTimeout(() => {
+                        if (editorRef.current) {
+                            editorRef.current.innerHTML = '';
+                        }
+                    }, 50);
+                }
             }
         }
     }, [isOpen, initialData]);
+
+    // Autosave draft (WIKI-024)
+    useEffect(() => {
+        if (!isOpen || isEditMode) return;
+        const timer = setInterval(() => {
+            const currentHtml = editorRef.current?.innerHTML || '';
+            if (title.trim() || currentHtml.trim()) {
+                const draft = {
+                    title,
+                    description,
+                    status,
+                    tags,
+                    coverImageUrl,
+                    contentHtml: currentHtml,
+                    savedAt: new Date().toISOString()
+                };
+                localStorage.setItem('wiki_draft_create', JSON.stringify(draft));
+            }
+        }, 3000);
+        return () => clearInterval(timer);
+    }, [isOpen, isEditMode, title, description, status, tags, coverImageUrl]);
 
     const [activeFormats, setActiveFormats] = useState({
         bold: false,
@@ -194,11 +307,103 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
             }
         } else if (command === 'insertHorizontalRule') {
             document.execCommand('insertHTML', false, '<hr class="my-4 border-t border-slate-300 dark:border-slate-700" /><p><br></p>');
+        } else if (command === 'insertImage') {
+            const url = window.prompt('Enter image URL to insert into document (or leave empty to pick a file):', 'https://');
+            if (url && url.trim() && url.trim() !== 'https://') {
+                if (document.activeElement !== editorRef.current && !editorRef.current.contains(document.activeElement)) {
+                    editorRef.current.focus();
+                }
+                const imgHtml = `<figure class="my-4"><img src="${url.trim()}" alt="Wiki diagram" class="rounded-xl max-w-full h-auto shadow-md border border-slate-200 dark:border-slate-800" /><figcaption class="text-xs text-slate-400 mt-1.5 text-center italic">Document Illustration</figcaption></figure><p><br></p>`;
+                document.execCommand('insertHTML', false, imgHtml);
+            } else if (url !== null) {
+                editorImageInputRef.current?.click();
+            }
         } else {
             document.execCommand(command, false, value);
         }
 
         updateActiveFormats();
+    };
+
+    const handleSelectPreset = (url, name) => {
+        setCoverImageUrl(url);
+        setIsPresetGalleryOpen(false);
+        addToast(`Cover banner preset "${name || 'Selected'}" attached!`, 'success');
+    };
+
+    const handleCoverFileUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            addToast('Please select a valid image file (JPG, PNG, WebP).', 'warning');
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            addToast('Cover banner image size must not exceed 10MB.', 'warning');
+            return;
+        }
+
+        setIsUploadingCover(true);
+        try {
+            const res = await apiClient.uploadFile('/Media/upload', file, 'image');
+            const resolved = res?.url || res?.data?.url;
+            if (resolved) {
+                setCoverImageUrl(resolved);
+                addToast('Custom cover banner uploaded and attached successfully!', 'success');
+            } else {
+                throw new Error('Upload endpoint did not return URL');
+            }
+        } catch (uploadErr) {
+            console.warn('Backend cover upload failed, using local FileReader fallback:', uploadErr);
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                if (ev.target?.result) {
+                    setCoverImageUrl(ev.target.result);
+                    addToast('Cover banner attached from local image!', 'success');
+                }
+            };
+            reader.readAsDataURL(file);
+        } finally {
+            setIsUploadingCover(false);
+            if (coverFileInputRef.current) coverFileInputRef.current.value = '';
+        }
+    };
+
+    const handleAttachUrl = () => {
+        const url = window.prompt('Enter direct image URL for Wiki cover banner (https://...):', coverImageUrl || 'https://');
+        if (url && url.trim() && url.trim() !== 'https://') {
+            setCoverImageUrl(url.trim());
+            addToast('Cover banner URL attached!', 'success');
+        }
+    };
+
+    const handleRemoveCover = () => {
+        setCoverImageUrl('');
+        addToast('Cover banner removed.', 'info');
+    };
+
+    const handleEditorImageUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        editorRef.current?.focus();
+        try {
+            const res = await apiClient.uploadFile('/Media/upload', file, 'image');
+            const resolved = resolveMediaUrl(res?.url || res?.data?.url);
+            const imgHtml = `<figure class="my-4"><img src="${resolved}" alt="${file.name}" class="rounded-xl max-w-full h-auto shadow-md border border-slate-200 dark:border-slate-800" /><figcaption class="text-xs text-slate-400 mt-1.5 text-center italic">${file.name}</figcaption></figure><p><br></p>`;
+            document.execCommand('insertHTML', false, imgHtml);
+        } catch {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const imgHtml = `<figure class="my-4"><img src="${ev.target.result}" alt="${file.name}" class="rounded-xl max-w-full h-auto shadow-md border border-slate-200 dark:border-slate-800" /><figcaption class="text-xs text-slate-400 mt-1.5 text-center italic">${file.name}</figcaption></figure><p><br></p>`;
+                document.execCommand('insertHTML', false, imgHtml);
+            };
+            reader.readAsDataURL(file);
+        } finally {
+            if (editorImageInputRef.current) editorImageInputRef.current.value = '';
+        }
     };
 
     const handleAddTag = (e) => {
@@ -248,7 +453,8 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     status,
                     coverImageUrl,
                     tags,
-                    changeSummary: changeSummary.trim() || 'Updated Wiki overview'
+                    changeSummary: changeSummary.trim() || 'Updated Wiki overview',
+                    expectedUpdatedDate: initialData.updatedDate
                 };
                 const updated = await wikiApi.updateWiki(initialData.wikiId, payload);
                 addToast('Wiki updated successfully!', 'success');
@@ -264,6 +470,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     tags
                 };
                 const created = await wikiApi.createWiki(payload);
+                localStorage.removeItem('wiki_draft_create');
                 addToast('Wiki created successfully!', 'success');
                 onSaved && onSaved(created);
                 onClose();
@@ -277,6 +484,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
     };
 
     return (
+        <>
         <Modal
             isOpen={isOpen}
             onClose={onClose}
@@ -315,6 +523,22 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     />
                 </div>
 
+                {/* Hidden File Inputs for Cover Banner & Inline Editor Images */}
+                <input
+                    type="file"
+                    ref={coverFileInputRef}
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={handleCoverFileUpload}
+                    className="hidden"
+                />
+                <input
+                    type="file"
+                    ref={editorImageInputRef}
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={handleEditorImageUpload}
+                    className="hidden"
+                />
+
                 {/* Status & Cover Banner Row */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -333,23 +557,132 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                            Cover Banner Preset
-                        </label>
-                        <div className="flex items-center gap-2 overflow-x-auto py-1">
-                            {PRESET_COVERS.map((img, idx) => (
+                        <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                                Cover Banner Preset & Attachments
+                            </label>
+                            <div className="flex items-center gap-1">
                                 <button
-                                    key={idx}
                                     type="button"
-                                    onClick={() => setCoverImageUrl(img)}
-                                    className={`w-10 h-10 rounded-lg overflow-hidden shrink-0 border-2 transition-all ${
-                                        coverImageUrl === img ? 'border-teal-500 scale-105 shadow-md' : 'border-transparent opacity-70 hover:opacity-100'
-                                    }`}
+                                    onClick={() => setIsPresetGalleryOpen(true)}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors cursor-pointer border border-teal-200/80 dark:border-teal-800/60"
+                                    title="Open Cover Banner Preset Attachment catalog"
                                 >
-                                    <img src={img} alt={`Cover ${idx}`} className="w-full h-full object-cover" />
+                                    <span className="material-symbols-outlined text-[13px]">photo_library</span>
+                                    <span>Presets</span>
                                 </button>
-                            ))}
+                                <button
+                                    type="button"
+                                    onClick={() => coverFileInputRef.current?.click()}
+                                    disabled={isUploadingCover}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors cursor-pointer border border-indigo-200/80 dark:border-indigo-800/60 disabled:opacity-50"
+                                    title="Upload custom cover photo from device (JPG, PNG, WebP)"
+                                >
+                                    {isUploadingCover ? (
+                                        <span className="w-3 h-3 border-2 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
+                                    ) : (
+                                        <span className="material-symbols-outlined text-[13px]">cloud_upload</span>
+                                    )}
+                                    <span>Upload</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleAttachUrl}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
+                                    title="Attach image from web URL"
+                                >
+                                    <span className="material-symbols-outlined text-[13px]">link</span>
+                                    <span>URL</span>
+                                </button>
+                                {coverImageUrl && (
+                                    <button
+                                        type="button"
+                                        onClick={handleRemoveCover}
+                                        className="p-0.5 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                                        title="Remove cover banner"
+                                    >
+                                        <span className="material-symbols-outlined text-[15px]">close</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
+
+                        {/* Quick Presets Strip */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scrollbar">
+                            {PRESET_COVER_BANNERS.slice(0, 6).map((preset) => {
+                                const isSel = coverImageUrl === preset.url;
+                                return (
+                                    <button
+                                        key={preset.id}
+                                        type="button"
+                                        onClick={() => handleSelectPreset(preset.url, preset.name)}
+                                        className={`w-10 h-10 rounded-lg overflow-hidden shrink-0 border-2 transition-all relative group cursor-pointer ${
+                                            isSel
+                                                ? 'border-teal-500 scale-105 shadow-md ring-2 ring-teal-500/30'
+                                                : 'border-transparent opacity-75 hover:opacity-100 hover:scale-105'
+                                        }`}
+                                        title={`Attach Preset: ${preset.name} (${preset.category})`}
+                                    >
+                                        <img
+                                            src={preset.url}
+                                            alt={preset.name}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => {
+                                                e.target.style.display = 'none';
+                                                if (e.target.parentElement) {
+                                                    e.target.parentElement.style.background = 'linear-gradient(135deg, #0d9488 0%, #065f46 100%)';
+                                                }
+                                            }}
+                                        />
+                                        {isSel && (
+                                            <div className="absolute inset-0 bg-teal-900/30 flex items-center justify-center">
+                                                <span className="material-symbols-outlined text-[14px] text-white font-bold drop-shadow">check</span>
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                            <button
+                                type="button"
+                                onClick={() => setIsPresetGalleryOpen(true)}
+                                className="w-10 h-10 rounded-lg shrink-0 border border-dashed border-teal-500/50 hover:border-teal-500 bg-teal-50/50 dark:bg-teal-950/30 hover:bg-teal-50 text-teal-600 dark:text-teal-400 flex flex-col items-center justify-center transition-all cursor-pointer"
+                                title="Browse all Cover Banner Presets"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">add_photo_alternate</span>
+                            </button>
+                        </div>
+
+                        {/* Active Attached Banner Badge / Preview */}
+                        {coverImageUrl && (
+                            <div className="mt-1.5 flex items-center justify-between px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-[11px]">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <img
+                                        src={resolveMediaUrl(coverImageUrl)}
+                                        alt="Current Cover"
+                                        className="w-5 h-5 rounded object-cover shrink-0 border border-slate-300 dark:border-slate-600"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                        }}
+                                    />
+                                    <span className="truncate text-slate-700 dark:text-slate-300 font-medium">
+                                        {PRESET_COVER_BANNERS.find(p => p.url === coverImageUrl)?.name
+                                            ? `Preset: ${PRESET_COVER_BANNERS.find(p => p.url === coverImageUrl).name}`
+                                            : coverImageUrl.startsWith('data:')
+                                                ? 'Local Image Attached'
+                                                : coverImageUrl.includes('/Media/') || coverImageUrl.includes('/uploads/')
+                                                    ? 'Uploaded Image Attached'
+                                                    : 'External Image URL Attached'}
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPresetGalleryOpen(true)}
+                                    className="text-teal-600 dark:text-teal-400 hover:underline font-bold shrink-0 ml-2 cursor-pointer"
+                                >
+                                    Change
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -510,6 +843,17 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                             >
                                 <span className="material-symbols-outlined text-[17px]">horizontal_rule</span>
                             </button>
+
+                            {/* Insert Image */}
+                            <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => executeCmd('insertImage')}
+                                className="w-7 h-7 rounded flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-300"
+                                title="Attach / Insert Image (Upload file or enter URL)"
+                            >
+                                <span className="material-symbols-outlined text-[17px]">image</span>
+                            </button>
                         </div>
 
                         {/* Editable Area */}
@@ -611,5 +955,161 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                 </div>
             </form>
         </Modal>
+
+        {/* Cover Banner Preset Attachment Modal */}
+        <Modal
+            isOpen={isPresetGalleryOpen}
+            onClose={() => setIsPresetGalleryOpen(false)}
+            title="Cover Banner Preset Attachment"
+            maxWidth="max-w-4xl"
+        >
+            <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                    <div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Select and attach a curated high-resolution enterprise cover banner to your Knowledge Wiki.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsPresetGalleryOpen(false);
+                                coverFileInputRef.current?.click();
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 transition-colors cursor-pointer border border-indigo-200/80 dark:border-indigo-800/60"
+                            title="Upload custom cover from local device"
+                        >
+                            <span className="material-symbols-outlined text-[15px]">cloud_upload</span>
+                            <span>Upload Custom Image</span>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Filter and Search Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {['All', 'Technology', 'Engineering', 'Operations', 'Documentation', 'Security', 'Business', 'Data'].map((cat) => (
+                            <button
+                                key={cat}
+                                type="button"
+                                onClick={() => setSelectedPresetCategory(cat)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                    selectedPresetCategory === cat
+                                        ? 'bg-teal-600 text-white shadow-xs'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                }`}
+                            >
+                                {cat}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="relative min-w-[180px]">
+                        <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">search</span>
+                        <input
+                            type="text"
+                            value={presetSearch}
+                            onChange={(e) => setPresetSearch(e.target.value)}
+                            placeholder="Search presets..."
+                            className="w-full pl-8 pr-3 py-1 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+                        />
+                    </div>
+                </div>
+
+                {/* Presets Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 max-h-[55vh] overflow-y-auto p-1 custom-scrollbar">
+                    {PRESET_COVER_BANNERS.filter((p) => {
+                        const matchCat = selectedPresetCategory === 'All' || p.category === selectedPresetCategory;
+                        const matchQuery = !presetSearch.trim() || p.name.toLowerCase().includes(presetSearch.toLowerCase()) || p.category.toLowerCase().includes(presetSearch.toLowerCase());
+                        return matchCat && matchQuery;
+                    }).map((preset) => {
+                        const isAttached = coverImageUrl === preset.url;
+                        return (
+                            <div
+                                key={preset.id}
+                                onClick={() => handleSelectPreset(preset.url, preset.name)}
+                                className={`group rounded-2xl border overflow-hidden bg-white dark:bg-slate-850 transition-all cursor-pointer flex flex-col justify-between ${
+                                    isAttached
+                                        ? 'border-teal-500 ring-2 ring-teal-500/40 shadow-md'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-teal-400 hover:shadow-md'
+                                }`}
+                            >
+                                <div className="relative h-28 w-full overflow-hidden bg-slate-100 dark:bg-slate-900">
+                                    <img
+                                        src={preset.url}
+                                        alt={preset.name}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            if (e.target.parentElement) {
+                                                e.target.parentElement.style.background = 'linear-gradient(135deg, #0d9488 0%, #1e293b 100%)';
+                                            }
+                                        }}
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
+                                    <div className="absolute top-2 left-2">
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-950/60 text-white backdrop-blur-md">
+                                            {preset.category}
+                                        </span>
+                                    </div>
+                                    {isAttached && (
+                                        <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500 text-white flex items-center gap-1 shadow-sm">
+                                            <span className="material-symbols-outlined text-[13px]">check</span>
+                                            Attached
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="p-3 space-y-1.5 flex-1 flex flex-col justify-between">
+                                    <div>
+                                        <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                                            {preset.name}
+                                        </h4>
+                                        {preset.description && (
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5">
+                                                {preset.description}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleSelectPreset(preset.url, preset.name);
+                                        }}
+                                        className={`w-full py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 mt-2 cursor-pointer ${
+                                            isAttached
+                                                ? 'bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800'
+                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 group-hover:bg-teal-600 group-hover:text-white'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[14px]">
+                                            {isAttached ? 'check_circle' : 'attach_file'}
+                                        </span>
+                                        <span>{isAttached ? 'Attached Preset' : 'Attach Preset'}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
+                    <span className="text-[11px] text-slate-400">
+                        {PRESET_COVER_BANNERS.length} curated enterprise presets available for instant attachment.
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setIsPresetGalleryOpen(false)}
+                        className="px-4 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 transition-colors cursor-pointer"
+                    >
+                        Done
+                    </button>
+                </div>
+            </div>
+        </Modal>
+        </>
     );
 }

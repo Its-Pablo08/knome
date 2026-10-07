@@ -4,6 +4,7 @@ import { wikiApi } from '../../utils/wikiService';
 import { communitiesApi, profileApi, adminApi, postsApi, notificationsApi, resolveMediaUrl, getCommunityImages } from '../../utils/apiService';
 import { useUser } from '../contexts/UserContext';
 import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmDialogContext';
 import HighlightText from '../ui/HighlightText';
 
 export default function WikiShareModal({
@@ -16,9 +17,10 @@ export default function WikiShareModal({
 }) {
     const { currentUser, users: contextUsers } = useUser();
     const { addToast } = useToast();
+    const confirm = useConfirm();
     const backdropRef = useRef(null);
 
-    // Active Tab in Share Modal: 'menu' | 'community' | 'users' | 'group'
+    // Active Tab in Share Modal: 'menu' | 'community' | 'users'
     const [shareTab, setShareTab] = useState('menu');
     const [accessLevel, setAccessLevel] = useState('Viewer');
     const [isSharing, setIsSharing] = useState(false);
@@ -37,11 +39,6 @@ export default function WikiShareModal({
     const [userResults, setUserResults] = useState([]);
     const [selectedUsers, setSelectedUsers] = useState([]);
     const [isSearchingUsers, setIsSearchingUsers] = useState(false);
-
-    // Department Spheres State
-    const [departments, setDepartments] = useState([]);
-    const [deptSearchQuery, setDeptSearchQuery] = useState('');
-    const [selectedDeptId, setSelectedDeptId] = useState('');
 
     // Load active shares
     const loadShares = async () => {
@@ -86,34 +83,6 @@ export default function WikiShareModal({
         }
     };
 
-    // Default fallback departments
-    const DEFAULT_DEPARTMENTS = [
-        { departmentId: 1, name: 'Engineering & Technology', departmentCode: 'ENG' },
-        { departmentId: 2, name: 'Operations & Delivery', departmentCode: 'OPS' },
-        { departmentId: 3, name: 'Human Resources & Talent', departmentCode: 'HR' },
-        { departmentId: 4, name: 'Finance & Accounts', departmentCode: 'FIN' },
-        { departmentId: 5, name: 'Product & Design', departmentCode: 'PRD' },
-        { departmentId: 6, name: 'Administration & Infrastructure', departmentCode: 'ADM' }
-    ];
-
-    // Load departments
-    const loadDepartments = async () => {
-        try {
-            const res = await wikiApi.getDepartments().catch(() => null);
-            const items = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-            if (items.length > 0) {
-                setDepartments(items);
-                if (!selectedDeptId) setSelectedDeptId(String(items[0].departmentId));
-            } else {
-                setDepartments(DEFAULT_DEPARTMENTS);
-                if (!selectedDeptId) setSelectedDeptId(String(DEFAULT_DEPARTMENTS[0].departmentId));
-            }
-        } catch {
-            setDepartments(DEFAULT_DEPARTMENTS);
-            if (!selectedDeptId) setSelectedDeptId(String(DEFAULT_DEPARTMENTS[0].departmentId));
-        }
-    };
-
     useEffect(() => {
         if (isOpen && wikiId) {
             setShareTab('menu');
@@ -121,10 +90,8 @@ export default function WikiShareModal({
             setSelectedUsers([]);
             setUserSearchQuery('');
             setCommunitySearchQuery('');
-            setDeptSearchQuery('');
             loadShares();
             loadCommunities();
-            loadDepartments();
         }
     }, [isOpen, wikiId]);
 
@@ -192,15 +159,7 @@ export default function WikiShareModal({
         );
     }, [communities, communitySearchQuery]);
 
-    // Filter departments
-    const filteredDepartments = useMemo(() => {
-        if (!deptSearchQuery.trim()) return departments;
-        const q = deptSearchQuery.trim().toLowerCase();
-        return departments.filter(d =>
-            (d.name || '').toLowerCase().includes(q) ||
-            (d.departmentCode || '').toLowerCase().includes(q)
-        );
-    }, [departments, deptSearchQuery]);
+
 
     // Copy direct link
     const handleCopyLink = () => {
@@ -230,7 +189,13 @@ export default function WikiShareModal({
 
     // Revoke existing share
     const handleRemoveShare = async (shareId, targetName) => {
-        if (!window.confirm(`Revoke Wiki access for ${targetName || 'this space'}?`)) return;
+        const ok = await confirm({
+            title: 'Revoke Share Access',
+            message: `Are you sure you want to revoke Wiki access for ${targetName || 'this space'}?`,
+            confirmText: 'Revoke Access',
+            confirmButtonClass: 'bg-red-600 hover:bg-red-700 text-white'
+        });
+        if (!ok) return;
         try {
             await wikiApi.removeShare(wikiId, shareId);
             addToast(`Access revoked for ${targetName || 'space'}.`, 'success');
@@ -414,38 +379,7 @@ export default function WikiShareModal({
         }
     };
 
-    // Action 3: Share with Department Sphere
-    const handleShareWithDepartment = async () => {
-        if (!selectedDeptId) {
-            addToast('Please select a department sphere to share with.', 'warning');
-            return;
-        }
 
-        setIsSharing(true);
-        const deptIdNum = parseInt(selectedDeptId, 10);
-        const targetDept = departments.find(d => String(d.departmentId) === String(selectedDeptId));
-
-        try {
-            try {
-                await wikiApi.shareWiki(wikiId, {
-                    shareType: 'Group',
-                    targetId: deptIdNum,
-                    accessLevel
-                });
-            } catch (shareErr) {
-                console.warn('Backend wiki permission grant skipped or restricted:', shareErr);
-            }
-
-            addToast(`Wiki shared with ${targetDept?.name || 'Department'} Sphere!`, 'success');
-            onSharesUpdated && onSharesUpdated();
-            onClose && onClose();
-        } catch (err) {
-            console.error('Error sharing wiki with department:', err);
-            addToast(err?.response?.data?.message || err?.message || 'Failed to share Wiki with department.', 'error');
-        } finally {
-            setIsSharing(false);
-        }
-    };
 
     if (!isOpen) return null;
 
@@ -478,9 +412,7 @@ export default function WikiShareModal({
                                     ? 'Share to Community' 
                                     : shareTab === 'users' 
                                         ? 'Share with Users' 
-                                        : shareTab === 'group' 
-                                            ? 'Share with Department Sphere' 
-                                            : 'Share Wiki'}
+                                        : 'Share Wiki'}
                             </h3>
                             <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5 font-normal">
                                 {wikiTitle || 'Knowledge Space'}
@@ -536,25 +468,6 @@ export default function WikiShareModal({
                                     </h4>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                                         Send direct notifications to specific MPOnline team members
-                                    </p>
-                                </div>
-                                <span className="material-symbols-outlined text-slate-400 text-[22px] group-hover:translate-x-0.5 transition-transform">chevron_right</span>
-                            </div>
-
-                            {/* Option 3: Share with Department Sphere */}
-                            <div
-                                onClick={() => setShareTab('group')}
-                                className="p-5 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-teal-300 dark:hover:border-teal-700/60 bg-white dark:bg-slate-900 hover:bg-teal-50/30 dark:hover:bg-teal-950/20 transition-all flex items-center gap-4 cursor-pointer group shadow-xs"
-                            >
-                                <div className="w-14 h-14 rounded-full bg-teal-100 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                                    <span className="material-symbols-outlined text-[28px]">domain</span>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h4 className="font-bold text-slate-900 dark:text-white text-base group-hover:text-teal-600 transition-colors">
-                                        Share with Department Sphere
-                                    </h4>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                                        Grant access to an entire department team
                                     </p>
                                 </div>
                                 <span className="material-symbols-outlined text-slate-400 text-[22px] group-hover:translate-x-0.5 transition-transform">chevron_right</span>
@@ -900,131 +813,6 @@ export default function WikiShareModal({
                                 {isSharing 
                                     ? 'Sharing with Users...' 
                                     : `Share Wiki with ${selectedUsers.length} User${selectedUsers.length === 1 ? '' : 's'}`}
-                            </button>
-                        </div>
-                    )}
-
-                    {/* ══ VIEW 4: Sub-view: Share with Department Sphere ══ */}
-                    {shareTab === 'group' && (
-                        <div className="space-y-4">
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        Select Department Sphere ({filteredDepartments.length})
-                                    </label>
-                                    {selectedDeptId && (
-                                        <span className="text-[11px] font-semibold text-teal-600 dark:text-teal-400 truncate max-w-[180px]">
-                                            Selected: {departments.find(d => String(d.departmentId) === String(selectedDeptId))?.name || ''}
-                                        </span>
-                                    )}
-                                </div>
-
-                                {/* Dept Search Box */}
-                                <div className="relative mb-2.5">
-                                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
-                                    <input
-                                        type="text"
-                                        placeholder="Search department sphere..."
-                                        value={deptSearchQuery}
-                                        onChange={(e) => setDeptSearchQuery(e.target.value)}
-                                        className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-500"
-                                    />
-                                    {deptSearchQuery && (
-                                        <button 
-                                            type="button"
-                                            onClick={() => setDeptSearchQuery('')}
-                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">close</span>
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Scrollable List of Departments */}
-                                <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                                    {filteredDepartments.length > 0 ? (
-                                        filteredDepartments.map(d => {
-                                            const isSelected = String(selectedDeptId) === String(d.departmentId);
-
-                                            return (
-                                                <div
-                                                    key={d.departmentId}
-                                                    onClick={() => setSelectedDeptId(String(d.departmentId))}
-                                                    className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 group ${
-                                                        isSelected 
-                                                            ? 'border-teal-500 bg-teal-50/80 dark:bg-teal-950/40 ring-2 ring-teal-500/20 shadow-xs' 
-                                                            : 'border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:border-slate-200 dark:hover:border-slate-700'
-                                                    }`}
-                                                >
-                                                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                                                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-slate-200/60 dark:border-slate-700/60 bg-teal-100 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 flex items-center justify-center">
-                                                            <span className="material-symbols-outlined text-[22px]">domain</span>
-                                                        </div>
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <h4 className={`text-xs font-bold truncate ${isSelected ? 'text-teal-700 dark:text-teal-300' : 'text-slate-900 dark:text-white'}`}>
-                                                                    <HighlightText text={d.name} query={deptSearchQuery} />
-                                                                </h4>
-                                                                {d.departmentCode && (
-                                                                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 shrink-0">
-                                                                        <HighlightText text={d.departmentCode} query={deptSearchQuery} />
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                                                Department Sphere
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="shrink-0 flex items-center justify-center pl-1">
-                                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
-                                                            isSelected 
-                                                                ? 'bg-teal-600 text-white shadow-xs' 
-                                                                : 'border-2 border-slate-300 dark:border-slate-600 group-hover:border-teal-400'
-                                                        }`}>
-                                                            {isSelected && (
-                                                                <span className="material-symbols-outlined text-[13px] font-black">check</span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })
-                                    ) : (
-                                        <div className="py-8 text-center bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
-                                            <span className="material-symbols-outlined text-[32px] text-slate-300 dark:text-slate-600 mb-1">domain</span>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                                {deptSearchQuery ? 'No departments match your search.' : 'No departments found.'}
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Access Permission */}
-                            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
-                                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
-                                    Permission Granted
-                                </label>
-                                <select
-                                    value={accessLevel}
-                                    onChange={(e) => setAccessLevel(e.target.value)}
-                                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs cursor-pointer"
-                                >
-                                    <option value="Viewer">👁️ Viewer (Read Only)</option>
-                                    <option value="Editor">✏️ Editor (Can Edit Sections)</option>
-                                </select>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={handleShareWithDepartment}
-                                disabled={isSharing || !selectedDeptId}
-                                className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-teal-500/25 flex items-center justify-center gap-2 cursor-pointer"
-                            >
-                                <span className="material-symbols-outlined text-[18px]">send</span>
-                                {isSharing ? 'Sharing with Department...' : 'Share Wiki with Department'}
                             </button>
                         </div>
                     )}

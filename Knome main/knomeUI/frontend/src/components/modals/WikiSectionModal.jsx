@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from './Modal';
 import { wikiApi } from '../../utils/wikiService';
+import { apiClient } from '../../utils/apiService';
 import { useToast } from '../contexts/ToastContext';
 import { checkRestrictedContent } from '../../utils/restrictedWords';
 
@@ -20,8 +21,10 @@ export default function WikiSectionModal({
     const [sortOrder, setSortOrder] = useState(0);
     const [changeSummary, setChangeSummary] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
 
     const editorRef = useRef(null);
+    const editorImageInputRef = useRef(null);
     const isEditMode = Boolean(initialData && initialData.sectionId);
 
     useEffect(() => {
@@ -37,18 +40,60 @@ export default function WikiSectionModal({
                     }
                 }, 50);
             } else {
-                setTitle('');
-                setParentSectionId(defaultParentId ? String(defaultParentId) : '');
-                setSortOrder(availableSections.length * 10);
-                setChangeSummary('');
-                setTimeout(() => {
-                    if (editorRef.current) {
-                        editorRef.current.innerHTML = '';
-                    }
-                }, 50);
+                const draftKey = `wiki_section_draft_${wikiId}`;
+                const savedDraftStr = localStorage.getItem(draftKey);
+                let restored = false;
+                if (savedDraftStr) {
+                    try {
+                        const d = JSON.parse(savedDraftStr);
+                        if (d && (d.title || d.contentHtml)) {
+                            setTitle(d.title || '');
+                            setParentSectionId(d.parentSectionId !== undefined ? String(d.parentSectionId) : (defaultParentId ? String(defaultParentId) : ''));
+                            setSortOrder(d.sortOrder || (availableSections.length * 10));
+                            setChangeSummary('');
+                            setTimeout(() => {
+                                if (editorRef.current) {
+                                    editorRef.current.innerHTML = d.contentHtml || '';
+                                }
+                            }, 50);
+                            restored = true;
+                        }
+                    } catch {}
+                }
+
+                if (!restored) {
+                    setTitle('');
+                    setParentSectionId(defaultParentId ? String(defaultParentId) : '');
+                    setSortOrder(availableSections.length * 10);
+                    setChangeSummary('');
+                    setTimeout(() => {
+                        if (editorRef.current) {
+                            editorRef.current.innerHTML = '';
+                        }
+                    }, 50);
+                }
             }
         }
-    }, [isOpen, initialData, defaultParentId, availableSections]);
+    }, [isOpen, initialData, defaultParentId, availableSections, wikiId]);
+
+    // Autosave draft for new sections (WIKI-024)
+    useEffect(() => {
+        if (!isOpen || isEditMode || !wikiId) return;
+        const timer = setInterval(() => {
+            const currentHtml = editorRef.current?.innerHTML || '';
+            if (title.trim() || currentHtml.trim()) {
+                const draft = {
+                    title,
+                    parentSectionId,
+                    sortOrder,
+                    contentHtml: currentHtml,
+                    savedAt: new Date().toISOString()
+                };
+                localStorage.setItem(`wiki_section_draft_${wikiId}`, JSON.stringify(draft));
+            }
+        }, 3000);
+        return () => clearInterval(timer);
+    }, [isOpen, isEditMode, wikiId, title, parentSectionId, sortOrder]);
 
     const [activeFormats, setActiveFormats] = useState({
         bold: false,
@@ -178,11 +223,71 @@ export default function WikiSectionModal({
             }
         } else if (command === 'insertHorizontalRule') {
             document.execCommand('insertHTML', false, '<hr class="my-4 border-t border-slate-300 dark:border-slate-700" /><p><br></p>');
+        } else if (command === 'insertImage') {
+            const url = window.prompt('Enter image URL to insert into document (or leave empty to pick a file):', 'https://');
+            if (url && url.trim() && url.trim() !== 'https://') {
+                if (document.activeElement !== editorRef.current && !editorRef.current.contains(document.activeElement)) {
+                    editorRef.current.focus();
+                }
+                const imgHtml = `<figure class="my-4"><img src="${url.trim()}" alt="Section diagram" class="rounded-xl max-w-full h-auto shadow-md border border-slate-200 dark:border-slate-800" /><figcaption class="text-xs text-slate-400 mt-1.5 text-center italic">Document Illustration</figcaption></figure><p><br></p>`;
+                document.execCommand('insertHTML', false, imgHtml);
+            } else if (url !== null) {
+                editorImageInputRef.current?.click();
+            }
         } else {
             document.execCommand(command, false, value);
         }
 
         updateActiveFormats();
+    };
+
+    const handleEditorImageUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            addToast('Please select a valid image file (JPG, PNG, WebP).', 'warning');
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            addToast('Image size must not exceed 10MB.', 'warning');
+            return;
+        }
+
+        setIsUploadingImage(true);
+        try {
+            let imgUrl = '';
+            try {
+                const res = await apiClient.uploadFile('/Media/upload', file, 'image');
+                imgUrl = res?.url || res?.data?.url;
+            } catch (upErr) {
+                console.warn('Backend upload failed, fallback to local FileReader:', upErr);
+            }
+
+            if (!imgUrl) {
+                imgUrl = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => resolve(ev.target?.result);
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            if (editorRef.current) {
+                if (document.activeElement !== editorRef.current && !editorRef.current.contains(document.activeElement)) {
+                    editorRef.current.focus();
+                }
+                const figureHtml = `<figure class="my-4"><img src="${imgUrl}" alt="${file.name}" class="rounded-xl max-w-full h-auto shadow-md border border-slate-200 dark:border-slate-800" /><figcaption class="text-xs text-slate-400 mt-1.5 text-center italic">${file.name}</figcaption></figure><p><br></p>`;
+                document.execCommand('insertHTML', false, figureHtml);
+                addToast('Image attached and inserted into section!', 'success');
+            }
+        } catch (err) {
+            console.error('Error attaching image:', err);
+            addToast('Failed to attach image.', 'error');
+        } finally {
+            setIsUploadingImage(false);
+            if (editorImageInputRef.current) editorImageInputRef.current.value = '';
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -218,11 +323,13 @@ export default function WikiSectionModal({
             };
 
             if (isEditMode) {
+                payload.expectedUpdatedDate = initialData.updatedDate;
                 const updated = await wikiApi.updateSection(wikiId, initialData.sectionId, payload);
                 addToast('Section updated successfully!', 'success');
                 onSaved && onSaved(updated);
             } else {
                 const created = await wikiApi.createSection(wikiId, payload);
+                localStorage.removeItem(`wiki_section_draft_${wikiId}`);
                 addToast('Section created successfully!', 'success');
                 onSaved && onSaved(created);
             }
@@ -431,6 +538,22 @@ export default function WikiSectionModal({
                                 <span className="material-symbols-outlined text-[17px]">link</span>
                             </button>
 
+                            {/* Image Attachment */}
+                            <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => executeCmd('insertImage')}
+                                disabled={isUploadingImage}
+                                className="w-7 h-7 rounded flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-300 disabled:opacity-50"
+                                title="Attach / Insert Image or Diagram"
+                            >
+                                {isUploadingImage ? (
+                                    <span className="w-3.5 h-3.5 border-2 border-teal-500/30 border-t-teal-600 rounded-full animate-spin" />
+                                ) : (
+                                    <span className="material-symbols-outlined text-[17px]">image</span>
+                                )}
+                            </button>
+
                             {/* Horizontal Rule */}
                             <button
                                 type="button"
@@ -442,6 +565,15 @@ export default function WikiSectionModal({
                                 <span className="material-symbols-outlined text-[17px]">horizontal_rule</span>
                             </button>
                         </div>
+
+                        {/* Hidden Editor Image Attachment Input */}
+                        <input
+                            type="file"
+                            ref={editorImageInputRef}
+                            onChange={handleEditorImageUpload}
+                            accept="image/*"
+                            className="hidden"
+                        />
 
                         {/* Editable Area */}
                         <div

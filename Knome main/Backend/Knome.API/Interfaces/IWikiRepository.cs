@@ -23,13 +23,14 @@ public interface IWikiRepository
     Task<Wiki> AddWikiAsync(Wiki wiki, List<string> tags);
     Task UpdateWikiAsync(Wiki wiki, List<string> tags);
     Task DeleteWikiAsync(Wiki wiki);
+    Task RestoreWikiAsync(Wiki wiki);
     Task ArchiveWikiAsync(Wiki wiki, bool isArchived);
     Task IncrementViewCountAsync(long wikiId);
     Task<List<string>> GetPopularTagsAsync(int count = 20);
 
     // Sections
     Task<List<WikiSection>> GetSectionsByWikiIdAsync(long wikiId);
-    Task<WikiSection?> GetSectionByIdAsync(long sectionId);
+    Task<WikiSection?> GetSectionByIdAsync(long sectionId, bool includeDeleted = false);
     Task<WikiSection> AddSectionAsync(WikiSection section);
     Task UpdateSectionAsync(WikiSection section);
     Task DeleteSectionAsync(WikiSection section);

@@ -23,6 +23,7 @@ public interface IWikiService
     Task<WikiDto> CreateWikiAsync(int currentUserId, CreateWikiDto dto);
     Task<WikiDto> UpdateWikiAsync(long wikiId, int currentUserId, UpdateWikiDto dto);
     Task DeleteWikiAsync(long wikiId, int currentUserId);
+    Task RestoreWikiAsync(long wikiId, int currentUserId);
     Task<WikiDto> ToggleArchiveWikiAsync(long wikiId, int currentUserId, bool isArchived);
     Task<int> RecordWikiViewAsync(long wikiId, int currentUserId);
     Task<List<string>> GetPopularTagsAsync(int count = 20);

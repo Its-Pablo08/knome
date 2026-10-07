@@ -25,6 +25,7 @@ import PostCard from '../components/widgets/PostCard';
 import useScrollLoading from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import KarmaBadge, { KarmaLevelMedal } from '../components/ui/KarmaBadge';
+import { useSystemConfig } from '../utils/systemConfig';
 
 const PRESET_BANNERS = [
     {
@@ -72,6 +73,7 @@ const PRESET_BANNERS = [
 ];
 
 export default function Profile() {
+    const { isMessagingEnabled, isEmailEnabled } = useSystemConfig();
     const { currentUser, refreshCurrentUser } = useUser();
     const { addToast } = useToast();
     const confirm = useConfirm();
@@ -1089,19 +1091,21 @@ export default function Profile() {
                                 </button>
 
                                 {/* Direct Message Button */}
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const targetId = displayUser.userId || displayUser.id;
-                                        const targetName = displayUser.name || displayUser.fullName || '';
-                                        navigate(`/messages?userId=${targetId}&name=${encodeURIComponent(targetName)}`);
-                                    }}
-                                    className="px-4 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold text-sm rounded-full transition-all shadow-xs flex items-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
-                                    title={`Message ${displayUser.name || 'this user'}`}
-                                >
-                                    <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
-                                    <span>Message</span>
-                                </button>
+                                {isMessagingEnabled && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const targetId = displayUser.userId || displayUser.id;
+                                            const targetName = displayUser.name || displayUser.fullName || '';
+                                            navigate(`/messages?userId=${targetId}&name=${encodeURIComponent(targetName)}`);
+                                        }}
+                                        className="px-4 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold text-sm rounded-full transition-all shadow-xs flex items-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
+                                        title={`Message ${displayUser.name || 'this user'}`}
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
+                                        <span>Message</span>
+                                    </button>
+                                )}
                         </div>
                     )}
                     {/* Interactive Stats Row */}
@@ -2339,20 +2343,22 @@ export default function Profile() {
                             </div>
 
                             {/* Email */}
-                            <div className="flex items-start gap-3.5">
-                                <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
-                                    <span className="material-symbols-outlined text-[20px]">mail</span>
+                            {isEmailEnabled && (
+                                <div className="flex items-start gap-3.5">
+                                    <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
+                                        <span className="material-symbols-outlined text-[20px]">mail</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Official Email</p>
+                                        <a 
+                                            href={`mailto:${displayUser?.email || `${(displayUser?.fullName || displayUser?.name || 'employee').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`}`}
+                                            className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline block mt-0.5"
+                                        >
+                                            {displayUser?.email || `${(displayUser?.fullName || displayUser?.name || 'employee').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`}
+                                        </a>
+                                    </div>
                                 </div>
-                                <div className="flex-1">
-                                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Official Email</p>
-                                    <a 
-                                        href={`mailto:${displayUser?.email || `${(displayUser?.fullName || displayUser?.name || 'employee').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`}`}
-                                        className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline block mt-0.5"
-                                    >
-                                        {displayUser?.email || `${(displayUser?.fullName || displayUser?.name || 'employee').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`}
-                                    </a>
-                                </div>
-                            </div>
+                            )}
 
                             {/* Phone / Mobile */}
                             <div className="flex items-start gap-3.5">
@@ -2553,40 +2559,42 @@ export default function Profile() {
                                                 </div>
 
                                                 {/* Right: Message & Quick Message Actions */}
-                                                <div className="flex items-center gap-1.5 shrink-0">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setIsConnectionsModalOpen(false);
-                                                            navigate(`/messages?userId=${connId}&name=${encodeURIComponent(connName)}`);
-                                                        }}
-                                                        className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold text-xs rounded-full transition-all shadow-xs flex items-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
-                                                        title={`Open chat with ${connName}`}
-                                                    >
-                                                        <span className="material-symbols-outlined text-[15px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
-                                                        <span>Message</span>
-                                                    </button>
+                                                {isMessagingEnabled && (
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setIsConnectionsModalOpen(false);
+                                                                navigate(`/messages?userId=${connId}&name=${encodeURIComponent(connName)}`);
+                                                            }}
+                                                            className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold text-xs rounded-full transition-all shadow-xs flex items-center gap-1.5 cursor-pointer hover:shadow-md active:scale-95"
+                                                            title={`Open chat with ${connName}`}
+                                                        >
+                                                            <span className="material-symbols-outlined text-[15px]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
+                                                            <span>Message</span>
+                                                        </button>
 
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            if (isQuickActive) {
-                                                                setQuickMessageTarget(null);
-                                                            } else {
-                                                                setQuickMessageTarget(conn);
-                                                                setQuickMessageText('');
-                                                            }
-                                                        }}
-                                                        className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
-                                                            isQuickActive 
-                                                                ? 'bg-blue-50 border-blue-300 text-blue-600 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400' 
-                                                                : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                                        }`}
-                                                        title="Quick message pop up"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[16px]">edit_note</span>
-                                                    </button>
-                                                </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (isQuickActive) {
+                                                                    setQuickMessageTarget(null);
+                                                                } else {
+                                                                    setQuickMessageTarget(conn);
+                                                                    setQuickMessageText('');
+                                                                }
+                                                            }}
+                                                            className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
+                                                                isQuickActive 
+                                                                    ? 'bg-blue-50 border-blue-300 text-blue-600 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400' 
+                                                                    : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                                            }`}
+                                                            title="Quick message pop up"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Expandable Quick Message Box */}

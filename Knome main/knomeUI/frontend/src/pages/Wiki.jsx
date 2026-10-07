@@ -93,6 +93,10 @@ export default function Wiki() {
     };
 
     useEffect(() => {
+        setPageNumber(1);
+    }, [activeTab, searchQuery, selectedTag, selectedStatus]);
+
+    useEffect(() => {
         loadWikis();
     }, [activeTab, searchQuery, selectedTag, selectedStatus, pageNumber]);
 
@@ -381,9 +385,13 @@ export default function Wiki() {
                                 {/* Cover Banner */}
                                 <div className="relative h-32 w-full overflow-hidden bg-slate-100 dark:bg-slate-900">
                                     <img
-                                        src={wiki.coverImageUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800'}
+                                        src={resolveMediaUrl(wiki.coverImageUrl) || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800'}
                                         alt=""
                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.src = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800';
+                                        }}
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/30 to-transparent" />
 
@@ -551,6 +559,61 @@ export default function Wiki() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Pagination Controls (WIKI-011) */}
+            {activeTab !== 'recent' && totalCount > pageSize && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-200 dark:border-slate-800 pt-4 px-2">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Showing <span className="font-semibold text-slate-700 dark:text-slate-200">{(pageNumber - 1) * pageSize + 1}</span> to{' '}
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">{Math.min(pageNumber * pageSize, totalCount)}</span> of{' '}
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">{totalCount}</span> Wikis
+                    </p>
+
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            disabled={pageNumber <= 1}
+                            onClick={() => setPageNumber(prev => Math.max(1, prev - 1))}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+                            Previous
+                        </button>
+
+                        {Array.from({ length: Math.ceil(totalCount / pageSize) }, (_, i) => i + 1)
+                            .filter(p => p === 1 || p === Math.ceil(totalCount / pageSize) || Math.abs(p - pageNumber) <= 1)
+                            .map((p, idx, arr) => {
+                                const showEllipsis = idx > 0 && p - arr[idx - 1] > 1;
+                                return (
+                                    <React.Fragment key={p}>
+                                        {showEllipsis && <span className="px-1 text-xs text-slate-400">...</span>}
+                                        <button
+                                            type="button"
+                                            onClick={() => setPageNumber(p)}
+                                            className={`w-7 h-7 text-xs font-semibold rounded-lg flex items-center justify-center transition-colors ${
+                                                pageNumber === p
+                                                    ? 'bg-teal-600 text-white shadow-xs'
+                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
+                                        >
+                                            {p}
+                                        </button>
+                                    </React.Fragment>
+                                );
+                            })}
+
+                        <button
+                            type="button"
+                            disabled={pageNumber >= Math.ceil(totalCount / pageSize)}
+                            onClick={() => setPageNumber(prev => Math.min(Math.ceil(totalCount / pageSize), prev + 1))}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Next
+                            <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                        </button>
                     </div>
                 </div>
             )}

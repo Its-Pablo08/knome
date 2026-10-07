@@ -64,6 +64,7 @@ export const KNOWN_ROSTER_NAMES = {
     'MPO101': 'Loveneesh Sharma',
     'MP0664': 'Vishendra Sharma',
     'MPO102': 'Vishendra Sharma',
+    'EMP052': 'Sourabh Sahu',
     'MPO103': 'Sourabh Sahu',
     'MPO105': 'Meghna',
     'MPO116': 'Meghna',
@@ -264,7 +265,7 @@ export const getUserStatusConfig = (statusOrUser) => {
 export const INITIAL_USERS = [
     { id: 1, userId: 1, employeeId: 'MP0108', email: 'loveneesh.sharma@mponline.gov.in', name: 'Loveneesh Sharma', fullName: 'Loveneesh Sharma', role: 'SYSADM', roleName: 'System Admin', designation: 'TPM', department: 'Higher Education', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
     { id: 1076, userId: 1076, employeeId: 'MP0664', email: 'vishendra.sharma@mponline.gov.in', name: 'Vishendra Sharma', fullName: 'Vishendra Sharma', role: 'CADM', roleName: 'Community Admin', designation: 'Track Lead', department: 'Higher Education', location: 'Bhopal HQ', avatar: null, karmaPoints: 225, karma: 225, isActive: true },
-    { id: 3, userId: 3, employeeId: 'MPO103', email: 'sourabhsahu45@gmail.com', name: 'Sourabh Sahu', fullName: 'Sourabh Sahu', role: 'HRADM', roleName: 'HR Admin', designation: 'Talent Acquisition Manager', department: 'Human Resources', location: 'Bhopal HQ', avatar: null, karmaPoints: 306, karma: 306, isActive: true },
+    { id: 3, userId: 3, employeeId: 'EMP052', email: 'sourabhsahu45@gmail.com', name: 'Sourabh Sahu', fullName: 'Sourabh Sahu', role: 'HRADM', roleName: 'HR Admin', designation: 'Talent Acquisition Manager', department: 'Human Resources', location: 'Bhopal HQ', avatar: null, karmaPoints: 306, karma: 306, isActive: true },
     { id: 5, userId: 5, employeeId: 'MPO105', email: 'meghna@gmail.com', name: 'Meghna', fullName: 'Meghna', role: 'HRADM', roleName: 'HR Admin', designation: 'Business Analyst', department: 'Product Design', location: 'Bhopal HQ', avatar: null, karmaPoints: 123, karma: 123, isActive: true },
     { id: 1036, userId: 1036, employeeId: 'MPO111', email: 'mayurbansal7089@gmail.com', name: 'Mayur Bansal', fullName: 'Mayur Bansal', role: 'EMP', roleName: 'Employee', designation: 'Software Developer', department: 'Technology', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
     { id: 1050, userId: 1050, employeeId: 'MPO089', email: 'vilash.deshmukh@mponline.gov.in', name: 'Vilash Deshmukh', fullName: 'Vilash Deshmukh', role: 'SYSADM', roleName: 'System Admin', designation: 'Associate Consultant', department: 'HR', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
@@ -318,6 +319,7 @@ export const UserProvider = ({ children }) => {
     const hasSavedSession = typeof window !== 'undefined' && Boolean(localStorage.getItem('knome_employeeId') || localStorage.getItem('knome_jwt'));
     const initialUser = (savedEmpId && initialUsersList.find(u => 
         u.employeeId?.toUpperCase() === savedEmpId.toUpperCase() ||
+        (savedEmpId.toUpperCase() === 'MPO103' && (u.employeeId === 'EMP052' || u.userId === 3)) ||
         (u.email && u.email.toLowerCase() === savedEmpId.toLowerCase()) ||
         String(u.userId) === String(savedEmpId) ||
         String(u.id) === String(savedEmpId)

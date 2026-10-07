@@ -27,7 +27,7 @@ export default function Layout({ children }) {
 
             <Navbar />
 
-            <div className={`w-full flex-1 flex flex-col relative min-h-0 ${isMessagesPage ? 'pt-[76px] pb-3 h-full overflow-hidden' : 'pt-20 md:pt-24 pb-20 md:pb-10'}`}>
+            <div className={`w-full flex-1 flex flex-col relative min-h-0 ${isMessagesPage ? 'pt-[72px] pb-16 md:pb-3 h-full overflow-hidden' : 'pt-20 md:pt-24 pb-20 md:pb-10'}`}>
                 <div className={`w-full ${isNoSidebarPage ? 'px-3 sm:px-4 md:px-6 max-w-[1920px]' : 'px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 max-w-[1720px]'} ${
                     isMessagesPage ? 'h-full min-h-0 overflow-hidden' : ''
                 } flex gap-4 lg:gap-6 mx-auto flex-1 min-w-0`}>
