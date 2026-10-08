@@ -61,7 +61,7 @@ public class MediaController : KnomeControllerBase
     public async Task<IActionResult> GetVideoInfo([FromQuery] string url)
     {
         if (string.IsNullOrWhiteSpace(url))
-            return BadRequest(ApiResponse<object>.ErrorResponse(400, "URL is required."));
+            return BadRequest(ApiResponse<object>.FailureResponse(400, "URL is required."));
 
         try
         {

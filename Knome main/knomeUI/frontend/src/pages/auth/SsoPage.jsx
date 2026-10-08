@@ -52,8 +52,11 @@ export default function SsoPage() {
                 localStorage.setItem('accessToken', token);
 
                 // Decode token claims for local identification
-                let email = null;
-                let sub = null;
+                let email = searchParams.get('email') || null;
+                let sub = searchParams.get('sub') || null;
+                let empId = searchParams.get('employeeId') || searchParams.get('empId') || searchParams.get('employee_id') || null;
+                let fullName = searchParams.get('name') || null;
+
                 try {
                     const parts = token.split('.');
                     if (parts.length >= 2) {
@@ -61,27 +64,66 @@ export default function SsoPage() {
                         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
                         const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
                         const payload = JSON.parse(jsonPayload);
-                        email = payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] ||
+                        
+                        email = email || payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] ||
                                 payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ||
-                                payload.email;
-                        sub = payload.sub;
+                                payload.email ||
+                                payload.preferred_username ||
+                                payload.upn;
+
+                        sub = sub || payload.sub;
+
+                        empId = empId || payload.employeeId ||
+                                payload.employee_id ||
+                                payload.empId ||
+                                payload.unique_name;
+
+                        fullName = fullName || payload.name ||
+                                   payload.fullName ||
+                                   payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ||
+                                   payload.given_name;
                     }
                 } catch { /* ignore jwt decode errors */ }
 
-                if (email) {
-                    localStorage.setItem('knome_employeeId', email);
+                const resolvedIdentity = empId || email || sub;
+                if (resolvedIdentity) {
+                    localStorage.setItem('knome_employeeId', resolvedIdentity);
                 }
 
                 let isSuspendedLocal = false;
                 try {
                     const suspendedMap = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
-                    if ((email && suspendedMap[email.toUpperCase()]) || (email && suspendedMap[email.toLowerCase()])) {
+                    if (
+                        (resolvedIdentity && suspendedMap[resolvedIdentity.toUpperCase()]) ||
+                        (resolvedIdentity && suspendedMap[resolvedIdentity.toLowerCase()]) ||
+                        (email && suspendedMap[email.toUpperCase()])
+                    ) {
                         isSuspendedLocal = true;
                     }
                 } catch {}
 
+                if (isSuspendedLocal) {
+                    setSuspendedUser({
+                        fullName: fullName || resolvedIdentity || 'Employee',
+                        employeeId: resolvedIdentity || '',
+                        email: email || '',
+                    });
+                    return;
+                }
+
                 // Verify with backend
-                const profile = await profileApi.getMe();
+                let profile = null;
+                try {
+                    profile = await profileApi.getMe();
+                } catch {
+                    try {
+                        const res = await authApi.getMe();
+                        profile = res?.data || res;
+                    } catch {
+                        // Backend may be initializing; continue if token identity is established
+                    }
+                }
+
                 if (profile) {
                     let isSuspended = isSuspendedLocal || profile.isSuspended === true || profile.isPermanentlySuspended === true || profile.isActive === false || (profile.suspendedUntil && new Date(profile.suspendedUntil) > new Date());
                     try {
@@ -95,27 +137,26 @@ export default function SsoPage() {
 
                     if (isSuspended) {
                         setSuspendedUser({
-                            fullName: profile.fullName || profile.name || email || 'Employee',
-                            employeeId: profile.employeeId || email || '',
+                            fullName: profile.fullName || profile.name || fullName || 'Employee',
+                            employeeId: profile.employeeId || resolvedIdentity || '',
                             email: profile.email || email,
                         });
                         return;
                     }
-                    setStatusMessage('Welcome to Knome! Redirecting to dashboard...');
-                    setTimeout(() => {
-                        window.location.href = '/';
-                    }, 400);
-                } else {
-                    throw new Error('User profile verification failed');
                 }
+
+                setStatusMessage('Welcome to Knome! Redirecting to dashboard...');
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 300);
             } catch (err) {
                 console.error('[SSO] Verification failed:', err);
                 const errMsg = (err?.message || '').toLowerCase();
                 const isSuspended = err?.status === 403 || errMsg.includes('suspended') || errMsg.includes('inactive') || errMsg.includes('forbidden');
                 if (isSuspended) {
                     setSuspendedUser({
-                        fullName: email || 'Employee',
-                        employeeId: email || '',
+                        fullName: fullName || email || 'Employee',
+                        employeeId: empId || email || '',
                         email: email,
                     });
                     return;

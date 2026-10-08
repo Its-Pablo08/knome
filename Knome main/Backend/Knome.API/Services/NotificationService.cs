@@ -304,7 +304,7 @@ public class NotificationService : INotificationService
 
         var senderIds = list
             .Where(d => d.RelatedContentType == Constants.NotificationContentTypes.User && d.RelatedContentId.HasValue)
-            .Select(d => (int)d.RelatedContentId.Value)
+            .Select(d => (int)d.RelatedContentId!.Value)
             .Distinct()
             .ToList();
 

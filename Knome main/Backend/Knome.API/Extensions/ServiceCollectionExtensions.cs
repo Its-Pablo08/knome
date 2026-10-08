@@ -234,76 +234,8 @@ public static class ServiceCollectionExtensions
                     if (context.Principal?.Identity is System.Security.Claims.ClaimsIdentity identity)
                     {
                         var dbContext = context.HttpContext.RequestServices.GetRequiredService<KnomeDbContext>();
-
-                        var user = await dbContext.Users
-                            .Include(u => u.Roles)
-                            .AsNoTracking()
-                            .FirstOrDefaultAsync(u =>
-                                (!string.IsNullOrEmpty(email) && u.Email.ToLower() == email.ToLower()) ||
-                                (!string.IsNullOrEmpty(empId) && u.EmployeeId.ToLower() == empId.ToLower()) ||
-                                (!string.IsNullOrEmpty(sub) && (u.EmployeeId.ToLower() == sub.ToLower() || (u.Email != null && u.Email.ToLower() == sub.ToLower()))));
-
-                        if (user == null && (!string.IsNullOrEmpty(email) || !string.IsNullOrEmpty(empId) || !string.IsNullOrEmpty(sub)))
-                        {
-                            try
-                            {
-                                var authService = context.HttpContext.RequestServices.GetRequiredService<IAuthService>();
-                                var searchId = !string.IsNullOrEmpty(email) ? email : (!string.IsNullOrEmpty(empId) ? empId : sub!);
-                                var currentUserDto = await authService.GetCurrentUserByIdentifierAsync(searchId);
-                                if (currentUserDto != null)
-                                {
-                                    user = await dbContext.Users
-                                        .Include(u => u.Roles)
-                                        .AsNoTracking()
-                                        .FirstOrDefaultAsync(u => u.UserId == currentUserDto.UserId);
-                                }
-                            }
-                            catch
-                            {
-                                // fallback gracefully
-                            }
-                        }
-
-                        if (user != null)
-                        {
-                            if (!identity.HasClaim(c => c.Type == "uid"))
-                                identity.AddClaim(new System.Security.Claims.Claim("uid", user.UserId.ToString()));
-                            if (!identity.HasClaim(c => c.Type == "employeeId"))
-                                identity.AddClaim(new System.Security.Claims.Claim("employeeId", user.EmployeeId));
-                            if (!identity.HasClaim(c => c.Type == "username"))
-                                identity.AddClaim(new System.Security.Claims.Claim("username", user.EmployeeId));
-                            if (!identity.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier))
-                                identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, user.UserId.ToString()));
-
-                            var hasRole = false;
-                            foreach (var role in user.Roles)
-                            {
-                                hasRole = true;
-                                if (!identity.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && c.Value == role.RoleName))
-                                    identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, role.RoleName));
-                                if (!identity.HasClaim(c => c.Type == "role" && c.Value == role.RoleName))
-                                    identity.AddClaim(new System.Security.Claims.Claim("role", role.RoleName));
-                            }
-
-                            if (!hasRole)
-                            {
-                                if (!identity.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && c.Value == "Employee"))
-                                    identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Employee"));
-                                if (!identity.HasClaim(c => c.Type == "role" && c.Value == "Employee"))
-                                    identity.AddClaim(new System.Security.Claims.Claim("role", "Employee"));
-                            }
-                        }
-                        else
-                        {
-                            // Default fallback claims for brand new identity
-                            var fallbackId = !string.IsNullOrEmpty(email) ? email.Split('@')[0] : (!string.IsNullOrEmpty(empId) ? empId : (sub ?? "EMP"));
-                            if (!identity.HasClaim(c => c.Type == "employeeId"))
-                                identity.AddClaim(new System.Security.Claims.Claim("employeeId", fallbackId));
-                            if (!identity.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && c.Value == "Employee"))
-                                identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Employee"));
-                            if (!identity.HasClaim(c => c.Type == "role" && c.Value == "Employee"))
-                                identity.AddClaim(new System.Security.Claims.Claim("role", "Employee"));
-                        }
+                        var authService = context.HttpContext.RequestServices.GetRequiredService<IAuthService>();
+                        await EnrichAndProvisionUserIdentityAsync(identity, dbContext, authService, email, empId, sub, context.Principal);
                     }
                 }
             };
@@ -362,48 +294,137 @@ public static class ServiceCollectionExtensions
                     if (context.Principal?.Identity is System.Security.Claims.ClaimsIdentity identity)
                     {
                         var dbContext = context.HttpContext.RequestServices.GetRequiredService<KnomeDbContext>();
-
-                        var user = await dbContext.Users
-                            .Include(u => u.Roles)
-                            .AsNoTracking()
-                            .FirstOrDefaultAsync(u =>
-                                (!string.IsNullOrEmpty(email) && u.Email.ToLower() == email.ToLower()) ||
-                                (!string.IsNullOrEmpty(empId) && u.EmployeeId.ToLower() == empId.ToLower()) ||
-                                (!string.IsNullOrEmpty(sub) && (u.EmployeeId.ToLower() == sub.ToLower() || (u.Email != null && u.Email.ToLower() == sub.ToLower()))));
-
-                        if (user != null)
-                        {
-                            if (!identity.HasClaim(c => c.Type == "uid"))
-                                identity.AddClaim(new System.Security.Claims.Claim("uid", user.UserId.ToString()));
-                            if (!identity.HasClaim(c => c.Type == "employeeId"))
-                                identity.AddClaim(new System.Security.Claims.Claim("employeeId", user.EmployeeId));
-                            if (!identity.HasClaim(c => c.Type == "username"))
-                                identity.AddClaim(new System.Security.Claims.Claim("username", user.EmployeeId));
-                            if (!identity.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier))
-                                identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, user.UserId.ToString()));
-
-                            var hasRole = false;
-                            foreach (var role in user.Roles)
-                            {
-                                hasRole = true;
-                                if (!identity.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && c.Value == role.RoleName))
-                                    identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, role.RoleName));
-                                if (!identity.HasClaim(c => c.Type == "role" && c.Value == role.RoleName))
-                                    identity.AddClaim(new System.Security.Claims.Claim("role", role.RoleName));
-                            }
-
-                            if (!hasRole)
-                            {
-                                if (!identity.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && c.Value == "Employee"))
-                                    identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Employee"));
-                                if (!identity.HasClaim(c => c.Type == "role" && c.Value == "Employee"))
-                                    identity.AddClaim(new System.Security.Claims.Claim("role", "Employee"));
-                            }
-                        }
+                        var authService = context.HttpContext.RequestServices.GetRequiredService<IAuthService>();
+                        await EnrichAndProvisionUserIdentityAsync(identity, dbContext, authService, email, empId, sub, context.Principal);
                     }
                 }
             };
         });
+    }
+
+    private static async Task EnrichAndProvisionUserIdentityAsync(
+        System.Security.Claims.ClaimsIdentity identity,
+        KnomeDbContext dbContext,
+        IAuthService authService,
+        string? email,
+        string? empId,
+        string? sub,
+        System.Security.Claims.ClaimsPrincipal? principal)
+    {
+        var user = await dbContext.Users
+            .Include(u => u.Roles)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u =>
+                (!string.IsNullOrEmpty(email) && u.Email.ToLower() == email.ToLower()) ||
+                (!string.IsNullOrEmpty(empId) && u.EmployeeId.ToLower() == empId.ToLower()) ||
+                (!string.IsNullOrEmpty(sub) && (u.EmployeeId.ToLower() == sub.ToLower() || (u.Email != null && u.Email.ToLower() == sub.ToLower()))));
+
+        if (user == null && (!string.IsNullOrEmpty(email) || !string.IsNullOrEmpty(empId) || !string.IsNullOrEmpty(sub)))
+        {
+            try
+            {
+                var searchId = !string.IsNullOrEmpty(email) ? email : (!string.IsNullOrEmpty(empId) ? empId : sub!);
+                var currentUserDto = await authService.GetCurrentUserByIdentifierAsync(searchId);
+                if (currentUserDto != null)
+                {
+                    user = await dbContext.Users
+                        .Include(u => u.Roles)
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(u => u.UserId == currentUserDto.UserId);
+                }
+            }
+            catch
+            {
+                // fallback to direct Knome DB auto-provisioning
+            }
+
+            if (user == null)
+            {
+                try
+                {
+                    var resolvedEmpId = !string.IsNullOrEmpty(empId) ? empId : (!string.IsNullOrEmpty(email) ? email.Split('@')[0] : (sub ?? "EMP" + (DateTime.UtcNow.Ticks % 100000).ToString()));
+                    var resolvedEmail = !string.IsNullOrEmpty(email) ? email : $"{resolvedEmpId.ToLower()}@mponline.gov.in";
+                    var resolvedName = principal?.FindFirst("name")?.Value 
+                                    ?? principal?.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+                                    ?? (!string.IsNullOrEmpty(email) ? email.Split('@')[0] : resolvedEmpId);
+
+                    var defaultRole = await dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == "Employee" || r.RoleCode == "EMP");
+                    var defaultDept = await dbContext.Departments.FirstOrDefaultAsync();
+
+                    var newUser = new Models.User
+                    {
+                        EmployeeId = resolvedEmpId,
+                        FullName = resolvedName,
+                        Email = resolvedEmail,
+                        DepartmentId = defaultDept?.DepartmentId ?? 1,
+                        Designation = "Employee",
+                        Location = "Bhopal HQ",
+                        IsActive = true,
+                        ProfileCompletion = 50,
+                        BioVisibility = "Public",
+                        NetworkVisibility = "Public",
+                        PhotosVisibility = "Public",
+                        InterestsVisibility = "Public",
+                        CreatedDate = DateTime.UtcNow,
+                        LastSyncedFromHrmsDate = DateTime.UtcNow
+                    };
+
+                    if (defaultRole != null)
+                    {
+                        newUser.Roles.Add(defaultRole);
+                    }
+
+                    dbContext.Users.Add(newUser);
+                    await dbContext.SaveChangesAsync();
+
+                    user = newUser;
+                }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Warning(ex, "[MPO SSO] Auto-provision user exception: {Message}", ex.Message);
+                }
+            }
+        }
+
+        if (user != null)
+        {
+            if (!identity.HasClaim(c => c.Type == "uid"))
+                identity.AddClaim(new System.Security.Claims.Claim("uid", user.UserId.ToString()));
+            if (!identity.HasClaim(c => c.Type == "employeeId"))
+                identity.AddClaim(new System.Security.Claims.Claim("employeeId", user.EmployeeId));
+            if (!identity.HasClaim(c => c.Type == "username"))
+                identity.AddClaim(new System.Security.Claims.Claim("username", user.EmployeeId));
+            if (!identity.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier))
+                identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, user.UserId.ToString()));
+
+            var hasRole = false;
+            foreach (var role in user.Roles)
+            {
+                hasRole = true;
+                if (!identity.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && c.Value == role.RoleName))
+                    identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, role.RoleName));
+                if (!identity.HasClaim(c => c.Type == "role" && c.Value == role.RoleName))
+                    identity.AddClaim(new System.Security.Claims.Claim("role", role.RoleName));
+            }
+
+            if (!hasRole)
+            {
+                if (!identity.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && c.Value == "Employee"))
+                    identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Employee"));
+                if (!identity.HasClaim(c => c.Type == "role" && c.Value == "Employee"))
+                    identity.AddClaim(new System.Security.Claims.Claim("role", "Employee"));
+            }
+        }
+        else
+        {
+            var fallbackId = !string.IsNullOrEmpty(email) ? email.Split('@')[0] : (!string.IsNullOrEmpty(empId) ? empId : (sub ?? "EMP"));
+            if (!identity.HasClaim(c => c.Type == "employeeId"))
+                identity.AddClaim(new System.Security.Claims.Claim("employeeId", fallbackId));
+            if (!identity.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && c.Value == "Employee"))
+                identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Employee"));
+            if (!identity.HasClaim(c => c.Type == "role" && c.Value == "Employee"))
+                identity.AddClaim(new System.Security.Claims.Claim("role", "Employee"));
+        }
     }
 
     private static void AddAuthorization(IServiceCollection services)

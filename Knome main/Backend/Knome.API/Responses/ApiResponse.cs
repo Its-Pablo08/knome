@@ -30,6 +30,11 @@ public class ApiResponse
     {
         return new ApiResponse(false, statusCode, message, errors);
     }
+
+    public static ApiResponse ErrorResponse(int statusCode, string message, List<string>? errors = null)
+    {
+        return FailureResponse(statusCode, message, errors);
+    }
 }
 
 public class ApiResponse<T> : ApiResponse
@@ -54,6 +59,11 @@ public class ApiResponse<T> : ApiResponse
     public static new ApiResponse<T> FailureResponse(int statusCode, string message, List<string>? errors = null)
     {
         return new ApiResponse<T>(false, statusCode, message, default, errors);
+    }
+
+    public static new ApiResponse<T> ErrorResponse(int statusCode, string message, List<string>? errors = null)
+    {
+        return FailureResponse(statusCode, message, errors);
     }
 }
 

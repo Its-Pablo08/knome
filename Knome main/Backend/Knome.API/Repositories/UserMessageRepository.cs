@@ -38,7 +38,7 @@ public class UserMessageRepository : IUserMessageRepository
         return await _context.UserMessages
             .Include(m => m.Sender)
             .Include(m => m.Receiver)
-            .Include(m => m.ParentMessage).ThenInclude(p => p.Sender)
+            .Include(m => m.ParentMessage!).ThenInclude(p => p.Sender)
             .Include(m => m.Reactions)
             .FirstOrDefaultAsync(m => m.MessageId == messageId);
     }
@@ -49,7 +49,7 @@ public class UserMessageRepository : IUserMessageRepository
             .AsNoTracking()
             .Include(m => m.Sender)
             .Include(m => m.Receiver)
-            .Include(m => m.ParentMessage).ThenInclude(p => p.Sender)
+            .Include(m => m.ParentMessage!).ThenInclude(p => p.Sender)
             .Include(m => m.Reactions)
             .Where(m =>
                 (m.SenderId == currentUserId && m.ReceiverId == otherUserId && !m.IsDeletedBySender) ||
