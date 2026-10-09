@@ -15,10 +15,12 @@ namespace Knome.API.Controllers;
 public class MessagesController : KnomeControllerBase
 {
     private readonly IUserMessageService _messageService;
+    private readonly ISystemSettingService _settingService;
 
-    public MessagesController(IUserMessageService messageService)
+    public MessagesController(IUserMessageService messageService, ISystemSettingService settingService)
     {
         _messageService = messageService;
+        _settingService = settingService;
     }
 
     /// <summary>
@@ -67,6 +69,11 @@ public class MessagesController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<UserMessageDto>), StatusCodes.Status201Created)]
     public async Task<IActionResult> SendMessage([FromBody] SendMessageDto dto)
     {
+        if (!await _settingService.GetEnableMessagingAsync())
+        {
+            throw new Knome.API.Exceptions.BadRequestException("Direct messaging is currently disabled by system administrator.");
+        }
+
         var currentUserId = GetCurrentUserId();
         var result = await _messageService.SendMessageAsync(currentUserId, dto);
         return StatusCode(StatusCodes.Status201Created, ApiResponse<UserMessageDto>.SuccessResponse(201, "Message sent successfully.", result));
@@ -79,6 +86,11 @@ public class MessagesController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<UserMessageDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> EditMessage([FromRoute] long messageId, [FromBody] EditMessageDto dto)
     {
+        if (!await _settingService.GetEnableMessagingAsync())
+        {
+            throw new Knome.API.Exceptions.BadRequestException("Direct messaging is currently disabled by system administrator.");
+        }
+
         var currentUserId = GetCurrentUserId();
         var result = await _messageService.EditMessageAsync(messageId, currentUserId, dto.Content);
         return Ok(ApiResponse<UserMessageDto>.SuccessResponse(200, "Message updated successfully.", result));

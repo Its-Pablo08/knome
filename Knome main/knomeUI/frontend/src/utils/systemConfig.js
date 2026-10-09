@@ -16,6 +16,9 @@ export const DEFAULT_SYSTEM_CONFIG = {
     enableMessaging: true,
     enableEmail: true,
     requireContentAndCommunityApproval: true,
+    requireCommunityApproval: true,
+    requireVideoApproval: true,
+    requirePodcastApproval: true,
 };
 
 /**
@@ -74,11 +77,82 @@ export function isEmailEnabled() {
 }
 
 /**
- * Fast synchronous check whether Content & Community Approval is required (ON).
+ * Fast synchronous check whether Content & Community Approval is required (master/legacy).
  */
 export function isApprovalRequired() {
     const config = getSystemConfig();
     return config.requireContentAndCommunityApproval !== false;
+}
+
+/**
+ * Fast synchronous check whether Community Approval is required (ON).
+ */
+export function isCommunityApprovalRequired() {
+    const config = getSystemConfig();
+    if (typeof config.requireCommunityApproval === 'boolean') {
+        return config.requireCommunityApproval;
+    }
+    return config.requireContentAndCommunityApproval !== false;
+}
+
+/**
+ * Fast synchronous check whether Video Approval is required (ON).
+ */
+export function isVideoApprovalRequired() {
+    const config = getSystemConfig();
+    if (typeof config.requireVideoApproval === 'boolean') {
+        return config.requireVideoApproval;
+    }
+    return config.requireContentAndCommunityApproval !== false;
+}
+
+/**
+ * Fast synchronous check whether Podcast Approval is required (ON).
+ */
+export function isPodcastApprovalRequired() {
+    const config = getSystemConfig();
+    if (typeof config.requirePodcastApproval === 'boolean') {
+        return config.requirePodcastApproval;
+    }
+    return config.requireContentAndCommunityApproval !== false;
+}
+
+/**
+ * Loads the authoritative approval policies and platform services from backend SQL Server.
+ */
+export async function loadSystemApprovalSettingFromBackend() {
+    if (typeof window === 'undefined') return getSystemConfig();
+    try {
+        const { apiClient } = await import('./apiClient');
+        const res = await apiClient.get('/settings/approval');
+        const data = res?.data !== undefined ? res.data : res;
+        if (data) {
+            const patch = {};
+            if (typeof data.requireApproval === 'boolean') {
+                patch.requireContentAndCommunityApproval = data.requireApproval;
+            }
+            if (typeof data.requireCommunityApproval === 'boolean') {
+                patch.requireCommunityApproval = data.requireCommunityApproval;
+            }
+            if (typeof data.requireVideoApproval === 'boolean') {
+                patch.requireVideoApproval = data.requireVideoApproval;
+            }
+            if (typeof data.requirePodcastApproval === 'boolean') {
+                patch.requirePodcastApproval = data.requirePodcastApproval;
+            }
+            if (typeof data.enableMessaging === 'boolean') {
+                patch.enableMessaging = data.enableMessaging;
+            }
+            if (typeof data.enableEmail === 'boolean') {
+                patch.enableEmail = data.enableEmail;
+            }
+            const updated = saveSystemConfig(patch);
+            return updated;
+        }
+    } catch (e) {
+        // Fallback to locally stored configuration if backend is temporarily unreachable
+    }
+    return getSystemConfig();
 }
 
 /**
@@ -88,6 +162,13 @@ export function useSystemConfig() {
     const [config, setConfig] = useState(getSystemConfig);
 
     useEffect(() => {
+        // Initial sync with backend database
+        loadSystemApprovalSettingFromBackend().then(latestConfig => {
+            if (latestConfig) {
+                setConfig(latestConfig);
+            }
+        }).catch(() => {});
+
         const handleConfigChange = (e) => {
             if (e?.detail) {
                 setConfig(prev => ({ ...prev, ...e.detail }));
@@ -121,6 +202,9 @@ export function useSystemConfig() {
         isMessagingEnabled: config.enableMessaging !== false,
         isEmailEnabled: config.enableEmail !== false,
         isApprovalRequired: config.requireContentAndCommunityApproval !== false,
+        isCommunityApprovalRequired: config.requireCommunityApproval !== false,
+        isVideoApprovalRequired: config.requireVideoApproval !== false,
+        isPodcastApprovalRequired: config.requirePodcastApproval !== false,
         updateConfig,
     };
 }

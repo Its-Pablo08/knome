@@ -163,14 +163,29 @@ public class MediaController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status201Created)]
     public async Task<IActionResult> AddPendingMedia([FromBody] JsonElement item)
     {
-        var requireApproval = _settingService != null
-            ? await _settingService.GetRequireContentAndCommunityApprovalAsync()
-            : true;
+        var mediaType = "video";
+        if (item.TryGetProperty("mediaType", out var mtProp))
+            mediaType = mtProp.GetString()?.ToLower() ?? "video";
+        else if (item.TryGetProperty("type", out var tProp))
+            mediaType = tProp.GetString()?.ToLower() ?? "video";
+
+        bool requireApproval = true;
+        if (_settingService != null)
+        {
+            if (mediaType == "podcast" || mediaType == "audio")
+            {
+                requireApproval = await _settingService.GetRequirePodcastApprovalAsync();
+            }
+            else
+            {
+                requireApproval = await _settingService.GetRequireVideoApprovalAsync();
+            }
+        }
 
         if (!requireApproval)
         {
-            // When approval is disabled (OFF), items must NOT enter the admin approval queue!
-            return Ok(ApiResponse<object>.SuccessResponse(200, "Content approval policy is disabled. Media does not enter the approval queue.", item));
+            // When approval is disabled (OFF) for this media type, items must NOT enter the admin approval queue!
+            return Ok(ApiResponse<object>.SuccessResponse(200, $"{mediaType.ToUpper()} approval policy is disabled. Media does not enter the approval queue.", item));
         }
 
         var filePath = GetPendingFilePath();

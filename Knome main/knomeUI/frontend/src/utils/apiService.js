@@ -819,7 +819,10 @@ export const settingsApi = {
     getApprovalSetting: () => apiClient.get('/settings/approval'),
 
     /** PUT /api/settings/approval */
-    setApprovalSetting: (requireApproval) => apiClient.put('/settings/approval', { requireApproval }),
+    setApprovalSetting: (payload) => {
+        const body = typeof payload === 'boolean' ? { requireApproval: payload } : payload;
+        return apiClient.put('/settings/approval', body);
+    },
 
     /** GET /api/settings */
     getAllSettings: () => apiClient.get('/settings'),

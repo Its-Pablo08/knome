@@ -4,6 +4,7 @@ import { apiClient } from '../../utils/apiClient';
 import { useUser } from '../contexts/UserContext';
 import { useToast } from '../contexts/ToastContext';
 import { checkRestrictedContent } from '../../utils/restrictedWords';
+import { isPodcastApprovalRequired } from '../../utils/systemConfig';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB (FR-PD-05)
 const ALLOWED_EXTENSIONS = ['.mp3', '.wav', '.aac', '.ogg', '.m4a', '.webm', '.flac'];
@@ -343,7 +344,10 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
                 uploaderUserId: numericAuthorId
             };
 
-            if (isCurrentUserAdmin) {
+            const approvalRequired = isPodcastApprovalRequired();
+            const shouldPublishImmediately = isCurrentUserAdmin || !approvalRequired;
+
+            if (shouldPublishImmediately) {
                 const createdRes = await podcastsApi.create(podcastData);
                 const createdPodcast = createdRes?.data || createdRes;
 

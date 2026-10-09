@@ -369,7 +369,7 @@ public class ContentInteractionService : IContentInteractionService
                     await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
                     {
                         clipId = contentId,
-                        viewCount = Math.Max(clip.ViewsCount, viewCount),
+                        viewCount = Math.Max(clip.ViewCount, viewCount),
                         likesCount = Math.Max(clip.LikesCount, likesCount),
                         commentsCount = totalComments,
                         sharesCount = Math.Max(clip.SharesCount, sharesCount),
@@ -458,7 +458,7 @@ public class ContentInteractionService : IContentInteractionService
                     await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
                     {
                         clipId = cId,
-                        viewCount = Math.Max(clip.ViewsCount, viewCount),
+                        viewCount = Math.Max(clip.ViewCount, viewCount),
                         likesCount = Math.Max(clip.LikesCount, likesCount),
                         commentsCount = totalComments,
                         sharesCount = Math.Max(clip.SharesCount, sharesCount),
@@ -607,7 +607,7 @@ public class ContentInteractionService : IContentInteractionService
                 var clip = await _db.Clips.FindAsync(contentId);
                 if (clip != null)
                 {
-                    clip.LikesCount = summary.TotalCount;
+                    clip.LikesCount = (int)summary.TotalCount;
                     await _db.SaveChangesAsync();
 
                     var viewCount = await _db.ContentViews.CountAsync(cv => (cv.ContentType == ContentTypes.Clip || cv.ContentType.ToLower() == "clip") && cv.ContentId == contentId);
@@ -620,7 +620,7 @@ public class ContentInteractionService : IContentInteractionService
                     await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
                     {
                         clipId = contentId,
-                        viewCount = Math.Max(clip.ViewsCount, viewCount),
+                        viewCount = Math.Max(clip.ViewCount, viewCount),
                         likesCount = summary.TotalCount,
                         commentsCount = commentsCount,
                         sharesCount = Math.Max(clip.SharesCount, sharesCount),
@@ -939,7 +939,7 @@ public class ContentInteractionService : IContentInteractionService
         }
         else if (contentType == ContentTypes.Clip)
         {
-            viewsDict = await _db.Clips.AsNoTracking().Where(c => idList.Contains(c.ClipId)).ToDictionaryAsync(c => c.ClipId, c => c.ViewsCount);
+            viewsDict = await _db.Clips.AsNoTracking().Where(c => idList.Contains(c.ClipId)).ToDictionaryAsync(c => c.ClipId, c => c.ViewCount);
         }
 
         // Assemble all summaries in-memory with zero extra database calls
@@ -1225,7 +1225,7 @@ public class ContentInteractionService : IContentInteractionService
                 var clip = await _db.Clips.FindAsync(contentId);
                 if (clip != null)
                 {
-                    clip.ViewsCount = (int)Math.Max(clip.ViewsCount, views);
+                    clip.ViewCount = (int)Math.Max(clip.ViewCount, views);
                     await _db.SaveChangesAsync();
 
                     var likesCount = await _db.Reactions.CountAsync(r => (r.ContentType == ContentTypes.Clip || r.ContentType.ToLower() == "clip") && r.ContentId == contentId && r.ReactionType == ReactionTypes.Like);
@@ -1238,7 +1238,7 @@ public class ContentInteractionService : IContentInteractionService
                     await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
                     {
                         clipId = contentId,
-                        viewCount = (int)Math.Max(clip.ViewsCount, views),
+                        viewCount = (int)Math.Max(clip.ViewCount, views),
                         likesCount = Math.Max(clip.LikesCount, likesCount),
                         commentsCount = commentsCount,
                         sharesCount = Math.Max(clip.SharesCount, sharesCount),
@@ -1250,7 +1250,7 @@ public class ContentInteractionService : IContentInteractionService
                     {
                         contentType = ContentTypes.Clip,
                         contentId,
-                        viewCount = (int)Math.Max(clip.ViewsCount, views)
+                        viewCount = (int)Math.Max(clip.ViewCount, views)
                     });
                 }
             }

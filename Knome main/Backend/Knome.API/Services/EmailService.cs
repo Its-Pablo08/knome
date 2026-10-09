@@ -12,11 +12,13 @@ public class EmailService : IEmailService
 {
     private readonly SmtpSettings _settings;
     private readonly ILogger<EmailService> _logger;
+    private readonly ISystemSettingService? _settingService;
 
-    public EmailService(IOptions<SmtpSettings> settings, ILogger<EmailService> logger)
+    public EmailService(IOptions<SmtpSettings> settings, ILogger<EmailService> logger, ISystemSettingService? settingService = null)
     {
         _settings = settings.Value;
         _logger = logger;
+        _settingService = settingService;
     }
 
     public Task<bool> SendEmailAsync(string toEmail, string subject, string htmlBody)
@@ -26,6 +28,12 @@ public class EmailService : IEmailService
 
     public async Task<bool> SendEmailAsync(string toEmail, string subject, string htmlBody, string? textBody)
     {
+        if (_settingService != null && !await _settingService.GetEnableEmailAsync())
+        {
+            _logger.LogInformation("SendEmailAsync suppressed: Outgoing email notifications are disabled by system administrator.");
+            return false;
+        }
+
         if (string.IsNullOrWhiteSpace(toEmail))
         {
             _logger.LogWarning("SendEmailAsync aborted: recipient email is empty.");

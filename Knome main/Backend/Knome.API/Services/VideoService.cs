@@ -128,7 +128,7 @@ public class VideoService : IVideoService
             r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM");
 
         var requireApproval = _systemSettingService != null
-            ? await _systemSettingService.GetRequireContentAndCommunityApprovalAsync()
+            ? await _systemSettingService.GetRequireVideoApprovalAsync()
             : true;
 
         if (requireApproval && !isCallerAdmin)

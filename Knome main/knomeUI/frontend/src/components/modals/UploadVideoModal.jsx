@@ -4,6 +4,7 @@ import { mediaApi } from '../../utils/apiService';
 import { useUser } from '../contexts/UserContext';
 import { useToast } from '../contexts/ToastContext';
 import { checkRestrictedContent } from '../../utils/restrictedWords';
+import { isVideoApprovalRequired } from '../../utils/systemConfig';
 
 // Helper to convert base64 data URLs to real File objects
 const dataUrlToFile = (dataUrl, filename = 'thumbnail.jpg') => {
@@ -456,9 +457,13 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
                 uploaderUserId: numericUploaderId
             };
 
-            if (isCurrentUserAdmin) {
+            const approvalRequired = isVideoApprovalRequired();
+            const shouldPublishImmediately = isCurrentUserAdmin || !approvalRequired;
+
+            if (shouldPublishImmediately) {
                 await apiClient.post('/videos', dto);
                 addToast("Video uploaded and published successfully!", 'success');
+                window.dispatchEvent(new CustomEvent('video-published'));
             } else {
                 const categoryLabel = category === '13' ? 'Training & Tutorials' : category === '14' ? 'Townhalls' : category === '15' ? 'Engineering Tech Talks' : 'Leadership Updates';
                 const pendingItem = {

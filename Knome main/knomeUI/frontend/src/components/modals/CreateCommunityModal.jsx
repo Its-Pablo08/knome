@@ -5,6 +5,7 @@ import { apiClient } from '../../utils/apiClient';
 import useScrollLoading from '../../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../ui/ScrollLoadingIndicator';
 import HighlightText from '../ui/HighlightText';
+import { isCommunityApprovalRequired } from '../../utils/systemConfig';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_IMAGE_SIZE_MB = 5;
@@ -649,8 +650,8 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                 rules: filteredRules.length > 0 ? filteredRules : ['Be respectful.', 'Stay on topic.'],
                 faq: filteredFaq.length > 0 ? filteredFaq : [{ q: 'Who can join?', a: 'All MPOnline employees.' }],
                 defaultOrg: type === 'default' ? defaultOrg : null,
-                status: isHRorAdmin ? 'Approved' : 'Pending Approval',
-                isApproved: isHRorAdmin ? true : false,
+                status: (dbCommunity?.approvalStatus === 'Approved' || isHRorAdmin || !isCommunityApprovalRequired()) ? 'Approved' : 'Pending Approval',
+                isApproved: (dbCommunity?.approvalStatus === 'Approved' || isHRorAdmin || !isCommunityApprovalRequired()),
                 invitedUserIds: invitedUserIds || [],
             };
 
@@ -684,8 +685,9 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                 actionLink: `/community/view?id=${newCommunity.id}`
             }));
 
-            // ── CASE A: Regular Employee -> Goes to HR Admin for Approval ──
-            if (!isHRorAdmin) {
+            // ── CASE A: Regular Employee when community approval policy is ON -> Goes to Admin for Approval ──
+            const shouldAutoApprove = dbCommunity?.approvalStatus === 'Approved' || isHRorAdmin || !isCommunityApprovalRequired();
+            if (!shouldAutoApprove) {
                 // 1. Add to pending approvals list
                 const existingApprovals = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
                 safeSetStorage('knome_pending_community_approvals', [newCommunity, ...existingApprovals.filter(c => String(c.id) !== String(communityId))]);

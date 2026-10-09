@@ -30,6 +30,36 @@ BEGIN
     INSERT INTO [dbo].[SystemSettings] ([SettingKey], [SettingValue], [Description], [UpdatedDate])
     VALUES ('RequireContentAndCommunityApproval', 'true', 'Require administrator approval before communities, videos and podcasts are published.', SYSUTCDATETIME());
 END
+
+IF NOT EXISTS (SELECT 1 FROM [dbo].[SystemSettings] WHERE [SettingKey] = 'RequireCommunityApproval')
+BEGIN
+    INSERT INTO [dbo].[SystemSettings] ([SettingKey], [SettingValue], [Description], [UpdatedDate])
+    VALUES ('RequireCommunityApproval', 'true', 'Require administrator approval before communities are published.', SYSUTCDATETIME());
+END
+
+IF NOT EXISTS (SELECT 1 FROM [dbo].[SystemSettings] WHERE [SettingKey] = 'RequireVideoApproval')
+BEGIN
+    INSERT INTO [dbo].[SystemSettings] ([SettingKey], [SettingValue], [Description], [UpdatedDate])
+    VALUES ('RequireVideoApproval', 'true', 'Require administrator approval before user videos are published.', SYSUTCDATETIME());
+END
+
+IF NOT EXISTS (SELECT 1 FROM [dbo].[SystemSettings] WHERE [SettingKey] = 'RequirePodcastApproval')
+BEGIN
+    INSERT INTO [dbo].[SystemSettings] ([SettingKey], [SettingValue], [Description], [UpdatedDate])
+    VALUES ('RequirePodcastApproval', 'true', 'Require administrator approval before user podcasts are published.', SYSUTCDATETIME());
+END
+
+IF NOT EXISTS (SELECT 1 FROM [dbo].[SystemSettings] WHERE [SettingKey] = 'EnableMessaging')
+BEGIN
+    INSERT INTO [dbo].[SystemSettings] ([SettingKey], [SettingValue], [Description], [UpdatedDate])
+    VALUES ('EnableMessaging', 'true', 'Enable direct user-to-user messaging and chat channels across the platform.', SYSUTCDATETIME());
+END
+
+IF NOT EXISTS (SELECT 1 FROM [dbo].[SystemSettings] WHERE [SettingKey] = 'EnableEmail')
+BEGIN
+    INSERT INTO [dbo].[SystemSettings] ([SettingKey], [SettingValue], [Description], [UpdatedDate])
+    VALUES ('EnableEmail', 'true', 'Enable outgoing email dispatch and notification services.', SYSUTCDATETIME());
+END
 ";
             await db.Database.ExecuteSqlRawAsync(ddl);
             Log.Information("SystemSettings database table & configuration defaults verified successfully.");

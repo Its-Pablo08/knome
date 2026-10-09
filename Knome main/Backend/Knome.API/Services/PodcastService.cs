@@ -201,7 +201,7 @@ public class PodcastService : IPodcastService
             r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM");
 
         var requireApproval = _systemSettingService != null
-            ? await _systemSettingService.GetRequireContentAndCommunityApprovalAsync()
+            ? await _systemSettingService.GetRequirePodcastApprovalAsync()
             : true;
 
         if (requireApproval && !isCallerAdmin)

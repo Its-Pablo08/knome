@@ -13,11 +13,11 @@ const localRoleMap = {
     'System Administrator': 'SYSADM',
     'System Admin': 'SYSADM'
 };
-import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, communitiesApi, mediaApi, clipsApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
+import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, communitiesApi, mediaApi, clipsApi, settingsApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
 import * as XLSX from 'xlsx';
 
-export const formatCommunityType = (type) => {
+const formatCommunityType = (type) => {
     const t = String(type || '').trim().toLowerCase();
     if (t.includes('default') || t.includes('org')) return 'Org';
     if (t.includes('private')) return 'Private';
@@ -192,7 +192,7 @@ const getFallbackPostContent = (report) => {
  * Evaluates reasons (Harassment -> 98% Toxic, Copyright -> 96% Risk, Spam -> 90% Spam, Inappropriate -> 88% Policy, etc.)
  * plus deep keyword scanning on post snippet.
  */
-export const detectReportScore = (reasonCode = '', snippet = '', existingScore = null) => {
+const detectReportScore = (reasonCode = '', snippet = '', existingScore = null) => {
     const reason = (reasonCode || '').trim();
     const reasonLower = reason.toLowerCase();
     const text = (snippet || '').toLowerCase();
@@ -339,6 +339,7 @@ export default function AdminConsole() {
     const activeDomain = useMemo(() => {
         if (['users', 'role_requests'].includes(activeTab)) return 'governance';
         if (['system', 'audit', 'serilog', 'analytics'].includes(activeTab)) return 'operations';
+        if (['approval_policy', 'moderation', 'media_approvals'].includes(activeTab)) return 'moderation';
         return 'moderation';
     }, [activeTab]);
 
@@ -2438,12 +2439,47 @@ export default function AdminConsole() {
         );
     };
 
-    // Handle System Config Save
-    const handleSaveConfig = () => {
-        saveSystemConfig(configState);
-        setConfigToast(true);
-        setTimeout(() => setConfigToast(false), 4000);
-        showToast('System configuration saved & published successfully.');
+    // Fetch and sync independent approval & communication policies from backend on mount
+    useEffect(() => {
+        settingsApi.getApprovalSetting()
+            .then(res => {
+                const data = res?.data !== undefined ? res.data : res;
+                if (data) {
+                    setConfigState(prev => {
+                        const updated = {
+                            ...prev,
+                            requireContentAndCommunityApproval: typeof data.requireApproval === 'boolean' ? data.requireApproval : prev.requireContentAndCommunityApproval,
+                            requireCommunityApproval: typeof data.requireCommunityApproval === 'boolean' ? data.requireCommunityApproval : prev.requireCommunityApproval,
+                            requireVideoApproval: typeof data.requireVideoApproval === 'boolean' ? data.requireVideoApproval : prev.requireVideoApproval,
+                            requirePodcastApproval: typeof data.requirePodcastApproval === 'boolean' ? data.requirePodcastApproval : prev.requirePodcastApproval,
+                            enableMessaging: typeof data.enableMessaging === 'boolean' ? data.enableMessaging : prev.enableMessaging,
+                            enableEmail: typeof data.enableEmail === 'boolean' ? data.enableEmail : prev.enableEmail,
+                        };
+                        saveSystemConfig(updated);
+                        return updated;
+                    });
+                }
+            })
+            .catch(err => console.warn('Could not fetch approval setting from backend:', err));
+    }, []);
+
+    // Toggle individual setting independently
+    const handleToggleIndependentSetting = async (settingKey, displayName) => {
+        const cur = configState[settingKey] !== false;
+        const next = !cur;
+
+        // Optimistic local state update
+        const updated = { ...configState, [settingKey]: next };
+        setConfigState(updated);
+        saveSystemConfig(updated);
+
+        try {
+            await settingsApi.setApprovalSetting({ [settingKey]: next });
+            showToast(`${displayName} is now ${next ? 'ENABLED (Active)' : 'DISABLED (Bypassed)'}`);
+        } catch (apiErr) {
+            console.error(`Failed to update ${settingKey} on backend:`, apiErr);
+            showToast(`Could not persist ${displayName} to server: ${apiErr?.message || 'Error'}`, 'error');
+        }
 
         setAuditTrail(prev => [
             {
@@ -2451,7 +2487,80 @@ export default function AdminConsole() {
                 time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
                 moderator: currentUser?.name || 'System Admin',
                 action: 'ConfigUpdate',
-                target: `Parameters Updated (Messaging: ${configState.enableMessaging !== false ? 'ON' : 'OFF'}, Email: ${configState.enableEmail !== false ? 'ON' : 'OFF'})`,
+                target: `${displayName}: ${next ? 'ON' : 'OFF'}`,
+                color: next ? 'text-indigo-600' : 'text-slate-500'
+            },
+            ...prev
+        ]);
+    };
+
+    // Toggle Content & Community Approval master policy
+    const handleToggleApprovalPolicy = async () => {
+        const cur = configState.requireContentAndCommunityApproval !== false;
+        const next = !cur;
+        try {
+            await settingsApi.setApprovalSetting({
+                requireApproval: next,
+                requireCommunityApproval: next,
+                requireVideoApproval: next,
+                requirePodcastApproval: next
+            });
+        } catch (apiErr) {
+            console.warn('Backend approval setting update fallback:', apiErr);
+        }
+        const updated = { 
+            ...configState, 
+            requireContentAndCommunityApproval: next,
+            requireCommunityApproval: next,
+            requireVideoApproval: next,
+            requirePodcastApproval: next
+        };
+        setConfigState(updated);
+        saveSystemConfig(updated);
+        showToast(next 
+            ? 'All Content Approvals enabled: communities, videos, and podcasts require admin approval.' 
+            : 'All Content Approvals disabled: communities, videos, and podcasts will publish immediately without approval.');
+
+        setAuditTrail(prev => [
+            {
+                id: Date.now(),
+                time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+                moderator: currentUser?.name || 'System Admin',
+                action: 'ConfigUpdate',
+                target: `Master Approval Policy: ${next ? 'ON (Approval Required)' : 'OFF (Instant Publish)'}`,
+                color: next ? 'text-indigo-600' : 'text-emerald-500'
+            },
+            ...prev
+        ]);
+    };
+
+    // Handle System Config Save (All settings synchronized to SQL Server)
+    const handleSaveConfig = async () => {
+        try {
+            await settingsApi.setApprovalSetting({
+                requireApproval: configState.requireContentAndCommunityApproval !== false,
+                requireCommunityApproval: configState.requireCommunityApproval !== false,
+                requireVideoApproval: configState.requireVideoApproval !== false,
+                requirePodcastApproval: configState.requirePodcastApproval !== false,
+                enableMessaging: configState.enableMessaging !== false,
+                enableEmail: configState.enableEmail !== false,
+            });
+            showToast('All system configuration policies saved & synchronized to SQL Server.');
+        } catch (e) {
+            console.warn('Backend approval save note:', e);
+            showToast('Configuration saved locally, backend sync note: ' + (e?.message || 'Check connection'), 'warning');
+        }
+        saveSystemConfig(configState);
+        setConfigToast(true);
+        setTimeout(() => setConfigToast(false), 4000);
+
+        setAuditTrail(prev => [
+            {
+                id: Date.now(),
+                time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+                moderator: currentUser?.name || 'System Admin',
+                action: 'ConfigUpdate',
+                target: `All 5 Policies Synchronized (Community: ${configState.requireCommunityApproval !== false ? 'ON' : 'OFF'}, Video: ${configState.requireVideoApproval !== false ? 'ON' : 'OFF'}, Podcast: ${configState.requirePodcastApproval !== false ? 'ON' : 'OFF'}, Messaging: ${configState.enableMessaging !== false ? 'ON' : 'OFF'}, Email: ${configState.enableEmail !== false ? 'ON' : 'OFF'})`,
                 color: 'text-emerald-500'
             },
             ...prev
@@ -3439,11 +3548,40 @@ export default function AdminConsole() {
                                         <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
                                     )}
                                 </button>
+                                <button
+                                    onClick={() => setActiveTab('approval_policy')}
+                                    className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                        activeTab === 'approval_policy'
+                                            ? 'bg-rose-600 text-white shadow-xs'
+                                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-[16px] text-rose-500">fact_check</span>
+                                    <span>Approval Policy & Toggle</span>
+                                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                                        configState.requireContentAndCommunityApproval !== false
+                                            ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
+                                            : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                    }`}>
+                                        {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
+                                    </span>
+                                </button>
                             </>
                         )}
 
                     {activeDomain === 'operations' && (
                         <>
+                            <button
+                                onClick={() => setActiveTab('system')}
+                                className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                    activeTab === 'system'
+                                        ? 'bg-cyan-600 text-white shadow-xs'
+                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-[16px] text-cyan-400">tune</span>
+                                <span>System Parameters</span>
+                            </button>
                             <button
                                 onClick={() => setActiveTab('audit')}
                                 className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
@@ -3484,6 +3622,37 @@ export default function AdminConsole() {
                             </button>
                         </>
                     )}
+                </div>
+
+                {/* Live Content & Community Approval Policy Switch (Always visible) */}
+                <div className="flex items-center gap-2.5 pl-2 sm:border-l border-slate-200 dark:border-slate-800 shrink-0">
+                    <div className="text-right hidden sm:block">
+                        <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 block leading-tight">Content & Community Approval</span>
+                        <span className="text-[9px] text-slate-500 dark:text-slate-400 block">Require admin approval before publish</span>
+                    </div>
+                    <div 
+                        onClick={handleToggleApprovalPolicy}
+                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer select-none transition-all ${
+                            configState.requireContentAndCommunityApproval !== false
+                                ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 shadow-xs ring-1 ring-rose-400/30'
+                                : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                        }`}
+                        title="Click to toggle Content & Community Approval ON/OFF"
+                    >
+                        <span className="material-symbols-outlined text-[16px]">
+                            {configState.requireContentAndCommunityApproval !== false ? 'lock' : 'lock_open'}
+                        </span>
+                        <span className="text-xs font-black uppercase tracking-tight">
+                            {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
+                        </span>
+                        <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${
+                            configState.requireContentAndCommunityApproval !== false ? 'bg-rose-600' : 'bg-slate-300 dark:bg-slate-700'
+                        }`}>
+                            <div className={`w-3 h-3 rounded-full bg-white transition-transform ${
+                                configState.requireContentAndCommunityApproval !== false ? 'translate-x-4' : 'translate-x-0'
+                            }`}></div>
+                        </div>
+                    </div>
                 </div>
             </div>
             )}
@@ -4095,7 +4264,7 @@ export default function AdminConsole() {
 
             {/* TAB 7: SYSTEM PARAMETERS QUICK TOGGLES */}
             {activeTab === 'system' && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 mb-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-2 mb-3">
                     {/* 1. Platform Online */}
                     <div className="p-2.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
                         <div className="flex items-center justify-between text-emerald-500 mb-1">
@@ -4246,6 +4415,28 @@ export default function AdminConsole() {
                         </div>
                         <p className="text-base font-black text-slate-900 dark:text-white leading-none mt-1">Email Service</p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Click to Toggle</p>
+                    </div>
+
+                    {/* 8. Toggle Content & Community Approval */}
+                    <div 
+                        onClick={handleToggleApprovalPolicy}
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                            configState.requireContentAndCommunityApproval !== false
+                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-500/40 shadow-xs'
+                        }`}
+                        title="Click to toggle Content & Community Approval on/off"
+                    >
+                        <div className="flex items-center justify-between text-rose-500 mb-1">
+                            <span className="material-symbols-outlined text-[18px]">fact_check</span>
+                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.requireContentAndCommunityApproval !== false ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                                {configState.requireContentAndCommunityApproval !== false ? 'REQUIRED' : 'OFF'}
+                            </span>
+                        </div>
+                        <p className="text-base font-black text-slate-900 dark:text-white leading-none mt-1 truncate">Content Approval</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">
+                            {configState.requireContentAndCommunityApproval !== false ? 'Admin Approval Req.' : 'Instant Publish'}
+                        </p>
                     </div>
                 </div>
             )}
@@ -5705,6 +5896,41 @@ export default function AdminConsole() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-semibold">
+                        {/* Content & Community Approval ON/OFF Toggle (Primary Policy Card) */}
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between col-span-1 md:col-span-2">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-[20px] text-rose-500">fact_check</span>
+                                        <p className="font-bold text-slate-900 dark:text-white text-sm">Content & Community Approval</p>
+                                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${configState.requireContentAndCommunityApproval !== false ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'}`}>
+                                            {configState.requireContentAndCommunityApproval !== false ? 'Approval Required (ON)' : 'Direct Publish (OFF)'}
+                                        </span>
+                                    </div>
+                                    <p className="text-slate-600 dark:text-slate-300 font-medium text-xs mt-1">
+                                        Require administrator approval before communities, videos and podcasts are published.
+                                    </p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked={configState.requireContentAndCommunityApproval !== false}
+                                        onChange={handleToggleApprovalPolicy}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                </label>
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-slate-200/70 dark:border-slate-700/70 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                <div className={`p-2 rounded-lg border ${configState.requireContentAndCommunityApproval !== false ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200/60 dark:border-rose-900/40 text-rose-800 dark:text-rose-300 font-medium' : 'bg-slate-100/40 dark:bg-slate-800/40 border-transparent'}`}>
+                                    <span className="font-bold">When ON:</span> Communities (Public & Private), user videos, and podcasts enter Admin Approval before going live.
+                                </div>
+                                <div className={`p-2 rounded-lg border ${configState.requireContentAndCommunityApproval === false ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-medium' : 'bg-slate-100/40 dark:bg-slate-800/40 border-transparent'}`}>
+                                    <span className="font-bold">When OFF:</span> Communities (Public & Private) are active immediately. User videos and podcasts publish live with zero delay.
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Direct Messaging ON/OFF Toggle */}
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
                             <div>
@@ -5720,13 +5946,7 @@ export default function AdminConsole() {
                             <input
                                 type="checkbox"
                                 checked={configState.enableMessaging !== false}
-                                onChange={e => {
-                                    const next = e.target.checked;
-                                    const updated = { ...configState, enableMessaging: next };
-                                    setConfigState(updated);
-                                    saveSystemConfig(updated);
-                                    showToast(`Direct messaging ${next ? 'enabled' : 'disabled'}`);
-                                }}
+                                onChange={() => handleToggleIndependentSetting('enableMessaging', 'Direct Messaging')}
                                 className="w-4 h-4 accent-blue-600 cursor-pointer"
                             />
                         </div>
@@ -5746,13 +5966,7 @@ export default function AdminConsole() {
                             <input
                                 type="checkbox"
                                 checked={configState.enableEmail !== false}
-                                onChange={e => {
-                                    const next = e.target.checked;
-                                    const updated = { ...configState, enableEmail: next };
-                                    setConfigState(updated);
-                                    saveSystemConfig(updated);
-                                    showToast(`Email service ${next ? 'enabled' : 'disabled'}`);
-                                }}
+                                onChange={() => handleToggleIndependentSetting('enableEmail', 'Email Notifications')}
                                 className="w-4 h-4 accent-purple-600 cursor-pointer"
                             />
                         </div>
@@ -6888,9 +7102,444 @@ export default function AdminConsole() {
                 </div>
             )}
 
+            {/* ─── TAB: CONTENT & COMMUNITY APPROVAL POLICY & CONFIG ─── */}
+            {activeTab === 'approval_policy' && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 space-y-6">
+                    {/* Header Bar */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-rose-500/20 shrink-0">
+                                <span className="material-symbols-outlined text-[26px]">admin_panel_settings</span>
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                                    Governance & Platform Approvals Control Center
+                                </h2>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Configure independent publication approval rules and communication capabilities across Knome.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                {[
+                                    configState.requireCommunityApproval !== false,
+                                    configState.requireVideoApproval !== false,
+                                    configState.requirePodcastApproval !== false,
+                                    configState.enableMessaging !== false,
+                                    configState.enableEmail !== false
+                                ].filter(Boolean).length} / 5 Services Active
+                            </span>
+                            <button
+                                onClick={handleSaveConfig}
+                                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">save</span>
+                                <span>Save & Sync All to SQL Server</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Quick Presets Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs font-semibold">
+                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[16px] text-indigo-500">tune</span>
+                            <span>Quick Presets:</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => {
+                                    handleToggleApprovalPolicy();
+                                }}
+                                className="px-3 py-1 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 text-[11px] font-bold cursor-pointer transition-all"
+                            >
+                                Toggle All Content Approvals
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    const next = true;
+                                    const allOn = {
+                                        ...configState,
+                                        requireContentAndCommunityApproval: true,
+                                        requireCommunityApproval: true,
+                                        requireVideoApproval: true,
+                                        requirePodcastApproval: true,
+                                        enableMessaging: true,
+                                        enableEmail: true,
+                                    };
+                                    setConfigState(allOn);
+                                    saveSystemConfig(allOn);
+                                    try {
+                                        await settingsApi.setApprovalSetting({
+                                            requireApproval: true,
+                                            requireCommunityApproval: true,
+                                            requireVideoApproval: true,
+                                            requirePodcastApproval: true,
+                                            enableMessaging: true,
+                                            enableEmail: true,
+                                        });
+                                    } catch (e) {}
+                                    showToast("All 5 platform governance services enabled.");
+                                }}
+                                className="px-3 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[11px] font-bold cursor-pointer transition-all"
+                            >
+                                Enable All (Standard)
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* ── 5 INDEPENDENT TOGGLE CARDS GRID ── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                        {/* 1. COMMUNITY APPROVAL CARD */}
+                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-indigo-400/50 transition-all flex flex-col justify-between">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined text-[22px]">groups</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500 block">Content Governance</span>
+                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Community Approval</h3>
+                                        </div>
+                                    </div>
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                        configState.requireCommunityApproval !== false
+                                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                    }`}>
+                                        {configState.requireCommunityApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                    </span>
+                                </div>
+
+                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                    Require administrator approval before communities are published. Applies to both public and private communities.
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireCommunityApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                        <span>Community stays Pending until admin approval.</span>
+                                    </div>
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireCommunityApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
+                                        <span>Community is created and live immediately.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                <span className="text-[10px] text-slate-400 font-mono">SystemSettings.RequireCommunityApproval</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {configState.requireCommunityApproval !== false ? 'Approval Required' : 'Instant Publish'}
+                                    </span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={configState.requireCommunityApproval !== false}
+                                            onChange={() => handleToggleIndependentSetting('requireCommunityApproval', 'Community Approval')}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 2. VIDEO APPROVAL CARD */}
+                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-cyan-400/50 transition-all flex flex-col justify-between">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined text-[22px]">videocam</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-cyan-500 block">Multimedia Governance</span>
+                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Video Approval</h3>
+                                        </div>
+                                    </div>
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                        configState.requireVideoApproval !== false
+                                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                    }`}>
+                                        {configState.requireVideoApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                    </span>
+                                </div>
+
+                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                    Require administrator approval before user videos are published to the public video portal.
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireVideoApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                        <span>Video routes to Media Approvals queue.</span>
+                                    </div>
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireVideoApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
+                                        <span>Video publishes live immediately upon upload.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                <span className="text-[10px] text-slate-400 font-mono">SystemSettings.RequireVideoApproval</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {configState.requireVideoApproval !== false ? 'Approval Required' : 'Instant Publish'}
+                                    </span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={configState.requireVideoApproval !== false}
+                                            onChange={() => handleToggleIndependentSetting('requireVideoApproval', 'Video Approval')}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 3. PODCAST APPROVAL CARD */}
+                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-pink-400/50 transition-all flex flex-col justify-between">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined text-[22px]">podcasts</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-pink-500 block">Multimedia Governance</span>
+                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Podcast Approval</h3>
+                                        </div>
+                                    </div>
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                        configState.requirePodcastApproval !== false
+                                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                    }`}>
+                                        {configState.requirePodcastApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                    </span>
+                                </div>
+
+                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                    Require administrator approval before audio podcasts and series episodes are published.
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                    <div className={`p-2.5 rounded-xl border ${configState.requirePodcastApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                        <span>Podcast routes to Media Approvals queue.</span>
+                                    </div>
+                                    <div className={`p-2.5 rounded-xl border ${configState.requirePodcastApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
+                                        <span>Podcast publishes live immediately upon upload.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                <span className="text-[10px] text-slate-400 font-mono">SystemSettings.RequirePodcastApproval</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {configState.requirePodcastApproval !== false ? 'Approval Required' : 'Instant Publish'}
+                                    </span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={configState.requirePodcastApproval !== false}
+                                            onChange={() => handleToggleIndependentSetting('requirePodcastApproval', 'Podcast Approval')}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 4. DIRECT MESSAGING CARD */}
+                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-blue-400/50 transition-all flex flex-col justify-between">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined text-[22px]">forum</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-blue-500 block">Communication Channel</span>
+                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Direct Messaging (Chat & DMs)</h3>
+                                        </div>
+                                    </div>
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                        configState.enableMessaging !== false
+                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                    }`}>
+                                        {configState.enableMessaging !== false ? 'ONLINE (ACTIVE)' : 'DISABLED (LOCKED)'}
+                                    </span>
+                                </div>
+
+                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                    Enable direct user-to-user messaging, chat channels, and real-time SignalR live delivery across the platform.
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                    <div className={`p-2.5 rounded-xl border ${configState.enableMessaging !== false ? 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-900 dark:text-blue-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-blue-600 dark:text-blue-400">When ON:</div>
+                                        <span>Employees can send DMs, files & reactions freely.</span>
+                                    </div>
+                                    <div className={`p-2.5 rounded-xl border ${configState.enableMessaging === false ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-amber-600 dark:text-amber-400">When OFF:</div>
+                                        <span>Messaging locked; displays admin maintenance alert.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                <span className="text-[10px] text-slate-400 font-mono">SystemSettings.EnableMessaging</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {configState.enableMessaging !== false ? 'Messaging Enabled' : 'Messaging Disabled'}
+                                    </span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={configState.enableMessaging !== false}
+                                            onChange={() => handleToggleIndependentSetting('enableMessaging', 'Direct Messaging')}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 5. EMAIL NOTIFICATIONS CARD */}
+                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-amber-400/50 transition-all flex flex-col justify-between col-span-1 lg:col-span-2">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined text-[22px]">mail</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-amber-500 block">Notification Service</span>
+                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Email Notifications & Alerts</h3>
+                                        </div>
+                                    </div>
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                        configState.enableEmail !== false
+                                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                    }`}>
+                                        {configState.enableEmail !== false ? 'ACTIVE (SENDING)' : 'PAUSED (MUTED)'}
+                                    </span>
+                                </div>
+
+                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                    Enable outgoing email dispatch and notification services for employee alerts, role approvals, and scheduled digests.
+                                </p>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                                    <div className={`p-2.5 rounded-xl border ${configState.enableEmail !== false ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-amber-600 dark:text-amber-400">When ON:</div>
+                                        <span>SMTP server dispatches transactional notifications and employee alerts.</span>
+                                    </div>
+                                    <div className={`p-2.5 rounded-xl border ${configState.enableEmail === false ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-slate-600 dark:text-slate-400">When OFF:</div>
+                                        <span>Outgoing email dispatch is safely paused without generating failures.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                <span className="text-[10px] text-slate-400 font-mono">SystemSettings.EnableEmail</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {configState.enableEmail !== false ? 'Email Dispatch Active' : 'Email Dispatch Paused'}
+                                    </span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={configState.enableEmail !== false}
+                                            onChange={() => handleToggleIndependentSetting('enableEmail', 'Email Notifications')}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    {/* Bottom Status & Persistence Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                            <span className="material-symbols-outlined text-[18px] text-indigo-500">database</span>
+                            <span>Direct SQL Server Database Synchronization (<code className="font-mono text-slate-800 dark:text-slate-200 font-bold">Knome.dbo.SystemSettings</code>)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleSaveConfig}
+                                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
+                                <span>Save & Commit All Changes</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ─── TAB: MEDIA APPROVALS (VIDEOS & PODCASTS) ─── */}
             {activeTab === 'media_approvals' && (
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs p-6 space-y-6">
+                    {/* Content & Community Approval Policy Banner directly in Media Approvals */}
+                    <div className="p-3.5 bg-gradient-to-r from-rose-50 to-orange-50 dark:from-rose-950/30 dark:to-orange-950/20 rounded-xl border border-rose-200 dark:border-rose-900/50 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                                <span className="material-symbols-outlined text-[20px]">fact_check</span>
+                            </div>
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">Content & Community Approval Policy</h3>
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                        configState.requireContentAndCommunityApproval !== false
+                                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300'
+                                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300'
+                                    }`}>
+                                        {configState.requireContentAndCommunityApproval !== false ? 'APPROVAL REQUIRED (ON)' : 'INSTANT PUBLISH (OFF)'}
+                                    </span>
+                                </div>
+                                <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium">
+                                    Require administrator approval before communities, videos and podcasts are published.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-xs font-bold text-slate-600 dark:text-slate-300 hidden md:inline">
+                                {configState.requireContentAndCommunityApproval !== false ? 'Approval Enforced' : 'Approval Bypassed'}
+                            </span>
+                            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                <input
+                                    type="checkbox"
+                                    checked={configState.requireContentAndCommunityApproval !== false}
+                                    onChange={handleToggleApprovalPolicy}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                            </label>
+                        </div>
+                    </div>
+
                     <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
                         <div>
                             <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">

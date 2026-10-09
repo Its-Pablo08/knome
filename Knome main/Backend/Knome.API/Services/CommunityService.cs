@@ -310,7 +310,7 @@ public class CommunityService : ICommunityService
         var isHRorAdmin = user != null && user.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.HRAdmin || r.RoleName == Roles.CommunityAdmin);
 
         var requireApproval = _systemSettingService != null
-            ? await _systemSettingService.GetRequireContentAndCommunityApprovalAsync()
+            ? await _systemSettingService.GetRequireCommunityApprovalAsync()
             : true;
         var shouldAutoApprove = !requireApproval || isHRorAdmin;
 

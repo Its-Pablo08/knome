@@ -28,54 +28,67 @@ public class SystemSettingsController : KnomeControllerBase
     }
 
     /// <summary>
-    /// Gets the current Content & Community Approval setting.
+    /// Gets all current Content & Community Approval and platform communication settings.
     /// </summary>
     [HttpGet("approval")]
     [ProducesResponseType(typeof(ApiResponse<ApprovalSettingDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetApprovalSetting()
     {
-        var requireApproval = await _settingService.GetRequireContentAndCommunityApprovalAsync();
-        var dto = new ApprovalSettingDto
-        {
-            SettingKey = "RequireContentAndCommunityApproval",
-            RequireApproval = requireApproval,
-            Description = "Require administrator approval before communities, videos and podcasts are published."
-        };
-        return Ok(ApiResponse<ApprovalSettingDto>.SuccessResponse(200, "Approval policy setting retrieved.", dto));
+        var dto = await _settingService.GetFullApprovalSettingsAsync();
+        return Ok(ApiResponse<ApprovalSettingDto>.SuccessResponse(200, "Approval policy settings retrieved.", dto));
     }
 
     /// <summary>
-    /// Updates the Content & Community Approval setting (System Administrator only).
+    /// Updates independent approval and communication settings (System Administrator or HR Administrator only).
     /// </summary>
     [HttpPut("approval")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponse<ApprovalSettingDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateApprovalSetting([FromBody] UpdateApprovalSettingDto updateDto)
     {
-        var currentUserId = GetCurrentUserId();
-        var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-        var isSysAdmin = user != null && user.Roles.Any(r => 
+        int currentUserId = 0;
+        try { currentUserId = GetCurrentUserId(); } catch { }
+
+        Knome.API.Models.User? dbUser = null;
+        if (currentUserId > 0)
+        {
+            dbUser = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
+        }
+        else
+        {
+            var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? User.FindFirst("email")?.Value;
+            var empId = User.FindFirst("empId")?.Value;
+            if (!string.IsNullOrEmpty(email) || !string.IsNullOrEmpty(empId))
+            {
+                dbUser = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => 
+                    (!string.IsNullOrEmpty(email) && u.Email == email) || 
+                    (!string.IsNullOrEmpty(empId) && u.EmployeeId == empId));
+                if (dbUser != null) currentUserId = dbUser.UserId;
+            }
+        }
+
+        var isSysAdmin = (dbUser != null && dbUser.Roles.Any(r => 
             r.RoleName == Roles.SystemAdmin || 
             r.RoleCode == "SYSADM" || 
             r.RoleCode == "ADMIN" ||
-            r.RoleName == Roles.HRAdmin);
+            r.RoleName == Roles.HRAdmin ||
+            r.RoleCode == "HRADM" ||
+            r.RoleName == "System Admin" ||
+            r.RoleName == "HR Admin")) ||
+            User.IsInRole(Roles.SystemAdmin) ||
+            User.IsInRole("System Admin") ||
+            User.IsInRole(Roles.HRAdmin) ||
+            User.IsInRole("HR Admin") ||
+            User.IsInRole("SYSADM") ||
+            User.IsInRole("ADMIN");
 
-        if (!isSysAdmin && !User.IsInRole(Roles.SystemAdmin))
+        if (!isSysAdmin)
         {
-            throw new ForbiddenException("Only System Administrators are authorized to modify content and community approval policies.");
+            throw new ForbiddenException("Only System Administrators and HR Administrators are authorized to modify content and community approval policies.");
         }
 
-        var result = await _settingService.SetRequireContentAndCommunityApprovalAsync(updateDto.RequireApproval, currentUserId);
-        var dto = new ApprovalSettingDto
-        {
-            SettingKey = "RequireContentAndCommunityApproval",
-            RequireApproval = result,
-            Description = "Require administrator approval before communities, videos and podcasts are published.",
-            UpdatedDate = Knome.API.Common.KnomeTime.Now,
-            UpdatedByUserId = currentUserId
-        };
-
-        return Ok(ApiResponse<ApprovalSettingDto>.SuccessResponse(200, "Content & Community approval policy updated successfully.", dto));
+        var dto = await _settingService.UpdateApprovalSettingsAsync(updateDto, currentUserId);
+        return Ok(ApiResponse<ApprovalSettingDto>.SuccessResponse(200, "Platform configuration policies updated successfully.", dto));
     }
 
     /// <summary>
