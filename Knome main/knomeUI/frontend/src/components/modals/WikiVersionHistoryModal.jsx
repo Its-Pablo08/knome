@@ -50,7 +50,7 @@ export default function WikiVersionHistoryModal({
             title: `Restore Version ${version.versionNumber}`,
             message: `Are you sure you want to restore Version ${version.versionNumber}? This will revert the current document content to this historical snapshot.`,
             confirmText: 'Restore Version',
-            confirmButtonClass: 'bg-teal-600 hover:bg-teal-700 text-white'
+            confirmButtonClass: 'bg-indigo-600 hover:bg-indigo-700 text-white'
         });
         if (!ok) return;
 
@@ -78,7 +78,7 @@ export default function WikiVersionHistoryModal({
             <div className="space-y-4">
                 {isLoading ? (
                     <div className="py-12 flex justify-center">
-                        <div className="w-8 h-8 border-3 border-teal-500/30 border-t-teal-600 rounded-full animate-spin" />
+                        <div className="w-8 h-8 border-3 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
                     </div>
                 ) : versions.length === 0 ? (
                     <div className="py-12 text-center text-slate-500 dark:text-slate-400">
@@ -104,12 +104,12 @@ export default function WikiVersionHistoryModal({
                                         onClick={() => setSelectedVersion(v)}
                                         className={`w-full p-3 rounded-xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
                                             isSelected
-                                                ? 'bg-teal-50/80 dark:bg-teal-950/50 border-teal-500 shadow-sm'
+                                                ? 'bg-indigo-50/80 dark:bg-indigo-950/50 border-indigo-500 shadow-sm'
                                                 : 'bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                                         }`}
                                     >
                                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
-                                            isSelected ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                            isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                                         }`}>
                                             v{v.versionNumber}
                                         </div>
@@ -149,7 +149,7 @@ export default function WikiVersionHistoryModal({
                                     <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-slate-800">
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold text-teal-600 dark:text-teal-400">
+                                                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
                                                     Version {selectedVersion.versionNumber}
                                                 </span>
                                                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[160px] sm:max-w-xs">
@@ -169,7 +169,7 @@ export default function WikiVersionHistoryModal({
                                                         onClick={() => setViewMode('preview')}
                                                         className={`px-2 py-1 rounded-md font-bold transition-colors ${
                                                             viewMode === 'preview'
-                                                                ? 'bg-white dark:bg-slate-800 text-teal-600 shadow-xs'
+                                                                ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-xs'
                                                                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                                                         }`}
                                                     >
@@ -180,7 +180,7 @@ export default function WikiVersionHistoryModal({
                                                         onClick={() => setViewMode('compare')}
                                                         className={`px-2 py-1 rounded-md font-bold transition-colors ${
                                                             viewMode === 'compare'
-                                                                ? 'bg-white dark:bg-slate-800 text-teal-600 shadow-xs'
+                                                                ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-xs'
                                                                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                                                         }`}
                                                     >
@@ -194,7 +194,7 @@ export default function WikiVersionHistoryModal({
                                                     type="button"
                                                     onClick={() => handleRestore(selectedVersion)}
                                                     disabled={isRestoring}
-                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all cursor-pointer shadow-xs disabled:opacity-50"
                                                 >
                                                     <span className="material-symbols-outlined text-[16px]">history_toggle_off</span>
                                                     Restore
@@ -209,7 +209,7 @@ export default function WikiVersionHistoryModal({
                                             {/* Historical Snapshot */}
                                             <div className="p-3.5 space-y-2">
                                                 <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-800">
-                                                    <span className="font-bold text-teal-600 dark:text-teal-400">
+                                                    <span className="font-bold text-indigo-600 dark:text-indigo-400">
                                                         v{selectedVersion.versionNumber} (Historical)
                                                     </span>
                                                     <span className="text-[10px] text-slate-400">

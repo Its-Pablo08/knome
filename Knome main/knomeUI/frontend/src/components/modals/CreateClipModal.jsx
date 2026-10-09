@@ -120,7 +120,7 @@ export default function CreateClipModal({ isOpen, onClose, onClipCreated }) {
     const { currentUser } = useUser();
     const { addToast } = useToast();
 
-    const [sourceTab, setSourceTab] = useState('direct'); // 'direct', 'onedrive', 'stream', 'embed'
+    const [sourceTab, setSourceTab] = useState('direct'); // 'direct', 'onedrive', 'embed'
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [category, setCategory] = useState('Training & Tutorials');
@@ -750,7 +750,6 @@ export default function CreateClipModal({ isOpen, onClose, onClipCreated }) {
                         {[
                             { id: 'direct', label: 'Direct Upload', icon: 'upload' },
                             { id: 'onedrive', label: 'OneDrive', icon: 'cloud' },
-                            { id: 'stream', label: 'MS Stream', icon: 'play_circle' },
                             { id: 'embed', label: 'Embed URL', icon: 'link' }
                         ].map(tab => {
                             const isActive = sourceTab === tab.id;
@@ -895,22 +894,6 @@ export default function CreateClipModal({ isOpen, onClose, onClipCreated }) {
                         </div>
                     )}
 
-                    {sourceTab === 'stream' && (
-                        <div className="p-4 rounded-2xl border border-pink-200 dark:border-pink-900/40 bg-pink-50/50 dark:bg-pink-950/20 flex items-center gap-3">
-                            <span className="material-symbols-outlined text-[26px] text-pink-500 shrink-0">play_circle</span>
-                            <div className="flex-1">
-                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Paste Microsoft Stream Video Link</label>
-                                <input
-                                    type="text"
-                                    value={sourceUrlInput}
-                                    maxLength={400}
-                                    onChange={e => handleUrlInputChange(e.target.value)}
-                                    placeholder="https://web.microsoftstream.com/video/..."
-                                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-pink-500 outline-none text-slate-900 dark:text-white"
-                                />
-                            </div>
-                        </div>
-                    )}
 
                     {sourceTab === 'embed' && (
                         <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 flex items-center gap-3">

@@ -179,6 +179,30 @@ export default function Communities() {
 
                 const s = (apiStatus || '').toLowerCase();
                 if (s === 'approved' || s === 'joined') return 'Approved';
+
+                // Check local members first
+                const localMembers = JSON.parse(localStorage.getItem(`knome_community_members_${id}`) || '[]');
+                const isLocalApprovedMember = currentUser && localMembers.some(m => 
+                    (currentUid && String(m.userId || m.id) === String(currentUid) && (m.status === 'Approved' || m.status === 'Active' || !m.status)) || 
+                    (currentUser.name && (m.fullName || m.name || '').toLowerCase() === currentUser.name.toLowerCase() && (m.status === 'Approved' || m.status === 'Active' || !m.status))
+                );
+                if (isLocalApprovedMember) {
+                    // Purge any stale join request
+                    try {
+                        const savedRequests = JSON.parse(localStorage.getItem(`knome_join_requests_${id}`) || '[]');
+                        const cleaned = savedRequests.filter(r => String(r.userId || r.id) !== currentUid);
+                        if (cleaned.length !== savedRequests.length) localStorage.setItem(`knome_join_requests_${id}`, JSON.stringify(cleaned));
+                    } catch (_) {}
+                    return 'Approved';
+                }
+
+                // Check user joined list
+                const entry = userJoinedList.find(c => String(c.id) === String(id));
+                if (entry) {
+                    if (entry.status === 'joined' || entry.status === 'approved' || entry.status === 'Approved') return 'Approved';
+                    if (entry.status === 'subscribed') return 'Subscribed';
+                }
+
                 if (s === 'pending') return 'Pending';
 
                 // Check pending join requests in localStorage
@@ -187,15 +211,10 @@ export default function Communities() {
                     if (savedRequests.some(r => String(r.userId || r.id) === currentUid)) return 'Pending';
                 } catch (_) {}
 
-                // Check user joined list
-                const entry = userJoinedList.find(c => String(c.id) === String(id));
-                if (entry) {
-                    if (entry.status === 'joined' || entry.status === 'approved' || entry.status === 'Approved') return 'Approved';
-                    if (entry.status === 'pending_approval' || entry.status === 'pending') return 'Pending';
-                    if (entry.status === 'subscribed') return 'Subscribed';
+                if (entry && (entry.status === 'pending_approval' || entry.status === 'pending')) {
+                    return 'Pending';
                 }
-                const localMembers = JSON.parse(localStorage.getItem(`knome_community_members_${id}`) || '[]');
-                if (currentUser && localMembers.some(m => (currentUid && String(m.userId || m.id) === String(currentUid)) || (currentUser.name && (m.fullName || m.name || '').toLowerCase() === currentUser.name.toLowerCase()))) return 'Approved';
+
                 return 'none';
             };
 
@@ -799,7 +818,7 @@ export default function Communities() {
         } catch (_) {}
 
         try {
-            await communitiesApi.join(community.id).catch(() => null);
+            await communitiesApi.join(targetId).catch(() => null);
         } catch (err) {
             console.error('Failed to join community via API:', err);
         }
@@ -870,7 +889,8 @@ export default function Communities() {
             } catch (_) {}
 
             setCommunities(prev => prev.map(c => String(c.id) === String(targetId) ? { ...c, membershipStatus: 'Pending' } : c));
-            window.dispatchEvent(new CustomEvent('community-joined-change'));
+            window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId } }));
+            window.dispatchEvent(new CustomEvent('community-join-requests-updated', { detail: { communityId: targetId } }));
             addToast(`📨 Join request sent to "${community.name}" administrator.`, 'info');
         } else {
             // Public community
@@ -1340,8 +1360,37 @@ export default function Communities() {
 
                         {/* Communities Grid — Compact, Modern Enterprise Cards */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                            {(activeTab === 'Discover' ? filteredCommunities : filteredCommunities.slice(0, visibleCount)).map(community => (
-                                <div key={community.id} onClick={() => navigate(`/community/view?id=${community.id}`)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group flex flex-col h-full min-h-[230px]">
+                            {(activeTab === 'Discover' ? filteredCommunities : filteredCommunities.slice(0, visibleCount)).map(community => {
+                                const currentUid = currentUser?.userId || currentUser?.id;
+                                const currentEmpId = (currentUser?.employeeId || '').toUpperCase();
+                                const currentEmail = (currentUser?.email || '').toLowerCase();
+                                const currentName = (currentUser?.fullName || currentUser?.name || '').toLowerCase();
+                                let isSuspendedInThisComm = false;
+                                try {
+                                    const commSusp = JSON.parse(localStorage.getItem(`knome_community_suspended_${community.id}`) || '[]');
+                                    isSuspendedInThisComm = commSusp.some(s => {
+                                        const sUid = s.userId || s.id;
+                                        const sEmpId = (s.employeeId || s.empId || '').toUpperCase();
+                                        const sEmail = (s.email || '').toLowerCase();
+                                        const sName = (s.fullName || s.name || '').toLowerCase();
+                                        return (currentUid && String(sUid) === String(currentUid)) ||
+                                               (currentEmpId && sEmpId && sEmpId === currentEmpId) ||
+                                               (currentEmail && sEmail && sEmail === currentEmail) ||
+                                               (currentName && sName && (sName === currentName || sName.includes(currentName) || currentName.includes(sName)));
+                                    }) || community.membershipStatus === 'Banned' || community.membershipStatus === 'Suspended';
+                                } catch (_) {}
+
+                                return (
+                                <div 
+                                    key={community.id} 
+                                    onClick={() => {
+                                        if (isSuspendedInThisComm) {
+                                            addToast('You are suspended from this community.', 'error');
+                                        }
+                                        navigate(`/community/view?id=${community.id}`);
+                                    }} 
+                                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group flex flex-col h-full min-h-[230px]"
+                                >
                                     {/* Compact Header Banner */}
                                     <div className="h-24 sm:h-26 relative overflow-hidden bg-slate-200 dark:bg-slate-800 shrink-0">
                                         <img 
@@ -1402,22 +1451,6 @@ export default function Communities() {
                                             <div className="flex items-center gap-1 shrink-0">
                                                 {/* FR-CM-01/FR-CM-09: Card action buttons */}
                                                 {(() => {
-                                                    const currentUid = currentUser?.userId || currentUser?.id;
-                                                    const currentEmpId = (currentUser?.employeeId || '').toUpperCase();
-                                                    const currentEmail = (currentUser?.email || '').toLowerCase();
-                                                    let isSuspendedInThisComm = false;
-                                                    try {
-                                                        const commSusp = JSON.parse(localStorage.getItem(`knome_community_suspended_${community.id}`) || '[]');
-                                                        isSuspendedInThisComm = commSusp.some(s => {
-                                                            const sUid = s.userId || s.id;
-                                                            const sEmpId = (s.employeeId || '').toUpperCase();
-                                                            const sEmail = (s.email || '').toLowerCase();
-                                                            return (currentUid && String(sUid) === String(currentUid)) ||
-                                                                   (currentEmpId && sEmpId && sEmpId === currentEmpId) ||
-                                                                   (currentEmail && sEmail && sEmail === currentEmail);
-                                                        }) || community.membershipStatus === 'Banned';
-                                                    } catch (_) {}
-
                                                     if (isSuspendedInThisComm) {
                                                         return (
                                                             <span className="px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-md font-bold text-[10px] flex items-center gap-0.5">
@@ -1515,7 +1548,8 @@ export default function Communities() {
                                         </div>
                                     </div>
                                 </div>
-                            ))}
+                            );
+                            })}
                             <ScrollLoadingIndicator isVisible={activeTab !== 'Discover' && visibleCount < filteredCommunities.length} text="Loading more communities on scroll..." />
                         </div>
                     </>

@@ -368,7 +368,7 @@ export default function WikiSectionModal({
                         placeholder="e.g., Database Schema & Entity Relationships"
                         maxLength={200}
                         required
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 text-sm font-medium"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm font-medium"
                     />
                 </div>
 
@@ -380,7 +380,7 @@ export default function WikiSectionModal({
                     <select
                         value={parentSectionId}
                         onChange={(e) => setParentSectionId(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 cursor-pointer"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer"
                     >
                         <option value="">📁 Top-Level Root Section</option>
                         {selectableParents.map(s => (
@@ -407,7 +407,7 @@ export default function WikiSectionModal({
                                 onClick={() => executeCmd('bold')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.bold
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 font-bold shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 font-bold shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Bold (Ctrl+B)"
@@ -422,7 +422,7 @@ export default function WikiSectionModal({
                                 onClick={() => executeCmd('italic')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.italic
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 font-bold shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 font-bold shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Italic (Ctrl+I)"
@@ -437,7 +437,7 @@ export default function WikiSectionModal({
                                 onClick={() => executeCmd('underline')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.underline
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 font-bold shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 font-bold shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Underline (Ctrl+U)"
@@ -454,7 +454,7 @@ export default function WikiSectionModal({
                                 onClick={() => executeCmd('formatBlock', 'h3')}
                                 className={`px-2 py-1 rounded flex items-center justify-center transition-colors cursor-pointer font-semibold text-[11px] ${
                                     activeFormats.h3
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Heading 3"
@@ -469,7 +469,7 @@ export default function WikiSectionModal({
                                 onClick={() => executeCmd('formatBlock', 'h4')}
                                 className={`px-2 py-1 rounded flex items-center justify-center transition-colors cursor-pointer font-semibold text-[11px] ${
                                     activeFormats.h4
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Subheading 4"
@@ -487,7 +487,7 @@ export default function WikiSectionModal({
                                 onClick={() => executeCmd('insertUnorderedList')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.bulletList
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Bulleted List"
@@ -502,7 +502,7 @@ export default function WikiSectionModal({
                                 onClick={() => executeCmd('insertOrderedList')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.numberList
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Numbered List"
@@ -517,7 +517,7 @@ export default function WikiSectionModal({
                                 onClick={() => executeCmd('formatBlock', 'blockquote')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.quote
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Quote / Blockquote"
@@ -548,7 +548,7 @@ export default function WikiSectionModal({
                                 title="Attach / Insert Image or Diagram"
                             >
                                 {isUploadingImage ? (
-                                    <span className="w-3.5 h-3.5 border-2 border-teal-500/30 border-t-teal-600 rounded-full animate-spin" />
+                                    <span className="w-3.5 h-3.5 border-2 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
                                 ) : (
                                     <span className="material-symbols-outlined text-[17px]">image</span>
                                 )}
@@ -612,7 +612,7 @@ export default function WikiSectionModal({
                             onChange={(e) => setChangeSummary(e.target.value)}
                             placeholder="e.g., Added detailed workflow steps and error handling notes"
                             maxLength={300}
-                            className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 text-xs"
+                            className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs"
                         />
                     </div>
                 )}
@@ -622,7 +622,7 @@ export default function WikiSectionModal({
                     <button
                         type="submit"
                         disabled={isSaving}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 shadow-md shadow-teal-500/20 disabled:opacity-50 transition-all cursor-pointer"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 shadow-md shadow-indigo-500/20 disabled:opacity-50 transition-all cursor-pointer"
                     >
                         {isSaving ? (
                             <>

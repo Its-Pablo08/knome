@@ -96,6 +96,12 @@ public class CommunityService : ICommunityService
         if (community == null)
             throw new NotFoundException($"Community ID {communityId} not found.");
 
+        var member = await _repo.GetMemberAsync(communityId, currentUserId);
+        if (member != null && (member.Status == CommunityMemberStatuses.Banned || member.Status == "Suspended"))
+        {
+            throw new UnauthorizedException("You are suspended from this community.");
+        }
+
         if (!community.IsActive || community.ApprovalStatus != "Approved")
         {
             var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
@@ -110,15 +116,24 @@ public class CommunityService : ICommunityService
 
         if (community.CommunityType == CommunityTypes.Private)
         {
-            var isAdmin = await _repo.IsCommunityAdminAsync(communityId, currentUserId);
-            if (!isAdmin)
+            var isCreator = community.CreatedByUserId == currentUserId;
+            var isCommAdmin = isCreator || await _repo.IsCommunityAdminAsync(communityId, currentUserId);
+            if (!isCommAdmin)
             {
-                var member = await _repo.GetMemberAsync(communityId, currentUserId);
-                if (member == null || member.Status != CommunityMemberStatuses.Approved)
+                var callerMember = await _repo.GetMemberAsync(communityId, currentUserId);
+                var isMemberAdmin = callerMember != null && callerMember.MemberType == CommunityMemberTypes.Admin && callerMember.Status == CommunityMemberStatuses.Approved;
+                var isApprovedMember = callerMember != null && callerMember.Status == CommunityMemberStatuses.Approved;
+
+                if (!isMemberAdmin && !isApprovedMember)
                 {
-                    // Check if System Administrator
+                    // Check if Platform Administrator
                     var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-                    if (user == null || !user.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.HRAdmin))
+                    var isPrivileged = user != null && user.Roles.Any(r => 
+                        r.RoleName == Roles.SystemAdmin || 
+                        r.RoleName == Roles.HRAdmin || 
+                        r.RoleName == Roles.CommunityAdmin);
+
+                    if (!isPrivileged)
                     {
                         throw new UnauthorizedException("You must be an approved member to view or interact with this private community.");
                     }
@@ -656,6 +671,27 @@ public class CommunityService : ICommunityService
             existingMember.DecidedDate = isAutoApprove ? KnomeTime.Now : null;
 
             await _repo.UpdateMemberAsync(existingMember);
+
+            if (existingMember.Status == CommunityMemberStatuses.Pending)
+            {
+                var adminIds = await _db.Communities
+                    .Where(c => c.CommunityId == communityId)
+                    .SelectMany(c => c.Users)
+                    .Select(u => u.UserId)
+                    .ToListAsync();
+                if (!adminIds.Contains(community.CreatedByUserId))
+                    adminIds.Add(community.CreatedByUserId);
+
+                if (adminIds.Count > 0)
+                {
+                    await _notificationService.PublishBroadcastAsync(
+                        NotificationTypes.CommunityJoin,
+                        $"A join request is pending for {community.Name}.",
+                        relatedContentType: NotificationContentTypes.Community,
+                        relatedContentId: communityId,
+                        candidateUserIds: adminIds);
+                }
+            }
             return _mapper.Map<CommunityMemberDto>(existingMember);
         }
 
@@ -679,6 +715,9 @@ public class CommunityService : ICommunityService
                 .SelectMany(c => c.Users)
                 .Select(u => u.UserId)
                 .ToListAsync();
+            if (!adminIds.Contains(community.CreatedByUserId))
+                adminIds.Add(community.CreatedByUserId);
+
             if (adminIds.Count > 0)
             {
                 await _notificationService.PublishBroadcastAsync(
@@ -991,6 +1030,8 @@ public class CommunityService : ICommunityService
             processedUserIds.Add(targetUser.UserId);
 
             var existingMember = await _repo.GetMemberAsync(communityId, targetUser.UserId);
+            var hadPendingRequest = existingMember != null && string.Equals(existingMember.Status, CommunityMemberStatuses.Pending, StringComparison.OrdinalIgnoreCase);
+
             if (existingMember != null)
             {
                 existingMember.Status = CommunityMemberStatuses.Approved;
@@ -1023,13 +1064,42 @@ public class CommunityService : ICommunityService
                 await _repo.RemoveCommunityAdminAsync(communityId, targetUser.UserId);
             }
 
+            // Dismiss any pending join request notifications for this community
+            try
+            {
+                var pendingJoinNotifs = await _db.Notifications
+                    .Where(n => n.RelatedContentType == NotificationContentTypes.Community
+                             && n.RelatedContentId == communityId
+                             && n.EventType == NotificationTypes.CommunityJoin
+                             && !n.IsRead
+                             && (n.Message.Contains("join request") || n.Message.Contains("pending")))
+                    .ToListAsync();
+
+                if (pendingJoinNotifs.Count > 0)
+                {
+                    foreach (var notif in pendingJoinNotifs)
+                    {
+                        notif.IsRead = true;
+                    }
+                    await _db.SaveChangesAsync();
+                }
+            }
+            catch
+            {
+                // Non-critical notification cleanup failure
+            }
+
             // Publish in-app SignalR notification to the added user
             try
             {
+                var notifMsg = hadPendingRequest
+                    ? $"📢 Your request to join \"{community.Name}\" was approved and you have been added as {targetMemberType} by {callerName}."
+                    : $"📢 You have been added to the community \"{community.Name}\" as {targetMemberType} by {callerName}.";
+
                 await _notificationService.PublishAsync(
                     targetUser.UserId,
-                    NotificationTypes.Community,
-                    $"📢 You have been added to the community \"{community.Name}\" as {targetMemberType} by {callerName}.",
+                    NotificationTypes.CommunityJoin,
+                    notifMsg,
                     relatedContentType: NotificationContentTypes.Community,
                     relatedContentId: communityId);
             }

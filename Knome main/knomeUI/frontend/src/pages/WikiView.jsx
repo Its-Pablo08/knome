@@ -35,7 +35,7 @@ function OutlineSectionItem({
                     level > 0 ? 'ml-3 pl-2.5 border-l-2' : ''
                 } ${
                     isActive
-                        ? 'border-teal-500 bg-teal-50/80 dark:bg-teal-950/60 text-teal-800 dark:text-teal-200 font-bold'
+                        ? 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-200 font-bold'
                         : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-400 font-medium'
                 }`}
             >
@@ -73,7 +73,7 @@ function OutlineSectionItem({
                             <button
                                 type="button"
                                 onClick={(e) => onAddSub(section, e)}
-                                className="p-1 rounded text-slate-400 hover:text-teal-600"
+                                className="p-1 rounded text-slate-400 hover:text-indigo-600"
                                 title="Add Subsection"
                             >
                                 <span className="material-symbols-outlined text-[13px]">add_circle</span>
@@ -81,7 +81,7 @@ function OutlineSectionItem({
                             <button
                                 type="button"
                                 onClick={(e) => onEdit(section, e)}
-                                className="p-1 rounded text-slate-400 hover:text-teal-600"
+                                className="p-1 rounded text-slate-400 hover:text-indigo-600"
                                 title="Edit Section"
                             >
                                 <span className="material-symbols-outlined text-[13px]">edit</span>
@@ -273,7 +273,7 @@ export default function WikiView() {
     if (isLoading && !wiki) {
         return (
             <div className="py-24 flex flex-col items-center justify-center gap-3">
-                <div className="w-10 h-10 border-4 border-teal-500/30 border-t-teal-600 rounded-full animate-spin" />
+                <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
                 <p className="text-xs font-semibold text-slate-400">Loading Wiki Document...</p>
             </div>
         );
@@ -293,7 +293,7 @@ export default function WikiView() {
                     <button
                         type="button"
                         onClick={() => navigate('/wiki')}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                     >
                         <span className="material-symbols-outlined text-[18px]">arrow_back</span>
                         All Wikis
@@ -305,7 +305,7 @@ export default function WikiView() {
                     {!isCurrentOverview && currentActiveSection && (
                         <>
                             <span className="text-slate-300 dark:text-slate-700">/</span>
-                            <span className="text-xs font-semibold text-teal-600 dark:text-teal-400 truncate max-w-[150px]">
+                            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 truncate max-w-[150px]">
                                 {currentActiveSection.title}
                             </span>
                         </>
@@ -321,7 +321,7 @@ export default function WikiView() {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                         title="Version History & Restore"
                     >
-                        <span className="material-symbols-outlined text-[16px] text-teal-500">history</span>
+                        <span className="material-symbols-outlined text-[16px] text-indigo-500">history</span>
                         <span className="hidden sm:inline">Versions</span>
                     </button>
 
@@ -384,7 +384,7 @@ export default function WikiView() {
                         {/* Wiki Summary Header Card */}
                         <div className="space-y-2 pb-3 border-b border-slate-100 dark:border-slate-800">
                             <div className="flex items-center justify-between gap-1">
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                                     {wiki.status}
                                 </span>
                                 <span className="text-[11px] text-slate-400">
@@ -408,7 +408,7 @@ export default function WikiView() {
                                 <button
                                     type="button"
                                     onClick={() => setSectionModalState({ isOpen: true, data: null, defaultParentId: null })}
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 transition-colors"
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 transition-colors"
                                     title="Add Top-Level Section"
                                 >
                                     <span className="material-symbols-outlined text-[14px]">add</span>
@@ -425,7 +425,7 @@ export default function WikiView() {
                                 onClick={() => handleSelectSection('overview')}
                                 className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-bold transition-all cursor-pointer ${
                                     isCurrentOverview
-                                        ? 'bg-teal-600 text-white shadow-xs'
+                                        ? 'bg-indigo-600 text-white shadow-xs'
                                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                                 }`}
                             >
@@ -478,7 +478,7 @@ export default function WikiView() {
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/25 to-transparent" />
                                 <div className="absolute bottom-3.5 left-4 right-4 flex items-end justify-between gap-3">
                                     <div className="min-w-0">
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/90 text-white backdrop-blur-md mb-1 inline-block shadow-xs">
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600/90 text-white backdrop-blur-md mb-1 inline-block shadow-xs">
                                             Cover Banner
                                         </span>
                                         <h2 className="text-base sm:text-lg font-black text-white line-clamp-1 drop-shadow-md">
@@ -504,7 +504,7 @@ export default function WikiView() {
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
                             <div className="space-y-1.5">
                                 <div className="flex items-center gap-2">
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800/60">
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
                                         {isCurrentOverview ? 'Wiki Overview' : 'Section Document'}
                                     </span>
                                     <span className="text-[11px] text-slate-400">
@@ -535,7 +535,7 @@ export default function WikiView() {
                                                 setSectionModalState({ isOpen: true, data: currentActiveSection, defaultParentId: currentActiveSection.parentSectionId });
                                             }
                                         }}
-                                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 transition-all cursor-pointer shadow-xs"
+                                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all cursor-pointer shadow-xs"
                                     >
                                         <span className="material-symbols-outlined text-[16px]">edit</span>
                                         {isCurrentOverview ? 'Edit Overview' : 'Edit Section'}
@@ -567,7 +567,7 @@ export default function WikiView() {
                                     }
                                 }}
                                 disabled={isCurrentOverview}
-                                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-teal-600 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-indigo-600 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                             >
                                 <span className="material-symbols-outlined text-[18px]">chevron_left</span>
                                 Previous Section
@@ -586,7 +586,7 @@ export default function WikiView() {
                                     }
                                 }}
                                 disabled={!isCurrentOverview && allSectionsFlat.findIndex(s => s.sectionId === activeSectionId) === allSectionsFlat.length - 1}
-                                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-teal-600 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-indigo-600 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                             >
                                 Next Section
                                 <span className="material-symbols-outlined text-[18px]">chevron_right</span>

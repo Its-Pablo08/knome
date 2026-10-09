@@ -147,15 +147,15 @@ const normalizeJobUrl = (url) => {
                 </div>
 
                 {/* Filters */}
-                <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-2">
+                <div className="flex flex-wrap items-center gap-2 w-full mb-6 overflow-x-auto no-scrollbar">
                     {filters.map(filter => (
                         <button
                             key={filter}
                             onClick={() => setActiveFilter(filter)}
-                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                            className={`px-4 py-2 rounded-xl text-xs sm:text-[13px] font-bold transition-all border shrink-0 cursor-pointer whitespace-nowrap ${
                                 activeFilter === filter
-                                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-md'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+                                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 shadow-xs'
+                                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800'
                             }`}
                         >
                             {filter}

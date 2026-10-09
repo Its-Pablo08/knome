@@ -984,8 +984,9 @@ export default function Videos() {
                                         </div>
                                     </div>
 
-                                    <div className="pt-2">
-                                        <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-700 hover:to-cyan-600 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md shadow-indigo-500/25 flex items-center justify-center gap-1.5 transition-all">
+                                    <div className="flex gap-2 pt-2">
+                                        <button type="button" onClick={() => setIsCreatePlaylistOpen(false)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl cursor-pointer transition-colors">Cancel</button>
+                                        <button type="submit" className="flex-1 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md shadow-red-500/25 flex items-center justify-center gap-1.5 transition-all">
                                             <span className="material-symbols-outlined text-[18px]">playlist_add</span>
                                             Create {newPlaylist.type}
                                         </button>
@@ -1000,28 +1001,43 @@ export default function Videos() {
 
             <main className="flex-1 w-full min-w-0 flex flex-col gap-6 pb-6">
 
-                {/* ── PAGE TITLE & HEADER ── */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 p-5 rounded-2xl shadow-sm">
-                    <div>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-cyan-500 bg-cyan-500/10 px-2.5 py-0.5 rounded-md inline-block mb-1">
+                {/* ── PAGE TITLE & HERO HEADER ── */}
+                <div className="relative rounded-2xl overflow-hidden mb-2 shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between text-left px-6 py-7 md:px-8 md:py-8 gap-6">
+                    {/* Background effects */}
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,_var(--tw-gradient-stops))] from-red-100/60 dark:from-red-950/30 via-transparent to-transparent pointer-events-none" />
+                    <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[500px] h-32 bg-red-400/10 dark:bg-red-500/10 blur-[80px] pointer-events-none" />
+                    
+                    {/* Light Streaks behind text */}
+                    <div className="absolute top-[35%] left-0 w-[60%] h-[1px] bg-gradient-to-r from-red-300/40 dark:from-red-400/20 to-transparent" />
+                    <div className="absolute top-[50%] left-0 w-[40%] h-[2px] bg-gradient-to-r from-rose-300/40 dark:from-rose-400/20 to-transparent blur-[1px]" />
+                    <div className="absolute top-[65%] left-0 w-[50%] h-[1px] bg-gradient-to-r from-orange-300/40 dark:from-orange-400/20 to-transparent" />
+
+                    {/* Content Left */}
+                    <div className="relative z-10 flex flex-col items-start max-w-3xl">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-red-500/30 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-[11px] font-bold mb-3 backdrop-blur-md uppercase tracking-wider">
+                            <span className="material-symbols-outlined text-[15px]">videocam</span>
                             Enterprise Media Hub
-                        </span>
-                        <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                            Video Streaming & Masterclass Series
+                        </div>
+                        <h1 className="text-3xl md:text-4xl lg:text-[40px] font-black tracking-tight mb-2 text-slate-900 dark:text-white" style={{ lineHeight: '1.2' }}>
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 dark:from-red-400 dark:via-rose-400 dark:to-orange-400">
+                                Video Streaming & Masterclass Series
+                            </span>
                         </h1>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                        <p className="text-slate-600 dark:text-slate-400 text-sm md:text-[15px] font-medium leading-relaxed max-w-2xl">
                             Browse technical talks, townhalls, full courses, and employee learning sessions.
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    {/* Action Right */}
+                    <div className="relative z-10 shrink-0 flex items-center gap-2.5 w-full md:w-auto mt-2 md:mt-0">
                         <button onClick={() => setIsCreatePlaylistOpen(true)}
-                            className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-700 hover:to-cyan-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-indigo-500/20 transition-all cursor-pointer">
+                            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-slate-200/80 dark:border-slate-700/80 transition-all cursor-pointer">
                             <span className="material-symbols-outlined text-[18px]">playlist_add</span>
                             Create Series
                         </button>
                         {currentUser?.role !== 'SYSADM' && (
                             <button onClick={() => setIsUploadOpen(true)}
-                                className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all cursor-pointer">
+                                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-red-600/30 transition-all cursor-pointer active:scale-95">
                                 <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
                                 Upload Video
                             </button>
@@ -1035,22 +1051,26 @@ export default function Videos() {
                         {/* Tab Switcher: Videos vs Playlists */}
                         <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
                             <button onClick={() => { setViewTab('videos'); setActiveVideo(null); }}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${viewTab === 'videos' ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${viewTab === 'videos' ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
                                 <span className="material-symbols-outlined text-[16px]">video_library</span>
                                 Videos ({filteredVideos.length})
                             </button>
                             <button onClick={() => { setViewTab('playlists'); setActiveVideo(null); }}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${viewTab === 'playlists' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${viewTab === 'playlists' ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
                                 <span className="material-symbols-outlined text-[16px]">playlist_play</span>
                                 Playlists & Series ({playlists.length})
                             </button>
                         </div>
 
                         {viewTab === 'videos' && (
-                            <div className="flex overflow-x-auto custom-scrollbar gap-1 p-1 bg-slate-100 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <div className="flex overflow-x-auto custom-scrollbar gap-1.5 p-1 rounded-xl">
                                 {filters.map(f => (
                                     <button key={f} onClick={() => { setActiveFilter(f); setActiveVideo(null); }}
-                                        className={`px-3 py-1.5 rounded-lg text-[12px] font-bold whitespace-nowrap transition-all ${activeFilter === f ? 'bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-400 shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}>
+                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border cursor-pointer ${
+                                            activeFilter === f 
+                                                ? 'bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-400 shadow-xs' 
+                                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800'
+                                        }`}>
                                         {f}
                                     </button>
                                 ))}
@@ -1062,7 +1082,7 @@ export default function Videos() {
                         <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
                         <input type="text" placeholder="Search videos or series..." value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-cyan-500 outline-none text-slate-900 dark:text-white transition-all" />
+                            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-red-500 outline-none text-slate-900 dark:text-white transition-all" />
                     </div>
                 </div>
 

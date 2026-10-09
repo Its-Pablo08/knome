@@ -976,13 +976,48 @@ export const formatToDDMMYYYY = (dateInput) => {
     return `${day}/${month}/${year}, ${pad(hours)}:${minutes} ${ampm}`;
 };
 
+export const KNOWN_ROSTER_NAMES = {
+    'MP0108': 'Loveneesh Sharma',
+    'MPO101': 'Loveneesh Sharma',
+    'MP0664': 'Vishendra Sharma',
+    'MPO102': 'Vishendra Sharma',
+    'EMP052': 'Sourabh Sahu',
+    'MPO103': 'Sourabh Sahu',
+    'EMP101': 'Meghna',
+    'Emp101': 'Meghna',
+    'MPO105': 'Meghna',
+    'MPO116': 'Meghna',
+    'MPO089': 'Vilash Deshmukh',
+    'MPO111': 'Mayur Bansal',
+    'MPO652': 'Deepak Simrodia',
+    'mpo652': 'Deepak Simrodia'
+};
+
+export const resolveEmployeeName = (rawName, empId) => {
+    const cleaned = String(rawName || '').trim();
+    const idKey = String(empId || '').trim().toUpperCase();
+    const nameKey = cleaned.toUpperCase();
+    const isEmpIdPattern = /^(EMP|MPO|MP)\d+$/i.test(cleaned) || cleaned.toUpperCase().startsWith('NON_EXISTENT');
+    
+    if (KNOWN_ROSTER_NAMES[nameKey]) return KNOWN_ROSTER_NAMES[nameKey];
+    if (isEmpIdPattern && KNOWN_ROSTER_NAMES[idKey]) return KNOWN_ROSTER_NAMES[idKey];
+    if (cleaned && !isEmpIdPattern && cleaned.toLowerCase() !== 'employee' && cleaned.toLowerCase() !== 'user' && cleaned.toLowerCase() !== 'unknown') return cleaned;
+    if (KNOWN_ROSTER_NAMES[idKey]) return KNOWN_ROSTER_NAMES[idKey];
+    return (cleaned && cleaned.toLowerCase() !== 'employee' && cleaned.toLowerCase() !== 'user' && cleaned.toLowerCase() !== 'unknown') ? cleaned : 'Employee';
+};
+
 export const mapPost = (post) => {
     const rawContent = post.contentText || post.content || post.text || '';
     const extractedTags = (post.tags && post.tags.length > 0)
         ? post.tags
         : (rawContent ? (rawContent.match(/#[a-zA-Z0-9_]+/g) || []).map(t => t.replace('#', '')) : []);
 
-    const authorName = post.authorFullName || post.authorUser?.fullName || post.authorName || post.author?.name || 'User';
+    const rawAuthorName = post.authorFullName || post.authorUser?.fullName || post.authorName || post.author?.name || post.user?.fullName || post.user?.name || '';
+    const authorEmpId = post.authorEmployeeId || post.employeeId || post.author?.employeeId || '';
+    const resolvedName = resolveEmployeeName(rawAuthorName, authorEmpId);
+    const authorName = (resolvedName && resolvedName !== 'Employee' && resolvedName !== 'User' && resolvedName !== 'Unknown')
+        ? resolvedName
+        : (rawAuthorName && rawAuthorName !== 'User' && rawAuthorName !== 'Unknown' ? rawAuthorName : 'Employee');
     const authorRole = post.authorDesignation || post.authorUser?.designation || post.authorRole || post.author?.role || 'Contributor';
     const authorAvatar = resolveMediaUrl(post.authorProfilePhotoUrl || post.authorUser?.profilePhotoUrl || post.authorAvatar || post.author?.avatar) ||
         `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}&background=6366f1&color=fff&size=256&bold=true`;
@@ -1293,12 +1328,24 @@ export function formatRelativeTime(dateStr) {
 }
 
 export const mapFeedItem = (item) => {
+    const rawAuthorName = item.authorFullName || item.authorName || item.author?.name || item.author?.fullName || item.authorUser?.fullName || item.user?.fullName || item.user?.name || '';
+    const authorEmpId = item.authorEmployeeId || item.employeeId || item.author?.employeeId || '';
+    const authorUserId = item.authorUserId || item.authorId || item.userId || item.author?.id || item.user?.id || item.user?.userId;
+    const resolvedName = resolveEmployeeName(rawAuthorName, authorEmpId);
+    const authorName = (resolvedName && resolvedName !== 'Employee' && resolvedName !== 'User' && resolvedName !== 'Unknown')
+        ? resolvedName
+        : (rawAuthorName && rawAuthorName !== 'User' && rawAuthorName !== 'Unknown' ? rawAuthorName : 'Employee');
+    const authorRole = item.authorDesignation || item.authorRole || item.author?.role || item.authorUser?.designation || 'Contributor';
+
     const author = {
-        id: item.authorUserId,
-        name: item.authorFullName,
-        role: item.authorDesignation || 'Contributor',
-        avatar: resolveMediaUrl(item.authorProfilePhotoUrl) ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(item.authorFullName || 'User')}&background=6366f1&color=fff`,
+        id: authorUserId,
+        userId: authorUserId,
+        employeeId: authorEmpId,
+        name: authorName,
+        fullName: authorName,
+        role: authorRole,
+        avatar: resolveMediaUrl(item.authorProfilePhotoUrl || item.authorAvatar || item.author?.avatar) ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}&background=6366f1&color=fff`,
         isVerified: false,
     };
 

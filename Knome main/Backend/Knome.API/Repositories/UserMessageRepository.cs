@@ -35,32 +35,63 @@ public class UserMessageRepository : IUserMessageRepository
 
     public async Task<UserMessage?> GetByIdWithDetailsAsync(long messageId)
     {
-        return await _context.UserMessages
-            .Include(m => m.Sender)
-            .Include(m => m.Receiver)
-            .Include(m => m.ParentMessage!).ThenInclude(p => p.Sender)
-            .Include(m => m.Reactions)
-            .FirstOrDefaultAsync(m => m.MessageId == messageId);
+        try
+        {
+            return await _context.UserMessages
+                .Include(m => m.Sender)
+                .Include(m => m.Receiver)
+                .Include(m => m.ParentMessage!).ThenInclude(p => p.Sender)
+                .Include(m => m.Reactions)
+                .FirstOrDefaultAsync(m => m.MessageId == messageId);
+        }
+        catch
+        {
+            return await _context.UserMessages
+                .Include(m => m.Sender)
+                .Include(m => m.Receiver)
+                .FirstOrDefaultAsync(m => m.MessageId == messageId);
+        }
     }
 
     public async Task<List<UserMessage>> GetConversationHistoryAsync(int currentUserId, int otherUserId, int pageNumber, int pageSize)
     {
-        var messages = await _context.UserMessages
-            .AsNoTracking()
-            .Include(m => m.Sender)
-            .Include(m => m.Receiver)
-            .Include(m => m.ParentMessage!).ThenInclude(p => p.Sender)
-            .Include(m => m.Reactions)
-            .Where(m =>
-                (m.SenderId == currentUserId && m.ReceiverId == otherUserId && !m.IsDeletedBySender) ||
-                (m.SenderId == otherUserId && m.ReceiverId == currentUserId && !m.IsDeletedByReceiver))
-            .OrderByDescending(m => m.CreatedDate)
-            .ThenByDescending(m => m.MessageId)
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
+        try
+        {
+            var messages = await _context.UserMessages
+                .AsNoTracking()
+                .Include(m => m.Sender)
+                .Include(m => m.Receiver)
+                .Include(m => m.ParentMessage!).ThenInclude(p => p.Sender)
+                .Include(m => m.Reactions)
+                .Where(m =>
+                    (m.SenderId == currentUserId && m.ReceiverId == otherUserId && !m.IsDeletedBySender) ||
+                    (m.SenderId == otherUserId && m.ReceiverId == currentUserId && !m.IsDeletedByReceiver))
+                .OrderByDescending(m => m.CreatedDate)
+                .ThenByDescending(m => m.MessageId)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
 
-        return messages.OrderBy(m => m.CreatedDate).ThenBy(m => m.MessageId).ToList();
+            return messages.OrderBy(m => m.CreatedDate).ThenBy(m => m.MessageId).ToList();
+        }
+        catch
+        {
+            // Fallback: Query core messages without complex optional joins if reactions/parent table is migrating
+            var fallback = await _context.UserMessages
+                .AsNoTracking()
+                .Include(m => m.Sender)
+                .Include(m => m.Receiver)
+                .Where(m =>
+                    (m.SenderId == currentUserId && m.ReceiverId == otherUserId && !m.IsDeletedBySender) ||
+                    (m.SenderId == otherUserId && m.ReceiverId == currentUserId && !m.IsDeletedByReceiver))
+                .OrderByDescending(m => m.CreatedDate)
+                .ThenByDescending(m => m.MessageId)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return fallback.OrderBy(m => m.CreatedDate).ThenBy(m => m.MessageId).ToList();
+        }
     }
 
     public async Task<List<UserMessage>> GetLatestMessagesForConversationsAsync(int currentUserId)

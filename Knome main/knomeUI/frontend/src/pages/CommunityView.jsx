@@ -1316,20 +1316,62 @@ export default function CommunityView() {
                 setSuspendedMembers(updatedSuspended);
             } catch (_) {}
 
-            // 3. Remove from pending join requests if any
+            // 3. Remove from pending join requests for all selected users
+            const toPurgeUserIds = new Set();
+            const toPurgeEmpIds = new Set();
+            const toPurgeNames = new Set();
+
+            selectedUserIdsToAdd.forEach(id => {
+                if (id) toPurgeUserIds.add(String(id).toLowerCase());
+            });
+            selectedUsers.forEach(u => {
+                if (u.id) toPurgeUserIds.add(String(u.id).toLowerCase());
+                if (u.userId) toPurgeUserIds.add(String(u.userId).toLowerCase());
+                if (u.employeeId) toPurgeEmpIds.add(String(u.employeeId).toUpperCase());
+                if (u.empId) toPurgeEmpIds.add(String(u.empId).toUpperCase());
+                if (u.name) toPurgeNames.add(String(u.name).toLowerCase());
+                if (u.fullName) toPurgeNames.add(String(u.fullName).toLowerCase());
+            });
+
+            // Target community keys
+            const commKeys = Array.from(new Set([
+                `knome_join_requests_${targetId}`,
+                community?.id ? `knome_join_requests_${community.id}` : null,
+                communityId ? `knome_join_requests_${communityId}` : null
+            ].filter(Boolean)));
+
+            commKeys.forEach(reqKey => {
+                try {
+                    const currentRequests = JSON.parse(localStorage.getItem(reqKey) || '[]');
+                    const filtered = currentRequests.filter(r => {
+                        const rUid = String(r.userId || r.id || '').toLowerCase();
+                        const rEmp = String(r.employeeId || '').toUpperCase();
+                        const rName = String(r.name || r.fullName || '').toLowerCase();
+                        return !(toPurgeUserIds.has(rUid) || (rEmp && toPurgeEmpIds.has(rEmp)) || (rName && toPurgeNames.has(rName)));
+                    });
+                    localStorage.setItem(reqKey, JSON.stringify(filtered));
+                } catch (_) {}
+            });
+
+            // Purge immediately from React state
+            setJoinRequests(prev => prev.filter(r => {
+                const rUid = String(r.userId || r.id || '').toLowerCase();
+                const rEmp = String(r.employeeId || '').toUpperCase();
+                const rName = String(r.name || r.fullName || '').toLowerCase();
+                return !(toPurgeUserIds.has(rUid) || (rEmp && toPurgeEmpIds.has(rEmp)) || (rName && toPurgeNames.has(rName)));
+            }));
+
+            // Dismiss pending join request notifications for these users
             try {
-                const requestsKey = `knome_join_requests_${targetId}`;
-                const currentRequests = JSON.parse(localStorage.getItem(requestsKey) || '[]');
-                const updatedRequests = currentRequests.filter(r => {
-                    const rUid = String(r.userId || r.id || '');
-                    const rEmp = String(r.employeeId || '').toUpperCase();
-                    return !selectedUsers.some(u => 
-                        (rUid && String(u.id || u.userId) === rUid) ||
-                        (rEmp && String(u.employeeId || u.empId || '').toUpperCase() === rEmp)
-                    );
+                const notifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
+                const cleanedNotifs = notifs.filter(n => {
+                    const isJoinNotif = n.type === 'join_request' || n.type === 'community_join';
+                    const matchesComm = String(n.communityId) === String(targetId) || String(n.communityId) === String(community?.id);
+                    const senderUid = String(n.senderUserId || n.userId || '').toLowerCase();
+                    const senderName = String(n.senderName || '').toLowerCase();
+                    return !(isJoinNotif && matchesComm && (toPurgeUserIds.has(senderUid) || (senderName && toPurgeNames.has(senderName))));
                 });
-                localStorage.setItem(requestsKey, JSON.stringify(updatedRequests));
-                setJoinRequests(updatedRequests);
+                localStorage.setItem('knome_notifications', JSON.stringify(cleanedNotifs));
             } catch (_) {}
 
             // 4. Construct rich member objects for local cache
@@ -1365,34 +1407,49 @@ export default function CommunityView() {
             });
             localStorage.setItem(savedMembersKey, JSON.stringify(localMembers));
 
-            // 6. If currently logged in user is being added, update their joined list
-            const currentUid = String(currentUser?.userId || currentUser?.id || '');
-            const currentEmp = String(currentUser?.employeeId || '').toUpperCase();
-            const isCurrentUserAdded = selectedUsers.some(u => 
-                (currentUid && String(u.id || u.userId) === currentUid) ||
-                (currentEmp && String(u.employeeId || u.empId).toUpperCase() === currentEmp)
-            );
-            if (isCurrentUserAdded && currentUser) {
-                const userJoinedKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
-                const joinedList = JSON.parse(localStorage.getItem(userJoinedKey) || '[]');
-                if (!joinedList.some(c => String(c.id) === String(targetId))) {
-                    joinedList.push({
+            // 6. Update user's joined list for all added users (removing pending state, setting joined)
+            const targetUserJoinedKeys = new Set();
+            toPurgeUserIds.forEach(uid => targetUserJoinedKeys.add(`knome_joined_communities_${uid}`));
+            toPurgeEmpIds.forEach(eid => targetUserJoinedKeys.add(`knome_joined_communities_${eid}`));
+            if (currentUser?.id) targetUserJoinedKeys.add(`knome_joined_communities_${currentUser.id}`);
+            if (currentUser?.userId) targetUserJoinedKeys.add(`knome_joined_communities_${currentUser.userId}`);
+            if (currentUser?.employeeId) targetUserJoinedKeys.add(`knome_joined_communities_${currentUser.employeeId}`);
+
+            targetUserJoinedKeys.forEach(k => {
+                try {
+                    const joinedList = JSON.parse(localStorage.getItem(k) || '[]');
+                    const filtered = joinedList.filter(c => String(c.id) !== String(targetId) && String(c.id) !== String(community?.id));
+                    filtered.push({
                         id: targetId,
                         name: community?.name || 'Community',
                         category: community?.category || 'General',
-                        type: community?.type || 'Public',
-                        role: selectedRoleToAdd,
+                        type: community?.type || 'Private',
+                        role: selectedRoleToAdd || 'Member',
                         status: 'joined',
                         joinedDate: new Date().toISOString()
                     });
-                    localStorage.setItem(userJoinedKey, JSON.stringify(joinedList));
-                }
+                    localStorage.setItem(k, JSON.stringify(filtered));
+                } catch (_) {}
+            });
+
+            const currentUid = String(currentUser?.userId || currentUser?.id || '').toLowerCase();
+            const currentEmp = String(currentUser?.employeeId || '').toUpperCase();
+            const currentName = String(currentUser?.fullName || currentUser?.name || '').toLowerCase();
+            if (toPurgeUserIds.has(currentUid) || (currentEmp && toPurgeEmpIds.has(currentEmp)) || (currentName && toPurgeNames.has(currentName))) {
                 setMembershipStatus('joined');
             }
 
-            // 7. Call backend API with rich payload
+            // 7. Call backend API with rich payload and decide membership on any pending requests
             const isValidInt32 = targetId && !isNaN(targetId) && Number(targetId) > 0 && Number(targetId) <= 2147483647;
             if (isValidInt32) {
+                // Ensure any pending join requests for these user IDs are marked Approved on backend
+                toPurgeUserIds.forEach(uid => {
+                    const num = Number(uid);
+                    if (!isNaN(num) && num > 0 && num < 1000000000) {
+                        communitiesApi.decideMembership(targetId, num, 'Approved').catch(() => null);
+                    }
+                });
+
                 try {
                     await communitiesApi.addMembers(targetId, {
                         userIds: selectedUserIdsToAdd.map(Number).filter(n => !isNaN(n) && n > 0),
@@ -1444,6 +1501,9 @@ export default function CommunityView() {
             setIsAddMemberModalOpen(false);
             window.dispatchEvent(new CustomEvent('community-joined-change'));
             window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
+            window.dispatchEvent(new CustomEvent('community-join-requests-updated', { detail: { communityId: targetId } }));
+            window.dispatchEvent(new CustomEvent('knome_notification_received'));
+            window.dispatchEvent(new Event('storage'));
             window.dispatchEvent(new Event('storage'));
         } catch (err) {
             console.error('Failed to add members:', err);
@@ -1577,14 +1637,16 @@ export default function CommunityView() {
             let postsData = [];
             let rawMembers = [];
             let apiFiles = null;
+            let apiPendingMembers = [];
 
             if (isValidInt32) {
                 commData = await communitiesApi.getById(communityId, { noCache: true }).catch(() => null);
                 if (commData) {
-                    [postsData, rawMembers, apiFiles] = await Promise.all([
+                    [postsData, rawMembers, apiFiles, apiPendingMembers] = await Promise.all([
                         communitiesApi.getPosts(communityId).catch(() => []),
                         communitiesApi.getMembers(communityId, null, 1, 200, { noCache: true }).catch(() => []),
-                        communitiesApi.getFiles(communityId).catch(() => null)
+                        communitiesApi.getFiles(communityId).catch(() => null),
+                        communitiesApi.getMembers(communityId, 'Pending', 1, 100, { noCache: true }).catch(() => [])
                     ]);
                 }
             }
@@ -1715,17 +1777,31 @@ export default function CommunityView() {
                 // Load persistent subscribers and suspended members
                 const savedSubs = JSON.parse(localStorage.getItem(`knome_community_subscribers_${commData.communityId}`) || '[]');
                 setSubscribersList(savedSubs);
-                const savedSuspended = JSON.parse(localStorage.getItem(`knome_community_suspended_${commData.communityId}`) || '[]');
+
+                const commSuspended1 = JSON.parse(localStorage.getItem(`knome_community_suspended_${commData.communityId}`) || '[]');
+                const commSuspended2 = communityId ? JSON.parse(localStorage.getItem(`knome_community_suspended_${communityId}`) || '[]') : [];
+                const savedSuspendedMap = new Map();
+                [...commSuspended1, ...commSuspended2].forEach(item => {
+                    const key = String(item.userId || item.id || item.employeeId || item.empId || item.fullName || item.name || '');
+                    if (key && !savedSuspendedMap.has(key)) {
+                        savedSuspendedMap.set(key, item);
+                    }
+                });
+                const savedSuspended = Array.from(savedSuspendedMap.values());
                 setSuspendedMembers(savedSuspended);
 
                 // FR-CM-07: Check if current user is suspended from this community
                 const userSuspensionRecord = savedSuspended.find(s => {
-                    const sUid = String(s.userId || s.id || '');
-                    const sEmpId = String(s.employeeId || '').toUpperCase();
+                    const sUid = String(s.userId || s.id || '').toLowerCase();
+                    const sEmpId = String(s.employeeId || s.empId || '').toUpperCase();
                     const sEmail = String(s.email || '').toLowerCase();
-                    return (currentUid && sUid === currentUid) || (currentEmpId && sEmpId === currentEmpId) || (currentEmail && sEmail === currentEmail);
+                    const sName = String(s.fullName || s.name || '').toLowerCase();
+                    return (currentUid && sUid === currentUid.toLowerCase()) || 
+                           (currentEmpId && sEmpId === currentEmpId) || 
+                           (currentEmail && sEmail === currentEmail) ||
+                           (currentName && sName && (sName === currentName || sName.includes(currentName) || currentName.includes(sName)));
                 });
-                const isUserSuspendedInComm = Boolean(userSuspensionRecord) || apiStatus === 'banned';
+                const isUserSuspendedInComm = Boolean(userSuspensionRecord) || apiStatus === 'banned' || apiStatus === 'suspended';
                 const isCurrentUserSysAdmin = ['SYSADM'].includes(currentUser?.role) || ['System Administrator', 'System Admin'].includes(currentUser?.roleName);
 
                 // Authoritative joined check:
@@ -1798,15 +1874,81 @@ export default function CommunityView() {
                 const localEntry = userJoinedList.find(c => String(c.id) === String(commData.communityId));
                 const isUserSubscribed = !isUserJoined && (!!(localEntry && localEntry.status === 'subscribed') || apiStatus === 'subscribed');
 
-                const savedRequests = JSON.parse(localStorage.getItem(`knome_join_requests_${commData.communityId}`) || '[]');
-                const myRequest = savedRequests.find(r => {
-                    const rUid = String(r.userId || r.id || '');
+                // Approved members lookup to ensure no approved member is shown as pending
+                const approvedUserIds = new Set(
+                    resolvedMembers
+                        .filter(m => m.status === 'Approved' || m.status === 'Active' || !m.status)
+                        .map(m => String(m.userId || m.id).toLowerCase())
+                );
+                const approvedEmpIds = new Set(
+                    resolvedMembers
+                        .filter(m => m.status === 'Approved' || m.status === 'Active' || !m.status)
+                        .map(m => String(m.employeeId || m.empId || '').toUpperCase())
+                        .filter(Boolean)
+                );
+
+                const rawSavedRequestsA = JSON.parse(localStorage.getItem(`knome_join_requests_${commData.communityId}`) || '[]');
+                const rawSavedRequestsB = JSON.parse(localStorage.getItem(`knome_join_requests_${communityId}`) || '[]');
+                const combinedSavedRequests = [...rawSavedRequestsA];
+                rawSavedRequestsB.forEach(rb => {
+                    const rbUid = String(rb.userId || rb.id || '').toLowerCase();
+                    if (rbUid && !combinedSavedRequests.some(ra => String(ra.userId || ra.id || '').toLowerCase() === rbUid)) {
+                        combinedSavedRequests.push(rb);
+                    }
+                });
+
+                const savedRequests = combinedSavedRequests.filter(r => {
+                    const rUid = String(r.userId || r.id || '').toLowerCase();
                     const rEmp = String(r.employeeId || '').toUpperCase();
-                    return (currentUid && rUid === currentUid) || (currentEmpId && rEmp && rEmp === currentEmpId);
+                    return !(approvedUserIds.has(rUid) || (rEmp && approvedEmpIds.has(rEmp)));
+                });
+
+                // Merge API pending requests from backend database
+                const pendingList = Array.isArray(apiPendingMembers) 
+                    ? apiPendingMembers 
+                    : (Array.isArray(apiPendingMembers?.data) ? apiPendingMembers.data : []);
+
+                const mergedRequests = [...savedRequests];
+                pendingList.forEach(pm => {
+                    const pmUid = String(pm.userId || pm.id || '').toLowerCase();
+                    const pmEmp = String(pm.employeeId || pm.empId || '').toUpperCase();
+                    if (!approvedUserIds.has(pmUid) && !(pmEmp && approvedEmpIds.has(pmEmp))) {
+                        const existingIdx = mergedRequests.findIndex(r => String(r.userId || r.id || '').toLowerCase() === pmUid);
+                        const transformed = {
+                            id: pm.userId || pm.id,
+                            userId: pm.userId || pm.id,
+                            name: pm.fullName || pm.name || 'Employee',
+                            fullName: pm.fullName || pm.name || 'Employee',
+                            employeeId: pm.employeeId || 'MPO100',
+                            role: pm.designation || 'Member',
+                            designation: pm.designation || 'Member',
+                            department: pm.departmentName || pm.department || 'MPOnline',
+                            avatar: pm.profilePhotoUrl || null,
+                            requestedAt: pm.requestedDate || new Date().toISOString(),
+                            status: 'Pending'
+                        };
+                        if (existingIdx >= 0) {
+                            mergedRequests[existingIdx] = { ...mergedRequests[existingIdx], ...transformed };
+                        } else {
+                            mergedRequests.push(transformed);
+                        }
+                    }
+                });
+
+                // Sync back to local storage so other components stay synchronized
+                localStorage.setItem(`knome_join_requests_${commData.communityId}`, JSON.stringify(mergedRequests));
+                if (String(communityId) !== String(commData.communityId)) {
+                    localStorage.setItem(`knome_join_requests_${communityId}`, JSON.stringify(mergedRequests));
+                }
+
+                const myRequest = isUserJoined ? null : mergedRequests.find(r => {
+                    const rUid = String(r.userId || r.id || '').toLowerCase();
+                    const rEmp = String(r.employeeId || '').toUpperCase();
+                    return (currentUid && rUid === currentUid.toLowerCase()) || (currentEmpId && rEmp && rEmp === currentEmpId);
                 });
 
                 let resolvedStatus;
-                if (isUserSuspendedInComm && !isCurrentUserSysAdmin) {
+                if (isUserSuspendedInComm) {
                     resolvedStatus = 'banned';
                     setCommunitySuspensionInfo(userSuspensionRecord || {
                         suspensionReason: 'Violation of community guidelines',
@@ -1823,14 +1965,6 @@ export default function CommunityView() {
                 }
                 setMembershipStatus(resolvedStatus);
 
-                // Load persisted join requests (from localStorage) and merge with any API pending
-                const pendingFromMembers = resolvedMembers.filter(m => m.status === 'Pending' || m.membershipStatus === 'Pending');
-                const mergedRequests = [...savedRequests];
-                pendingFromMembers.forEach(m => {
-                    if (!mergedRequests.some(r => String(r.id) === String(m.userId || m.id))) {
-                        mergedRequests.push({ id: m.userId || m.id, userId: m.userId || m.id, name: m.fullName, fullName: m.fullName, role: m.designation, designation: m.designation, department: 'MPOnline', requestedAt: new Date().toISOString(), status: 'Pending' });
-                    }
-                });
                 setJoinRequests(mergedRequests);
             } else {
                 // Fallback check custom created communities or seeds
@@ -1912,21 +2046,40 @@ export default function CommunityView() {
                 setMembersList(resolvedMembers);
                 localStorage.setItem(savedMembersKey, JSON.stringify(resolvedMembers));
 
-                // Load persisted join requests for the fallback/offline path
-                const savedRequests = JSON.parse(localStorage.getItem(`knome_join_requests_${targetId}`) || '[]');
+                // Load persisted join requests for the fallback/offline path excluding approved members
+                const fallbackApprovedIds = new Set(resolvedMembers.filter(m => m.status === 'Approved' || m.status === 'Active' || !m.status).map(m => String(m.userId || m.id).toLowerCase()));
+                const fallbackApprovedEmps = new Set(resolvedMembers.filter(m => m.status === 'Approved' || m.status === 'Active' || !m.status).map(m => String(m.employeeId || m.empId || '').toUpperCase()).filter(Boolean));
+                const savedRequests = (JSON.parse(localStorage.getItem(`knome_join_requests_${targetId}`) || '[]')).filter(r => {
+                    const rUid = String(r.userId || r.id || '').toLowerCase();
+                    const rEmp = String(r.employeeId || '').toUpperCase();
+                    return !(fallbackApprovedIds.has(rUid) || (rEmp && fallbackApprovedEmps.has(rEmp)));
+                });
                 setJoinRequests(savedRequests);
 
                 // Load persistent subscribers and suspended members
                 const savedSubs = JSON.parse(localStorage.getItem(`knome_community_subscribers_${targetId}`) || '[]');
                 setSubscribersList(savedSubs);
-                const savedSuspended = JSON.parse(localStorage.getItem(`knome_community_suspended_${targetId}`) || '[]');
+                const savedSuspended1 = JSON.parse(localStorage.getItem(`knome_community_suspended_${targetId}`) || '[]');
+                const savedSuspended2 = communityId ? JSON.parse(localStorage.getItem(`knome_community_suspended_${communityId}`) || '[]') : [];
+                const savedSuspendedMapFallback = new Map();
+                [...savedSuspended1, ...savedSuspended2].forEach(item => {
+                    const key = String(item.userId || item.id || item.employeeId || item.empId || item.fullName || item.name || '');
+                    if (key && !savedSuspendedMapFallback.has(key)) {
+                        savedSuspendedMapFallback.set(key, item);
+                    }
+                });
+                const savedSuspended = Array.from(savedSuspendedMapFallback.values());
                 setSuspendedMembers(savedSuspended);
 
                 const userSuspensionRecord = savedSuspended.find(s => {
-                    const sUid = String(s.userId || s.id || '');
-                    const sEmpId = String(s.employeeId || '').toUpperCase();
+                    const sUid = String(s.userId || s.id || '').toLowerCase();
+                    const sEmpId = String(s.employeeId || s.empId || '').toUpperCase();
                     const sEmail = String(s.email || '').toLowerCase();
-                    return (currentUidFallback && sUid === currentUidFallback) || (currentEmpIdFallback && sEmpId === currentEmpIdFallback) || (currentEmailFallback && sEmail === currentEmailFallback);
+                    const sName = String(s.fullName || s.name || '').toLowerCase();
+                    return (currentUidFallback && sUid === currentUidFallback.toLowerCase()) || 
+                           (currentEmpIdFallback && sEmpId === currentEmpIdFallback) || 
+                           (currentEmailFallback && sEmail === currentEmailFallback) ||
+                           (currentNameFallback && sName && (sName === currentNameFallback || sName.includes(currentNameFallback) || currentNameFallback.includes(sName)));
                 });
                 const isUserSuspendedInComm = Boolean(userSuspensionRecord);
                 const isCurrentUserSysAdmin = ['SYSADM'].includes(currentUser?.role) || ['System Administrator', 'System Admin'].includes(currentUser?.roleName);
@@ -1940,7 +2093,7 @@ export default function CommunityView() {
                 const isDefaultOrgFallback = found ? ((found.type || '').toLowerCase().includes('default') || (found.type || '').toLowerCase().includes('org')) : false;
 
                 let calcStatus;
-                if (isUserSuspendedInComm && !isCurrentUserSysAdmin) {
+                if (isUserSuspendedInComm) {
                     calcStatus = 'banned';
                     setCommunitySuspensionInfo(userSuspensionRecord || {
                         suspensionReason: 'Violation of community guidelines',
@@ -2347,9 +2500,77 @@ export default function CommunityView() {
             setSubscribersList(savedSubs);
             const savedSuspended = JSON.parse(localStorage.getItem(`knome_community_suspended_${targetId}`) || '[]');
             setSuspendedMembers(savedSuspended);
-            // Also refresh join requests and files
-            const savedRequests = JSON.parse(localStorage.getItem(`knome_join_requests_${targetId}`) || '[]');
+
+            const userSuspRecord = (savedSuspended || []).find(s => {
+                const sUid = String(s.userId || s.id || '').toLowerCase();
+                const sEmpId = String(s.employeeId || s.empId || '').toUpperCase();
+                const sEmail = String(s.email || '').toLowerCase();
+                const sName = String(s.fullName || s.name || '').toLowerCase();
+                return (myUid && sUid === myUid) || 
+                       (myEmpId && sEmpId === myEmpId) || 
+                       (currentUser?.email && sEmail === currentUser.email.toLowerCase()) ||
+                       (myName && sName && (sName === myName || sName.includes(myName) || myName.includes(sName)));
+            });
+            if (userSuspRecord) {
+                setMembershipStatus('banned');
+                setCommunitySuspensionInfo(userSuspRecord);
+            } else if (membershipStatus === 'banned') {
+                loadData();
+            }
+            // Also refresh join requests (excluding approved members) and files
+            const currentApprovedIds = new Set((localMembers || []).filter(m => m.status === 'Approved' || m.status === 'Active' || !m.status).map(m => String(m.userId || m.id).toLowerCase()));
+            const currentApprovedEmps = new Set((localMembers || []).filter(m => m.status === 'Approved' || m.status === 'Active' || !m.status).map(m => String(m.employeeId || m.empId || '').toUpperCase()).filter(Boolean));
+            const rawA = JSON.parse(localStorage.getItem(`knome_join_requests_${targetId}`) || '[]');
+            const rawB = communityId ? JSON.parse(localStorage.getItem(`knome_join_requests_${communityId}`) || '[]') : [];
+            const combinedReqs = [...rawA];
+            rawB.forEach(rb => {
+                const rbUid = String(rb.userId || rb.id || '').toLowerCase();
+                if (rbUid && !combinedReqs.some(ra => String(ra.userId || ra.id || '').toLowerCase() === rbUid)) {
+                    combinedReqs.push(rb);
+                }
+            });
+            const savedRequests = combinedReqs.filter(r => {
+                const rUid = String(r.userId || r.id || '').toLowerCase();
+                const rEmp = String(r.employeeId || '').toUpperCase();
+                return !(currentApprovedIds.has(rUid) || (rEmp && currentApprovedEmps.has(rEmp)));
+            });
             setJoinRequests(savedRequests);
+
+            if (targetId && !isNaN(targetId) && Number(targetId) > 0 && Number(targetId) < 1000000000) {
+                communitiesApi.getMembers(targetId, 'Pending', 1, 100, { noCache: true }).then(res => {
+                    const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+                    if (list.length > 0) {
+                        setJoinRequests(prev => {
+                            const updated = [...prev];
+                            list.forEach(pm => {
+                                const pmUid = String(pm.userId || pm.id || '').toLowerCase();
+                                const pmEmp = String(pm.employeeId || pm.empId || '').toUpperCase();
+                                if (!currentApprovedIds.has(pmUid) && !(pmEmp && currentApprovedEmps.has(pmEmp))) {
+                                    const idx = updated.findIndex(r => String(r.userId || r.id || '').toLowerCase() === pmUid);
+                                    const obj = {
+                                        id: pm.userId || pm.id,
+                                        userId: pm.userId || pm.id,
+                                        name: pm.fullName || pm.name || 'Employee',
+                                        fullName: pm.fullName || pm.name || 'Employee',
+                                        employeeId: pm.employeeId || 'MPO100',
+                                        role: pm.designation || 'Member',
+                                        designation: pm.designation || 'Member',
+                                        department: pm.departmentName || pm.department || 'MPOnline',
+                                        avatar: pm.profilePhotoUrl || null,
+                                        requestedAt: pm.requestedDate || new Date().toISOString(),
+                                        status: 'Pending'
+                                    };
+                                    if (idx >= 0) updated[idx] = { ...updated[idx], ...obj };
+                                    else updated.push(obj);
+                                }
+                            });
+                            localStorage.setItem(`knome_join_requests_${targetId}`, JSON.stringify(updated));
+                            return updated;
+                        });
+                    }
+                }).catch(() => {});
+            }
+
             const savedFiles = JSON.parse(localStorage.getItem(`knome_community_files_${targetId}`) || '[]');
             const isInitialDemoCommTarget = String(targetId) === '101' || String(targetId) === '1';
             if (!isInitialDemoCommTarget) {
@@ -2415,6 +2636,8 @@ export default function CommunityView() {
 
         window.addEventListener('community-members-updated', handleMembersUpdated);
         window.addEventListener('community-joined-change', handleMembersUpdated);
+        window.addEventListener('community-suspended-change', handleMembersUpdated);
+        window.addEventListener('community-join-requests-updated', handleMembersUpdated);
         window.addEventListener('community-posts-updated', handleFeedOrPostsUpdated);
         window.addEventListener('community-post-created', handleFeedOrPostsUpdated);
         window.addEventListener('post-created', handleFeedOrPostsUpdated);
@@ -2425,6 +2648,8 @@ export default function CommunityView() {
         return () => {
             window.removeEventListener('community-members-updated', handleMembersUpdated);
             window.removeEventListener('community-joined-change', handleMembersUpdated);
+            window.removeEventListener('community-suspended-change', handleMembersUpdated);
+            window.removeEventListener('community-join-requests-updated', handleMembersUpdated);
             window.removeEventListener('community-posts-updated', handleFeedOrPostsUpdated);
             window.removeEventListener('community-post-created', handleFeedOrPostsUpdated);
             window.removeEventListener('post-created', handleFeedOrPostsUpdated);
@@ -2913,9 +3138,9 @@ export default function CommunityView() {
     };
 
     const handleJoinAction = async () => {
-        const isPrivate = community?.type === 'Private';
+        const isPrivate = (community?.type || '').toLowerCase() === 'private';
         const newStatus = isPrivate ? 'requested' : 'joined';
-        const targetId = community?.id || communityId || 101;
+        const targetId = Number(community?.id || commData?.communityId || communityId || 101);
 
         // Clear any previous removed tombstone for current user
         try {
@@ -2932,7 +3157,7 @@ export default function CommunityView() {
         } catch (_) {}
 
         try {
-            await communitiesApi.join(community.id).catch(() => null);
+            await communitiesApi.join(targetId).catch(() => null);
         } catch (err) {
             console.warn('Backend join API warning:', err);
         }
@@ -2990,6 +3215,9 @@ export default function CommunityView() {
             setJoinRequests(prev => {
                 const updated = [newRequest, ...prev.filter(r => String(r.userId || r.id) !== String(newRequest.userId))];
                 localStorage.setItem(`knome_join_requests_${targetId}`, JSON.stringify(updated));
+                if (String(communityId) !== String(targetId)) {
+                    localStorage.setItem(`knome_join_requests_${communityId}`, JSON.stringify(updated));
+                }
                 return updated;
             });
 
@@ -3007,7 +3235,8 @@ export default function CommunityView() {
                 requestedAt: new Date().toISOString()
             });
             localStorage.setItem(userKey, JSON.stringify(updatedJoined));
-            window.dispatchEvent(new CustomEvent('community-joined-change'));
+            window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId } }));
+            window.dispatchEvent(new CustomEvent('community-join-requests-updated', { detail: { communityId: targetId } }));
 
             // Store a notification for community creator and admins
             try {
@@ -3581,8 +3810,8 @@ export default function CommunityView() {
         });
         if (!ok) return;
 
-        try { await communitiesApi.leave(community?.id || communityId).catch(() => null); } catch (e) { /* ignore */ }
-        const targetId = community?.id || communityId || 101;
+        const targetId = Number(community?.id || commData?.communityId || communityId || 101);
+        try { await communitiesApi.leave(targetId).catch(() => null); } catch (e) { /* ignore */ }
         const currentUid = String(currentUser?.userId || currentUser?.id || '');
         const currentEmpId = String(currentUser?.employeeId || '').toUpperCase();
 
@@ -3593,6 +3822,9 @@ export default function CommunityView() {
                 return !((currentUid && rUid === currentUid) || (currentEmpId && rEmp === currentEmpId));
             });
             localStorage.setItem(`knome_join_requests_${targetId}`, JSON.stringify(updated));
+            if (String(communityId) !== String(targetId)) {
+                localStorage.setItem(`knome_join_requests_${communityId}`, JSON.stringify(updated));
+            }
             return updated;
         });
 
@@ -3609,7 +3841,8 @@ export default function CommunityView() {
             } catch (_) {}
         });
 
-        window.dispatchEvent(new CustomEvent('community-joined-change'));
+        window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId } }));
+        window.dispatchEvent(new CustomEvent('community-join-requests-updated', { detail: { communityId: targetId } }));
         setMembershipStatus('none');
         showToast('Your join request has been cancelled.', 'info');
     };
@@ -3618,14 +3851,17 @@ export default function CommunityView() {
     // FR-CM-03: Approve a join request (Admin)
     // ─────────────────────────────────────────
     const handleApprove = async (requestId, requestName) => {
-        const targetId = community?.id || communityId || 101;
+        const targetId = Number(community?.id || commData?.communityId || communityId || 101);
         const request = joinRequests.find(r => String(r.id || r.userId) === String(requestId));
         const reqUserId = request?.userId || requestId;
         const reqEmpId = request?.employeeId;
 
         // Try backend API
         try {
-            await communitiesApi.decideMembership(targetId, reqUserId, 'Approved').catch(() => null);
+            const numericUserId = Number(reqUserId);
+            if (!isNaN(numericUserId) && numericUserId > 0) {
+                await communitiesApi.decideMembership(targetId, numericUserId, 'Approved').catch(() => null);
+            }
         } catch (e) { /* fallback to localStorage */ }
 
         // Clear any previous removed tombstone for approved user
@@ -3655,7 +3891,7 @@ export default function CommunityView() {
             localStorage.setItem(`knome_community_members_${targetId}`, JSON.stringify(updated));
             localStorage.setItem(`knome_community_members_updated_${targetId}`, Date.now().toString());
             window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
-            window.dispatchEvent(new CustomEvent('community-joined-change'));
+            window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId } }));
             return updated;
         });
 
@@ -3692,10 +3928,14 @@ export default function CommunityView() {
         setJoinRequests(prev => {
             const updated = prev.filter(r => String(r.id || r.userId) !== String(requestId));
             localStorage.setItem(`knome_join_requests_${targetId}`, JSON.stringify(updated));
+            if (String(communityId) !== String(targetId)) {
+                localStorage.setItem(`knome_join_requests_${communityId}`, JSON.stringify(updated));
+            }
             return updated;
         });
 
         setCommunity(prev => ({ ...prev, membersCount: (prev.membersCount || 0) + 1 }));
+        window.dispatchEvent(new CustomEvent('community-join-requests-updated', { detail: { communityId: targetId } }));
 
         // Notify the requesting user so they see it in their notification bell
         try {
@@ -3731,20 +3971,26 @@ export default function CommunityView() {
     // FR-CM-03: Reject a join request (Admin)
     // ─────────────────────────────────────────
     const handleReject = async (requestId, requestName) => {
-        const targetId = community?.id || communityId || 101;
+        const targetId = Number(community?.id || commData?.communityId || communityId || 101);
         const request = joinRequests.find(r => String(r.id || r.userId) === String(requestId));
         const reqUserId = request?.userId || requestId;
         const reqEmpId = request?.employeeId;
 
         // Try backend API
         try {
-            await communitiesApi.decideMembership(targetId, reqUserId, 'Rejected').catch(() => null);
+            const numericUserId = Number(reqUserId);
+            if (!isNaN(numericUserId) && numericUserId > 0) {
+                await communitiesApi.decideMembership(targetId, numericUserId, 'Rejected').catch(() => null);
+            }
         } catch (e) { /* fallback */ }
 
         // Remove from joinRequests
         setJoinRequests(prev => {
             const updated = prev.filter(r => String(r.id || r.userId) !== String(requestId));
             localStorage.setItem(`knome_join_requests_${targetId}`, JSON.stringify(updated));
+            if (String(communityId) !== String(targetId)) {
+                localStorage.setItem(`knome_join_requests_${communityId}`, JSON.stringify(updated));
+            }
             return updated;
         });
 
@@ -3766,6 +4012,9 @@ export default function CommunityView() {
         if (currentUid && String(reqUserId) === currentUid) {
             setMembershipStatus('none');
         }
+
+        window.dispatchEvent(new CustomEvent('community-join-requests-updated', { detail: { communityId: targetId } }));
+        window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId } }));
 
         // Notify the requesting user of rejection
         try {
@@ -4162,6 +4411,82 @@ export default function CommunityView() {
         );
     }
 
+    if (membershipStatus === 'banned') {
+        return (
+            <main className="flex-1 min-h-[85vh] flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-slate-50/50 dark:bg-slate-950/50">
+                {/* Toast Notification */}
+                {toast && (
+                    <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-2.5 animate-in slide-in-from-bottom-4 duration-300 ${
+                        toast.type === 'error' ? 'bg-red-500 text-white' :
+                        toast.type === 'warning' ? 'bg-amber-500 text-white' :
+                        toast.type === 'info' ? 'bg-slate-700 text-white' :
+                        'bg-emerald-500 text-white'
+                    }`}>
+                        <span className="material-symbols-outlined text-[18px]">
+                            {toast.type === 'error' ? 'error' : toast.type === 'warning' ? 'warning' : toast.type === 'info' ? 'info' : 'check_circle'}
+                        </span>
+                        {toast.message}
+                    </div>
+                )}
+
+                <div className="max-w-xl w-full bg-white dark:bg-slate-900 border border-amber-300/80 dark:border-amber-700/60 rounded-3xl p-8 sm:p-10 shadow-2xl space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
+                    <div className="w-20 h-20 rounded-3xl bg-amber-500/15 dark:bg-amber-500/20 text-amber-500 flex items-center justify-center mx-auto shadow-inner border border-amber-500/30">
+                        <span className="material-symbols-outlined text-4xl">person_off</span>
+                    </div>
+                    <div className="space-y-2">
+                        <span className="text-[11px] font-black uppercase tracking-wider px-3.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 inline-flex items-center gap-1.5 shadow-xs">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                            Access Suspended
+                        </span>
+                        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+                            You are suspended from this community.
+                        </h1>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                            You cannot open or access <strong className="text-slate-900 dark:text-white">"{community.name}"</strong>, view its content, files, or discussions until your suspension is removed by an administrator.
+                        </p>
+                    </div>
+
+                    {communitySuspensionInfo && (
+                        <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-700/60 text-left space-y-2.5 max-w-md mx-auto shadow-xs">
+                            {communitySuspensionInfo.suspensionDuration && (
+                                <div className="flex items-center justify-between text-xs">
+                                    <span className="text-slate-500 dark:text-slate-400 font-semibold">Duration:</span>
+                                    <span className="font-bold text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-900/40 px-2.5 py-0.5 rounded-lg border border-amber-300/80 dark:border-amber-700/60">
+                                        {communitySuspensionInfo.suspensionDuration}
+                                    </span>
+                                </div>
+                            )}
+                            {communitySuspensionInfo.suspensionReason && (
+                                <div className="text-xs pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                                    <span className="text-slate-500 dark:text-slate-400 block mb-1 font-semibold">Reason:</span>
+                                    <p className="font-medium text-slate-800 dark:text-slate-200 italic bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-700/50">
+                                        "{communitySuspensionInfo.suspensionReason}"
+                                    </p>
+                                </div>
+                            )}
+                            {communitySuspensionInfo.suspendedBy && (
+                                <div className="flex items-center justify-between text-[11px] pt-1 text-slate-500 dark:text-slate-400">
+                                    <span className="text-slate-500 dark:text-slate-400 font-medium">Suspended By:</span>
+                                    <span className="font-bold text-slate-700 dark:text-slate-300">{communitySuspensionInfo.suspendedBy}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="pt-2">
+                        <button
+                            onClick={() => navigate('/communities')}
+                            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-indigo-600/25 transition-all cursor-pointer flex items-center justify-center gap-2 mx-auto w-full sm:w-auto"
+                        >
+                            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                            Back to Communities
+                        </button>
+                    </div>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main className="flex-1 pb-6">
 
@@ -4411,62 +4736,7 @@ export default function CommunityView() {
                 </div>
             )}
 
-            {membershipStatus === 'banned' ? (
-                <div className="max-w-3xl mx-auto px-4 py-16 text-center">
-                    <div className="glass bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800/60 rounded-3xl p-8 sm:p-12 shadow-xl space-y-6 animate-in fade-in zoom-in duration-200">
-                        <div className="w-20 h-20 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-500 flex items-center justify-center mx-auto shadow-inner border border-amber-500/30">
-                            <span className="material-symbols-outlined text-4xl">person_off</span>
-                        </div>
-                        <div>
-                            <span className="text-[11px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 inline-block mb-2">
-                                Access Restricted
-                            </span>
-                            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-                                You are suspended from this community
-                            </h2>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-                                A Community Admin has suspended your membership in <strong className="text-slate-900 dark:text-white">"{community.name}"</strong>.
-                            </p>
-                        </div>
-
-                        {communitySuspensionInfo && (
-                            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 text-left space-y-2 max-w-lg mx-auto">
-                                {communitySuspensionInfo.suspensionDuration && (
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-slate-500 font-medium">Duration:</span>
-                                        <span className="font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800">
-                                            {communitySuspensionInfo.suspensionDuration}
-                                        </span>
-                                    </div>
-                                )}
-                                {communitySuspensionInfo.suspensionReason && (
-                                    <div className="text-xs pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                                        <span className="text-slate-500 block mb-0.5 font-medium">Reason for suspension:</span>
-                                        <span className="font-semibold text-slate-700 dark:text-slate-200 italic">
-                                            "{communitySuspensionInfo.suspensionReason}"
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        <div className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-                            While suspended, you cannot access or view discussions, files, or members in this community, and cannot publish posts. Your access to other Knome communities and platform features remains unaffected.
-                        </div>
-
-                        <div className="pt-2">
-                            <button
-                                onClick={() => navigate('/communities')}
-                                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/20 transition-all cursor-pointer flex items-center gap-2 mx-auto"
-                            >
-                                <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-                                Explore Other Communities
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            ) : (
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
                 
                 {/* Main Content Area */}
                 <div className="w-full">
@@ -6205,7 +6475,6 @@ export default function CommunityView() {
                     )}
                 </div>
             </div>
-            )}
 
             {/* Upload File Modal - Enterprise Grade */}
             {isUploadModalOpen && (

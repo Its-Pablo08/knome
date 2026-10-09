@@ -338,8 +338,8 @@ export default function WikiShareModal({
                     type: 'wiki_share',
                     category: 'Shares',
                     icon: 'menu_book',
-                    color: 'text-teal-500',
-                    bg: 'bg-teal-500/10',
+                    color: 'text-indigo-500',
+                    bg: 'bg-indigo-500/10',
                     text: textMsg,
                     message: textMsg,
                     senderName,
@@ -476,7 +476,7 @@ export default function WikiShareModal({
                             {/* Direct Share Link Banner */}
                             <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80">
                                 <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                                    <span className="material-symbols-outlined text-[20px] text-teal-600 dark:text-teal-400 shrink-0">link</span>
+                                    <span className="material-symbols-outlined text-[20px] text-indigo-600 dark:text-indigo-400 shrink-0">link</span>
                                     <div className="min-w-0">
                                         <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Direct Share Link</p>
                                         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
@@ -487,7 +487,7 @@ export default function WikiShareModal({
                                 <button
                                     type="button"
                                     onClick={handleCopyLink}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800/60 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors cursor-pointer shrink-0"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors cursor-pointer shrink-0"
                                 >
                                     <span className="material-symbols-outlined text-[16px]">content_copy</span>
                                     Copy Link
@@ -502,7 +502,7 @@ export default function WikiShareModal({
 
                                 {isLoadingShares ? (
                                     <div className="py-6 flex justify-center">
-                                        <div className="w-5 h-5 border-2 border-teal-500/30 border-t-teal-600 rounded-full animate-spin" />
+                                        <div className="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
                                     </div>
                                 ) : shares.length === 0 ? (
                                     <p className="text-xs text-slate-400 dark:text-slate-500 italic py-2 text-center">
@@ -516,7 +516,7 @@ export default function WikiShareModal({
                                                 className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
                                             >
                                                 <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                                                    <span className="w-8 h-8 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 border border-teal-200/60 dark:border-teal-800/60">
+                                                    <span className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-200/60 dark:border-indigo-800/60">
                                                         <span className="material-symbols-outlined text-[18px]">
                                                             {s.shareType === 'Community' ? 'group' : s.shareType === 'User' ? 'person' : 'domain'}
                                                         </span>

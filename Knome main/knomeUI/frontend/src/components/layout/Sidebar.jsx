@@ -125,12 +125,12 @@ export default function Sidebar() {
     }
 
     const quickLinks = [
-        { to: '/posts',    label: 'Posts',     icon: 'dynamic_feed', color: '#6366f1' },
-        { to: '/clips',    label: 'Clips',     icon: 'movie',        color: '#ec4899', matchPaths: ['/clips'] },
+        { to: '/posts',    label: 'Posts',     icon: 'dynamic_feed', color: '#2563eb' },
+        { to: '/clips',    label: 'Clips',     icon: 'movie',        color: '#f43f5e', matchPaths: ['/clips'] },
         { to: '/articles', label: 'Articles',  icon: 'article',      color: '#0ea5e9', matchPaths: ['/articles', '/article-view'] },
-        { to: '/wiki',     label: 'Wiki',      icon: 'menu_book',    color: '#0d9488', matchPaths: ['/wiki', '/wikis', '/wiki/view'] },
+        { to: '/wiki',     label: 'Wiki',      icon: 'menu_book',    color: '#6366f1', matchPaths: ['/wiki', '/wikis', '/wiki/view'] },
         { to: '/videos',   label: 'Videos',    icon: 'videocam',     color: '#ef4444' },
-        { to: '/podcasts', label: 'Podcasts',  icon: 'podcasts',     color: '#8b5cf6' },
+        { to: '/podcasts', label: 'Podcasts',  icon: 'podcasts',     color: '#d946ef' },
         { to: '/jobs',     label: 'Openings',  icon: 'work',         color: '#10b981' },
     ];
 
@@ -243,12 +243,19 @@ export default function Sidebar() {
                                 onClick={() => isMobile && setIsMobileOpen(false)}
                                 className={`flex flex-row items-center gap-2.5 px-2.5 py-2 rounded-xl transition-all duration-200 group relative ${
                                     isActive 
-                                        ? 'bg-indigo-50/80 dark:bg-indigo-950/50 border border-indigo-200/80 dark:border-indigo-800/60 shadow-xs' 
+                                        ? 'shadow-xs border' 
                                         : 'border border-transparent hover:bg-slate-100/80 dark:hover:bg-slate-800/60 hover:border-slate-200/50 dark:hover:border-slate-700/50'
                                 }`}
+                                style={isActive ? {
+                                    backgroundColor: `${link.color}15`,
+                                    borderColor: `${link.color}40`,
+                                } : undefined}
                                 title={link.label}>
                                 {isActive && (
-                                    <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-4 rounded-full bg-indigo-600 dark:bg-indigo-400 shadow-xs"></div>
+                                    <div 
+                                        className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-4 rounded-full shadow-xs"
+                                        style={{ backgroundColor: link.color }}
+                                    />
                                 )}
                                 <div 
                                     className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all ${
@@ -275,11 +282,14 @@ export default function Sidebar() {
                                 }`}>
                                     {link.label}
                                 </span>
-                                <span className={`material-symbols-outlined text-[14px] transition-all ml-auto ${
-                                    isActive
-                                        ? 'text-indigo-600 dark:text-indigo-400 opacity-70'
-                                        : 'opacity-0 -translate-x-1 group-hover:opacity-40 group-hover:translate-x-0 text-slate-400'
-                                }`}>
+                                <span 
+                                    className={`material-symbols-outlined text-[14px] transition-all ml-auto ${
+                                        isActive
+                                            ? 'opacity-80'
+                                            : 'opacity-0 -translate-x-1 group-hover:opacity-40 group-hover:translate-x-0 text-slate-400'
+                                    }`}
+                                    style={isActive ? { color: link.color } : undefined}
+                                >
                                     chevron_right
                                 </span>
                             </Link>

@@ -185,16 +185,16 @@ export default function WikiCollaboratorsModal({
 
                         {/* User search or selected user card */}
                         {selectedUser ? (
-                            <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-teal-500/50 bg-teal-50/80 dark:bg-teal-950/40 transition-all">
+                            <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-indigo-500/50 bg-indigo-50/80 dark:bg-indigo-950/40 transition-all">
                                 <div className="flex items-center gap-2.5 min-w-0">
                                     <img
-                                        src={resolveMediaUrl(selectedUser.profilePhotoUrl) || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.fullName)}&background=0d9488&color=fff`}
+                                        src={resolveMediaUrl(selectedUser.profilePhotoUrl) || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.fullName)}&background=2563eb&color=fff`}
                                         alt=""
-                                        className="w-7 h-7 rounded-full object-cover shrink-0 border border-teal-200 dark:border-teal-800"
+                                        className="w-7 h-7 rounded-full object-cover shrink-0 border border-indigo-200 dark:border-indigo-800"
                                     />
                                     <div className="min-w-0">
                                         <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{selectedUser.fullName}</p>
-                                        <p className="text-[11px] text-teal-700 dark:text-teal-300 truncate">
+                                        <p className="text-[11px] text-indigo-700 dark:text-indigo-300 truncate">
                                             {selectedUser.employeeId ? `${selectedUser.employeeId} • ` : ''}{selectedUser.designation}
                                         </p>
                                     </div>
@@ -226,12 +226,12 @@ export default function WikiCollaboratorsModal({
                                         }
                                     }}
                                     placeholder="Search colleague by name or employee code..."
-                                    className="w-full pl-3.5 pr-8 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 shadow-xs"
+                                    className="w-full pl-3.5 pr-8 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-xs"
                                 />
 
                                 {isSearching ? (
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                        <div className="w-3.5 h-3.5 border-2 border-teal-500/30 border-t-teal-600 rounded-full animate-spin" />
+                                        <div className="w-3.5 h-3.5 border-2 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
                                     </div>
                                 ) : searchQuery ? (
                                     <button
@@ -255,10 +255,10 @@ export default function WikiCollaboratorsModal({
                                                     setSearchQuery('');
                                                     setSearchResults([]);
                                                 }}
-                                                className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors text-left cursor-pointer"
+                                                className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors text-left cursor-pointer"
                                             >
                                                 <img
-                                                    src={resolveMediaUrl(u.profilePhotoUrl) || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName)}&background=0d9488&color=fff`}
+                                                    src={resolveMediaUrl(u.profilePhotoUrl) || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName)}&background=2563eb&color=fff`}
                                                     alt=""
                                                     className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-slate-700"
                                                 />
@@ -268,7 +268,7 @@ export default function WikiCollaboratorsModal({
                                                         {u.employeeId ? `${u.employeeId} • ` : ''}{u.designation}
                                                     </p>
                                                 </div>
-                                                <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-900/30">
+                                                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30">
                                                     Select
                                                 </span>
                                             </button>
@@ -324,7 +324,7 @@ export default function WikiCollaboratorsModal({
                                     type="button"
                                     onClick={handleAddCollaborator}
                                     disabled={(!selectedUser && !searchQuery.trim()) || isAdding}
-                                    className="w-full py-2 px-3 rounded-lg text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm shadow-teal-600/20"
+                                    className="w-full py-2 px-3 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-600/20"
                                 >
                                     {isAdding ? (
                                         <>
@@ -351,7 +351,7 @@ export default function WikiCollaboratorsModal({
 
                     {isLoading ? (
                         <div className="py-8 flex justify-center">
-                            <div className="w-6 h-6 border-2 border-teal-500/30 border-t-teal-600 rounded-full animate-spin" />
+                            <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
                         </div>
                     ) : collaborators.length === 0 ? (
                         <p className="text-xs text-slate-500 dark:text-slate-400 italic py-4 text-center">
@@ -362,7 +362,7 @@ export default function WikiCollaboratorsModal({
                             {collaborators.map(c => {
                                 const roleColors = {
                                     Owner: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/60',
-                                    Editor: 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-200/80 dark:border-teal-800/60',
+                                    Editor: 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200/80 dark:border-blue-800/60',
                                     Viewer: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                                 };
 
