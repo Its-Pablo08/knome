@@ -10,12 +10,11 @@ Write-Host "============================================================" -Foreg
 $ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 if (-not $ScriptDir) { $ScriptDir = "D:\Knome_Complete_Project\Knome main" }
 
-$connString = "Server=LAPTOP-458;Database=Knome;User ID=sa;Password=sa@123;TrustServerCertificate=True;Connect Timeout=15"
 $sqlFile = "$ScriptDir\Documentation\Database\Create_Wiki_Module.sql"
 
 if (-not (Test-Path $sqlFile)) {
     Write-Host "[Error] SQL script not found at: $sqlFile" -ForegroundColor Red
-    exit 1
+    return
 }
 
 $sqlContent = Get-Content -Path $sqlFile -Raw
@@ -23,10 +22,23 @@ $sqlContent = Get-Content -Path $sqlFile -Raw
 # Split batches by GO keyword
 $batches = $sqlContent -split "(?m)^\s*GO\s*$"
 
+$conn = $null
+foreach ($srv in @("localhost", "127.0.0.1,1433", "LAPTOP-458")) {
+    try {
+        $c = New-Object System.Data.SqlClient.SqlConnection("Server=$srv;Database=Knome;User ID=sa;Password=sa@123;TrustServerCertificate=True;Connect Timeout=5")
+        $c.Open()
+        $conn = $c
+        Write-Host " Connected to SQL Server (Server=$srv, Database=Knome)" -ForegroundColor Green
+        break
+    } catch {}
+}
+
+if (-not $conn) {
+    Write-Host " [Warning] Could not reach SQL Server for Wiki DB setup." -ForegroundColor DarkYellow
+    return
+}
+
 try {
-    $conn = New-Object System.Data.SqlClient.SqlConnection($connString)
-    $conn.Open()
-    Write-Host " Connected to SQL Server (Server=LAPTOP-458, Database=Knome)" -ForegroundColor Green
 
     $index = 1
     foreach ($batch in $batches) {

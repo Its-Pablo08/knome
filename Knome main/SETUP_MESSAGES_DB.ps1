@@ -14,7 +14,7 @@ $sqlFile = "$ScriptDir\Documentation\Database\Create_Messages_Module.sql"
 
 if (-not (Test-Path $sqlFile)) {
     Write-Host "[Error] SQL script not found at: $sqlFile" -ForegroundColor Red
-    exit 1
+    return
 }
 
 $sqlContent = Get-Content -Path $sqlFile -Raw
@@ -38,7 +38,7 @@ foreach ($srv in $serverCandidates) {
 
 if (-not $conn) {
     Write-Host " [Warning] Could not reach SQL Server via standalone PowerShell. The backend's in-app initializer will verify tables on startup." -ForegroundColor DarkYellow
-    exit 0
+    return
 }
 
 try {

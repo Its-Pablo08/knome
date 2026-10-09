@@ -29,10 +29,20 @@ if (-not (Test-Path "$ScriptDir\knomeUI\frontend\node_modules")) {
 
 # 0c. Database Connection Verification & Wiki Tables Check
 try {
-    $dbTest = New-Object System.Data.SqlClient.SqlConnection("Server=LAPTOP-458;Database=Knome;User ID=sa;Password=sa@123;TrustServerCertificate=True;Connect Timeout=5")
-    $dbTest.Open()
-    $dbTest.Close()
-    Write-Host " SQL Server: Knome database verified & accessible on LAPTOP-458" -ForegroundColor Green
+    $dbTest = $null
+    foreach ($srv in @("localhost", "127.0.0.1,1433", "LAPTOP-458")) {
+        try {
+            $t = New-Object System.Data.SqlClient.SqlConnection("Server=$srv;Database=Knome;User ID=sa;Password=sa@123;TrustServerCertificate=True;Connect Timeout=5")
+            $t.Open()
+            $dbTest = $t
+            Write-Host " SQL Server: Knome database verified & accessible on $srv" -ForegroundColor Green
+            $t.Close()
+            break
+        } catch {}
+    }
+    if (-not $dbTest) {
+        Write-Host " [Warning] Knome database not reachable. Ensure SQL Server is running." -ForegroundColor DarkYellow
+    }
 
     # 0d. Ensure Wiki Tables Exist
     if (Test-Path "$ScriptDir\SETUP_WIKI_DB.ps1") {

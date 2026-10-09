@@ -277,7 +277,7 @@ public class ClipRepository : IClipRepository
                     EmployeeId = cv.User != null ? cv.User.EmployeeId : string.Empty,
                     ProfilePhotoUrl = cv.User != null ? cv.User.ProfilePhotoUrl : null,
                     Designation = cv.User != null ? cv.User.Designation : null,
-                    Department = cv.User != null ? cv.User.Department : null,
+                    Department = cv.User?.Department?.Name,
                     ViewedDate = cv.ViewedDate
                 });
             }
