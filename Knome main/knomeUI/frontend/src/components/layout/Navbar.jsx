@@ -1111,6 +1111,14 @@ export default function Navbar() {
             window.dispatchEvent(new CustomEvent('knome:share-updated', { detail: data }));
         });
 
+        connection.on("ViewCountUpdated", (data) => {
+            window.dispatchEvent(new CustomEvent('knome:view-updated', { detail: data }));
+        });
+
+        connection.on("ClipEngagementUpdated", (data) => {
+            window.dispatchEvent(new CustomEvent('knome:clip-engagement-updated', { detail: data }));
+        });
+
         const joinGroup = () => {
             const currentUid = currentUser?.userId || currentUser?.id;
             if (currentUid && connection.state === signalR.HubConnectionState.Connected) {

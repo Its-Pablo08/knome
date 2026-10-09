@@ -21,8 +21,16 @@ public class VideoService : IVideoService
     private readonly KnomeDbContext _db;
     private readonly IMapper _mapper;
     private readonly ISuspensionGuard _suspensionGuard;
+    private readonly ISystemSettingService? _systemSettingService;
 
-    public VideoService(IVideoRepository repo, IContentInteractionService interactionService, IKarmaService karmaService, KnomeDbContext db, IMapper mapper, ISuspensionGuard suspensionGuard)
+    public VideoService(
+        IVideoRepository repo, 
+        IContentInteractionService interactionService, 
+        IKarmaService karmaService, 
+        KnomeDbContext db, 
+        IMapper mapper, 
+        ISuspensionGuard suspensionGuard,
+        ISystemSettingService? systemSettingService = null)
     {
         _repo = repo;
         _interactionService = interactionService;
@@ -30,6 +38,7 @@ public class VideoService : IVideoService
         _db = db;
         _mapper = mapper;
         _suspensionGuard = suspensionGuard;
+        _systemSettingService = systemSettingService;
     }
 
     private async Task CheckIsUploaderOrAdminAsync(Video video, int currentUserId)
@@ -111,6 +120,21 @@ public class VideoService : IVideoService
     public async Task<VideoDto> CreateVideoAsync(int currentUserId, CreateVideoDto dto)
     {
         await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
+
+        var caller = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
+        var isCallerAdmin = caller != null && caller.Roles.Any(r => 
+            r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" ||
+            r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" ||
+            r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM");
+
+        var requireApproval = _systemSettingService != null
+            ? await _systemSettingService.GetRequireContentAndCommunityApprovalAsync()
+            : true;
+
+        if (requireApproval && !isCallerAdmin)
+        {
+            throw new ForbiddenException("Administrator approval is required before videos are published per enterprise governance policy.");
+        }
 
         if (dto.FileSizeMb.HasValue && dto.FileSizeMb.Value > MediaSizeLimits.MaxVideoSizeMb)
             throw new BadRequestException($"Video file size ({dto.FileSizeMb} MB) exceeds maximum permitted size of {MediaSizeLimits.MaxVideoSizeMb} MB per FR-VC-01.");

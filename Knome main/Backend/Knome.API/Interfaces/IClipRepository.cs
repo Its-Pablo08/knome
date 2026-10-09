@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Knome.API.DTOs.Clips;
 using Knome.API.Models;
 
 namespace Knome.API.Interfaces;
@@ -21,4 +22,8 @@ public interface IClipRepository
     Task<bool> IsBookmarkedByUserAsync(long clipId, int userId);
     Task<Dictionary<long, bool>> GetLikedClipsMapAsync(IEnumerable<long> clipIds, int userId);
     Task<Dictionary<long, bool>> GetBookmarkedClipsMapAsync(IEnumerable<long> clipIds, int userId);
+    Task<List<ClipViewerDto>> GetClipViewersAsync(long clipId);
+    Task<ClipEngagementDto> GetClipEngagementAsync(long clipId);
+    Task<Dictionary<long, int>> GetCommentsCountMapAsync(IEnumerable<long> clipIds);
 }
+

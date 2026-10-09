@@ -914,9 +914,8 @@ export default function Videos() {
                                         </div>
                                     </div>
 
-                                    <div className="flex gap-2 pt-2">
-                                        <button type="button" onClick={() => setIsCreatePlaylistOpen(false)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl cursor-pointer transition-colors">Cancel</button>
-                                        <button type="submit" className="flex-1 py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-700 hover:to-cyan-600 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md shadow-indigo-500/25 flex items-center justify-center gap-1.5 transition-all">
+                                    <div className="pt-2">
+                                        <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-700 hover:to-cyan-600 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md shadow-indigo-500/25 flex items-center justify-center gap-1.5 transition-all">
                                             <span className="material-symbols-outlined text-[18px]">playlist_add</span>
                                             Import & Save Series
                                         </button>
@@ -985,9 +984,8 @@ export default function Videos() {
                                         </div>
                                     </div>
 
-                                    <div className="flex gap-2 pt-2">
-                                        <button type="button" onClick={() => setIsCreatePlaylistOpen(false)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl cursor-pointer transition-colors">Cancel</button>
-                                        <button type="submit" className="flex-1 py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-700 hover:to-cyan-600 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md shadow-indigo-500/25 flex items-center justify-center gap-1.5 transition-all">
+                                    <div className="pt-2">
+                                        <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-700 hover:to-cyan-600 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md shadow-indigo-500/25 flex items-center justify-center gap-1.5 transition-all">
                                             <span className="material-symbols-outlined text-[18px]">playlist_add</span>
                                             Create {newPlaylist.type}
                                         </button>

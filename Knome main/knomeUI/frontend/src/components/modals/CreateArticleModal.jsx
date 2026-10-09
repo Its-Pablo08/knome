@@ -628,14 +628,6 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
                     </div>
 
                     <div className="flex items-center gap-2 ml-auto">
-                        <button 
-                            type="button"
-                            onClick={onClose} 
-                            disabled={isPublishing}
-                            className="px-4 py-2 text-slate-gray font-label-md hover:bg-surface-container rounded-lg transition-all cursor-pointer disabled:opacity-50"
-                        >
-                            Cancel
-                        </button>
 
                         {(() => {
                             const textToScan = `${title} ${tags} ${content}`;

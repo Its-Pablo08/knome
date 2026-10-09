@@ -65,9 +65,9 @@ public class WikiController : KnomeControllerBase
 
     [HttpGet("tags")]
     [ProducesResponseType(typeof(ApiResponse<List<string>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetPopularTags([FromQuery] int count = 20)
+    public async Task<IActionResult> GetPopularTags([FromQuery] int count = 10)
     {
-        var tags = await _wikiService.GetPopularTagsAsync(count);
+        var tags = await _wikiService.GetPopularTagsAsync(Math.Min(count, 10));
         return Ok(ApiResponse<List<string>>.SuccessResponse(200, "Wiki tags retrieved successfully.", tags));
     }
 

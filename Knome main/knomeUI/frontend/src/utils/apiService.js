@@ -176,6 +176,7 @@ export const postsApi = {
     getById: (id) => apiClient.get(`/posts/${id}`),
     getPost: (postId) => apiClient.get(`/posts/${postId}`),
     create: (data) => apiClient.post('/posts', data),
+    createPost: (data) => apiClient.post('/posts', data),
     update: (id, data) => apiClient.put(`/posts/${id}`, data),
     delete: (id) => apiClient.delete(`/posts/${id}`),
     recordView: (id) => apiClient.post(`/posts/${id}/view`),
@@ -808,6 +809,20 @@ export const mediaApi = {
 
     /** DELETE /api/media/pending/{id} */
     removePendingApproval: (id) => apiClient.delete(`/media/pending/${encodeURIComponent(id)}`),
+};
+
+// ─────────────────────────────────────────────
+//  SETTINGS & SYSTEM CONFIGURATION
+// ─────────────────────────────────────────────
+export const settingsApi = {
+    /** GET /api/settings/approval */
+    getApprovalSetting: () => apiClient.get('/settings/approval'),
+
+    /** PUT /api/settings/approval */
+    setApprovalSetting: (requireApproval) => apiClient.put('/settings/approval', { requireApproval }),
+
+    /** GET /api/settings */
+    getAllSettings: () => apiClient.get('/settings'),
 };
 
 
@@ -1529,10 +1544,28 @@ export const resolveSharedTarget = (post) => {
         };
     }
 
-    // 2. Video Check
+    // 2. Clip Check
+    const clipUrlMatch = content.match(/(?:https?:\/\/[^\s]+)?\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i) ||
+                         (post.link || '').match(/(?:https?:\/\/[^\s]+)?\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i);
+    const isClipType = typeStr === 'clip_share' || typeStr === 'clip' || contentTypeStr === 'clip' || post.sharedContent?.type?.toLowerCase() === 'clip';
+    const isClipText = content.includes('Shared Clip:') || content.includes('Check out this Clip:') || title.startsWith('Shared Clip:') || Boolean(post.clipId);
+
+    if (post.sharedClip || clipUrlMatch || isClipType || isClipText || post.clipId) {
+        const id = post.sharedClip?.clipId || post.sharedClip?.id || post.clipId || (clipUrlMatch ? clipUrlMatch[1] : null) || post.sharedContent?.id || post.contentId;
+        return {
+            type: 'Clip',
+            id: id,
+            url: id ? `/clips?id=${id}` : '/clips',
+            label: 'Shared Clip',
+            actionText: 'Watch Clip',
+            icon: 'movie_filter'
+        };
+    }
+
+    // 3. Video Check
     const videoUrlMatch = content.match(/(?:https?:\/\/[^\s]+)?\/videos\?id=([a-zA-Z0-9_-]+)/i);
     const isVideoType = typeStr === 'video_share' || typeStr === 'video' || contentTypeStr === 'video' || post.sharedContent?.type?.toLowerCase() === 'video';
-    const isVideoText = content.includes('Shared Video:') || title.startsWith('Shared Video:') || post.videoUrl;
+    const isVideoText = content.includes('Shared Video:') || title.startsWith('Shared Video:') || (post.videoUrl && !post.clipId && !isClipType && !isClipText);
     if (post.sharedVideo || videoUrlMatch || isVideoType || isVideoText || post.videoId) {
         const id = post.sharedVideo?.id || post.videoId || (videoUrlMatch ? videoUrlMatch[1] : null) || post.sharedContent?.id || post.contentId;
         return {
@@ -1661,6 +1694,10 @@ export const clipsApi = {
     delete: (id) => apiClient.delete(`/clips/${id}`),
 
     recordView: (id) => apiClient.post(`/clips/${id}/view`, {}),
+
+    getViewers: (id) => apiClient.get(`/clips/${id}/viewers`),
+
+    getEngagement: (id) => apiClient.get(`/clips/${id}/engagement`),
 
     react: (id, reactionType = 'Like') => apiClient.post(`/clips/${id}/react`, { reactionType }),
 

@@ -18,4 +18,7 @@ public interface IClipService
     Task<bool> ShareClipAsync(long clipId, int userId, ShareClipDto dto);
     Task<(List<ClipDto> Items, int TotalCount)> GetAllClipsForAdminAsync(int pageNumber = 1, int pageSize = 50, string? search = null, string? status = null);
     Task<ClipDto> AdminUpdateStatusAsync(long clipId, int adminUserId, string status);
+    Task<List<ClipViewerDto>> GetClipViewersAsync(long clipId);
+    Task<ClipEngagementDto> GetClipEngagementAsync(long clipId);
 }
+

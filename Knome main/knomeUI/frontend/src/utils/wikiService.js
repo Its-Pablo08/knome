@@ -71,7 +71,7 @@ export const wikiApi = {
         }
     },
 
-    async getPopularTags(count = 20) {
+    async getPopularTags(count = 10) {
         try {
             const res = await apiClient.get(`/wikis/tags?count=${count}`);
             return res?.data || res;

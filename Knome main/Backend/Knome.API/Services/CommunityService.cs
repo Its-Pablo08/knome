@@ -31,6 +31,7 @@ public class CommunityService : ICommunityService
     private readonly IKarmaService _karmaService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<CommunityService>? _logger;
+    private readonly ISystemSettingService? _systemSettingService;
     private static readonly object _commFilesLock = new();
 
     public CommunityService(
@@ -43,7 +44,8 @@ public class CommunityService : ICommunityService
         IPostRepository postRepo,
         IKarmaService karmaService,
         IConfiguration configuration,
-        ILogger<CommunityService>? logger = null)
+        ILogger<CommunityService>? logger = null,
+        ISystemSettingService? systemSettingService = null)
     {
         _repo = repo;
         _interactionService = interactionService;
@@ -55,6 +57,7 @@ public class CommunityService : ICommunityService
         _karmaService = karmaService;
         _configuration = configuration;
         _logger = logger;
+        _systemSettingService = systemSettingService;
     }
 
     private async Task CheckIsAdminOrSysAdminAsync(int communityId, int currentUserId)
@@ -306,6 +309,11 @@ public class CommunityService : ICommunityService
         var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
         var isHRorAdmin = user != null && user.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.HRAdmin || r.RoleName == Roles.CommunityAdmin);
 
+        var requireApproval = _systemSettingService != null
+            ? await _systemSettingService.GetRequireContentAndCommunityApprovalAsync()
+            : true;
+        var shouldAutoApprove = !requireApproval || isHRorAdmin;
+
         var community = new Community
         {
             Name = trimmedName,
@@ -318,8 +326,8 @@ public class CommunityService : ICommunityService
             CommunityType = dto.CommunityType,
             CreatedByUserId = currentUserId,
             CreatedDate = KnomeTime.Now,
-            IsActive = isHRorAdmin,
-            ApprovalStatus = isHRorAdmin ? "Approved" : "Pending"
+            IsActive = shouldAutoApprove,
+            ApprovalStatus = shouldAutoApprove ? "Approved" : "Pending"
         };
 
         await _repo.AddCommunityAsync(community);
@@ -335,7 +343,7 @@ public class CommunityService : ICommunityService
             Status = CommunityMemberStatuses.Approved,
             RequestedDate = KnomeTime.Now,
             DecidedDate = KnomeTime.Now,
-            ApprovedByUserId = isHRorAdmin ? currentUserId : null
+            ApprovedByUserId = shouldAutoApprove ? currentUserId : null
         };
         await _repo.AddMemberAsync(member);
 

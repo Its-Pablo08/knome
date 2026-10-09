@@ -13,6 +13,7 @@ import HighlightText from '../ui/HighlightText';
 
 import { interactionsApi, postsApi, notificationsApi, searchApi, communitiesApi, resolveMediaUrl, getVideoThumbnail, formatToDDMMYYYY, resolveSharedTarget } from '../../utils/apiService';
 import { checkRestrictedContent } from '../../utils/restrictedWords';
+import SharedClipCard, { isClipPost } from './SharedClipCard';
 
 // Available reactions (FR-CI-01)
 const REACTION_TYPES = {
@@ -870,9 +871,11 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
         return Boolean(u.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)$/i)) || u.startsWith('data:image/');
     };
 
-    // Separate image attachments from other attachments
-    const imageAttachments = (post.attachments || []).filter(isImageAttachment);
-    const otherAttachments = (post.attachments || []).filter(a => !isImageAttachment(a));
+    // Separate image attachments from other attachments (exclude clip media so clip card handles it self-contained)
+    const isClip = isClipPost(post);
+    const hasExplicitClipCard = isClip;
+    const imageAttachments = isClip ? [] : (post.attachments || []).filter(isImageAttachment);
+    const otherAttachments = isClip ? [] : (post.attachments || []).filter(a => !isImageAttachment(a));
 
     const handleCopyPostLink = () => {
         const link = `${window.location.origin}/posts?id=${post.id}`;
@@ -1715,13 +1718,13 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
 
                     const hasExplicitArticleCard = Boolean(post.sharedArticle || post.type === 'article_share' || (post.content && (post.content.includes('Shared Article:') || post.content.includes('/article-view'))));
                     const hasExplicitPodcastCard = Boolean(post.sharedPodcast || post.type === 'podcast_share' || (post.content && (post.content.includes('Shared Podcast:') || post.content.includes('/podcasts'))));
-                    const hasExplicitVideoCard = Boolean(post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹'))));
+                    const hasExplicitVideoCard = !hasExplicitClipCard && Boolean(post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹'))));
                     const hasExplicitProfileCard = Boolean(post.sharedProfile || post.isProfileShare || (post.content && post.content.includes('Shared Profile:')));
 
                     const isWikiShare = Boolean(target?.type === 'Wiki' || post.sharedWiki || post.type === 'wiki_share' || (post.postType || '').toLowerCase() === 'wiki' || (post.content && (post.content.includes('Shared Wiki:') || post.content.includes('/wiki/view') || post.content.includes('/wiki'))));
 
                     const isSharedPost = Boolean(
-                        !hasExplicitArticleCard && !hasExplicitPodcastCard && !hasExplicitVideoCard && !hasExplicitProfileCard && !isWikiShare &&
+                        !hasExplicitClipCard && !hasExplicitArticleCard && !hasExplicitPodcastCard && !hasExplicitVideoCard && !hasExplicitProfileCard && !isWikiShare &&
                         (
                             target ||
                             extractedPostId || 
@@ -1732,13 +1735,16 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                         )
                     );
 
-                    // Clean user commentary if this is a shared post, article, video, or profile:
+                    // Clean user commentary if this is a shared post, article, video, profile, or clip:
                     // Strip the automated template strings and internal URLs from rendered body
                     let userCommentary = post.content || '';
-                    if (isSharedPost || (post.content && (post.content.includes('Shared Article:') || post.content.includes('Shared Video:') || post.content.includes('Shared Profile:')))) {
+                    if (isSharedPost || hasExplicitClipCard || (post.content && (post.content.includes('Shared Article:') || post.content.includes('Shared Video:') || post.content.includes('Shared Profile:') || post.content.includes('Shared Clip:') || post.content.includes('Check out this Clip:')))) {
                         userCommentary = userCommentary
-                            .replace(/Shared\s+(?:Post|Article|Video|Profile):\s*"[^"]*"/gi, '')
-                            .replace(/(?:https?:\/\/[^\s]+)?\/(?:posts|article-view|videos|profile)\?[^\s]+/gi, '')
+                            .replace(/(?:Shared Clip|Check out this Clip):\s*"[^"]*"\s*(?:🎬)?/gi, '')
+                            .replace(/🎬\s*(?:Shared Clip|Check out this Clip):\s*"[^"]*"/gi, '')
+                            .replace(/Shared\s+(?:Post|Article|Video|Profile|Clip):\s*"[^"]*"/gi, '')
+                            .replace(/(?:https?:\/\/[^\s]+)?\/(?:posts|article-view|videos|profile|clips)\?[^\s]+/gi, '')
+                            .replace(/(?:https?:\/\/[^\s]+)?\/clips\/[^\s]+/gi, '')
                             .trim();
                     }
 
@@ -2079,8 +2085,13 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                         </div>
                     );
                 })()}
+                {/* Shared Clip Player / Card inside PostCard */}
+                {hasExplicitClipCard && (
+                    <SharedClipCard post={post} />
+                )}
+
                 {/* Shared Video Player / Card inside PostCard */}
-                {(post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹')))) && (
+                {!hasExplicitClipCard && (post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹')))) && (
                     <div className="mt-3.5 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-xl">
                         {(() => {
                             const vidObj = post.sharedVideo || {

@@ -173,18 +173,11 @@ export default function EditClipModal({ isOpen, onClose, clip, onClipUpdated }) 
                     )}
 
                     {/* Footer */}
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                        >
-                            Cancel
-                        </button>
+                    <div className="flex items-center justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
                         <button
                             type="submit"
                             disabled={isSaving}
-                            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white text-xs font-bold shadow-lg shadow-pink-500/25 transition disabled:opacity-50"
+                            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white text-xs font-bold shadow-lg shadow-pink-500/25 transition disabled:opacity-50 cursor-pointer"
                         >
                             {isSaving ? 'Saving...' : 'Save Changes'}
                         </button>

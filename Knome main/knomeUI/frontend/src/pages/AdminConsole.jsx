@@ -4894,11 +4894,11 @@ export default function AdminConsole() {
                                                                     setSelectedUserDetailsUser(u);
                                                                     setIsUserDetailsModalOpen(true);
                                                                 }}
-                                                                className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                                                                title="View Complete User Details"
+                                                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                                                title="View Details"
+                                                                aria-label="View Details"
                                                             >
-                                                                <span className="material-symbols-outlined text-[14px]">visibility</span>
-                                                                <span>View Details</span>
+                                                                <span className="material-symbols-outlined text-[18px]">visibility</span>
                                                             </button>
                                                             {isSysAdmin && (
                                                                 <button
@@ -4908,27 +4908,35 @@ export default function AdminConsole() {
                                                                         setSelectedRoles([getUserAssignedRole(u)]);
                                                                         setIsRoleModalOpen(true);
                                                                     }}
-                                                                    className="px-2.5 py-1 bg-indigo-500/10 text-indigo-600 font-bold text-[11px] rounded-lg hover:bg-indigo-500/20 cursor-pointer flex items-center gap-1"
-                                                                    title="Modify User Role"
+                                                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 transition-colors cursor-pointer"
+                                                                    title="Edit Role"
+                                                                    aria-label="Edit Role"
                                                                 >
-                                                                    <span className="material-symbols-outlined text-[13px]">tune</span>
-                                                                    <span>Edit Role</span>
+                                                                    <span className="material-symbols-outlined text-[17px]">tune</span>
                                                                 </button>
                                                             )}
                                                             <button
                                                                 onClick={() => handleToggleUserActive(u)}
-                                                                className={`px-2.5 py-1 font-bold text-[11px] rounded-lg cursor-pointer ${u.isActive ? 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/20' : 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'}`}
+                                                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+                                                                    u.isActive 
+                                                                        ? 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/20' 
+                                                                        : 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'
+                                                                }`}
+                                                                title={u.isActive ? "Suspend User" : "Activate User"}
+                                                                aria-label={u.isActive ? "Suspend User" : "Activate User"}
                                                             >
-                                                                {u.isActive ? 'Suspend' : 'Activate'}
+                                                                <span className="material-symbols-outlined text-[18px]">
+                                                                    {u.isActive ? 'person_off' : 'person_check'}
+                                                                </span>
                                                             </button>
                                                             {isSysAdmin && (
                                                                 <button
                                                                     onClick={() => handleDeleteUser(u)}
-                                                                    className="px-2.5 py-1 bg-red-500/10 text-red-600 hover:bg-red-600 hover:text-white font-bold text-[11px] rounded-lg transition-colors cursor-pointer flex items-center gap-1"
-                                                                    title="Permanently Delete User and All Associated Data"
+                                                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-500/10 text-red-600 hover:bg-red-600 hover:text-white transition-colors cursor-pointer"
+                                                                    title="Delete User"
+                                                                    aria-label="Delete User"
                                                                 >
-                                                                    <span className="material-symbols-outlined text-[13px]">delete</span>
-                                                                    <span>Delete</span>
+                                                                    <span className="material-symbols-outlined text-[17px]">delete</span>
                                                                 </button>
                                                             )}
                                                         </div>
@@ -7736,13 +7744,17 @@ export default function AdminConsole() {
                                                 <button
                                                     onClick={() => {
                                                         setIsPreviewOpen(false);
-                                                        const streamUrl = previewPost.videoUrl || previewPost.sourceUrl || 'https://vjs.zencdn.net/v/oceans.mp4';
-                                                        navigate(`/videos?id=${previewReport.contentId}&url=${encodeURIComponent(streamUrl)}`);
+                                                        if (previewReport.contentType === 'Clip') {
+                                                            navigate(`/clips?id=${previewReport.contentId}`);
+                                                        } else {
+                                                            const streamUrl = previewPost.videoUrl || previewPost.sourceUrl || 'https://vjs.zencdn.net/v/oceans.mp4';
+                                                            navigate(`/videos?id=${previewReport.contentId}&url=${encodeURIComponent(streamUrl)}`);
+                                                        }
                                                     }}
                                                     className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-600 hover:to-indigo-700 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                                                 >
                                                     <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                                                    <span>Open Full Video Hub</span>
+                                                    <span>{previewReport.contentType === 'Clip' ? 'Open in Clips' : 'Open Full Video Hub'}</span>
                                                 </button>
                                             </div>
                                         </div>

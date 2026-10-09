@@ -86,6 +86,22 @@ public class ClipsController : KnomeControllerBase
         return Ok(ApiResponse<object>.SuccessResponse(200, "View recorded.", new { viewCount = views }));
     }
 
+    [HttpGet("{id}/viewers")]
+    [ProducesResponseType(typeof(ApiResponse<List<ClipViewerDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetViewers(long id)
+    {
+        var viewers = await _clipService.GetClipViewersAsync(id);
+        return Ok(ApiResponse<List<ClipViewerDto>>.SuccessResponse(200, "Clip viewers retrieved successfully.", viewers));
+    }
+
+    [HttpGet("{id}/engagement")]
+    [ProducesResponseType(typeof(ApiResponse<ClipEngagementDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetEngagement(long id)
+    {
+        var engagement = await _clipService.GetClipEngagementAsync(id);
+        return Ok(ApiResponse<ClipEngagementDto>.SuccessResponse(200, "Clip engagement retrieved successfully.", engagement));
+    }
+
     [HttpPost("{id}/react")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ToggleLike(long id)

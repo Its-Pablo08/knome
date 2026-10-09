@@ -15,6 +15,7 @@ export const DEFAULT_SYSTEM_CONFIG = {
     notifyAdminsOnReport: true,
     enableMessaging: true,
     enableEmail: true,
+    requireContentAndCommunityApproval: true,
 };
 
 /**
@@ -73,6 +74,14 @@ export function isEmailEnabled() {
 }
 
 /**
+ * Fast synchronous check whether Content & Community Approval is required (ON).
+ */
+export function isApprovalRequired() {
+    const config = getSystemConfig();
+    return config.requireContentAndCommunityApproval !== false;
+}
+
+/**
  * React hook to reactively subscribe to system configuration changes.
  */
 export function useSystemConfig() {
@@ -111,6 +120,7 @@ export function useSystemConfig() {
         config,
         isMessagingEnabled: config.enableMessaging !== false,
         isEmailEnabled: config.enableEmail !== false,
+        isApprovalRequired: config.requireContentAndCommunityApproval !== false,
         updateConfig,
     };
 }

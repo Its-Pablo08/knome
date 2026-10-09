@@ -87,8 +87,9 @@ export default function Wiki() {
 
     const loadPopularTags = async () => {
         try {
-            const tags = await wikiApi.getPopularTags(15);
-            setPopularTags(Array.isArray(tags) ? tags : []);
+            const tags = await wikiApi.getPopularTags(10);
+            const list = Array.isArray(tags) ? tags : [];
+            setPopularTags(list.slice(0, 10));
         } catch {}
     };
 
@@ -333,13 +334,13 @@ export default function Wiki() {
                 </div>
             </div>
 
-            {/* Popular Tags Pills */}
-            {popularTags.length > 0 && (
+            {/* Popular Tags Pills - Top 10 tags only */}
+            {popularTags.slice(0, 10).length > 0 && (
                 <div className="flex items-center gap-2 overflow-x-auto py-1 custom-scrollbar">
                     <span className="text-[11px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">
                         Topic Tags:
                     </span>
-                    {popularTags.map(tag => (
+                    {popularTags.slice(0, 10).map(tag => (
                         <button
                             key={tag}
                             type="button"

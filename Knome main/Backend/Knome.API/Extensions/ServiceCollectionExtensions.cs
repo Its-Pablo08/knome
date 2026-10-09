@@ -545,6 +545,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<IAuditLogService, AuditLogService>();
 
+        // System Settings & Governance Configuration Module
+        services.AddScoped<ISystemSettingService, SystemSettingService>();
+
         // Suspension Guard (Phase 10.2) — reusable across content creation workflows
         services.AddScoped<ISuspensionGuard, SuspensionGuard>();
 

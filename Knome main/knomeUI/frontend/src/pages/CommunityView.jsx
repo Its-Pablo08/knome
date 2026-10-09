@@ -8,6 +8,7 @@ import { checkRestrictedContent } from '../utils/restrictedWords';
 import ArticleShareModal from '../components/modals/ArticleShareModal';
 import SuspendUserModal from '../components/modals/SuspendUserModal';
 import { ImageGrid, ImageLightbox } from '../components/widgets/PostCard';
+import SharedClipCard, { isClipPost } from '../components/widgets/SharedClipCard';
 import useScrollLoading from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
@@ -2164,6 +2165,8 @@ export default function CommunityView() {
                         attachments: postMedia.attachments,
                         images: postMedia.images,
                         attachmentUrls: postMedia.attachmentUrls,
+                        sharedClip: p.sharedClip || null,
+                        type: p.type || (isClipPost(p) ? 'clip_share' : null),
                         sharedProfile: backendSharedProfile,
                         isProfileShare: !!backendSharedProfile,
                         likes: finalLikes,
@@ -4687,15 +4690,16 @@ export default function CommunityView() {
                                             sharedPostTitle = `${target?.label || 'Post'} #${extractedPostId}`;
                                         }
 
+                                        const hasExplicitClipCard = isClipPost(post);
                                         const hasExplicitArticleCard = Boolean(post.sharedArticle || post.type === 'article_share' || (post.content && (post.content.includes('Shared Article:') || post.content.includes('/article-view'))));
                                         const hasExplicitPodcastCard = Boolean(post.sharedPodcast || post.type === 'podcast_share' || (post.content && (post.content.includes('Shared Podcast:') || post.content.includes('/podcasts'))));
-                                        const hasExplicitVideoCard = Boolean(post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹'))));
+                                        const hasExplicitVideoCard = !hasExplicitClipCard && Boolean(post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹'))));
                                         const hasExplicitProfileCard = Boolean(post.sharedProfile || post.isProfileShare || (post.content && post.content.includes('Shared Profile:')));
 
                                         const isWikiShare = Boolean(target?.type === 'Wiki' || post.sharedWiki || post.type === 'wiki_share' || (post.postType || '').toLowerCase() === 'wiki' || (post.content && (post.content.includes('Shared Wiki:') || post.content.includes('/wiki/view') || post.content.includes('/wiki'))));
 
                                         const isSharedPost = Boolean(
-                                            !hasExplicitArticleCard && !hasExplicitPodcastCard && !hasExplicitVideoCard && !hasExplicitProfileCard && !isWikiShare &&
+                                            !hasExplicitClipCard && !hasExplicitArticleCard && !hasExplicitPodcastCard && !hasExplicitVideoCard && !hasExplicitProfileCard && !isWikiShare &&
                                             (
                                                 target ||
                                                 extractedPostId || 
@@ -4706,12 +4710,15 @@ export default function CommunityView() {
                                             )
                                         );
 
-                                        // Clean user commentary if this is a shared post, article, video, or profile:
+                                        // Clean user commentary if this is a shared post, article, video, profile, or clip:
                                         let userCommentary = post.content || '';
-                                        if (isSharedPost || (post.content && (post.content.includes('Shared Article:') || post.content.includes('Shared Video:') || post.content.includes('Shared Profile:')))) {
+                                        if (isSharedPost || hasExplicitClipCard || (post.content && (post.content.includes('Shared Article:') || post.content.includes('Shared Video:') || post.content.includes('Shared Profile:') || post.content.includes('Shared Clip:') || post.content.includes('Check out this Clip:')))) {
                                             userCommentary = userCommentary
-                                                .replace(/Shared\s+(?:Post|Article|Video|Profile):\s*"[^"]*"/gi, '')
-                                                .replace(/(?:https?:\/\/[^\s]+)?\/(?:posts|article-view|videos|profile)\?[^\s]+/gi, '')
+                                                .replace(/(?:Shared Clip|Check out this Clip):\s*"[^"]*"\s*(?:🎬)?/gi, '')
+                                                .replace(/🎬\s*(?:Shared Clip|Check out this Clip):\s*"[^"]*"/gi, '')
+                                                .replace(/Shared\s+(?:Post|Article|Video|Profile|Clip):\s*"[^"]*"/gi, '')
+                                                .replace(/(?:https?:\/\/[^\s]+)?\/(?:posts|article-view|videos|profile|clips)\?[^\s]+/gi, '')
+                                                .replace(/(?:https?:\/\/[^\s]+)?\/clips\/[^\s]+/gi, '')
                                                 .trim();
                                         }
 
@@ -4814,7 +4821,7 @@ export default function CommunityView() {
                                                 {(() => {
                                                     const postMedia = normalizePostAttachments(post);
                                                     const postImages = postMedia.images;
-                                                    if (!postImages || postImages.length === 0) return null;
+                                                    if (hasExplicitClipCard || !postImages || postImages.length === 0) return null;
                                                     return (
                                                         <div className="mb-4 w-full rounded-2xl overflow-hidden">
                                                             <ImageGrid 
@@ -5048,8 +5055,13 @@ export default function CommunityView() {
                                                     </div>
                                                 )}
 
+                                                {/* Shared Clip Player / Card inside Community Feed Post */}
+                                                {hasExplicitClipCard && (
+                                                    <SharedClipCard post={post} />
+                                                )}
+
                                                 {/* Shared Video Player / Card inside Community Feed Post */}
-                                                {(post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹')))) && (
+                                                {!hasExplicitClipCard && (post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹')))) && (
                                                     <div className="mb-4 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-xl">
                                                         {(() => {
                                                             const vidObj = post.sharedVideo || {

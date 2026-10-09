@@ -131,6 +131,7 @@ function App() {
                     <Route path="/jobs"            element={<ProtectedPage><Jobs /></ProtectedPage>} />
                     <Route path="/videos"          element={<ProtectedPage><Videos /></ProtectedPage>} />
                     <Route path="/clips"           element={<ProtectedPage><Clips /></ProtectedPage>} />
+                    <Route path="/clips/:id"       element={<ProtectedPage><Clips /></ProtectedPage>} />
                     <Route path="/podcasts"        element={<ProtectedPage><Podcasts /></ProtectedPage>} />
                     <Route path="/articles"        element={<ProtectedPage><Articles /></ProtectedPage>} />
                     <Route path="/article-view"    element={<ProtectedPage><ArticleView /></ProtectedPage>} />
