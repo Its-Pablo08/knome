@@ -87,8 +87,9 @@ export default function Wiki() {
 
     const loadPopularTags = async () => {
         try {
-            const tags = await wikiApi.getPopularTags(15);
-            setPopularTags(Array.isArray(tags) ? tags : []);
+            const tags = await wikiApi.getPopularTags(10);
+            const list = Array.isArray(tags) ? tags : [];
+            setPopularTags(list.slice(0, 10));
         } catch {}
     };
 
@@ -253,33 +254,7 @@ export default function Wiki() {
                         </button>
                     )}
 
-                    {/* Compact View Switcher in Toolbar */}
-                    <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
-                        <button
-                            type="button"
-                            onClick={() => setViewMode('grid')}
-                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                                viewMode === 'grid'
-                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-                            }`}
-                            title="Grid View"
-                        >
-                            <span className="material-symbols-outlined text-[18px]">grid_view</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setViewMode('list')}
-                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                                viewMode === 'list'
-                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-                            }`}
-                            title="Directory List View"
-                        >
-                            <span className="material-symbols-outlined text-[18px]">view_list</span>
-                        </button>
-                    </div>
+                    {/* Navigation Filter Pills (Uniform Boxed Pills Shifted Below Search Bar) */}
                 </div>
             </div>
 

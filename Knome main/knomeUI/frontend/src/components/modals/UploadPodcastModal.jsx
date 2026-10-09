@@ -663,9 +663,6 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
                 </div>
 
                 <div className="p-4 sm:p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 rounded-b-2xl sm:rounded-b-3xl shrink-0 z-10">
-                    <button onClick={onClose} className="px-6 py-2.5 text-[13px] font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors">
-                        Cancel
-                    </button>
                     <button 
                         onClick={handleUpload}
                         disabled={isUploading || isRecording}

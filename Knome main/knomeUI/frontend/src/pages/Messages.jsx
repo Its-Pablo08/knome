@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUser } from '../components/contexts/UserContext';
 import { useToast } from '../components/contexts/ToastContext';
-import { resolveMediaUrl, userApi, messagesApi, mediaApi } from '../utils/apiService';
+import { resolveMediaUrl, userApi, messagesApi, mediaApi, clipsApi } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
 import { useSystemConfig } from '../utils/systemConfig';
 import DeleteMessageModal from '../components/modals/DeleteMessageModal';
@@ -151,6 +151,198 @@ const EMOJI_LABELS = {
     '🍻': 'Clinking Beer Mugs', '🍕': 'Pizza Slice', '🍔': 'Hamburger', '🍟': 'French Fries', '🍩': 'Doughnut',
     '🍪': 'Cookie', '🍫': 'Chocolate Bar', '🍿': 'Popcorn', '⚽': 'Soccer Ball', '🏀': 'Basketball',
     '🎾': 'Tennis Ball', '🎮': 'Video Game Controller', '🎲': 'Game Die', '🎨': 'Artist Palette', '🎵': 'Musical Note'
+};
+
+/**
+ * Extracts a Clip ID from shared text or URL patterns
+ */
+export const extractClipIdFromText = (text) => {
+    if (!text || typeof text !== 'string') return null;
+    const match = text.match(/(?:https?:\/\/[^\s]+)?\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i);
+    return match ? match[1] : null;
+};
+
+/**
+ * Interactive preview card for clips shared in messages
+ */
+function MessageClipCard({ clipId, isMe, navigate }) {
+    const [clipData, setClipData] = useState(null);
+
+    useEffect(() => {
+        if (!clipId) return;
+        let isMounted = true;
+        // 1. Check local caches for zero latency
+        try {
+            const localClips = JSON.parse(localStorage.getItem('knome_my_uploaded_clips') || '[]');
+            const localSaved = JSON.parse(localStorage.getItem('knome_saved_clips') || '[]');
+            const found = [...localClips, ...localSaved].find(c => String(c.clipId || c.id) === String(clipId));
+            if (found && isMounted) {
+                setClipData(found);
+                return;
+            }
+        } catch {}
+
+        // 2. Query backend API
+        if (typeof clipsApi?.getById === 'function') {
+            clipsApi.getById(clipId).then(res => {
+                const data = res?.data !== undefined ? res.data : res;
+                if (data && (data.clipId || data.id) && isMounted) {
+                    setClipData(data);
+                }
+            }).catch(() => {});
+        }
+
+        return () => { isMounted = false; };
+    }, [clipId]);
+
+    const handleOpenClip = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(`/clips?id=${clipId}`);
+    };
+
+    const title = clipData?.title || `Knome Clip #${clipId}`;
+    const rawThumb = clipData?.thumbnailUrl || clipData?.videoUrl;
+    const thumb = resolveMediaUrl(rawThumb) || rawThumb;
+    const author = clipData?.creatorName || 'Colleague';
+
+    return (
+        <div
+            onClick={handleOpenClip}
+            className={`mt-2 rounded-2xl overflow-hidden border transition-all duration-200 cursor-pointer group shadow-sm select-none ${
+                isMe
+                    ? 'bg-black/25 hover:bg-black/35 border-white/25 text-white'
+                    : 'bg-slate-50 dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-850 border-slate-200 dark:border-slate-700 hover:border-pink-500/60 text-slate-900 dark:text-white'
+            }`}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOpenClip(e); }}
+            title="Click to directly open and play this clip"
+        >
+            <div className="flex items-center gap-3 p-2.5">
+                {/* Reel Thumbnail or Video Box */}
+                <div className="relative w-14 h-18 sm:w-16 sm:h-20 rounded-xl overflow-hidden bg-slate-950 shrink-0 border border-black/20 flex items-center justify-center">
+                    {thumb && !thumb.includes('.mp4') ? (
+                        <img 
+                            src={thumb} 
+                            alt={title} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                        />
+                    ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-pink-600 via-rose-600 to-indigo-900 flex items-center justify-center">
+                            <span className="material-symbols-outlined text-white/90 text-2xl">movie</span>
+                        </div>
+                    )}
+                    {/* Play Badge Overlay */}
+                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/10 transition-colors">
+                        <div className="w-7 h-7 rounded-full bg-pink-500 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                            <span className="material-symbols-outlined text-sm font-fill ml-0.5">play_arrow</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Info & Watch CTA */}
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 mb-1">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                            <span className="material-symbols-outlined text-[11px]">movie</span>
+                            Knome Clip
+                        </span>
+                        <span className={`text-[10.5px] truncate ${isMe ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>
+                            • {author}
+                        </span>
+                    </div>
+
+                    <p className={`text-xs sm:text-[13px] font-bold line-clamp-2 leading-snug group-hover:text-pink-400 transition-colors ${
+                        isMe ? 'text-white' : 'text-slate-900 dark:text-slate-100'
+                    }`}>
+                        {title}
+                    </p>
+
+                    <div className="flex items-center gap-1 mt-1.5 text-[11px] font-semibold text-pink-400 group-hover:text-pink-300 transition-colors">
+                        <span>Tap to watch & play clip</span>
+                        <span className="material-symbols-outlined text-[14px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Tokenizes and formats message text with clickable links and @mentions
+ */
+const renderMessageContentWithLinks = (text, isMe, navigate) => {
+    if (!text) return null;
+    const tokenRegex = /(https?:\/\/[^\s]+|\/clips(?:\?id=|\/)[a-zA-Z0-9_-]+|@[a-zA-Z0-9_\s]+?(?=\s|[.,!?]|$))/gi;
+    const parts = text.split(tokenRegex);
+
+    return parts.map((part, idx) => {
+        if (!part) return null;
+
+        // 1. @mention
+        if (part.startsWith('@') && part.length > 1) {
+            return (
+                <span
+                    key={idx}
+                    className={`font-bold px-1 py-0.5 rounded ${
+                        isMe
+                            ? 'bg-black/20 text-white underline decoration-white/40'
+                            : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800'
+                    }`}
+                >
+                    {part}
+                </span>
+            );
+        }
+
+        // 2. URL or internal /clips link
+        const isUrl = /^https?:\/\//i.test(part) || /^\/clips(?:\?id=|\/)/i.test(part);
+        if (isUrl) {
+            const clipIdMatch = /(?:https?:\/\/[^\s]+)?\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i.exec(part);
+            const clipId = clipIdMatch ? clipIdMatch[1] : null;
+
+            const handleLinkClick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (clipId) {
+                    navigate(`/clips?id=${clipId}`);
+                } else {
+                    try {
+                        const urlObj = new URL(part, window.location.origin);
+                        if (urlObj.origin === window.location.origin) {
+                            navigate(urlObj.pathname + urlObj.search + urlObj.hash);
+                            return;
+                        }
+                    } catch {}
+                    window.open(part, '_blank', 'noopener,noreferrer');
+                }
+            };
+
+            return (
+                <a
+                    key={idx}
+                    href={part}
+                    onClick={handleLinkClick}
+                    className={`underline font-semibold cursor-pointer break-all transition-colors inline-flex items-center gap-0.5 ${
+                        isMe
+                            ? 'text-cyan-200 hover:text-white decoration-cyan-300/60'
+                            : 'text-indigo-600 dark:text-cyan-400 hover:underline decoration-indigo-400'
+                    }`}
+                    title={clipId ? `Open & play Clip #${clipId}` : 'Open link'}
+                >
+                    <span>{part}</span>
+                    {clipId && (
+                        <span className="material-symbols-outlined text-[13px] inline leading-none ml-0.5">
+                            play_circle
+                        </span>
+                    )}
+                </a>
+            );
+        }
+
+        return <span key={idx}>{part}</span>;
+    });
 };
 
 export default function Messages() {
@@ -1989,25 +2181,18 @@ export default function Messages() {
                                                         )}
 
                                                         {msg.text && (
-                                                            <p className="break-words whitespace-pre-wrap emoji-font text-[13px] leading-relaxed">
-                                                                {msg.text.split(/(@[a-zA-Z0-9_\s]+?(?=\s|[.,!?]|$))/g).map((part, idx) => {
-                                                                    if (part.startsWith('@') && part.length > 1) {
-                                                                        return (
-                                                                            <span
-                                                                                key={idx}
-                                                                                className={`font-bold px-1 py-0.5 rounded ${
-                                                                                    isMe
-                                                                                        ? 'bg-black/20 text-white underline decoration-white/40'
-                                                                                        : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800'
-                                                                                }`}
-                                                                            >
-                                                                                {part}
-                                                                            </span>
-                                                                        );
-                                                                    }
-                                                                    return part;
-                                                                })}
-                                                            </p>
+                                                            <div className="flex flex-col gap-1">
+                                                                <p className="break-words whitespace-pre-wrap emoji-font text-[13px] leading-relaxed">
+                                                                    {renderMessageContentWithLinks(msg.text, isMe, navigate)}
+                                                                </p>
+                                                                {/* Rich interactive Clip preview card if message contains a clip link */}
+                                                                {(() => {
+                                                                    const clipId = extractClipIdFromText(msg.text);
+                                                                    return clipId ? (
+                                                                        <MessageClipCard clipId={clipId} isMe={isMe} navigate={navigate} />
+                                                                    ) : null;
+                                                                })()}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 )}

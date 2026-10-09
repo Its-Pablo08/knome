@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import { useUser } from '../components/contexts/UserContext';
 import { useToast } from '../components/contexts/ToastContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
@@ -117,7 +117,8 @@ export default function Clips() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
 
-    const targetClipIdParam = searchParams.get('id');
+    const { id: routeClipId } = useParams();
+    const targetClipIdParam = routeClipId || searchParams.get('id') || searchParams.get('clipId');
     const targetTagParam = searchParams.get('tag');
 
     // Feed state
@@ -341,21 +342,62 @@ export default function Clips() {
 
             setClips(loadedClips);
 
-            // Determine initial clip index (support deep linking via id param)
+            // Determine initial clip index (support deep linking via id or route param)
             let initialIdx = 0;
-            if (targetClipIdParam && loadedClips.length > 0) {
-                const targetIdx = loadedClips.findIndex(c => String(c.clipId) === String(targetClipIdParam));
+            if (targetClipIdParam) {
+                let foundTargetClip = null;
+                const targetIdx = loadedClips.findIndex(c => String(c.clipId || c.id) === String(targetClipIdParam));
                 if (targetIdx !== -1) {
-                    initialIdx = targetIdx;
+                    foundTargetClip = loadedClips[targetIdx];
+                } else {
+                    // Check local storage caches
+                    const allLocal = [...getUserUploadedClipsLocal(), ...getSavedClipsLocal(), ...FALLBACK_CLIPS];
+                    const localMatch = allLocal.find(c => String(c.clipId || c.id) === String(targetClipIdParam));
+                    if (localMatch) {
+                        foundTargetClip = localMatch;
+                    } else {
+                        // Fetch directly via API
+                        try {
+                            const singleRes = await clipsApi.getById(targetClipIdParam);
+                            const singleClip = singleRes?.data !== undefined ? singleRes.data : singleRes;
+                            if (singleClip && (singleClip.clipId || singleClip.id)) {
+                                const localSavedIds = new Set(getSavedClipsLocal().map(c => String(c.clipId)));
+                                foundTargetClip = {
+                                    ...singleClip,
+                                    clipId: singleClip.clipId || singleClip.id,
+                                    isBookmarkedByCurrentUser: Boolean(singleClip.isBookmarkedByCurrentUser || localSavedIds.has(String(singleClip.clipId || singleClip.id)))
+                                };
+                            }
+                        } catch (fetchErr) {
+                            console.warn('Target clip not found via API:', fetchErr);
+                        }
+                    }
+                }
+
+                if (foundTargetClip) {
+                    // Position target clip directly at index 0 so it immediately opens and autoplays at top
+                    const remainingClips = loadedClips.filter(c => String(c.clipId || c.id) !== String(foundTargetClip.clipId || foundTargetClip.id));
+                    loadedClips = [foundTargetClip, ...remainingClips];
+                    initialIdx = 0;
+
+                    // Cleanly sync and preserve query param in browser address bar
+                    const targetId = foundTargetClip.clipId || foundTargetClip.id;
+                    if (window.location.search !== `?id=${targetId}`) {
+                        window.history.replaceState(null, '', `/clips?id=${targetId}`);
+                    }
+                } else {
+                    addToast('The shared clip could not be found or has been removed.', 'warning');
                 }
             }
 
+            setClips(loadedClips);
             setActiveIndex(initialIdx);
             activeIndexRef.current = initialIdx;
+            setIsPlaying(true);
             setVideoProgress(0);
+
             if (containerRef.current) {
-                const itemHeight = containerRef.current.clientHeight || 0;
-                containerRef.current.scrollTop = initialIdx * itemHeight;
+                containerRef.current.scrollTop = 0;
             }
         } catch (err) {
             console.warn('API feed error:', err);
@@ -375,7 +417,7 @@ export default function Clips() {
         } finally {
             setIsLoading(false);
         }
-    }, [feedTab, selectedHashtag, targetClipIdParam, getSavedClipsLocal, getUserUploadedClipsLocal]);
+    }, [feedTab, selectedHashtag, targetClipIdParam, getSavedClipsLocal, getUserUploadedClipsLocal, addToast]);
 
     useEffect(() => {
         loadClips();
@@ -399,7 +441,14 @@ export default function Clips() {
         activeIndexRef.current = index;
         setActiveIndex(index);
         setVideoProgress(0);
-    }, []);
+
+        // Keep current clip ID in address bar
+        const activeItem = clips[index];
+        if (activeItem && (activeItem.clipId || activeItem.id)) {
+            const activeId = activeItem.clipId || activeItem.id;
+            window.history.replaceState(null, '', `/clips?id=${activeId}`);
+        }
+    }, [clips]);
 
     // Container Scroll Listener — Updates activeIndex mathematically with debounce
     const handleContainerScroll = useCallback((e) => {
@@ -415,10 +464,17 @@ export default function Clips() {
                     activeIndexRef.current = newIndex;
                     setActiveIndex(newIndex);
                     setVideoProgress(0);
+
+                    // Keep current clip ID in address bar
+                    const activeItem = clips[newIndex];
+                    if (activeItem && (activeItem.clipId || activeItem.id)) {
+                        const activeId = activeItem.clipId || activeItem.id;
+                        window.history.replaceState(null, '', `/clips?id=${activeId}`);
+                    }
                 }
             }, 50);
         }
-    }, [clips.length]);
+    }, [clips]);
 
     // YouTube Shorts Style Wheel Handler
     useEffect(() => {
@@ -541,38 +597,66 @@ export default function Clips() {
         } else {
             const vid = videoRefs.current[activeIndex];
             if (vid) {
-                vid.muted = isMuted;
-                const playPromise = vid.play();
-                if (playPromise !== undefined) {
-                    playPromise
-                        .then(() => {
-                            setIsPlaying(true);
-                            setIsBuffering(false);
-                        })
-                        .catch((err) => {
-                            console.warn('Autoplay with sound prevented, falling back to muted autoplay:', err);
-                            vid.muted = true;
-                            setIsMuted(true);
-                            vid.play()
-                                .then(() => {
-                                    setIsPlaying(true);
-                                    setIsBuffering(false);
-                                })
-                                .catch(() => {
-                                    setIsPlaying(false);
-                                    setIsBuffering(false);
-                                });
-                        });
+                const playActiveVideo = () => {
+                    vid.muted = isMuted;
+                    const playPromise = vid.play();
+                    if (playPromise !== undefined) {
+                        playPromise
+                            .then(() => {
+                                setIsPlaying(true);
+                                setIsBuffering(false);
+                            })
+                            .catch((err) => {
+                                console.warn('Autoplay with sound prevented, falling back to muted autoplay:', err);
+                                vid.muted = true;
+                                setIsMuted(true);
+                                vid.play()
+                                    .then(() => {
+                                        setIsPlaying(true);
+                                        setIsBuffering(false);
+                                    })
+                                    .catch(() => {
+                                        setIsPlaying(false);
+                                        setIsBuffering(false);
+                                    });
+                            });
+                    }
+                };
+
+                playActiveVideo();
+                if (vid.readyState < 2) {
+                    vid.addEventListener('canplay', playActiveVideo, { once: true });
                 }
             }
         }
     }, [activeIndex, isMuted, clips]);
 
-    // Record view: exactly 1 view per user tracked authentically
+    // Record view and fetch authoritative engagement: exactly 1 view per user tracked authentically
     const activeClipId = clips[activeIndex]?.clipId;
     useEffect(() => {
         if (!activeClipId) return;
         const idStr = String(activeClipId);
+
+        // Fetch authoritative engagement (comments count, likes, views, shares) for the active clip
+        clipsApi.getEngagement(activeClipId)
+            .then(res => {
+                const data = res?.data || res;
+                if (data && typeof data === 'object') {
+                    setClips(prev => prev.map(c => {
+                        if (String(c.clipId || c.id) === idStr) {
+                            return {
+                                ...c,
+                                commentsCount: data.commentsCount !== undefined ? data.commentsCount : c.commentsCount,
+                                likesCount: data.likesCount !== undefined ? data.likesCount : c.likesCount,
+                                viewCount: data.viewCount !== undefined ? data.viewCount : c.viewCount,
+                                sharesCount: data.sharesCount !== undefined ? data.sharesCount : c.sharesCount
+                            };
+                        }
+                        return c;
+                    }));
+                }
+            })
+            .catch(() => {});
 
         if (!recordedViewsRef.current.has(idStr)) {
             recordedViewsRef.current.add(idStr);
@@ -601,6 +685,127 @@ export default function Clips() {
                 });
         }
     }, [activeClipId]);
+
+    // Real-Time Engagement Synchronizer across all active users
+    useEffect(() => {
+        const handleClipEngagement = (e) => {
+            const detail = e.detail;
+            if (!detail || !detail.clipId) return;
+
+            const targetIdStr = String(detail.clipId);
+            const currentUserId = currentUser?.userId || currentUser?.id;
+
+            setClips(prev => prev.map(c => {
+                if (String(c.clipId || c.id) === targetIdStr) {
+                    const updated = { ...c };
+                    if (detail.viewCount !== undefined) updated.viewCount = detail.viewCount;
+                    if (detail.likesCount !== undefined) updated.likesCount = detail.likesCount;
+                    if (detail.commentsCount !== undefined) updated.commentsCount = detail.commentsCount;
+                    if (detail.sharesCount !== undefined) updated.sharesCount = detail.sharesCount;
+
+                    // If this update was triggered by the current user's like/unlike
+                    if (detail.updateType === 'like' && detail.userId && currentUserId && Number(detail.userId) === Number(currentUserId) && detail.isLiked !== undefined) {
+                        updated.isLikedByCurrentUser = Boolean(detail.isLiked);
+                    }
+                    return updated;
+                }
+                return c;
+            }));
+
+            // Keep modal clip reference up-to-date
+            setSelectedClipForModal(prev => {
+                if (prev && String(prev.clipId || prev.id) === targetIdStr) {
+                    const updated = { ...prev };
+                    if (detail.viewCount !== undefined) updated.viewCount = detail.viewCount;
+                    if (detail.likesCount !== undefined) updated.likesCount = detail.likesCount;
+                    if (detail.commentsCount !== undefined) updated.commentsCount = detail.commentsCount;
+                    if (detail.sharesCount !== undefined) updated.sharesCount = detail.sharesCount;
+                    return updated;
+                }
+                return prev;
+            });
+        };
+
+        const handleViewUpdated = (e) => {
+            const detail = e.detail;
+            if (!detail || (detail.contentType && detail.contentType.toLowerCase() !== 'clip')) return;
+            const targetIdStr = String(detail.contentId || detail.clipId);
+            if (!targetIdStr) return;
+
+            setClips(prev => prev.map(c => {
+                if (String(c.clipId || c.id) === targetIdStr && detail.viewCount !== undefined) {
+                    return { ...c, viewCount: detail.viewCount };
+                }
+                return c;
+            }));
+        };
+
+        const handleReactionUpdated = (e) => {
+            const detail = e.detail;
+            if (!detail || (detail.contentType && detail.contentType.toLowerCase() !== 'clip')) return;
+            const targetIdStr = String(detail.contentId || detail.clipId);
+            if (!targetIdStr) return;
+
+            setClips(prev => prev.map(c => {
+                if (String(c.clipId || c.id) === targetIdStr) {
+                    const newLikes = detail.totalLikes ?? detail.reactionCount ?? detail.likesCount;
+                    if (newLikes !== undefined) {
+                        return { ...c, likesCount: newLikes };
+                    }
+                }
+                return c;
+            }));
+        };
+
+        const handleCommentUpdated = (e) => {
+            const detail = e.detail;
+            if (!detail || (detail.contentType && detail.contentType.toLowerCase() !== 'clip')) return;
+            const targetIdStr = String(detail.contentId || detail.clipId);
+            if (!targetIdStr) return;
+
+            setClips(prev => prev.map(c => {
+                if (String(c.clipId || c.id) === targetIdStr && detail.commentsCount !== undefined) {
+                    return { ...c, commentsCount: detail.commentsCount };
+                }
+                return c;
+            }));
+
+            setSelectedClipForModal(prev => {
+                if (prev && String(prev.clipId || prev.id) === targetIdStr && detail.commentsCount !== undefined) {
+                    return { ...prev, commentsCount: detail.commentsCount };
+                }
+                return prev;
+            });
+        };
+
+        const handleShareUpdated = (e) => {
+            const detail = e.detail;
+            if (!detail || (detail.contentType && detail.contentType.toLowerCase() !== 'clip')) return;
+            const targetIdStr = String(detail.contentId || detail.clipId);
+            if (!targetIdStr) return;
+
+            setClips(prev => prev.map(c => {
+                if (String(c.clipId || c.id) === targetIdStr && detail.sharesCount !== undefined) {
+                    return { ...c, sharesCount: detail.sharesCount };
+                }
+                return c;
+            }));
+        };
+
+        window.addEventListener('knome:clip-engagement-updated', handleClipEngagement);
+        window.addEventListener('knome:view-updated', handleViewUpdated);
+        window.addEventListener('knome:reaction-updated', handleReactionUpdated);
+        window.addEventListener('knome:comment-updated', handleCommentUpdated);
+        window.addEventListener('knome:share-updated', handleShareUpdated);
+
+        return () => {
+            window.removeEventListener('knome:clip-engagement-updated', handleClipEngagement);
+            window.removeEventListener('knome:view-updated', handleViewUpdated);
+            window.removeEventListener('knome:reaction-updated', handleReactionUpdated);
+            window.removeEventListener('knome:comment-updated', handleCommentUpdated);
+            window.removeEventListener('knome:share-updated', handleShareUpdated);
+        };
+    }, [currentUser?.userId, currentUser?.id]);
 
     // Video Time Update Progress
     const handleTimeUpdate = (e) => {
@@ -1116,137 +1321,167 @@ export default function Clips() {
                                                             </button>
                                                         </>
                                                     )}
-                                                    <button
-                                                        type="button"
-                                                        onClick={toggleMute}
-                                                        className="p-2 rounded-xl bg-black/40 backdrop-blur-md text-white/80 hover:text-white transition cursor-pointer"
-                                                        title={isMuted ? "Unmute" : "Mute"}
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">{isMuted ? 'volume_off' : 'volume_up'}</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const el = document.getElementById(`clip-card-${index}`);
-                                                            if (el) {
-                                                                if (!document.fullscreenElement) el.requestFullscreen().catch(() => {});
-                                                                else document.exitFullscreen().catch(() => {});
-                                                            }
-                                                        }}
-                                                        className="p-2 rounded-xl bg-black/40 backdrop-blur-md text-white/80 hover:text-white transition cursor-pointer"
-                                                        title="Fullscreen"
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">fullscreen</span>
-                                                    </button>
-                                                </div>
-                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={toggleMute}
+                                                                className="p-2 rounded-xl bg-black/40 backdrop-blur-md text-white/80 hover:text-white transition cursor-pointer"
+                                                                title={isMuted ? "Unmute" : "Mute"}
+                                                            >
+                                                                <span className="material-symbols-outlined text-sm">{isMuted ? 'volume_off' : 'volume_up'}</span>
+                                                            </button>
+                                                            {!clip.isMyClip && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedClipForModal(clip);
+                                                                        setIsReportOpen(true);
+                                                                    }}
+                                                                    className="p-2 rounded-xl bg-black/40 backdrop-blur-md text-white/80 hover:text-rose-400 hover:bg-black/60 transition cursor-pointer"
+                                                                    title="Report Clip"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-sm">flag</span>
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const el = document.getElementById(`clip-card-${index}`);
+                                                                    if (el) {
+                                                                        if (!document.fullscreenElement) el.requestFullscreen().catch(() => {});
+                                                                        else document.exitFullscreen().catch(() => {});
+                                                                    }
+                                                                }}
+                                                                className="p-2 rounded-xl bg-black/40 backdrop-blur-md text-white/80 hover:text-white transition cursor-pointer"
+                                                                title="Fullscreen"
+                                                            >
+                                                                <span className="material-symbols-outlined text-sm">fullscreen</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
 
-                                            {/* Right Floating Action Overlay Bar */}
-                                            <div className="absolute right-3 bottom-14 flex flex-col items-center gap-4 z-30 pointer-events-auto">
-                                                
-                                                {/* Creator Avatar & Profile Shortcut */}
-                                                <div className="relative mb-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            navigate(`/profile/${clip.createdByUserId}`);
-                                                        }}
-                                                        className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-pink-500 to-rose-500 shadow-xl overflow-hidden transition hover:scale-105 active:scale-95 cursor-pointer"
-                                                        title={`View ${clip.creatorName}'s profile`}
-                                                    >
-                                                        <img
-                                                            src={resolveMediaUrl(clip.creatorAvatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(clip.creatorName || 'User')}&background=ec4899&color=fff`}
-                                                            alt={clip.creatorName}
-                                                            className="w-full h-full object-cover rounded-full"
-                                                        />
-                                                    </button>
-                                                </div>
+                                                    {/* Right Floating Action Overlay Bar */}
+                                                    <div className="absolute right-3 bottom-14 flex flex-col items-center gap-4 z-30 pointer-events-auto">
+                                                        
+                                                        {/* Creator Avatar & Profile Shortcut */}
+                                                        <div className="relative mb-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    navigate(`/profile/${clip.createdByUserId}`);
+                                                                }}
+                                                                className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-pink-500 to-rose-500 shadow-xl overflow-hidden transition hover:scale-105 active:scale-95 cursor-pointer"
+                                                                title={`View ${clip.creatorName}'s profile`}
+                                                            >
+                                                                <img
+                                                                    src={resolveMediaUrl(clip.creatorAvatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(clip.creatorName || 'User')}&background=ec4899&color=fff`}
+                                                                    alt={clip.creatorName}
+                                                                    className="w-full h-full object-cover rounded-full"
+                                                                />
+                                                            </button>
+                                                        </div>
 
-                                                {/* Like Button */}
-                                                <div className="flex flex-col items-center">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleLike(clip);
-                                                        }}
-                                                        className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer ${
-                                                            clip.isLikedByCurrentUser
-                                                                ? 'bg-rose-500/30 text-rose-500 scale-110'
-                                                                : 'bg-black/50 text-white hover:bg-rose-500/20 hover:text-rose-400'
-                                                        }`}
-                                                        title="Like Clip"
-                                                    >
-                                                        <span className={`material-symbols-outlined text-2xl ${clip.isLikedByCurrentUser ? 'font-fill text-rose-500' : ''}`}>
-                                                            favorite
-                                                        </span>
-                                                    </button>
-                                                    <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
-                                                        {clip.likesCount || 0}
-                                                    </span>
-                                                </div>
+                                                        {/* Like Button */}
+                                                        <div className="flex flex-col items-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleLike(clip);
+                                                                }}
+                                                                className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer ${
+                                                                    clip.isLikedByCurrentUser
+                                                                        ? 'bg-rose-500/30 text-rose-500 scale-110'
+                                                                        : 'bg-black/50 text-white hover:bg-rose-500/20 hover:text-rose-400'
+                                                                }`}
+                                                                title="Like Clip"
+                                                            >
+                                                                <span className={`material-symbols-outlined text-2xl ${clip.isLikedByCurrentUser ? 'font-fill text-rose-500' : ''}`}>
+                                                                    favorite
+                                                                </span>
+                                                            </button>
+                                                            <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
+                                                                {clip.likesCount || 0}
+                                                            </span>
+                                                        </div>
 
-                                                {/* Comments Drawer Button */}
-                                                <div className="flex flex-col items-center">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedClipForModal(clip);
-                                                            setIsCommentsOpen(true);
-                                                        }}
-                                                        className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70 flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer"
-                                                        title="Comments"
-                                                    >
-                                                        <span className="material-symbols-outlined text-2xl">chat_bubble</span>
-                                                    </button>
-                                                    <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
-                                                        {clip.commentsCount || 0}
-                                                    </span>
-                                                </div>
+                                                        {/* Comments Drawer Button */}
+                                                        <div className="flex flex-col items-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedClipForModal(clip);
+                                                                    setIsCommentsOpen(true);
+                                                                }}
+                                                                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70 flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer"
+                                                                title="Comments"
+                                                            >
+                                                                <span className="material-symbols-outlined text-2xl">chat_bubble</span>
+                                                            </button>
+                                                            <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
+                                                                {clip.commentsCount || 0}
+                                                            </span>
+                                                        </div>
 
-                                                {/* Share Modal Button */}
-                                                <div className="flex flex-col items-center">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedClipForModal(clip);
-                                                            setIsShareOpen(true);
-                                                        }}
-                                                        className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70 flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer"
-                                                        title="Share Clip"
-                                                    >
-                                                        <span className="material-symbols-outlined text-2xl">share</span>
-                                                    </button>
-                                                    <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
-                                                        {clip.sharesCount || 0}
-                                                    </span>
-                                                </div>
+                                                        {/* Share Modal Button */}
+                                                        <div className="flex flex-col items-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedClipForModal(clip);
+                                                                    setIsShareOpen(true);
+                                                                }}
+                                                                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70 flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer"
+                                                                title="Share Clip"
+                                                            >
+                                                                <span className="material-symbols-outlined text-2xl">share</span>
+                                                            </button>
+                                                            <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
+                                                                {clip.sharesCount || 0}
+                                                            </span>
+                                                        </div>
 
-                                                {/* Bookmark / Save Button — High-reliability dual local & backend save */}
-                                                <div className="flex flex-col items-center">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleBookmark(clip);
-                                                        }}
-                                                        className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer ${
-                                                            clip.isBookmarkedByCurrentUser
-                                                                ? 'bg-amber-500 text-white ring-2 ring-amber-400/50 shadow-amber-500/30'
-                                                                : 'bg-black/50 text-white hover:bg-black/70 hover:text-amber-400'
-                                                        }`}
-                                                        title={clip.isBookmarkedByCurrentUser ? 'Saved' : 'Save Clip'}
-                                                    >
-                                                        <span className={`material-symbols-outlined text-2xl ${clip.isBookmarkedByCurrentUser ? 'font-fill text-white' : ''}`}>
-                                                            bookmark
-                                                        </span>
-                                                    </button>
-                                                </div>
+                                                        {/* Bookmark / Save Button — High-reliability dual local & backend save */}
+                                                        <div className="flex flex-col items-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleBookmark(clip);
+                                                                }}
+                                                                className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer ${
+                                                                    clip.isBookmarkedByCurrentUser
+                                                                        ? 'bg-amber-500 text-white ring-2 ring-amber-400/50 shadow-amber-500/30'
+                                                                        : 'bg-black/50 text-white hover:bg-black/70 hover:text-amber-400'
+                                                                }`}
+                                                                title={clip.isBookmarkedByCurrentUser ? 'Saved' : 'Save Clip'}
+                                                            >
+                                                                <span className={`material-symbols-outlined text-2xl ${clip.isBookmarkedByCurrentUser ? 'font-fill text-white' : ''}`}>
+                                                                    bookmark
+                                                                </span>
+                                                            </button>
+                                                        </div>
 
-                                            </div>
+                                                        {/* Report Button */}
+                                                        <div className="flex flex-col items-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedClipForModal(clip);
+                                                                    setIsReportOpen(true);
+                                                                }}
+                                                                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-rose-500/80 hover:text-white flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer group/report"
+                                                                title="Report Clip"
+                                                            >
+                                                                <span className="material-symbols-outlined text-2xl text-rose-400 group-hover/report:text-white transition-colors">flag</span>
+                                                            </button>
+                                                        </div>
+
+                                                    </div>
 
                                             {/* Bottom Information Overlay */}
                                             <div className="absolute inset-x-0 bottom-0 p-5 pr-20 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-20 flex flex-col gap-2 pointer-events-none">
@@ -1294,15 +1529,11 @@ export default function Clips() {
                                                     </div>
                                                 )}
 
-                                                {/* Views counter & Audio Sound Wave badge */}
-                                                <div className="flex items-center justify-between text-[11px] text-slate-300 mt-1 pt-1">
+                                                {/* Views counter */}
+                                                <div className="flex items-center text-[11px] text-slate-300 mt-1 pt-1">
                                                     <div className="flex items-center gap-1.5" title="Knome Internal Views">
                                                         <span className="material-symbols-outlined text-sm text-slate-400">visibility</span>
                                                         <span>{(clip.viewCount ?? 0) === 1 ? '1 view' : `${clip.viewCount || 0} views`}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5 text-slate-300">
-                                                        <span className="material-symbols-outlined text-xs animate-pulse text-pink-500">graphic_eq</span>
-                                                        <span className="text-[10px]">Original Audio</span>
                                                     </div>
                                                 </div>
 
@@ -1387,13 +1618,44 @@ export default function Clips() {
                 isOpen={isCommentsOpen}
                 onClose={() => setIsCommentsOpen(false)}
                 clip={selectedClipForModal}
-                onCommentAdded={() => {
+                onCommentsCountChange={(count) => {
+                    const targetIdStr = String(selectedClipForModal?.clipId || selectedClipForModal?.id);
+                    if (!targetIdStr) return;
                     setClips(prev => prev.map(c => {
-                        if (c.clipId === selectedClipForModal?.clipId) {
-                            return { ...c, commentsCount: (c.commentsCount || 0) + 1 };
+                        if (String(c.clipId || c.id) === targetIdStr) {
+                            return { ...c, commentsCount: count };
                         }
                         return c;
                     }));
+                    setSelectedClipForModal(prev => prev ? { ...prev, commentsCount: count } : prev);
+                }}
+                onCommentAdded={(newTotal) => {
+                    const targetIdStr = String(selectedClipForModal?.clipId || selectedClipForModal?.id);
+                    if (!targetIdStr) return;
+                    setClips(prev => prev.map(c => {
+                        if (String(c.clipId || c.id) === targetIdStr) {
+                            const count = newTotal !== undefined ? newTotal : ((c.commentsCount || 0) + 1);
+                            return { ...c, commentsCount: count };
+                        }
+                        return c;
+                    }));
+                    if (newTotal !== undefined) {
+                        setSelectedClipForModal(prev => prev ? { ...prev, commentsCount: newTotal } : prev);
+                    }
+                }}
+                onCommentDeleted={(newTotal) => {
+                    const targetIdStr = String(selectedClipForModal?.clipId || selectedClipForModal?.id);
+                    if (!targetIdStr) return;
+                    setClips(prev => prev.map(c => {
+                        if (String(c.clipId || c.id) === targetIdStr) {
+                            const count = newTotal !== undefined ? newTotal : Math.max(0, (c.commentsCount || 1) - 1);
+                            return { ...c, commentsCount: count };
+                        }
+                        return c;
+                    }));
+                    if (newTotal !== undefined) {
+                        setSelectedClipForModal(prev => prev ? { ...prev, commentsCount: newTotal } : prev);
+                    }
                 }}
             />
 

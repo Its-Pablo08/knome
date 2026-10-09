@@ -54,7 +54,6 @@ export function CreateCommunityModal({ isOpen, onClose }) {
                 </div>
 
                 <div className="flex justify-end gap-3 mt-4 border-t border-border-subtle pt-4">
-                    <button onClick={onClose} className="px-4 py-2 text-slate-gray font-label-md hover:bg-surface-container rounded-lg">Cancel</button>
                     <button onClick={onClose} className="px-4 py-2 bg-electric-blue text-white font-label-md rounded-lg hover:opacity-90">Create Community</button>
                 </div>
             </div>
@@ -104,7 +103,6 @@ export function CreateJobModal({ isOpen, onClose }) {
                 </div>
 
                 <div className="flex justify-end gap-3 mt-4 border-t border-border-subtle pt-4">
-                    <button onClick={onClose} className="px-4 py-2 text-slate-gray font-label-md hover:bg-surface-container rounded-lg">Cancel</button>
                     <button onClick={onClose} className="px-4 py-2 bg-electric-blue text-white font-label-md rounded-lg hover:opacity-90">Publish Job</button>
                 </div>
             </div>

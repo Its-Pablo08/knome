@@ -17,6 +17,7 @@ public partial class KnomeDbContext
         ConfigureUserMessageEntities(modelBuilder);
         ConfigureWikiEntities(modelBuilder);
         ConfigureClipEntities(modelBuilder);
+        ConfigureSystemSettingEntities(modelBuilder);
     }
 
     private static void ConfigureWikiEntities(ModelBuilder modelBuilder)

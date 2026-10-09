@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from '../contexts/UserContext';
 import { useToast } from '../contexts/ToastContext';
-import { clipsApi, communitiesApi, postsApi, resolveMediaUrl } from '../../utils/apiService';
+import { clipsApi, communitiesApi, postsApi, messagesApi, resolveMediaUrl } from '../../utils/apiService';
 
 export default function ClipShareModal({ isOpen, onClose, clip, onClipShared }) {
     const { currentUser, users: allUsers } = useUser();
@@ -30,17 +30,19 @@ export default function ClipShareModal({ isOpen, onClose, clip, onClipShared }) 
         }
     }, [isOpen]);
 
-    const clipShareUrl = `${window.location.origin}/clips?id=${clip?.clipId}`;
+    const clipId = clip?.clipId || clip?.id;
+    const clipShareUrl = `${window.location.origin}/clips?id=${clipId}`;
 
     const handleCopyLink = () => {
+        if (!clipId) return;
         navigator.clipboard.writeText(clipShareUrl);
         setHasCopiedLink(true);
-        addToast('Clip link copied to clipboard!', 'success');
+        addToast('Professional clip link copied to clipboard!', 'success');
         setTimeout(() => setHasCopiedLink(false), 3000);
     };
 
     const handleExecuteShare = async () => {
-        if (!clip?.clipId) return;
+        if (!clipId) return;
 
         setIsSharing(true);
         try {
@@ -51,28 +53,97 @@ export default function ClipShareModal({ isOpen, onClose, clip, onClipShared }) 
                     return;
                 }
 
+                const targetCommId = Number(selectedCommunityId);
+                const cleanNote = shareNote.trim();
+                const postContentText = cleanNote 
+                    ? `${cleanNote}\n\n🎬 Shared Clip: "${clip.title}"\n${clipShareUrl}`
+                    : `🎬 Shared Clip: "${clip.title}"\n${clipShareUrl}`;
+
                 // 1. Backend ClipShare record
-                await clipsApi.share(clip.clipId, {
+                await clipsApi.share(clipId, {
                     sharedToType: 'Community',
-                    targetId: Number(selectedCommunityId),
-                    note: shareNote.trim() || null
+                    targetId: targetCommId,
+                    note: cleanNote || null
                 });
 
-                // 2. Also publish to community feed as a shared post so community members see it
+                // 2. Publish to community feed
+                let createdPost = null;
+                const postAttachments = [clip.thumbnailUrl || clip.videoUrl, clip.videoUrl].filter(Boolean);
+                const postTypes = clip.thumbnailUrl ? ['Image', 'Video'] : ['Video'];
+
                 try {
-                    const commName = communities.find(c => String(c.communityId || c.id) === String(selectedCommunityId))?.name || 'Community';
-                    await postsApi.createPost({
-                        contentText: shareNote.trim() 
-                            ? `${shareNote.trim()}\n\nShared Clip: "${clip.title}" 🎬\n${clipShareUrl}`
-                            : `🎬 Check out this Clip: "${clip.title}"\n${clipShareUrl}`,
-                        audienceType: 'Community',
-                        audienceCommunityIds: [Number(selectedCommunityId)],
-                        visibility: 'Community',
-                        mediaUrls: [clip.videoUrl],
-                        thumbnailUrl: clip.thumbnailUrl || null
-                    });
-                } catch (feedErr) {
-                    console.warn('Community feed post sync notice:', feedErr);
+                    if (typeof communitiesApi.createPost === 'function') {
+                        createdPost = await communitiesApi.createPost(targetCommId, {
+                            contentText: postContentText,
+                            attachmentUrls: postAttachments,
+                            attachmentTypes: postTypes
+                        });
+                    }
+                } catch (commErr) {
+                    console.warn('Community post sync note:', commErr);
+                }
+
+                if (!createdPost) {
+                    try {
+                        createdPost = await postsApi.create({
+                            contentText: postContentText,
+                            audienceType: 'Community',
+                            audienceCommunityIds: [targetCommId],
+                            status: 'Published',
+                            attachmentUrls: postAttachments,
+                            attachmentTypes: postTypes
+                        });
+                    } catch (feedErr) {
+                        console.warn('Community feed post sync notice:', feedErr);
+                    }
+                }
+
+                // 3. Instant local cache synchronization for zero-latency UI update
+                try {
+                    const savedPostsKey = `knome_community_posts_${targetCommId}`;
+                    const existingCommPosts = JSON.parse(localStorage.getItem(savedPostsKey) || '[]');
+                    const newFeedPost = {
+                        id: (createdPost?.data?.postId || createdPost?.postId || Date.now()),
+                        author: currentUser?.name || currentUser?.fullName || 'Colleague',
+                        role: currentUser?.designation || currentUser?.roleName || 'Member',
+                        avatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
+                        time: 'Just now',
+                        content: postContentText,
+                        attachments: postAttachments,
+                        images: clip.thumbnailUrl ? [clip.thumbnailUrl] : [],
+                        attachmentUrls: postAttachments,
+                        likes: 0,
+                        comments: 0,
+                        isPinned: false,
+                        type: 'clip_share',
+                        clipId: clipId,
+                        clipTitle: clip.title,
+                        clipThumbnail: clip.thumbnailUrl || null,
+                        clipVideoUrl: clip.videoUrl,
+                        sharedClip: {
+                            clipId: clipId,
+                            title: clip.title,
+                            thumbnailUrl: clip.thumbnailUrl || null,
+                            videoUrl: clip.videoUrl,
+                            duration: clip.durationSeconds || null,
+                            sharerName: currentUser?.name || currentUser?.fullName || 'Colleague',
+                            sharerAvatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
+                            sharerRole: currentUser?.designation || currentUser?.roleName || 'Member'
+                        }
+                    };
+                    localStorage.setItem(savedPostsKey, JSON.stringify([newFeedPost, ...existingCommPosts]));
+
+                    // Also add to global knome_local_posts
+                    const globalLocalPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
+                    localStorage.setItem('knome_local_posts', JSON.stringify([newFeedPost, ...globalLocalPosts]));
+
+                    window.dispatchEvent(new CustomEvent('community-posts-updated', { detail: { communityId: targetCommId } }));
+                    window.dispatchEvent(new CustomEvent('community-post-created', { detail: { communityId: targetCommId } }));
+                    window.dispatchEvent(new CustomEvent('post-created'));
+                    window.dispatchEvent(new StorageEvent('storage', { key: savedPostsKey }));
+                    window.dispatchEvent(new StorageEvent('storage', { key: 'knome_local_posts' }));
+                } catch (cacheErr) {
+                    console.warn('Local feed cache notice:', cacheErr);
                 }
 
                 addToast('Clip successfully shared to community feed!', 'success');
@@ -84,13 +155,23 @@ export default function ClipShareModal({ isOpen, onClose, clip, onClipShared }) 
                 }
 
                 // Backend Direct ClipShare (generates direct notification for recipient)
-                await clipsApi.share(clip.clipId, {
+                await clipsApi.share(clipId, {
                     sharedToType: 'User',
                     targetId: Number(selectedUserId),
                     note: shareNote.trim() || null
                 });
 
-                addToast('Clip sent directly to colleague with notification!', 'success');
+                // Also send directly into their 1-to-1 conversation with the direct link!
+                try {
+                    const msgContent = shareNote.trim()
+                        ? `${shareNote.trim()}\n\n${clipShareUrl}`
+                        : clipShareUrl;
+                    await messagesApi.send(Number(selectedUserId), msgContent);
+                } catch (dmErr) {
+                    console.warn('Direct chat sync notice:', dmErr);
+                }
+
+                addToast('Clip sent directly to colleague with notification & message!', 'success');
             }
 
             if (onClipShared) onClipShared();
@@ -245,16 +326,17 @@ export default function ClipShareModal({ isOpen, onClose, clip, onClipShared }) 
 
                     {/* Mode 3: Copy Link */}
                     {shareTab === 'Link' && (
-                        <div className="space-y-3">
+                        <div className="space-y-3.5">
                             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                                Direct Clip URL
+                                Direct Shareable URL
                             </label>
                             <div className="flex items-center gap-2">
                                 <input
                                     type="text"
                                     readOnly
                                     value={clipShareUrl}
-                                    className="flex-1 px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 font-mono outline-none"
+                                    onClick={(e) => e.target.select()}
+                                    className="flex-1 px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 font-mono outline-none select-all focus:ring-2 focus:ring-pink-500"
                                 />
                                 <button
                                     type="button"
@@ -264,8 +346,51 @@ export default function ClipShareModal({ isOpen, onClose, clip, onClipShared }) 
                                     <span className="material-symbols-outlined text-sm">
                                         {hasCopiedLink ? 'done' : 'content_copy'}
                                     </span>
-                                    {hasCopiedLink ? 'Copied!' : 'Copy'}
+                                    {hasCopiedLink ? 'Copied!' : 'Copy Link'}
                                 </button>
+                            </div>
+
+                            {/* Clean visual preview */}
+                            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 flex items-center gap-3.5 shadow-sm">
+                                <div className="w-14 h-20 rounded-xl overflow-hidden bg-slate-900 shrink-0 relative border border-slate-700/60">
+                                    {clip.thumbnailUrl ? (
+                                        <img 
+                                            src={resolveMediaUrl(clip.thumbnailUrl) || clip.thumbnailUrl} 
+                                            alt={clip.title} 
+                                            className="w-full h-full object-cover" 
+                                            onError={(e) => {
+                                                e.target.onerror = null;
+                                                e.target.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=600';
+                                            }}
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-pink-500 bg-slate-900">
+                                            <span className="material-symbols-outlined text-xl">movie_filter</span>
+                                        </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                                        <div className="w-6 h-6 rounded-full bg-pink-500/90 flex items-center justify-center text-white">
+                                            <span className="material-symbols-outlined text-xs ml-0.5">play_arrow</span>
+                                        </div>
+                                    </div>
+                                    <div className="absolute bottom-1 right-1 px-1 py-0.2 rounded bg-black/80 text-[8px] font-bold text-white">
+                                        CLIP
+                                    </div>
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <span className="px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-500 font-extrabold text-[9px] uppercase tracking-wider">
+                                            Verified Link
+                                        </span>
+                                        <span className="text-[10px] text-slate-400">ID: #{clipId}</span>
+                                    </div>
+                                    <h5 className="text-xs font-bold text-slate-900 dark:text-white truncate mb-0.5">
+                                        {clip.title}
+                                    </h5>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight line-clamp-2">
+                                        Anyone with this link will open and play this exact Clip directly in the viewer.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     )}

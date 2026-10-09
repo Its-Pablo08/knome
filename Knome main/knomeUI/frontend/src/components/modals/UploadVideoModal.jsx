@@ -918,14 +918,6 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
                     <div className="flex items-center gap-2.5 shrink-0">
                         <button 
                             type="button"
-                            onClick={onClose} 
-                            disabled={isUploading} 
-                            className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/80 dark:hover:bg-slate-700/80 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
-                        >
-                            Cancel
-                        </button>
-                        <button 
-                            type="button"
                             onClick={handleUpload}
                             disabled={isUploading}
                             className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-cyan-500/25 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"

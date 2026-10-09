@@ -32,7 +32,9 @@ export default function Login() {
         } catch {}
 
         if (isAuthenticated && currentUser) {
-            navigate('/', { replace: true });
+            const returnTarget = sessionStorage.getItem('knome_return_url') || '/';
+            sessionStorage.removeItem('knome_return_url');
+            navigate(returnTarget, { replace: true });
             return;
         }
 

@@ -21,8 +21,16 @@ public class PodcastService : IPodcastService
     private readonly KnomeDbContext _db;
     private readonly IMapper _mapper;
     private readonly ISuspensionGuard _suspensionGuard;
+    private readonly ISystemSettingService? _systemSettingService;
 
-    public PodcastService(IPodcastRepository repo, IContentInteractionService interactionService, IKarmaService karmaService, KnomeDbContext db, IMapper mapper, ISuspensionGuard suspensionGuard)
+    public PodcastService(
+        IPodcastRepository repo, 
+        IContentInteractionService interactionService, 
+        IKarmaService karmaService, 
+        KnomeDbContext db, 
+        IMapper mapper, 
+        ISuspensionGuard suspensionGuard,
+        ISystemSettingService? systemSettingService = null)
     {
         _repo = repo;
         _interactionService = interactionService;
@@ -30,6 +38,7 @@ public class PodcastService : IPodcastService
         _db = db;
         _mapper = mapper;
         _suspensionGuard = suspensionGuard;
+        _systemSettingService = systemSettingService;
     }
 
     private async Task CheckIsAdminAsync(int currentUserId)
@@ -184,6 +193,21 @@ public class PodcastService : IPodcastService
     public async Task<PodcastDto> CreatePodcastAsync(int currentUserId, CreatePodcastDto dto)
     {
         await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
+
+        var caller = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
+        var isCallerAdmin = caller != null && caller.Roles.Any(r => 
+            r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" ||
+            r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" ||
+            r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM");
+
+        var requireApproval = _systemSettingService != null
+            ? await _systemSettingService.GetRequireContentAndCommunityApprovalAsync()
+            : true;
+
+        if (requireApproval && !isCallerAdmin)
+        {
+            throw new ForbiddenException("Administrator approval is required before podcasts are published per enterprise governance policy.");
+        }
 
         if (dto.SeriesId.HasValue)
         {

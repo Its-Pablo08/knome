@@ -118,6 +118,7 @@ public static class ApplicationBuilderExtensions
             Knome.API.Data.WikiDbInitializer.EnsureWikiTablesExistAsync(db).GetAwaiter().GetResult();
             Knome.API.Data.UserMessageDbInitializer.EnsureUserMessageTablesExistAsync(db).GetAwaiter().GetResult();
             Knome.API.Data.ClipDbInitializer.EnsureClipTablesExistAsync(db).GetAwaiter().GetResult();
+            Knome.API.Data.SystemSettingDbInitializer.EnsureSystemSettingsTableExistsAsync(db).GetAwaiter().GetResult();
         }
         catch (System.Exception ex)
         {

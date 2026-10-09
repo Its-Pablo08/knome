@@ -114,6 +114,13 @@ export default function AuthGuard({ children }) {
     }
 
     if (!isAuthenticated || !currentUser) {
+        // Preserve return URL for deep-linked items (e.g., shared clips or community posts)
+        try {
+            if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/sso') {
+                sessionStorage.setItem('knome_return_url', window.location.pathname + window.location.search);
+            }
+        } catch (_) {}
+
         // Enforce MPO Employee Hub Login: Route unauthenticated visits through /login with client registration
         try {
             window.location.replace('/login');

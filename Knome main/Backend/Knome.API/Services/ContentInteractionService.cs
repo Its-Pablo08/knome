@@ -344,13 +344,40 @@ public class ContentInteractionService : IContentInteractionService
         // Real-time broadcast comment count update to all active users
         try
         {
-            var topLevel = await _repo.GetTopLevelCommentsAsync(contentType, contentId);
+            var totalComments = await _db.Comments
+                .CountAsync(c => (c.ContentType == contentType || c.ContentType.ToLower() == contentType.ToLower()) && c.ContentId == contentId);
+
             await _hubContext.Clients.All.SendAsync("CommentCountUpdated", new
             {
                 contentType,
                 contentId,
-                commentsCount = topLevel.Count
+                commentsCount = totalComments
             });
+
+            if (string.Equals(contentType, ContentTypes.Clip, StringComparison.OrdinalIgnoreCase))
+            {
+                var clip = await _db.Clips.FindAsync(contentId);
+                if (clip != null)
+                {
+                    clip.CommentsCount = totalComments;
+                    await _db.SaveChangesAsync();
+
+                    var viewCount = await _db.ContentViews.CountAsync(cv => (cv.ContentType == ContentTypes.Clip || cv.ContentType.ToLower() == "clip") && cv.ContentId == contentId);
+                    var likesCount = await _db.Reactions.CountAsync(r => (r.ContentType == ContentTypes.Clip || r.ContentType.ToLower() == "clip") && r.ContentId == contentId && r.ReactionType == ReactionTypes.Like);
+                    var sharesCount = await _db.ClipShares.CountAsync(s => s.ClipId == contentId);
+
+                    await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
+                    {
+                        clipId = contentId,
+                        viewCount = Math.Max(clip.ViewsCount, viewCount),
+                        likesCount = Math.Max(clip.LikesCount, likesCount),
+                        commentsCount = totalComments,
+                        sharesCount = Math.Max(clip.SharesCount, sharesCount),
+                        userId,
+                        updateType = "comment"
+                    });
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -406,13 +433,40 @@ public class ContentInteractionService : IContentInteractionService
         // Real-time broadcast comment count update after deletion
         try
         {
-            var topLevel = await _repo.GetTopLevelCommentsAsync(cType, cId);
+            var totalComments = await _db.Comments
+                .CountAsync(c => (c.ContentType == cType || c.ContentType.ToLower() == cType.ToLower()) && c.ContentId == cId);
+
             await _hubContext.Clients.All.SendAsync("CommentCountUpdated", new
             {
                 contentType = cType,
                 contentId = cId,
-                commentsCount = topLevel.Count
+                commentsCount = totalComments
             });
+
+            if (string.Equals(cType, ContentTypes.Clip, StringComparison.OrdinalIgnoreCase))
+            {
+                var clip = await _db.Clips.FindAsync(cId);
+                if (clip != null)
+                {
+                    clip.CommentsCount = totalComments;
+                    await _db.SaveChangesAsync();
+
+                    var viewCount = await _db.ContentViews.CountAsync(cv => (cv.ContentType == ContentTypes.Clip || cv.ContentType.ToLower() == "clip") && cv.ContentId == cId);
+                    var likesCount = await _db.Reactions.CountAsync(r => (r.ContentType == ContentTypes.Clip || r.ContentType.ToLower() == "clip") && r.ContentId == cId && r.ReactionType == ReactionTypes.Like);
+                    var sharesCount = await _db.ClipShares.CountAsync(s => s.ClipId == cId);
+
+                    await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
+                    {
+                        clipId = cId,
+                        viewCount = Math.Max(clip.ViewsCount, viewCount),
+                        likesCount = Math.Max(clip.LikesCount, likesCount),
+                        commentsCount = totalComments,
+                        sharesCount = Math.Max(clip.SharesCount, sharesCount),
+                        userId,
+                        updateType = "comment"
+                    });
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -547,6 +601,34 @@ public class ContentInteractionService : IContentInteractionService
                 totalLikes = summary.TotalCount,
                 reactionsSummary = summary
             });
+
+            if (string.Equals(contentType, ContentTypes.Clip, StringComparison.OrdinalIgnoreCase))
+            {
+                var clip = await _db.Clips.FindAsync(contentId);
+                if (clip != null)
+                {
+                    clip.LikesCount = summary.TotalCount;
+                    await _db.SaveChangesAsync();
+
+                    var viewCount = await _db.ContentViews.CountAsync(cv => (cv.ContentType == ContentTypes.Clip || cv.ContentType.ToLower() == "clip") && cv.ContentId == contentId);
+                    var commentsCount = await _db.Comments.CountAsync(c => (c.ContentType == ContentTypes.Clip || c.ContentType.ToLower() == "clip") && c.ContentId == contentId);
+                    var sharesCount = await _db.ClipShares.CountAsync(s => s.ClipId == contentId);
+
+                    clip.CommentsCount = commentsCount;
+                    await _db.SaveChangesAsync();
+
+                    await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
+                    {
+                        clipId = contentId,
+                        viewCount = Math.Max(clip.ViewsCount, viewCount),
+                        likesCount = summary.TotalCount,
+                        commentsCount = commentsCount,
+                        sharesCount = Math.Max(clip.SharesCount, sharesCount),
+                        userId,
+                        updateType = "like"
+                    });
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -855,6 +937,10 @@ public class ContentInteractionService : IContentInteractionService
         {
             viewsDict = await _db.Posts.AsNoTracking().Where(p => idList.Contains(p.PostId)).ToDictionaryAsync(p => p.PostId, p => p.ViewCount);
         }
+        else if (contentType == ContentTypes.Clip)
+        {
+            viewsDict = await _db.Clips.AsNoTracking().Where(c => idList.Contains(c.ClipId)).ToDictionaryAsync(c => c.ClipId, c => c.ViewsCount);
+        }
 
         // Assemble all summaries in-memory with zero extra database calls
         foreach (var cid in idList)
@@ -981,6 +1067,7 @@ public class ContentInteractionService : IContentInteractionService
         var videoIds = dtos.Where(d => d.ContentType.Equals("Video", StringComparison.OrdinalIgnoreCase)).Select(d => d.ContentId).Distinct().ToList();
         var articleIds = dtos.Where(d => d.ContentType.Equals("Article", StringComparison.OrdinalIgnoreCase)).Select(d => d.ContentId).Distinct().ToList();
         var podcastIds = dtos.Where(d => d.ContentType.Equals("Podcast", StringComparison.OrdinalIgnoreCase)).Select(d => d.ContentId).Distinct().ToList();
+        var clipIds = dtos.Where(d => d.ContentType.Equals("Clip", StringComparison.OrdinalIgnoreCase)).Select(d => d.ContentId).Distinct().ToList();
 
         var posts = postIds.Count > 0 
             ? await _db.Posts.AsNoTracking()
@@ -1013,6 +1100,14 @@ public class ContentInteractionService : IContentInteractionService
                 .Where(p => podcastIds.Contains(p.PodcastId))
                 .ToDictionaryAsync(p => p.PodcastId)
             : new Dictionary<long, Podcast>();
+
+        var clips = clipIds.Count > 0 
+            ? await _db.Clips.AsNoTracking()
+                .Include(c => c.CreatedByUser)
+                .Include(c => c.Community)
+                .Where(c => clipIds.Contains(c.ClipId))
+                .ToDictionaryAsync(c => c.ClipId)
+            : new Dictionary<long, Clip>();
 
         foreach (var dto in dtos)
         {
@@ -1098,6 +1193,22 @@ public class ContentInteractionService : IContentInteractionService
                     dto.CommunityName = "Audio Room";
                 }
             }
+            else if (dto.ContentType.Equals("Clip", StringComparison.OrdinalIgnoreCase))
+            {
+                if (clips.TryGetValue(dto.ContentId, out var clip))
+                {
+                    dto.ReportedUserId = clip.CreatedByUserId;
+                    dto.ReportedUserName = clip.CreatedByUser?.FullName ?? $"User #{clip.CreatedByUserId}";
+                    dto.PostContentSnippet = !string.IsNullOrWhiteSpace(clip.Title) ? clip.Title : (clip.Description ?? "Clip");
+                    dto.CommunityName = clip.Community?.Name ?? "Clips";
+                }
+                else
+                {
+                    dto.ReportedUserName = "Clip Creator";
+                    dto.PostContentSnippet = $"Reported {dto.ReasonCode} violation on Clip #{dto.ContentId}.";
+                    dto.CommunityName = "Clips";
+                }
+            }
         }
 
         return dtos;
@@ -1106,7 +1217,49 @@ public class ContentInteractionService : IContentInteractionService
     public async Task<long> RecordViewAsync(string contentType, long contentId, int userId)
     {
         ValidateContentType(contentType);
-        return await _repo.RecordUniqueViewAsync(contentType, contentId, userId);
+        var views = await _repo.RecordUniqueViewAsync(contentType, contentId, userId);
+        if (string.Equals(contentType, ContentTypes.Clip, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var clip = await _db.Clips.FindAsync(contentId);
+                if (clip != null)
+                {
+                    clip.ViewsCount = (int)Math.Max(clip.ViewsCount, views);
+                    await _db.SaveChangesAsync();
+
+                    var likesCount = await _db.Reactions.CountAsync(r => (r.ContentType == ContentTypes.Clip || r.ContentType.ToLower() == "clip") && r.ContentId == contentId && r.ReactionType == ReactionTypes.Like);
+                    var commentsCount = await _db.Comments.CountAsync(c => (c.ContentType == ContentTypes.Clip || c.ContentType.ToLower() == "clip") && c.ContentId == contentId);
+                    var sharesCount = await _db.ClipShares.CountAsync(s => s.ClipId == contentId);
+
+                    clip.CommentsCount = commentsCount;
+                    await _db.SaveChangesAsync();
+
+                    await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
+                    {
+                        clipId = contentId,
+                        viewCount = (int)Math.Max(clip.ViewsCount, views),
+                        likesCount = Math.Max(clip.LikesCount, likesCount),
+                        commentsCount = commentsCount,
+                        sharesCount = Math.Max(clip.SharesCount, sharesCount),
+                        userId,
+                        updateType = "view"
+                    });
+
+                    await _hubContext.Clients.All.SendAsync("ViewCountUpdated", new
+                    {
+                        contentType = ContentTypes.Clip,
+                        contentId,
+                        viewCount = (int)Math.Max(clip.ViewsCount, views)
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to update clip views count or broadcast live ViewCountUpdated");
+            }
+        }
+        return views;
     }
 
     public async Task<bool> HasUserViewedAsync(string contentType, long contentId, int userId)

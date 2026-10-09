@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Knome.API.Constants;
 using Knome.API.Data;
+using Knome.API.DTOs.Clips;
 using Knome.API.Interfaces;
 using Knome.API.Models;
 using Microsoft.EntityFrameworkCore;
@@ -252,4 +253,89 @@ public class ClipRepository : IClipRepository
         var set = new HashSet<long>(bookmarkedIds);
         return ids.ToDictionary(id => id, id => set.Contains(id));
     }
+
+    public async Task<List<ClipViewerDto>> GetClipViewersAsync(long clipId)
+    {
+        var raw = await _db.ContentViews
+            .AsNoTracking()
+            .Include(cv => cv.User)
+            .Where(cv => cv.ContentType == ContentTypes.Clip && cv.ContentId == clipId)
+            .OrderByDescending(cv => cv.ViewedDate)
+            .ToListAsync();
+
+        var seenUsers = new HashSet<int>();
+        var result = new List<ClipViewerDto>();
+
+        foreach (var cv in raw)
+        {
+            if (seenUsers.Add(cv.UserId))
+            {
+                result.Add(new ClipViewerDto
+                {
+                    UserId = cv.UserId,
+                    FullName = cv.User != null ? cv.User.FullName : "Employee",
+                    EmployeeId = cv.User != null ? cv.User.EmployeeId : string.Empty,
+                    ProfilePhotoUrl = cv.User != null ? cv.User.ProfilePhotoUrl : null,
+                    Designation = cv.User != null ? cv.User.Designation : null,
+                    Department = cv.User != null ? cv.User.Department : null,
+                    ViewedDate = cv.ViewedDate
+                });
+            }
+        }
+
+        return result;
+    }
+
+    public async Task<ClipEngagementDto> GetClipEngagementAsync(long clipId)
+    {
+        var clip = await _db.Clips.AsNoTracking().FirstOrDefaultAsync(c => c.ClipId == clipId);
+        if (clip == null) return new ClipEngagementDto { ClipId = clipId };
+
+        var uniqueViews = await _db.ContentViews
+            .AsNoTracking()
+            .Where(cv => cv.ContentType == ContentTypes.Clip && cv.ContentId == clipId)
+            .Select(cv => cv.UserId)
+            .Distinct()
+            .CountAsync();
+
+        var totalComments = await _db.Comments
+            .AsNoTracking()
+            .Where(c => (c.ContentType == ContentTypes.Clip || c.ContentType.ToLower() == "clip") && c.ContentId == clipId)
+            .CountAsync();
+
+        var totalLikes = await _db.Reactions
+            .AsNoTracking()
+            .Where(r => (r.ContentType == ContentTypes.Clip || r.ContentType.ToLower() == "clip") && r.ContentId == clipId)
+            .CountAsync();
+
+        var totalShares = await _db.ClipShares
+            .AsNoTracking()
+            .Where(s => s.ClipId == clipId)
+            .CountAsync();
+
+        return new ClipEngagementDto
+        {
+            ClipId = clipId,
+            ViewCount = Math.Max(clip.ViewCount, uniqueViews),
+            LikesCount = Math.Max(clip.LikesCount, totalLikes),
+            CommentsCount = totalComments,
+            SharesCount = Math.Max(clip.SharesCount, totalShares)
+        };
+    }
+
+    public async Task<Dictionary<long, int>> GetCommentsCountMapAsync(IEnumerable<long> clipIds)
+    {
+        var ids = clipIds.Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<long, int>();
+
+        var counts = await _db.Comments
+            .AsNoTracking()
+            .Where(c => (c.ContentType == ContentTypes.Clip || c.ContentType.ToLower() == "clip") && ids.Contains(c.ContentId))
+            .GroupBy(c => c.ContentId)
+            .Select(g => new { ClipId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.ClipId, g => g.Count);
+
+        return ids.ToDictionary(id => id, id => counts.TryGetValue(id, out var cnt) ? cnt : 0);
+    }
 }
+

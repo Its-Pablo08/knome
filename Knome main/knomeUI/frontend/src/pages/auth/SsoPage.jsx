@@ -145,9 +145,11 @@ export default function SsoPage() {
                     }
                 }
 
-                setStatusMessage('Welcome to Knome! Redirecting to dashboard...');
+                const returnTarget = sessionStorage.getItem('knome_return_url') || '/';
+                sessionStorage.removeItem('knome_return_url');
+                setStatusMessage('Welcome to Knome! Redirecting...');
                 setTimeout(() => {
-                    window.location.href = '/';
+                    window.location.href = returnTarget;
                 }, 300);
             } catch (err) {
                 console.error('[SSO] Verification failed:', err);

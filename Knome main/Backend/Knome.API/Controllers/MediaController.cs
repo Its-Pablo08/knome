@@ -28,16 +28,19 @@ public class MediaController : KnomeControllerBase
     private readonly IFileStorageService _fileStorageService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<MediaController> _logger;
+    private readonly ISystemSettingService? _settingService;
     private static readonly object _fileLock = new();
 
     public MediaController(
         IFileStorageService fileStorageService,
         IConfiguration configuration,
-        ILogger<MediaController> logger)
+        ILogger<MediaController> logger,
+        ISystemSettingService? settingService = null)
     {
         _fileStorageService = fileStorageService;
         _configuration = configuration;
         _logger = logger;
+        _settingService = settingService;
     }
 
     [HttpPost("upload")]
@@ -158,8 +161,18 @@ public class MediaController : KnomeControllerBase
 
     [HttpPost("pending")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status201Created)]
-    public IActionResult AddPendingMedia([FromBody] JsonElement item)
+    public async Task<IActionResult> AddPendingMedia([FromBody] JsonElement item)
     {
+        var requireApproval = _settingService != null
+            ? await _settingService.GetRequireContentAndCommunityApprovalAsync()
+            : true;
+
+        if (!requireApproval)
+        {
+            // When approval is disabled (OFF), items must NOT enter the admin approval queue!
+            return Ok(ApiResponse<object>.SuccessResponse(200, "Content approval policy is disabled. Media does not enter the approval queue.", item));
+        }
+
         var filePath = GetPendingFilePath();
         List<JsonElement> list = new();
 

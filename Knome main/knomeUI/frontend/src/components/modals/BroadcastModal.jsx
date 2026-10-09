@@ -284,14 +284,6 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
-                            onClick={onClose}
-                            disabled={isSubmitting}
-                            className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer disabled:opacity-50"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
                             onClick={handleSubmit}
                             disabled={isSubmitting || !message.trim()}
                             className="px-5 py-2 text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl shadow-md shadow-amber-500/20 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"

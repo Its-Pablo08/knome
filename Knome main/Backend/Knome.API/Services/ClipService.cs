@@ -6,8 +6,10 @@ using AutoMapper;
 using Knome.API.Constants;
 using Knome.API.DTOs.Clips;
 using Knome.API.Exceptions;
+using Knome.API.Hubs;
 using Knome.API.Interfaces;
 using Knome.API.Models;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
 namespace Knome.API.Services;
@@ -22,6 +24,7 @@ public class ClipService : IClipService
     private readonly IKarmaService _karmaService;
     private readonly ISuspensionGuard _suspensionGuard;
     private readonly IMapper _mapper;
+    private readonly IHubContext<NotificationHub> _hubContext;
     private readonly ILogger<ClipService> _logger;
 
     public ClipService(
@@ -33,6 +36,7 @@ public class ClipService : IClipService
         IKarmaService karmaService,
         ISuspensionGuard suspensionGuard,
         IMapper mapper,
+        IHubContext<NotificationHub> hubContext,
         ILogger<ClipService> logger)
     {
         _clipRepo = clipRepo;
@@ -43,8 +47,10 @@ public class ClipService : IClipService
         _karmaService = karmaService;
         _suspensionGuard = suspensionGuard;
         _mapper = mapper;
+        _hubContext = hubContext;
         _logger = logger;
     }
+
 
     public async Task<List<ClipDto>> GetFeedClipsAsync(int currentUserId, int pageNumber = 1, int pageSize = 20, string? hashtag = null, long? communityId = null)
     {
@@ -54,6 +60,7 @@ public class ClipService : IClipService
         var clipIds = clips.Select(c => c.ClipId).ToList();
         var likedMap = await _clipRepo.GetLikedClipsMapAsync(clipIds, currentUserId);
         var bookmarkedMap = await _clipRepo.GetBookmarkedClipsMapAsync(clipIds, currentUserId);
+        var commentsMap = await _clipRepo.GetCommentsCountMapAsync(clipIds);
 
         var dtos = new List<ClipDto>();
         foreach (var clip in clips)
@@ -62,6 +69,10 @@ public class ClipService : IClipService
             dto.IsLikedByCurrentUser = likedMap.TryGetValue(clip.ClipId, out var liked) && liked;
             dto.IsBookmarkedByCurrentUser = bookmarkedMap.TryGetValue(clip.ClipId, out var bookmarked) && bookmarked;
             dto.IsMyClip = clip.CreatedByUserId == currentUserId;
+            if (commentsMap.TryGetValue(clip.ClipId, out var cCount))
+            {
+                dto.CommentsCount = cCount;
+            }
             dtos.Add(dto);
         }
 
@@ -79,6 +90,12 @@ public class ClipService : IClipService
         dto.IsBookmarkedByCurrentUser = await _clipRepo.IsBookmarkedByUserAsync(clipId, currentUserId);
         dto.IsMyClip = clip.CreatedByUserId == currentUserId;
 
+        var engagement = await _clipRepo.GetClipEngagementAsync(clipId);
+        dto.CommentsCount = engagement.CommentsCount;
+        dto.LikesCount = Math.Max(clip.LikesCount, engagement.LikesCount);
+        dto.ViewCount = Math.Max(clip.ViewCount, engagement.ViewCount);
+        dto.SharesCount = Math.Max(clip.SharesCount, engagement.SharesCount);
+
         return dto;
     }
 
@@ -90,6 +107,7 @@ public class ClipService : IClipService
         var clipIds = clips.Select(c => c.ClipId).ToList();
         var likedMap = await _clipRepo.GetLikedClipsMapAsync(clipIds, currentUserId);
         var bookmarkedMap = await _clipRepo.GetBookmarkedClipsMapAsync(clipIds, currentUserId);
+        var commentsMap = await _clipRepo.GetCommentsCountMapAsync(clipIds);
 
         var dtos = new List<ClipDto>();
         foreach (var clip in clips)
@@ -98,6 +116,10 @@ public class ClipService : IClipService
             dto.IsLikedByCurrentUser = likedMap.TryGetValue(clip.ClipId, out var liked) && liked;
             dto.IsBookmarkedByCurrentUser = bookmarkedMap.TryGetValue(clip.ClipId, out var bookmarked) && bookmarked;
             dto.IsMyClip = clip.CreatedByUserId == currentUserId;
+            if (commentsMap.TryGetValue(clip.ClipId, out var cCount))
+            {
+                dto.CommentsCount = cCount;
+            }
             dtos.Add(dto);
         }
 
@@ -217,7 +239,37 @@ public class ClipService : IClipService
 
         // Use Knome unique view enforcement: exactly 1 view per user tracked in ContentViews
         var authoritativeViews = await _interactionRepo.RecordUniqueViewAsync(ContentTypes.Clip, clipId, userId);
-        return (int)authoritativeViews;
+
+        var engagement = await _clipRepo.GetClipEngagementAsync(clipId);
+        int finalViews = (int)Math.Max(authoritativeViews, engagement.ViewCount);
+
+        // Real-time broadcast to all connected users
+        try
+        {
+            await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
+            {
+                clipId,
+                viewCount = finalViews,
+                likesCount = engagement.LikesCount,
+                commentsCount = engagement.CommentsCount,
+                sharesCount = engagement.SharesCount,
+                userId,
+                updateType = "view"
+            });
+
+            await _hubContext.Clients.All.SendAsync("ViewCountUpdated", new
+            {
+                contentType = "Clip",
+                contentId = clipId,
+                viewCount = finalViews
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to broadcast real-time ClipEngagementUpdated for view on Clip #{ClipId}", clipId);
+        }
+
+        return finalViews;
     }
 
     public async Task<bool> ToggleLikeAsync(long clipId, int userId)
@@ -228,6 +280,7 @@ public class ClipService : IClipService
         if (clip == null)
             throw new NotFoundException($"Clip with ID {clipId} not found.");
 
+        bool isLiked;
         var existingReaction = await _interactionRepo.GetUserReactionAsync(ContentTypes.Clip, clipId, userId);
         if (existingReaction != null)
         {
@@ -235,46 +288,78 @@ public class ClipService : IClipService
             await _interactionRepo.RemoveReactionAsync(existingReaction);
             clip.LikesCount = Math.Max(0, clip.LikesCount - 1);
             await _clipRepo.UpdateAsync(clip);
-            return false;
+            isLiked = false;
+        }
+        else
+        {
+            // Like
+            var newReaction = new Reaction
+            {
+                ContentType = ContentTypes.Clip,
+                ContentId = clipId,
+                UserId = userId,
+                ReactionType = ReactionTypes.Like,
+                CreatedDate = DateTime.UtcNow
+            };
+            await _interactionRepo.AddReactionAsync(newReaction);
+
+            clip.LikesCount += 1;
+            await _clipRepo.UpdateAsync(clip);
+            isLiked = true;
+
+            // Notify clip creator if not liking own clip
+            if (clip.CreatedByUserId != userId)
+            {
+                try
+                {
+                    var actor = await _userRepo.GetByIdAsync(userId);
+                    var actorName = actor?.FullName ?? "A colleague";
+                    await _notificationService.PublishAsync(
+                        clip.CreatedByUserId,
+                        NotificationTypes.Reaction,
+                        $"{actorName} liked your clip \"{clip.Title}\"",
+                        NotificationContentTypes.Clip,
+                        clipId
+                    );
+                    await _karmaService.AwardKarmaAsync(clip.CreatedByUserId, KarmaActivityTypes.ReceiveReaction, 1, ContentTypes.Clip, clipId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed sending like notification for Clip #{ClipId}", clipId);
+                }
+            }
         }
 
-        // Like
-        var newReaction = new Reaction
-        {
-            ContentType = ContentTypes.Clip,
-            ContentId = clipId,
-            UserId = userId,
-            ReactionType = ReactionTypes.Like,
-            CreatedDate = DateTime.UtcNow
-        };
-        await _interactionRepo.AddReactionAsync(newReaction);
+        var engagement = await _clipRepo.GetClipEngagementAsync(clipId);
 
-        clip.LikesCount += 1;
-        await _clipRepo.UpdateAsync(clip);
-
-        // Notify clip creator if not liking own clip
-        if (clip.CreatedByUserId != userId)
+        // Real-time broadcast to all connected users
+        try
         {
-            try
+            await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
             {
-                var actor = await _userRepo.GetByIdAsync(userId);
-                var actorName = actor?.FullName ?? "A colleague";
-                await _notificationService.PublishAsync(
-                    clip.CreatedByUserId,
-                    NotificationTypes.Reaction,
-                    $"{actorName} liked your clip \"{clip.Title}\"",
-                    NotificationContentTypes.Clip,
-                    clipId
-                );
-                await _karmaService.AwardKarmaAsync(clip.CreatedByUserId, KarmaActivityTypes.ReceiveReaction, 1, ContentTypes.Clip, clipId);
-            }
-            catch (Exception ex)
+                clipId,
+                viewCount = engagement.ViewCount,
+                likesCount = engagement.LikesCount,
+                commentsCount = engagement.CommentsCount,
+                sharesCount = engagement.SharesCount,
+                isLiked,
+                userId,
+                updateType = "like"
+            });
+
+            await _hubContext.Clients.All.SendAsync("ReactionCountUpdated", new
             {
-                _logger.LogWarning(ex, "Failed sending like notification for Clip #{ClipId}", clipId);
-            }
+                contentType = "Clip",
+                contentId = clipId,
+                totalLikes = engagement.LikesCount
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to broadcast real-time ClipEngagementUpdated for like on Clip #{ClipId}", clipId);
         }
 
-        return true;
+        return isLiked;
     }
 
     public async Task<bool> ToggleBookmarkAsync(long clipId, int userId)
@@ -372,8 +457,47 @@ public class ClipService : IClipService
             }
         }
 
+        var engagement = await _clipRepo.GetClipEngagementAsync(clipId);
+
+        // Real-time broadcast to all connected users
+        try
+        {
+            await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
+            {
+                clipId,
+                viewCount = engagement.ViewCount,
+                likesCount = engagement.LikesCount,
+                commentsCount = engagement.CommentsCount,
+                sharesCount = engagement.SharesCount,
+                userId,
+                updateType = "share"
+            });
+
+            await _hubContext.Clients.All.SendAsync("ShareCountUpdated", new
+            {
+                contentType = "Clip",
+                contentId = clipId,
+                sharesCount = engagement.SharesCount
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to broadcast real-time ClipEngagementUpdated for share on Clip #{ClipId}", clipId);
+        }
+
         return true;
     }
+
+    public async Task<List<ClipViewerDto>> GetClipViewersAsync(long clipId)
+    {
+        return await _clipRepo.GetClipViewersAsync(clipId);
+    }
+
+    public async Task<ClipEngagementDto> GetClipEngagementAsync(long clipId)
+    {
+        return await _clipRepo.GetClipEngagementAsync(clipId);
+    }
+
 
     public async Task<(List<ClipDto> Items, int TotalCount)> GetAllClipsForAdminAsync(int pageNumber = 1, int pageSize = 50, string? search = null, string? status = null)
     {
