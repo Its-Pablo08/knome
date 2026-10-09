@@ -106,86 +106,93 @@ public class UserMessageService : IUserMessageService
 
         foreach (var msg in messages)
         {
-            var dto = new UserMessageDto
+            try
             {
-                MessageId = msg.MessageId,
-                SenderId = msg.SenderId,
-                SenderName = msg.Sender?.FullName ?? string.Empty,
-                SenderAvatarUrl = msg.Sender?.ProfilePhotoUrl,
-                ReceiverId = msg.ReceiverId,
-                ReceiverName = msg.Receiver?.FullName ?? string.Empty,
-                ReceiverAvatarUrl = msg.Receiver?.ProfilePhotoUrl,
-                AttachmentsJson = msg.AttachmentsJson,
-                IsRead = msg.IsRead,
-                ReadDate = msg.ReadDate,
-                CreatedDate = msg.CreatedDate,
-                ParentMessageId = msg.ParentMessageId,
-                IsEdited = msg.IsEdited,
-                EditedDate = msg.EditedDate,
-                IsDeleted = msg.IsDeleted,
-                Reactions = new List<MessageReactionDto>()
-            };
+                var dto = new UserMessageDto
+                {
+                    MessageId = msg.MessageId,
+                    SenderId = msg.SenderId,
+                    SenderName = msg.Sender?.FullName ?? string.Empty,
+                    SenderAvatarUrl = msg.Sender?.ProfilePhotoUrl,
+                    ReceiverId = msg.ReceiverId,
+                    ReceiverName = msg.Receiver?.FullName ?? string.Empty,
+                    ReceiverAvatarUrl = msg.Receiver?.ProfilePhotoUrl,
+                    AttachmentsJson = msg.AttachmentsJson,
+                    IsRead = msg.IsRead,
+                    ReadDate = msg.ReadDate,
+                    CreatedDate = msg.CreatedDate,
+                    ParentMessageId = msg.ParentMessageId,
+                    IsEdited = msg.IsEdited,
+                    EditedDate = msg.EditedDate,
+                    IsDeleted = msg.IsDeleted,
+                    Reactions = new List<MessageReactionDto>()
+                };
 
-            if (msg.IsDeleted)
-            {
-                dto.Content = "This message was deleted";
-                dto.AttachmentsJson = null;
-            }
-            else
-            {
-                try
+                if (msg.IsDeleted)
                 {
-                    dto.Content = _encryptionService.Decrypt(msg.CipherText, msg.Nonce, msg.AuthTag, msg.KeyVersion);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to decrypt message {MessageId}", msg.MessageId);
-                    dto.Content = "[Encrypted Content]";
-                }
-            }
-
-            // Resolve Parent Message context
-            if (msg.ParentMessage != null)
-            {
-                dto.ParentSenderName = msg.ParentMessage.Sender?.FullName ?? "Colleague";
-                if (msg.ParentMessage.IsDeleted)
-                {
-                    dto.ParentContent = "This message was deleted";
+                    dto.Content = "This message was deleted";
+                    dto.AttachmentsJson = null;
                 }
                 else
                 {
                     try
                     {
-                        var parentText = _encryptionService.Decrypt(
-                            msg.ParentMessage.CipherText,
-                            msg.ParentMessage.Nonce,
-                            msg.ParentMessage.AuthTag,
-                            msg.ParentMessage.KeyVersion);
-                        dto.ParentContent = !string.IsNullOrWhiteSpace(parentText) ? parentText : "Attachment";
+                        dto.Content = _encryptionService.Decrypt(msg.CipherText, msg.Nonce, msg.AuthTag, msg.KeyVersion);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        dto.ParentContent = "[Encrypted Message]";
+                        _logger.LogWarning(ex, "Failed to decrypt message {MessageId}", msg.MessageId);
+                        dto.Content = "[Encrypted Content]";
                     }
                 }
-            }
 
-            // Group reactions
-            if (msg.Reactions != null && msg.Reactions.Count > 0)
-            {
-                dto.Reactions = msg.Reactions
-                    .GroupBy(r => r.ReactionType)
-                    .Select(g => new MessageReactionDto
+                // Resolve Parent Message context
+                if (msg.ParentMessage != null)
+                {
+                    dto.ParentSenderName = msg.ParentMessage.Sender?.FullName ?? "Colleague";
+                    if (msg.ParentMessage.IsDeleted)
                     {
-                        ReactionType = g.Key,
-                        Count = g.Count(),
-                        UserIds = g.Select(r => r.UserId).ToList(),
-                        HasReacted = g.Any(r => r.UserId == currentUserId)
-                    })
-                    .ToList();
-            }
+                        dto.ParentContent = "This message was deleted";
+                    }
+                    else
+                    {
+                        try
+                        {
+                            var parentText = _encryptionService.Decrypt(
+                                msg.ParentMessage.CipherText,
+                                msg.ParentMessage.Nonce,
+                                msg.ParentMessage.AuthTag,
+                                msg.ParentMessage.KeyVersion);
+                            dto.ParentContent = !string.IsNullOrWhiteSpace(parentText) ? parentText : "Attachment";
+                        }
+                        catch
+                        {
+                            dto.ParentContent = "[Encrypted Message]";
+                        }
+                    }
+                }
 
-            dtos.Add(dto);
+                // Group reactions
+                if (msg.Reactions != null && msg.Reactions.Count > 0)
+                {
+                    dto.Reactions = msg.Reactions
+                        .GroupBy(r => r.ReactionType)
+                        .Select(g => new MessageReactionDto
+                        {
+                            ReactionType = g.Key,
+                            Count = g.Count(),
+                            UserIds = g.Select(r => r.UserId).ToList(),
+                            HasReacted = g.Any(r => r.UserId == currentUserId)
+                        })
+                        .ToList();
+                }
+
+                dtos.Add(dto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to process message {MessageId} in history", msg.MessageId);
+            }
         }
 
         return dtos;

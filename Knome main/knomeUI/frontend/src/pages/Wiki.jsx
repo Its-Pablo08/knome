@@ -154,96 +154,46 @@ export default function Wiki() {
     return (
         <div className="space-y-6 max-w-7xl mx-auto pb-16">
             {/* Header Hero Banner */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-teal-900 via-emerald-900 to-slate-900 text-white p-6 sm:p-8 shadow-xl border border-teal-800/40">
-                <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-teal-500/20 via-emerald-500/10 to-transparent pointer-events-none" />
-                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="max-w-2xl space-y-2">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-teal-500/20 text-teal-300 border border-teal-400/30 backdrop-blur-md">
-                            <span className="material-symbols-outlined text-[16px]">menu_book</span>
-                            Institutional Knowledge & Living Playbooks
-                        </div>
-                        <h1
-                            className="text-2xl sm:text-3xl font-black tracking-tight text-white !text-white"
-                            style={{ color: '#ffffff' }}
-                        >
+            <div className="relative rounded-2xl overflow-hidden mb-6 shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between text-left px-6 py-8 md:px-10 md:py-8 gap-6">
+                {/* Background effects */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,_var(--tw-gradient-stops))] from-indigo-100/70 dark:from-indigo-950/40 via-transparent to-transparent pointer-events-none" />
+                <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[500px] h-32 bg-indigo-500/15 dark:bg-indigo-500/20 blur-[80px] pointer-events-none" />
+
+                {/* Light Streaks behind text */}
+                <div className="absolute top-[35%] left-0 w-[60%] h-[1px] bg-gradient-to-r from-indigo-400/40 dark:from-indigo-400/20 to-transparent" />
+                <div className="absolute top-[50%] left-0 w-[40%] h-[2px] bg-gradient-to-r from-violet-400/40 dark:from-violet-400/20 to-transparent blur-[1px]" />
+                <div className="absolute top-[65%] left-0 w-[50%] h-[1px] bg-gradient-to-r from-purple-400/40 dark:from-purple-400/20 to-transparent" />
+
+                {/* Content Left */}
+                <div className="relative z-10 flex flex-col items-start max-w-3xl">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-indigo-500/30 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-[11px] font-bold mb-3 backdrop-blur-md uppercase tracking-wider">
+                        <span className="material-symbols-outlined text-[15px]">menu_book</span>
+                        Institutional Knowledge & Living Playbooks
+                    </div>
+
+                    <h1 className="text-3xl md:text-4xl lg:text-[40px] font-black tracking-tight mb-3 text-slate-900 dark:text-white" style={{ lineHeight: '1.2' }}>
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400">
                             Enterprise Wiki Library
-                        </h1>
-                        <p className="text-xs sm:text-sm text-teal-100/80 leading-relaxed">
-                            Centralized documentation, architecture blueprints, standard operating procedures, and team knowledge bases with multi-level section collaboration and version control.
-                        </p>
-                    </div>
+                        </span>
+                    </h1>
 
-                    <div className="flex items-center gap-3 shrink-0">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setEditingWiki(null);
-                                setIsCreateModalOpen(true);
-                            }}
-                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 shadow-lg shadow-teal-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-                        >
-                            <span className="material-symbols-outlined text-[20px]">add</span>
-                            Create Wiki
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Navigation Tabs Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-2">
-                <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto custom-scrollbar min-w-0 pr-1">
-                    {[
-                        { id: 'all', label: 'All Wikis', icon: 'public' },
-                        { id: 'my', label: 'My Wikis', icon: 'person' },
-                        { id: 'shared', label: 'Shared With Me', icon: 'group' },
-                        { id: 'recent', label: 'Recently Updated', icon: 'history' }
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            type="button"
-                            onClick={() => {
-                                setActiveTab(tab.id);
-                                setPageNumber(1);
-                            }}
-                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
-                                activeTab === tab.id
-                                    ? 'bg-teal-600 text-white shadow-md shadow-teal-500/20'
-                                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                        >
-                            <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
-                            {tab.label}
-                        </button>
-                    ))}
+                    <p className="text-slate-600 dark:text-slate-400 text-sm md:text-[15px] font-medium leading-relaxed max-w-2xl">
+                        Centralized documentation, architecture blueprints, standard operating procedures, and team knowledge bases with multi-level section collaboration and version control.
+                    </p>
                 </div>
 
-                {/* View switcher (Always visible, distinct, and firmly anchored) */}
-                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/90 dark:border-slate-700/80 shrink-0 shadow-2xs">
+                {/* Action Right */}
+                <div className="relative z-10 shrink-0 flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
                     <button
                         type="button"
-                        onClick={() => setViewMode('grid')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            viewMode === 'grid'
-                                ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-300 shadow-xs'
-                                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
-                        }`}
-                        title="Switch to Card Grid View"
+                        onClick={() => {
+                            setEditingWiki(null);
+                            setIsCreateModalOpen(true);
+                        }}
+                        className="w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                     >
-                        <span className="material-symbols-outlined text-[18px]">grid_view</span>
-                        <span>Grid</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setViewMode('list')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            viewMode === 'list'
-                                ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-300 shadow-xs'
-                                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
-                        }`}
-                        title="Switch to Directory List View"
-                    >
-                        <span className="material-symbols-outlined text-[18px]">view_list</span>
-                        <span>List</span>
+                        <span className="material-symbols-outlined text-[20px]">add</span>
+                        Create Wiki
                     </button>
                 </div>
             </div>
@@ -263,7 +213,7 @@ export default function Wiki() {
                             setPageNumber(1);
                         }}
                         placeholder="Search Wikis by title, overview text, or tags..."
-                        className="w-full pl-10 pr-9 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                        className="w-full pl-10 pr-9 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                     />
                     {searchQuery && (
                         <button
@@ -284,7 +234,7 @@ export default function Wiki() {
                             setSelectedStatus(e.target.value);
                             setPageNumber(1);
                         }}
-                        className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                        className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                     >
                         <option value="All">All Statuses</option>
                         <option value="Published">Published Only</option>
@@ -296,7 +246,7 @@ export default function Wiki() {
                         <button
                             type="button"
                             onClick={() => setSelectedTag('')}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 transition-colors"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors"
                         >
                             <span>#{selectedTag}</span>
                             <span className="material-symbols-outlined text-[14px]">close</span>
@@ -310,7 +260,7 @@ export default function Wiki() {
                             onClick={() => setViewMode('grid')}
                             className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                                 viewMode === 'grid'
-                                    ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-300 shadow-xs'
+                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
                                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
                             }`}
                             title="Grid View"
@@ -322,7 +272,7 @@ export default function Wiki() {
                             onClick={() => setViewMode('list')}
                             className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                                 viewMode === 'list'
-                                    ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-300 shadow-xs'
+                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
                                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
                             }`}
                             title="Directory List View"
@@ -333,41 +283,42 @@ export default function Wiki() {
                 </div>
             </div>
 
-            {/* Popular Tags Pills */}
-            {popularTags.length > 0 && (
-                <div className="flex items-center gap-2 overflow-x-auto py-1 custom-scrollbar">
-                    <span className="text-[11px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">
-                        Topic Tags:
-                    </span>
-                    {popularTags.map(tag => (
-                        <button
-                            key={tag}
-                            type="button"
-                            onClick={() => {
-                                setSelectedTag(selectedTag === tag ? '' : tag);
-                                setPageNumber(1);
-                            }}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all shrink-0 cursor-pointer ${
-                                selectedTag === tag
-                                    ? 'bg-teal-600 text-white shadow-xs'
-                                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-950/40 hover:text-teal-600'
-                            }`}
-                        >
-                            #{tag}
-                        </button>
-                    ))}
-                </div>
-            )}
+            {/* Navigation Filter Pills (Uniform Boxed Pills Shifted Below Search Bar) */}
+            <div className="flex flex-wrap items-center gap-2 w-full mb-2 overflow-x-auto no-scrollbar">
+                {[
+                    { id: 'all', label: 'All Wikis', icon: 'public' },
+                    { id: 'my', label: 'My Wikis', icon: 'person' },
+                    { id: 'shared', label: 'Shared With Me', icon: 'group' },
+                    { id: 'recent', label: 'Recently Updated', icon: 'history' }
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => {
+                            setActiveTab(tab.id);
+                            setPageNumber(1);
+                        }}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-[13px] font-bold transition-all border shrink-0 cursor-pointer whitespace-nowrap ${
+                            activeTab === tab.id
+                                ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-700 dark:text-indigo-400 shadow-xs'
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800'
+                        }`}
+                    >
+                        <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
 
             {/* Wiki Grid / List */}
             {isLoading ? (
                 <div className="py-20 flex flex-col items-center justify-center gap-3">
-                    <div className="w-10 h-10 border-4 border-teal-500/30 border-t-teal-600 rounded-full animate-spin" />
+                    <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
                     <p className="text-xs font-semibold text-slate-400">Loading Wikis...</p>
                 </div>
             ) : wikis.length === 0 ? (
                 <div className="py-20 text-center rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-850 p-8 space-y-4">
-                    <div className="w-16 h-16 mx-auto rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center border border-teal-200/60 dark:border-teal-800/60">
+                    <div className="w-16 h-16 mx-auto rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200/60 dark:border-indigo-800/60">
                         <span className="material-symbols-outlined text-3xl">menu_book</span>
                     </div>
                     <div>
@@ -389,7 +340,7 @@ export default function Wiki() {
                                     setIsCreateModalOpen(true);
                                 }
                             }}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 shadow-md shadow-teal-500/20 transition-all cursor-pointer"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
                         >
                             <span className="material-symbols-outlined text-[18px]">
                                 {searchQuery || selectedTag ? 'filter_alt_off' : 'add'}
@@ -409,7 +360,7 @@ export default function Wiki() {
 
                         const permBadges = {
                             Owner: 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200',
-                            Editor: 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-200',
+                            Editor: 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200',
                             Viewer: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200'
                         };
 
@@ -417,7 +368,7 @@ export default function Wiki() {
                             <div
                                 key={wiki.wikiId}
                                 onClick={() => handleCardClick(wiki.wikiId)}
-                                className="group flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 overflow-hidden hover:shadow-xl hover:border-teal-500/50 dark:hover:border-teal-500/50 transition-all duration-200 cursor-pointer"
+                                className="group flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 overflow-hidden hover:shadow-xl hover:border-indigo-500/50 dark:hover:border-indigo-500/50 transition-all duration-200 cursor-pointer"
                             >
                                 {/* Cover Banner */}
                                 <div className="relative h-32 w-full overflow-hidden bg-slate-100 dark:bg-slate-900">
@@ -445,7 +396,7 @@ export default function Wiki() {
 
                                     {/* Bottom Title on Image */}
                                     <div className="absolute bottom-2 left-3 right-3">
-                                        <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-teal-300 transition-colors">
+                                        <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-indigo-300 transition-colors">
                                             <HighlightText text={wiki.title} highlight={searchQuery} />
                                         </h3>
                                     </div>
@@ -478,7 +429,7 @@ export default function Wiki() {
                                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
                                         <div className="flex items-center gap-3">
                                             <span className="flex items-center gap-1" title="Sections">
-                                                <span className="material-symbols-outlined text-[14px] text-teal-500">format_list_bulleted</span>
+                                                <span className="material-symbols-outlined text-[14px] text-indigo-500">format_list_bulleted</span>
                                                 {wiki.sectionsCount || 0}
                                             </span>
                                             <span className="flex items-center gap-1" title="Collaborators">
@@ -515,7 +466,7 @@ export default function Wiki() {
                                                 <button
                                                     type="button"
                                                     onClick={(e) => handleOpenEdit(wiki, e)}
-                                                    className="p-1 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                    className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                                     title="Edit Overview"
                                                 >
                                                     <span className="material-symbols-outlined text-[16px]">edit</span>
@@ -525,7 +476,7 @@ export default function Wiki() {
                                             <button
                                                 type="button"
                                                 onClick={(e) => handleOpenShare(wiki, e)}
-                                                className="p-1 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                                 title="Share Wiki"
                                             >
                                                 <span className="material-symbols-outlined text-[16px]">share</span>
@@ -569,7 +520,7 @@ export default function Wiki() {
 
                             const permBadges = {
                                 Owner: 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200',
-                                Editor: 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-200',
+                                Editor: 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200',
                                 Viewer: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200'
                             };
 
@@ -592,14 +543,14 @@ export default function Wiki() {
                                                     }}
                                                 />
                                             ) : (
-                                                <div className="w-full h-full flex items-center justify-center bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400">
+                                                <div className="w-full h-full flex items-center justify-center bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
                                                     <span className="material-symbols-outlined text-[20px]">menu_book</span>
                                                 </div>
                                             )}
                                         </div>
 
                                         <div className="min-w-0 flex-1">
-                                            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                                            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                                                 <HighlightText text={wiki.title} highlight={searchQuery} />
                                             </h3>
                                             <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
@@ -626,7 +577,7 @@ export default function Wiki() {
                                     {/* Column 3: Metrics & Activity */}
                                     <div className="md:col-span-2 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 w-full">
                                         <span className="flex items-center gap-1" title="Sections">
-                                            <span className="material-symbols-outlined text-[15px] text-teal-500">format_list_bulleted</span>
+                                            <span className="material-symbols-outlined text-[15px] text-indigo-500">format_list_bulleted</span>
                                             {wiki.sectionsCount || 0}
                                         </span>
                                         <span className="flex items-center gap-1" title="Collaborators">
@@ -656,7 +607,7 @@ export default function Wiki() {
                                                 <button
                                                     type="button"
                                                     onClick={(e) => handleOpenEdit(wiki, e)}
-                                                    className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                    className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                                     title="Edit Overview"
                                                 >
                                                     <span className="material-symbols-outlined text-[17px]">edit</span>
@@ -665,7 +616,7 @@ export default function Wiki() {
                                             <button
                                                 type="button"
                                                 onClick={(e) => handleOpenShare(wiki, e)}
-                                                className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                                 title="Share"
                                             >
                                                 <span className="material-symbols-outlined text-[17px]">share</span>
@@ -721,7 +672,7 @@ export default function Wiki() {
                                             onClick={() => setPageNumber(p)}
                                             className={`w-7 h-7 text-xs font-semibold rounded-lg flex items-center justify-center transition-colors ${
                                                 pageNumber === p
-                                                    ? 'bg-teal-600 text-white shadow-xs'
+                                                    ? 'bg-indigo-600 text-white shadow-xs'
                                                     : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                                             }`}
                                         >

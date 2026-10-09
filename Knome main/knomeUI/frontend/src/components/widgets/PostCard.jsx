@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '../contexts/UserContext';
+import { useUser, resolveEmployeeName, KNOWN_ROSTER_NAMES } from '../contexts/UserContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmDialogContext';
 import ReportModal from '../modals/ReportModal';
@@ -548,7 +548,7 @@ const setCachedPostInteraction = (postId, updates) => {
 };
 
 export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuthorFollowed = false, isAuthorFollower = false }) {
-    const { currentUser, awardRuleKarma } = useUser();
+    const { currentUser, awardRuleKarma, users } = useUser();
     const { addToast } = useToast();
     const confirm = useConfirm();
     const navigate = useNavigate();
@@ -1166,7 +1166,117 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
 
     const currentUserId = currentUser?.userId || currentUser?.id;
     const postAuthorId = post.author?.id || post.author?.userId || post.authorUserId || post.authorId || post.userId;
-    const isAuthor = Boolean(currentUserId && postAuthorId && String(currentUserId) === String(postAuthorId));
+    const postEmpId = post.authorEmployeeId || post.author?.employeeId || post.employeeId || post.user?.employeeId;
+    const isAuthor = Boolean(
+        (currentUserId && postAuthorId && String(currentUserId) === String(postAuthorId)) ||
+        (currentUser?.employeeId && postEmpId && String(currentUser.employeeId).toUpperCase() === String(postEmpId).toUpperCase())
+    );
+
+    const resolvedAuthorName = React.useMemo(() => {
+        // 1. If author is current user, use currentUser's definitive name
+        if (isAuthor && (currentUser?.fullName || currentUser?.name)) {
+            return currentUser.fullName || currentUser.name;
+        }
+
+        // 2. Candidate names on post object
+        const candidates = [
+            post.author?.name,
+            post.author?.fullName,
+            post.authorFullName,
+            post.authorName,
+            post.authorUser?.fullName,
+            post.user?.fullName,
+            post.user?.name
+        ].filter(Boolean);
+
+        // 3. Check for an explicit non-generic candidate
+        for (const c of candidates) {
+            const s = String(c).trim();
+            const l = s.toLowerCase();
+            if (s && l !== 'employee' && l !== 'user' && l !== 'unknown' && !/^(emp|mpo|mp)\d+$/i.test(s)) {
+                return s;
+            }
+        }
+
+        // 4. Try matching author in platform users list from UserContext
+        if (Array.isArray(users) && users.length > 0) {
+            const matched = users.find(u => 
+                (postAuthorId && String(u.userId || u.id) === String(postAuthorId)) ||
+                (postEmpId && String(u.employeeId || '').toUpperCase() === String(postEmpId).toUpperCase())
+            );
+            if (matched) {
+                const uName = matched.fullName || matched.name;
+                if (uName && uName.toLowerCase() !== 'employee' && uName.toLowerCase() !== 'user' && uName.toLowerCase() !== 'unknown') {
+                    return uName;
+                }
+            }
+        }
+
+        // 5. Look up by employee ID in known roster mapping
+        const empKey = String(postEmpId || '').trim().toUpperCase();
+        if (empKey && KNOWN_ROSTER_NAMES[empKey]) {
+            return KNOWN_ROSTER_NAMES[empKey];
+        }
+
+        // 6. Check candidates against KNOWN_ROSTER_NAMES (if name was stored as an empId like "MPO105")
+        for (const c of candidates) {
+            const cKey = String(c).trim().toUpperCase();
+            if (KNOWN_ROSTER_NAMES[cKey]) {
+                return KNOWN_ROSTER_NAMES[cKey];
+            }
+        }
+
+        // 7. Try resolveEmployeeName helper
+        for (const c of candidates) {
+            const resolved = resolveEmployeeName(c, postEmpId);
+            if (resolved && resolved.toLowerCase() !== 'employee' && resolved.toLowerCase() !== 'user' && resolved.toLowerCase() !== 'unknown') {
+                return resolved;
+            }
+        }
+        if (postEmpId) {
+            const resolved = resolveEmployeeName(postEmpId, postEmpId);
+            if (resolved && resolved.toLowerCase() !== 'employee' && resolved.toLowerCase() !== 'user' && resolved.toLowerCase() !== 'unknown') {
+                return resolved;
+            }
+        }
+
+        // 8. If post had any candidate name at all, use it
+        if (candidates.length > 0 && candidates[0]) {
+            return candidates[0];
+        }
+
+        // 9. If current user exists, fallback to current user
+        if (currentUser?.fullName || currentUser?.name) {
+            return currentUser.fullName || currentUser.name;
+        }
+
+        return 'Employee';
+    }, [post, isAuthor, currentUser, postAuthorId, postEmpId, users]);
+
+    const resolvedAuthorAvatar = React.useMemo(() => {
+        const existing = post.author?.avatar || post.authorProfilePhotoUrl || post.authorAvatar;
+        if (existing && 
+            !existing.includes('name=User&') && 
+            !existing.includes('name=Employee&') && 
+            !existing.includes('name=Unknown&') &&
+            !existing.endsWith('name=User') &&
+            !existing.endsWith('name=Employee')) {
+            return existing;
+        }
+        if (isAuthor && (currentUser?.profilePhotoUrl || currentUser?.avatar)) {
+            return currentUser.profilePhotoUrl || currentUser.avatar;
+        }
+        if (Array.isArray(users) && users.length > 0) {
+            const matched = users.find(u => 
+                (postAuthorId && String(u.userId || u.id) === String(postAuthorId)) ||
+                (postEmpId && String(u.employeeId || '').toUpperCase() === String(postEmpId).toUpperCase())
+            );
+            if (matched && (matched.profilePhotoUrl || matched.avatar)) {
+                return matched.profilePhotoUrl || matched.avatar;
+            }
+        }
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(resolvedAuthorName || 'Employee')}&background=6366f1&color=fff&size=256&bold=true`;
+    }, [post, isAuthor, currentUser, users, resolvedAuthorName, postAuthorId, postEmpId]);
 
     const isUserAdmin = Boolean(
         currentUser?.isAdmin === true ||
@@ -1509,11 +1619,11 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                 >
                     <img 
                         className="w-full h-full rounded-[10px] object-cover border-2 border-white dark:border-slate-900" 
-                        alt={post.author?.name || "Avatar"} 
-                        src={post.author?.avatar}
+                        alt={resolvedAuthorName || "Avatar"} 
+                        src={resolvedAuthorAvatar}
                         onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(post.author?.name || 'User')}&background=6366f1&color=fff`;
+                            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(resolvedAuthorName || 'User')}&background=6366f1&color=fff`;
                         }}
                     />
                 </button>
@@ -1521,7 +1631,7 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                     <div className="flex items-center justify-between mb-0.5">
                         <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
                             <button onClick={() => navigate('/profile', { state: { user: post.author } })} className="font-source-sans font-bold text-[15px] text-[#0F172A] dark:text-white leading-tight hover:underline cursor-pointer">
-                                <HighlightText text={post.author?.name || post.authorName || 'Employee'} query={searchQuery} />
+                                <HighlightText text={resolvedAuthorName} query={searchQuery} />
                             </button>
                             {post.author?.isVerified && <span className="material-symbols-outlined text-[13px] text-blue-500" style={{fontVariationSettings: "'FILL' 1"}}>verified</span>}
                             <span className="text-slate-300 dark:text-slate-700 text-[11px]">•</span>

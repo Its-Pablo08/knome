@@ -607,8 +607,8 @@ export default function Podcasts() {
                     </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto custom-scrollbar">
+                {/* Category Filter Pills */}
+                <div className="flex flex-wrap items-center gap-2 w-full mb-6 overflow-x-auto no-scrollbar">
                     {['All Episodes', 'General', 'Tech', 'Leadership', 'Engineering', 'My Podcasts'].map(tab => (
                         <button 
                             key={tab}
@@ -616,10 +616,13 @@ export default function Podcasts() {
                                 setActiveTab(tab);
                                 setSelectedSeries(null);
                             }}
-                            className={`px-6 py-4 font-bold text-[14px] transition-colors relative whitespace-nowrap ${activeTab === tab ? 'text-pink-500' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                            className={`px-4 py-2 rounded-xl text-xs sm:text-[13px] font-bold transition-all border shrink-0 cursor-pointer whitespace-nowrap ${
+                                activeTab === tab
+                                    ? 'bg-fuchsia-500/15 border-fuchsia-500/40 text-fuchsia-700 dark:text-fuchsia-400 shadow-xs'
+                                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }`}
                         >
                             {tab}
-                            {activeTab === tab && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-pink-500 rounded-t-full"></div>}
                         </button>
                     ))}
                 </div>

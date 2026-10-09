@@ -167,7 +167,12 @@ export default function Dashboard() {
                 localPosts.forEach(lp => {
                     const lpIdStr = String(lp.id || lp.postId || '');
                     if (!deletedIds.includes(lpIdStr) && !mapped.some(m => String(m.id || m.contentId || m.postId) === lpIdStr)) {
-                        mapped.unshift(mapFeedItem(lp));
+                        const enrichedLp = { ...lp };
+                        if (currentUser && (!enrichedLp.authorName || enrichedLp.authorName === 'Employee' || enrichedLp.authorName === 'User')) {
+                            enrichedLp.authorName = currentUser.fullName || currentUser.name || enrichedLp.authorName;
+                            enrichedLp.authorFullName = currentUser.fullName || currentUser.name || enrichedLp.authorFullName;
+                        }
+                        mapped.unshift(mapFeedItem(enrichedLp));
                     }
                 });
             } catch (_) {}

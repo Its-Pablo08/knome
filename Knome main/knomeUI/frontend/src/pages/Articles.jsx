@@ -684,22 +684,22 @@ export default function Articles() {
                     {/* Hero Header */}
                     <div className="relative rounded-2xl overflow-hidden mb-6 shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between text-left px-6 py-8 md:px-10 md:py-8 gap-6">
                         {/* Background effects */}
-                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,_var(--tw-gradient-stops))] from-teal-100/60 dark:from-teal-950/30 via-transparent to-transparent pointer-events-none"></div>
-                        <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[500px] h-32 bg-teal-400/10 dark:bg-teal-500/10 blur-[80px] pointer-events-none"></div>
+                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,_var(--tw-gradient-stops))] from-sky-100/60 dark:from-sky-950/30 via-transparent to-transparent pointer-events-none"></div>
+                        <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[500px] h-32 bg-sky-400/10 dark:bg-sky-500/10 blur-[80px] pointer-events-none"></div>
                         
                         {/* Light Streaks behind text */}
-                        <div className="absolute top-[35%] left-0 w-[60%] h-[1px] bg-gradient-to-r from-teal-300/40 dark:from-teal-400/20 to-transparent"></div>
-                        <div className="absolute top-[50%] left-0 w-[40%] h-[2px] bg-gradient-to-r from-emerald-300/40 dark:from-emerald-400/20 to-transparent blur-[1px]"></div>
-                        <div className="absolute top-[65%] left-0 w-[50%] h-[1px] bg-gradient-to-r from-cyan-300/40 dark:from-cyan-400/20 to-transparent"></div>
+                        <div className="absolute top-[35%] left-0 w-[60%] h-[1px] bg-gradient-to-r from-sky-300/40 dark:from-sky-400/20 to-transparent"></div>
+                        <div className="absolute top-[50%] left-0 w-[40%] h-[2px] bg-gradient-to-r from-cyan-300/40 dark:from-cyan-400/20 to-transparent blur-[1px]"></div>
+                        <div className="absolute top-[65%] left-0 w-[50%] h-[1px] bg-gradient-to-r from-blue-300/40 dark:from-blue-400/20 to-transparent"></div>
 
                         {/* Content Left */}
                         <div className="relative z-10 flex flex-col items-start max-w-3xl">
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-teal-500/30 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 text-[11px] font-bold mb-3 backdrop-blur-md uppercase tracking-wider">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-sky-500/30 bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 text-[11px] font-bold mb-3 backdrop-blur-md uppercase tracking-wider">
                                 📖 Knowledge Base & Publications
                             </div>
                             
                             <h1 className="text-3xl md:text-4xl lg:text-[40px] font-black tracking-tight mb-3 text-slate-900 dark:text-white" style={{ lineHeight: '1.2' }}>
-                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 via-emerald-600 to-cyan-600 dark:from-teal-400 dark:via-emerald-400 dark:to-cyan-400">
+                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-600 dark:from-sky-400 dark:via-cyan-400 dark:to-blue-400">
                                     Explore In-Depth Publications
                                 </span>
                             </h1>
@@ -714,7 +714,7 @@ export default function Articles() {
                             {currentUser?.role !== 'SYSADM' && (
                                 <button 
                                     onClick={() => setViewMode('create')}
-                                    className="w-full sm:w-auto px-6 py-3 bg-teal-600 text-white font-bold rounded-xl hover:bg-teal-700 transition-colors shadow-lg shadow-teal-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                                    className="w-full sm:w-auto px-6 py-3 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-700 transition-colors shadow-lg shadow-sky-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                                 >
                                     <span className="material-symbols-outlined text-[20px]">edit_document</span>
                                     Write Article
@@ -733,7 +733,7 @@ export default function Articles() {
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search articles by title, content, or author..."
-                                className="w-full pl-10 pr-8 py-2.5 text-xs font-bold rounded-xl outline-none border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500/30 transition-all"
+                                className="w-full pl-10 pr-8 py-2.5 text-xs font-bold rounded-xl outline-none border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500/30 transition-all"
                             />
                             {searchQuery && (
                                 <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer">
@@ -749,7 +749,7 @@ export default function Articles() {
                                 <select 
                                     value={sortBy}
                                     onChange={(e) => setSortBy(e.target.value)}
-                                    className="w-full md:w-auto appearance-none pl-9 pr-8 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl outline-none cursor-pointer focus:ring-2 focus:ring-teal-500/30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                                    className="w-full md:w-auto appearance-none pl-9 pr-8 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl outline-none cursor-pointer focus:ring-2 focus:ring-sky-500/30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700/60"
                                 >
                                     <option value="newest">Newest posted</option>
                                     <option value="oldest">Oldest posted</option>
@@ -760,7 +760,7 @@ export default function Articles() {
                             {(searchQuery || selectedCategory !== 'All' || sortBy !== 'newest') && (
                                 <button 
                                     onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setSortBy('newest'); }}
-                                    className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline shrink-0 cursor-pointer px-1 py-1"
+                                    className="text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline shrink-0 cursor-pointer px-1 py-1"
                                 >
                                     Reset
                                 </button>
@@ -776,7 +776,7 @@ export default function Articles() {
                                 onClick={() => setSelectedCategory(cat)}
                                 className={`px-4 py-2 rounded-xl text-[12px] font-bold transition-all border shrink-0 cursor-pointer ${
                                     selectedCategory === cat
-                                        ? 'bg-teal-500/15 border-teal-500/40 text-teal-700 dark:text-teal-400 shadow-xs'
+                                        ? 'bg-sky-500/15 border-sky-500/40 text-sky-700 dark:text-sky-400 shadow-xs'
                                         : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                                 }`}
                             >

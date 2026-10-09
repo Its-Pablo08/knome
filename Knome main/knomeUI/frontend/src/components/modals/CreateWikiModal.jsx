@@ -371,14 +371,6 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
         }
     };
 
-    const handleAttachUrl = () => {
-        const url = window.prompt('Enter direct image URL for Wiki cover banner (https://...):', coverImageUrl || 'https://');
-        if (url && url.trim() && url.trim() !== 'https://') {
-            setCoverImageUrl(url.trim());
-            addToast('Cover banner URL attached!', 'success');
-        }
-    };
-
     const handleRemoveCover = () => {
         setCoverImageUrl('');
         addToast('Cover banner removed.', 'info');
@@ -519,7 +511,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                         placeholder="Brief summary explaining what this Wiki covers..."
                         rows={2}
                         maxLength={500}
-                        className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 text-sm resize-none"
+                        className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm resize-none"
                     />
                 </div>
 
@@ -549,7 +541,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                         <select
                             value={status}
                             onChange={(e) => setStatus(e.target.value)}
-                            className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 shadow-2xs"
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-2xs"
                         >
                             <option value="Published">🌐 Published (Organization Visible)</option>
                             <option value="Draft">🔒 Draft (Authors & Collaborators Only)</option>
@@ -568,7 +560,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                             <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                                <span className="material-symbols-outlined text-[15px] text-teal-600 dark:text-teal-400">image</span>
+                                <span className="material-symbols-outlined text-[15px] text-indigo-600 dark:text-indigo-400">image</span>
                                 <span>Cover Banner</span>
                             </label>
                             <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
@@ -586,10 +578,10 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                     <button
                                         type="button"
                                         onClick={() => setIsPresetGalleryOpen(true)}
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all shadow-2xs hover:text-teal-600 dark:hover:text-teal-400 cursor-pointer"
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all shadow-2xs hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer"
                                         title="Browse full preset gallery"
                                     >
-                                        <span className="material-symbols-outlined text-[14px] text-teal-600 dark:text-teal-400">photo_library</span>
+                                        <span className="material-symbols-outlined text-[14px] text-indigo-600 dark:text-indigo-400">photo_library</span>
                                         <span>Presets</span>
                                     </button>
                                     <button
@@ -606,15 +598,6 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                         )}
                                         <span>Upload</span>
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleAttachUrl}
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all shadow-2xs hover:text-cyan-600 dark:hover:text-cyan-400 cursor-pointer"
-                                        title="Attach banner from direct image URL"
-                                    >
-                                        <span className="material-symbols-outlined text-[14px] text-slate-500 dark:text-slate-400">link</span>
-                                        <span>URL</span>
-                                    </button>
                                 </div>
                             </div>
 
@@ -629,7 +612,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                             onClick={() => handleSelectPreset(preset.url, preset.name)}
                                             className={`w-10 h-10 rounded-xl overflow-hidden shrink-0 border-2 transition-all relative group cursor-pointer ${
                                                 isSel
-                                                    ? 'border-teal-500 ring-2 ring-teal-500/30 scale-105 shadow-sm'
+                                                    ? 'border-indigo-500 ring-2 ring-indigo-500/30 scale-105 shadow-sm'
                                                     : 'border-transparent opacity-80 hover:opacity-100 hover:scale-105'
                                             }`}
                                             title={`${preset.name} (${preset.category})`}
@@ -639,14 +622,14 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                                 alt={preset.name}
                                                 className="w-full h-full object-cover"
                                                 onError={(e) => {
-                                                    e.target.style.display = 'none';
+                                                    e.target.display = 'none';
                                                     if (e.target.parentElement) {
-                                                        e.target.parentElement.style.background = 'linear-gradient(135deg, #0d9488 0%, #065f46 100%)';
+                                                        e.target.parentElement.style.background = 'linear-gradient(135deg, #1e1b4b 0%, #1e3a8a 100%)';
                                                     }
                                                 }}
                                             />
                                             {isSel && (
-                                                <div className="absolute inset-0 bg-teal-900/40 backdrop-blur-[0.5px] flex items-center justify-center">
+                                                <div className="absolute inset-0 bg-indigo-950/50 backdrop-blur-[0.5px] flex items-center justify-center">
                                                     <span className="material-symbols-outlined text-[14px] text-white font-bold drop-shadow">check</span>
                                                 </div>
                                             )}
@@ -656,7 +639,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                 <button
                                     type="button"
                                     onClick={() => setIsPresetGalleryOpen(true)}
-                                    className="w-10 h-10 rounded-xl shrink-0 border border-dashed border-teal-500/50 hover:border-teal-500 bg-teal-50/40 dark:bg-teal-950/30 hover:bg-teal-50 text-teal-600 dark:text-teal-400 flex flex-col items-center justify-center transition-all cursor-pointer group"
+                                    className="w-10 h-10 rounded-xl shrink-0 border border-dashed border-indigo-500/50 hover:border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 hover:bg-indigo-50 text-indigo-600 dark:text-indigo-400 flex flex-col items-center justify-center transition-all cursor-pointer group"
                                     title="Browse all 12 Cover Banner Presets"
                                 >
                                     <span className="material-symbols-outlined text-[16px] group-hover:scale-110 transition-transform">add_photo_alternate</span>
@@ -685,7 +668,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                                             : 'External Image URL')}
                                             </p>
                                             <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
                                                 <span>Attached Banner</span>
                                             </span>
                                         </div>
@@ -694,7 +677,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                         <button
                                             type="button"
                                             onClick={() => setIsPresetGalleryOpen(true)}
-                                            className="text-teal-600 dark:text-teal-400 hover:text-teal-700 font-semibold cursor-pointer px-1.5 py-0.5 rounded hover:bg-teal-50 dark:hover:bg-teal-950/60 transition-colors"
+                                            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-semibold cursor-pointer px-1.5 py-0.5 rounded hover:bg-indigo-50 dark:hover:bg-indigo-950/60 transition-colors"
                                         >
                                             Change
                                         </button>
@@ -717,7 +700,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                     <button
                                         type="button"
                                         onClick={() => setIsPresetGalleryOpen(true)}
-                                        className="text-teal-600 dark:text-teal-400 font-semibold hover:underline cursor-pointer"
+                                        className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline cursor-pointer"
                                     >
                                         Pick Preset
                                     </button>
@@ -743,7 +726,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                 onClick={() => executeCmd('bold')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.bold
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 font-bold shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 font-bold shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Bold (Ctrl+B)"
@@ -758,7 +741,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                 onClick={() => executeCmd('italic')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.italic
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 font-bold shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 font-bold shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Italic (Ctrl+I)"
@@ -773,7 +756,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                 onClick={() => executeCmd('underline')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.underline
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 font-bold shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 font-bold shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Underline (Ctrl+U)"
@@ -790,7 +773,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                 onClick={() => executeCmd('formatBlock', 'h2')}
                                 className={`px-2 py-1 rounded flex items-center justify-center transition-colors cursor-pointer font-semibold text-[11px] ${
                                     activeFormats.h2
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Heading 2"
@@ -805,7 +788,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                 onClick={() => executeCmd('formatBlock', 'h3')}
                                 className={`px-2 py-1 rounded flex items-center justify-center transition-colors cursor-pointer font-semibold text-[11px] ${
                                     activeFormats.h3
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Heading 3"
@@ -823,7 +806,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                 onClick={() => executeCmd('insertUnorderedList')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.bulletList
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Bulleted List"
@@ -838,7 +821,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                 onClick={() => executeCmd('insertOrderedList')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.numberList
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Numbered List"
@@ -853,7 +836,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                 onClick={() => executeCmd('formatBlock', 'blockquote')}
                                 className={`w-7 h-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                                     activeFormats.quote
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 shadow-xs'
+                                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 shadow-xs'
                                         : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 title="Quote / Blockquote"
@@ -929,7 +912,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     </label>
                     <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
                         {tags.map((t, idx) => (
-                            <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/60">
+                            <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60">
                                 #{t}
                                 <button type="button" onClick={() => handleRemoveTag(t)} className="hover:text-red-500">
                                     <span className="material-symbols-outlined text-[14px]">close</span>
@@ -959,7 +942,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                             onChange={(e) => setChangeSummary(e.target.value)}
                             placeholder="e.g., Added architecture overview diagram and security guidelines"
                             maxLength={300}
-                            className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 text-xs"
+                            className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs"
                         />
                     </div>
                 )}
@@ -977,7 +960,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     <button
                         type="submit"
                         disabled={isSaving}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 shadow-md shadow-teal-500/20 disabled:opacity-50 transition-all cursor-pointer"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 shadow-md shadow-indigo-500/20 disabled:opacity-50 transition-all cursor-pointer"
                     >
                         {isSaving ? (
                             <>
@@ -1037,7 +1020,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                 onClick={() => setSelectedPresetCategory(cat)}
                                 className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                                     selectedPresetCategory === cat
-                                        ? 'bg-teal-600 text-white shadow-xs'
+                                        ? 'bg-indigo-600 text-white shadow-xs'
                                         : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                             >
@@ -1053,7 +1036,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                             value={presetSearch}
                             onChange={(e) => setPresetSearch(e.target.value)}
                             placeholder="Search presets..."
-                            className="w-full pl-8 pr-3 py-1 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+                            className="w-full pl-8 pr-3 py-1 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                     </div>
                 </div>
@@ -1072,8 +1055,8 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                 onClick={() => handleSelectPreset(preset.url, preset.name)}
                                 className={`group rounded-2xl border overflow-hidden bg-white dark:bg-slate-850 transition-all cursor-pointer flex flex-col justify-between ${
                                     isAttached
-                                        ? 'border-teal-500 ring-2 ring-teal-500/40 shadow-md'
-                                        : 'border-slate-200 dark:border-slate-800 hover:border-teal-400 hover:shadow-md'
+                                        ? 'border-indigo-500 ring-2 ring-indigo-500/40 shadow-md'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-indigo-400 hover:shadow-md'
                                 }`}
                             >
                                 <div className="relative h-28 w-full overflow-hidden bg-slate-100 dark:bg-slate-900">
@@ -1084,7 +1067,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                         onError={(e) => {
                                             e.target.style.display = 'none';
                                             if (e.target.parentElement) {
-                                                e.target.parentElement.style.background = 'linear-gradient(135deg, #0d9488 0%, #1e293b 100%)';
+                                                e.target.parentElement.style.background = 'linear-gradient(135deg, #1e1b4b 0%, #1e293b 100%)';
                                             }
                                         }}
                                     />
@@ -1095,7 +1078,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                         </span>
                                     </div>
                                     {isAttached && (
-                                        <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500 text-white flex items-center gap-1 shadow-sm">
+                                        <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white flex items-center gap-1 shadow-sm">
                                             <span className="material-symbols-outlined text-[13px]">check</span>
                                             Attached
                                         </div>
@@ -1104,7 +1087,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
 
                                 <div className="p-3 space-y-1.5 flex-1 flex flex-col justify-between">
                                     <div>
-                                        <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                                        <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                                             {preset.name}
                                         </h4>
                                         {preset.description && (
@@ -1122,8 +1105,8 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                                         }}
                                         className={`w-full py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 mt-2 cursor-pointer ${
                                             isAttached
-                                                ? 'bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800'
-                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 group-hover:bg-teal-600 group-hover:text-white'
+                                                ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 group-hover:bg-indigo-600 group-hover:text-white'
                                         }`}
                                     >
                                         <span className="material-symbols-outlined text-[14px]">

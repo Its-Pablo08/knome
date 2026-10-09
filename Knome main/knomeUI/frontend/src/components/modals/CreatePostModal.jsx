@@ -879,12 +879,16 @@ const FILE_LIMITS = {
                     }
                     console.warn('API post creation notice, using local post fallback:', err);
                     createdPostId = `post_local_${Date.now()}`;
+                    const realAuthorName = currentUser?.fullName || currentUser?.name || 'Employee';
                     const localPost = {
                         id: createdPostId,
                         userId: currentUser?.userId || currentUser?.id || 1,
-                        authorName: currentUser?.name || currentUser?.fullName || 'Employee',
+                        authorUserId: currentUser?.userId || currentUser?.id || 1,
+                        authorEmployeeId: currentUser?.employeeId || '',
+                        authorName: realAuthorName,
+                        authorFullName: realAuthorName,
                         authorAvatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
-                        authorRole: currentUser?.roleName || 'Employee',
+                        authorRole: currentUser?.roleName || currentUser?.designation || 'Contributor',
                         content: text,
                         status: status,
                         scheduledDate: isoScheduledDate,

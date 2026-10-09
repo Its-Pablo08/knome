@@ -8,8 +8,8 @@ const ACTION_ICONS = {
     WikiUpdated: { icon: 'edit', color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/60' },
     WikiDeleted: { icon: 'delete', color: 'text-red-500 bg-red-50 dark:bg-red-950/60' },
     WikiArchived: { icon: 'archive', color: 'text-slate-500 bg-slate-100 dark:bg-slate-800' },
-    WikiUnarchived: { icon: 'unarchive', color: 'text-teal-500 bg-teal-50 dark:bg-teal-950/60' },
-    SectionAdded: { icon: 'post_add', color: 'text-teal-500 bg-teal-50 dark:bg-teal-950/60' },
+    WikiUnarchived: { icon: 'unarchive', color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60' },
+    SectionAdded: { icon: 'post_add', color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/60' },
     SectionUpdated: { icon: 'edit_note', color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60' },
     SectionDeleted: { icon: 'delete_sweep', color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/60' },
     SectionsReordered: { icon: 'reorder', color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/60' },
@@ -51,7 +51,7 @@ export default function WikiActivityModal({ isOpen, onClose, wikiId, wikiTitle =
             <div className="space-y-4">
                 {isLoading ? (
                     <div className="py-12 flex justify-center">
-                        <div className="w-7 h-7 border-3 border-teal-500/30 border-t-teal-600 rounded-full animate-spin" />
+                        <div className="w-7 h-7 border-3 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
                     </div>
                 ) : activities.length === 0 ? (
                     <div className="py-12 text-center text-slate-400">

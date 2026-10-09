@@ -170,6 +170,8 @@ export default function PeopleYouMayKnowWidget() {
                             'MPO102': 'Vishendra Sharma',
                             'EMP052': 'Sourabh Sahu',
                             'MPO103': 'Sourabh Sahu',
+                            'EMP101': 'Meghna',
+                            'Emp101': 'Meghna',
                             'MPO105': 'Meghna',
                             'MPO116': 'Meghna',
                             'MPO089': 'Vilash Deshmukh',

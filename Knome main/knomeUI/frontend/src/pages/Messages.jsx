@@ -564,6 +564,11 @@ export default function Messages() {
             setHistoryPage(1);
             setHasMoreHistory(rawList.length >= 50);
 
+            // Cache conversation messages locally for instant load and offline resilience
+            try {
+                localStorage.setItem(`knome_cached_messages_${currentUserId}_${partnerId}`, JSON.stringify(formatted));
+            } catch (_) {}
+
             setActiveHistory(prev => {
                 const inFlight = prev.filter(m => m.status === 'sending' || m.status === 'failed');
                 const existingMap = new Map(formatted.map(m => [m.id, m]));
@@ -580,16 +585,51 @@ export default function Messages() {
                 setConversations(prev => prev.map(c => c.partnerId === partnerId ? { ...c, unreadCount: 0 } : c));
             }).catch(() => {});
         } catch (err) {
-            console.error('[Messages] Failed to fetch message history:', err);
-            if (!isSilent) {
-                setHistoryError('Failed to load message history.');
+            console.warn('[Messages] Failed to fetch message history from server, checking local cache:', err);
+            
+            // Check local storage cache fallback
+            let hasCache = false;
+            try {
+                const cached = JSON.parse(localStorage.getItem(`knome_cached_messages_${currentUserId}_${partnerId}`) || '[]');
+                if (Array.isArray(cached) && cached.length > 0) {
+                    setActiveHistory(cached);
+                    setHistoryError(null);
+                    hasCache = true;
+                }
+            } catch (_) {}
+
+            if (!hasCache) {
+                // If conversation summary has a preview, create initial preview message so conversation is usable
+                const convSummary = conversations.find(c => c.partnerId === partnerId);
+                if (convSummary && (convSummary.lastMessageText || convSummary.lastMessagePreview)) {
+                    const fallbackDate = convSummary.lastMessageDate ? new Date(convSummary.lastMessageDate) : new Date();
+                    const syntheticMsg = {
+                        id: convSummary.lastMessageId || `preview_${partnerId}`,
+                        messageId: convSummary.lastMessageId || `preview_${partnerId}`,
+                        senderId: convSummary.partnerId,
+                        senderName: convSummary.partnerName || 'Colleague',
+                        receiverId: currentUserId,
+                        content: convSummary.lastMessageText || convSummary.lastMessagePreview,
+                        text: convSummary.lastMessageText || convSummary.lastMessagePreview,
+                        attachments: [],
+                        isRead: true,
+                        time: fallbackDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        timestamp: fallbackDate.getTime(),
+                        createdDate: fallbackDate.toISOString(),
+                        status: 'sent'
+                    };
+                    setActiveHistory([syntheticMsg]);
+                    setHistoryError(null);
+                } else if (!isSilent) {
+                    setHistoryError('Failed to load message history.');
+                }
             }
         } finally {
             if (!isSilent) {
                 setIsLoadingHistory(false);
             }
         }
-    }, [currentUserId, formatMessageItem]);
+    }, [currentUserId, formatMessageItem, conversations]);
 
     // When active partner changes, fetch history and load draft
     useEffect(() => {
