@@ -211,7 +211,10 @@ public class FeedService : IFeedService
 
     public async Task<List<FeedItemDto>> GetHotFeedAsync(int currentUserId, string window, int top = 10)
     {
-        if (!await _settingService.GetEnablePostsAsync())
+        var enablePosts = await _settingService.GetEnablePostsAsync();
+        var enableArticles = await _settingService.GetEnableArticlesAsync();
+
+        if (!enablePosts && !enableArticles)
         {
             return new List<FeedItemDto>();
         }
@@ -225,46 +228,57 @@ public class FeedService : IFeedService
         var allRecentItems = new List<FeedItemDto>();
 
         // Fetch recent posts
-        var posts = await _db.Posts.Include(p => p.AuthorUser).Include(p => p.PostAttachments).Where(p => p.CreatedDate >= cutoff && p.AudienceType == AudienceTypes.Everyone).Take(50).ToListAsync();
-        foreach (var p in posts)
+        if (enablePosts)
         {
-            var summary = await _interactionService.GetContentSummaryAsync(ContentTypes.Post, p.PostId, currentUserId);
-            var score = ComputeHotScore(summary.EngagementScore, p.CreatedDate);
-            await _repo.UpdateOrAddHotScoreCacheAsync(new HotPostsScoreCache { ContentType = ContentTypes.Post, ContentId = p.PostId, Window = window, Score = score, CalculatedAt = Knome.API.Common.KnomeTime.Now });
-
-            allRecentItems.Add(new FeedItemDto
+            var posts = await _db.Posts.Include(p => p.AuthorUser).Include(p => p.PostAttachments).Where(p => p.CreatedDate >= cutoff && p.AudienceType == AudienceTypes.Everyone).Take(50).ToListAsync();
+            foreach (var p in posts)
             {
-                ContentType = ContentTypes.Post,
-                ContentId = p.PostId,
-                Title = string.Empty,
-                TextSummary = p.ContentText.Length > 200 ? p.ContentText.Substring(0, 197) + "..." : p.ContentText,
-                ContentText = p.ContentText,
-                Status = p.Status ?? "Published",
-                ScheduledDate = p.ScheduledDate,
-                AttachmentUrl = p.PostAttachments.FirstOrDefault()?.FileUrl,
-                AttachmentUrls = p.PostAttachments.Select(pa => pa.FileUrl).ToList(),
-                Attachments = p.PostAttachments.Select(pa => new FeedAttachmentDto
+                var summary = await _interactionService.GetContentSummaryAsync(ContentTypes.Post, p.PostId, currentUserId);
+                var score = ComputeHotScore(summary.EngagementScore, p.CreatedDate);
+                await _repo.UpdateOrAddHotScoreCacheAsync(new HotPostsScoreCache { ContentType = ContentTypes.Post, ContentId = p.PostId, Window = window, Score = score, CalculatedAt = Knome.API.Common.KnomeTime.Now });
+
+                allRecentItems.Add(new FeedItemDto
                 {
-                    AttachmentId = pa.AttachmentId,
-                    FileUrl = pa.FileUrl,
-                    FileType = pa.FileType
-                }).ToList(),
-                AuthorUserId = p.AuthorUserId,
-                AuthorEmployeeId = p.AuthorUser?.EmployeeId ?? string.Empty,
-                AuthorFullName = p.AuthorUser?.FullName ?? "Unknown",
-                AuthorDesignation = p.AuthorUser?.Designation,
-                AuthorProfilePhotoUrl = p.AuthorUser?.ProfilePhotoUrl,
-                PublishedDate = p.PublishedDate ?? p.CreatedDate,
-                AudienceType = p.AudienceType,
-                EngagementSummary = summary,
-                HotScore = score
-            });
+                    ContentType = ContentTypes.Post,
+                    ContentId = p.PostId,
+                    Title = string.Empty,
+                    TextSummary = p.ContentText.Length > 200 ? p.ContentText.Substring(0, 197) + "..." : p.ContentText,
+                    ContentText = p.ContentText,
+                    Status = p.Status ?? "Published",
+                    ScheduledDate = p.ScheduledDate,
+                    AttachmentUrl = p.PostAttachments.FirstOrDefault()?.FileUrl,
+                    AttachmentUrls = p.PostAttachments.Select(pa => pa.FileUrl).ToList(),
+                    Attachments = p.PostAttachments.Select(pa => new FeedAttachmentDto
+                    {
+                        AttachmentId = pa.AttachmentId,
+                        FileUrl = pa.FileUrl,
+                        FileType = pa.FileType
+                    }).ToList(),
+                    AuthorUserId = p.AuthorUserId,
+                    AuthorEmployeeId = p.AuthorUser?.EmployeeId ?? string.Empty,
+                    AuthorFullName = p.AuthorUser?.FullName ?? "Unknown",
+                    AuthorDesignation = p.AuthorUser?.Designation,
+                    AuthorProfilePhotoUrl = p.AuthorUser?.ProfilePhotoUrl,
+                    PublishedDate = p.PublishedDate ?? p.CreatedDate,
+                    AudienceType = p.AudienceType,
+                    EngagementSummary = summary,
+                    HotScore = score
+                });
+            }
         }
 
         // Fetch recent articles
-        var articles = await _db.Articles.Include(a => a.AuthorUser).Include(a => a.ArticleAttachments).Where(a => (a.PublishedDate ?? a.CreatedDate) >= cutoff && a.Status == ArticleStatuses.Published).Take(50).ToListAsync();
-        foreach (var a in articles)
+        if (enableArticles)
         {
+            var articles = await _db.Articles
+                .Include(a => a.AuthorUser)
+                .Include(a => a.ArticleAttachments)
+                .Where(a => (a.PublishedDate ?? a.CreatedDate) >= cutoff && (a.Status == ArticleStatuses.Published || string.IsNullOrEmpty(a.Status)))
+                .Take(50)
+                .ToListAsync();
+
+            foreach (var a in articles)
+            {
             var summary = await _interactionService.GetContentSummaryAsync(ContentTypes.Article, a.ArticleId, currentUserId);
             var pubDate = a.PublishedDate ?? a.CreatedDate;
             var score = ComputeHotScore(summary.EngagementScore, pubDate);
@@ -297,6 +311,7 @@ public class FeedService : IFeedService
                 EngagementSummary = summary,
                 HotScore = score
             });
+        }
         }
 
         return allRecentItems

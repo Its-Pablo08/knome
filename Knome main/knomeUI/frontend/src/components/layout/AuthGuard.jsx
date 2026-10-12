@@ -106,7 +106,7 @@ export default function AuthGuard({ children }) {
                         Logging out of Knome...
                     </p>
                     <p className="text-xs text-slate-400">
-                        Redirecting to MPO Employee Hub.
+                        Redirecting to login portal...
                     </p>
                 </div>
             </div>
@@ -221,7 +221,7 @@ export default function AuthGuard({ children }) {
                             className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition-all border border-slate-700 cursor-pointer shadow-lg flex items-center justify-center gap-2"
                         >
                             <span className="material-symbols-outlined text-sm">logout</span>
-                            <span>Sign Out & Return to Employee Hub</span>
+                            <span>Sign Out</span>
                         </button>
                     </div>
                 </div>

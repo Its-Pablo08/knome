@@ -21,9 +21,9 @@ export default class ErrorBoundary extends Component {
         const isLoggingOut = typeof window !== 'undefined' && sessionStorage.getItem('knome_logging_out') === 'true';
         if (isLoggingOut) {
             try {
-                window.location.replace('https://counselling-1.mponline.demo.gov.in:3001/applications');
+                window.location.replace('https://counselling-1.mponline.demo.gov.in:3001/login?logout=true');
             } catch {
-                window.location.href = 'https://counselling-1.mponline.demo.gov.in:3001/applications';
+                window.location.href = 'https://counselling-1.mponline.demo.gov.in:3001/login?logout=true';
             }
         }
     }

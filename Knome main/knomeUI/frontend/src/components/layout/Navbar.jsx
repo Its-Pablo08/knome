@@ -16,7 +16,7 @@ import { formatNotificationDate, getTimeGroup, isNotificationForUser, isSelfNoti
 import { subscribeToLiveMessages } from '../../utils/realtimeMessenger';
 import { getKarmaLevelInfo } from '../../utils/karmaEngine';
 import { KarmaLevelMedal } from '../ui/KarmaBadge';
-import { isMessagingEnabled, saveSystemConfig, useSystemConfig } from '../../utils/systemConfig';
+import { isMessagingEnabled, saveSystemConfig, useSystemConfig, loadSystemApprovalSettingFromBackend } from '../../utils/systemConfig';
 
 const DISCOVER_CATEGORIES = [
     { id: 'All', label: 'All', icon: 'grid_view' },
@@ -37,7 +37,7 @@ export default function Navbar() {
     const userStatusConfig = getUserStatusConfig(currentUser);
     const { pathname } = useLocation();
     const navigate = useNavigate();
-    const { isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled, isWikiEnabled } = useSystemConfig();
+    const { isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled, isWikiEnabled, isClipsEnabled } = useSystemConfig();
     const activeDiscoverCategories = useMemo(() => {
         return DISCOVER_CATEGORIES.filter(cat => {
             if (cat.id === 'Post' && !isPostsEnabled) return false;
@@ -47,7 +47,7 @@ export default function Navbar() {
             if (cat.id === 'Wiki' && !isWikiEnabled) return false;
             return true;
         });
-    }, [isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled, isWikiEnabled]);
+    }, [isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled, isWikiEnabled, isClipsEnabled]);
     
     // User Karma Points State
     const [userKarma, setUserKarma] = useState(currentUser?.karmaPoints ?? currentUser?.karma ?? 0);
@@ -254,6 +254,7 @@ export default function Navbar() {
                     if (type === 'video' && !isVideosEnabled) return false;
                     if (type === 'podcast' && !isPodcastsEnabled) return false;
                     if (type === 'wiki' && !isWikiEnabled) return false;
+                    if (type === 'clip' && !isClipsEnabled) return false;
                     return true;
                 });
                 setSuggestions(filtered);
@@ -266,7 +267,7 @@ export default function Navbar() {
         }, 250);
 
         return () => clearTimeout(timer);
-    }, [searchQuery]);
+    }, [searchQuery, isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled, isWikiEnabled, isClipsEnabled]);
 
     const handleSearch = (query, categoryFilter = null) => {
         const q = query ? query.trim() : searchQuery.trim();
@@ -370,6 +371,11 @@ export default function Navbar() {
     useEffect(() => {
         notifPreferencesRef.current = notifPreferences;
     }, [notifPreferences]);
+
+    const currentUserRef = useRef(currentUser);
+    useEffect(() => {
+        currentUserRef.current = currentUser;
+    }, [currentUser]);
 
     useEffect(() => {
         const uid = currentUser?.userId || currentUser?.id || localStorage.getItem('knome_userId') || localStorage.getItem('knome_employeeId') || 'default';
@@ -1140,26 +1146,132 @@ export default function Navbar() {
         });
 
         connection.on("SystemConfigUpdated", (data) => {
-            if (data) {
+            if (data && typeof data === 'object') {
+                const parseBool = (...keys) => {
+                    for (const k of keys) {
+                        const v = data[k];
+                        if (typeof v === 'boolean') return v;
+                        if (v === 'true' || v === 'True') return true;
+                        if (v === 'false' || v === 'False') return false;
+                    }
+                    return undefined;
+                };
+
                 const patch = {};
-                if (typeof data.requireApproval === 'boolean') patch.requireContentAndCommunityApproval = data.requireApproval;
-                if (typeof data.requireCommunityApproval === 'boolean') patch.requireCommunityApproval = data.requireCommunityApproval;
-                if (typeof data.requireVideoApproval === 'boolean') patch.requireVideoApproval = data.requireVideoApproval;
-                if (typeof data.requirePodcastApproval === 'boolean') patch.requirePodcastApproval = data.requirePodcastApproval;
-                if (typeof data.enableMessaging === 'boolean') patch.enableMessaging = data.enableMessaging;
-                if (typeof data.enableEmail === 'boolean') patch.enableEmail = data.enableEmail;
-                if (typeof data.enablePosts === 'boolean') patch.enablePosts = data.enablePosts;
-                if (typeof data.enableArticles === 'boolean') patch.enableArticles = data.enableArticles;
-                if (typeof data.enableClips === 'boolean') patch.enableClips = data.enableClips;
-                if (typeof data.enableWiki === 'boolean') patch.enableWiki = data.enableWiki;
-                if (typeof data.enableVideos === 'boolean') patch.enableVideos = data.enableVideos;
-                if (typeof data.enablePodcasts === 'boolean') patch.enablePodcasts = data.enablePodcasts;
+                const reqApp = parseBool('requireApproval', 'RequireApproval');
+                if (reqApp !== undefined) patch.requireContentAndCommunityApproval = reqApp;
+
+                const reqComm = parseBool('requireCommunityApproval', 'RequireCommunityApproval');
+                if (reqComm !== undefined) patch.requireCommunityApproval = reqComm;
+
+                const reqVid = parseBool('requireVideoApproval', 'RequireVideoApproval');
+                if (reqVid !== undefined) patch.requireVideoApproval = reqVid;
+
+                const reqPod = parseBool('requirePodcastApproval', 'RequirePodcastApproval');
+                if (reqPod !== undefined) patch.requirePodcastApproval = reqPod;
+
+                const enMsg = parseBool('enableMessaging', 'EnableMessaging');
+                if (enMsg !== undefined) patch.enableMessaging = enMsg;
+
+                const enEmail = parseBool('enableEmail', 'EnableEmail');
+                if (enEmail !== undefined) patch.enableEmail = enEmail;
+
+                const enPosts = parseBool('enablePosts', 'EnablePosts');
+                if (enPosts !== undefined) patch.enablePosts = enPosts;
+
+                const enArticles = parseBool('enableArticles', 'EnableArticles');
+                if (enArticles !== undefined) patch.enableArticles = enArticles;
+
+                const enClips = parseBool('enableClips', 'EnableClips');
+                if (enClips !== undefined) patch.enableClips = enClips;
+
+                const enWiki = parseBool('enableWiki', 'EnableWiki');
+                if (enWiki !== undefined) patch.enableWiki = enWiki;
+
+                const enVideos = parseBool('enableVideos', 'EnableVideos');
+                if (enVideos !== undefined) patch.enableVideos = enVideos;
+
+                const enPodcasts = parseBool('enablePodcasts', 'EnablePodcasts');
+                if (enPodcasts !== undefined) patch.enablePodcasts = enPodcasts;
+
                 saveSystemConfig(patch);
             }
         });
 
+        connection.on("UserPresenceChanged", (data) => {
+            try {
+                const payload = typeof data === 'string' ? JSON.parse(data) : data;
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('knome_user_presence_changed', { detail: payload }));
+                }
+            } catch {}
+        });
+
+        connection.on("UserTyping", (data) => {
+            try {
+                const payload = typeof data === 'string' ? JSON.parse(data) : data;
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('knome_user_typing', { detail: payload }));
+                }
+            } catch {}
+        });
+
+        connection.on("MessageEdited", (data) => {
+            try {
+                const payload = typeof data === 'string' ? JSON.parse(data) : data;
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('knome_message_edited', { detail: payload }));
+                }
+            } catch {}
+        });
+
+        connection.on("MessageDeleted", (data) => {
+            try {
+                const payload = typeof data === 'string' ? JSON.parse(data) : data;
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('knome_message_deleted', { detail: payload }));
+                }
+            } catch {}
+        });
+
+        connection.on("MessageReactionUpdated", (data) => {
+            try {
+                const payload = typeof data === 'string' ? JSON.parse(data) : data;
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('knome_message_reaction_updated', { detail: payload }));
+                }
+            } catch {}
+        });
+
+        connection.on("MessagesRead", (data) => {
+            try {
+                const payload = typeof data === 'string' ? JSON.parse(data) : data;
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('knome_messages_read', { detail: payload }));
+                }
+            } catch {}
+        });
+
+        connection.on("BookmarkUpdated", (data) => {
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('knome:bookmark-updated', { detail: data }));
+            }
+        });
+
+        connection.on("BroadcastUpdated", (data) => {
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('knome:broadcast-updated', { detail: data }));
+            }
+        });
+
+        connection.on("BroadcastDeleted", (data) => {
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('knome:broadcast-deleted', { detail: data }));
+            }
+        });
+
         const joinGroup = () => {
-            const currentUid = currentUser?.userId || currentUser?.id;
+            const currentUid = currentUserRef.current?.userId || currentUserRef.current?.id || currentUser?.userId || currentUser?.id;
             if (currentUid && connection.state === signalR.HubConnectionState.Connected) {
                 connection.invoke("JoinUserGroup", Number(currentUid)).catch(() => {});
             }
@@ -1179,6 +1291,7 @@ export default function Navbar() {
             if (!isStopped) {
                 fetchNotifications();
                 joinGroup();
+                loadSystemApprovalSettingFromBackend(true).catch(() => {});
             }
         });
 
@@ -1207,7 +1320,7 @@ export default function Navbar() {
             window.removeEventListener('knome:logout', handleLogoutEvent);
             stopConnection();
         };
-    }, [currentUser]);
+    }, [currentUser?.userId || currentUser?.id, currentUser?.employeeId]);
 
     // Filter notifications based on active user preferences
     const allowedNotifs = useMemo(() => {
@@ -2325,13 +2438,13 @@ export default function Navbar() {
                                             setIsUserMenuOpen(false);
                                             const ok = await confirm({
                                                 title: 'Confirm Logout',
-                                                message: "Are you sure you want to log out of Knome? You will be redirected to MPO Employee Hub.",
+                                                message: "Are you sure you want to log out of Knome? You will be redirected to the central login portal.",
                                                 confirmText: 'Yes, Log Out',
                                                 cancelText: 'Cancel',
                                                 variant: 'danger'
                                             });
                                             if (ok) {
-                                                logout('https://counselling-1.mponline.demo.gov.in:3001/applications');
+                                                logout('https://counselling-1.mponline.demo.gov.in:3001/login?logout=true');
                                             }
                                         }}
                                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[13px] font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors mt-0.5 cursor-pointer"

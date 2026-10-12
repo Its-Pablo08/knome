@@ -1,7 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useAudio } from '../contexts/AudioContext';
+import { useSystemConfig } from '../../utils/systemConfig';
 
 export default function GlobalAudioPlayer() {
+    const { isPodcastsEnabled } = useSystemConfig();
     const audioCtx = useAudio() || {};
     const { 
         currentPodcast, isPlaying, volume, speed, progress, 
@@ -11,7 +13,13 @@ export default function GlobalAudioPlayer() {
 
     const progressRef = useRef(null);
 
-    if (!currentPodcast) return null;
+    useEffect(() => {
+        if (!isPodcastsEnabled && currentPodcast && closePlayer) {
+            closePlayer();
+        }
+    }, [isPodcastsEnabled, currentPodcast, closePlayer]);
+
+    if (!currentPodcast || !isPodcastsEnabled) return null;
 
     const formatTime = (seconds) => {
         if (!seconds || isNaN(seconds)) return "0:00";

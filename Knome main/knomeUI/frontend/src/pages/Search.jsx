@@ -15,6 +15,7 @@ const CATEGORIES = [
     { id: 'Post', label: 'Posts', icon: 'edit_square' },
     { id: 'Article', label: 'Articles', icon: 'article' },
     { id: 'Video', label: 'Videos', icon: 'videocam' },
+    { id: 'Wiki', label: 'Wiki', icon: 'menu_book' },
     { id: 'Community', label: 'Communities', icon: 'group' },
     { id: 'Hashtags', label: 'Hashtags', icon: 'tag' },
     { id: 'Podcast', label: 'Audio', icon: 'audiotrack' },
@@ -22,7 +23,7 @@ const CATEGORIES = [
 
 export default function Search() {
     const navigate = useNavigate();
-    const { isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled } = useSystemConfig();
+    const { isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled, isWikiEnabled, isClipsEnabled } = useSystemConfig();
     const queryParams = useQuery();
     const initialQuery = queryParams.get('q') || '';
     const initialType = queryParams.get('type') || 'All';
@@ -32,10 +33,11 @@ export default function Search() {
             if (cat.id === 'Post' && !isPostsEnabled) return false;
             if (cat.id === 'Article' && !isArticlesEnabled) return false;
             if (cat.id === 'Video' && !isVideosEnabled) return false;
+            if (cat.id === 'Wiki' && !isWikiEnabled) return false;
             if (cat.id === 'Podcast' && !isPodcastsEnabled) return false;
             return true;
         });
-    }, [isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled]);
+    }, [isPostsEnabled, isArticlesEnabled, isVideosEnabled, isWikiEnabled, isPodcastsEnabled]);
 
     const [searchQuery, setSearchQuery] = useState(initialQuery);
     const [activeCategory, setActiveCategory] = useState(initialType);
@@ -149,6 +151,8 @@ export default function Search() {
                 if (type === 'article' && !isArticlesEnabled) return false;
                 if (type === 'video' && !isVideosEnabled) return false;
                 if (type === 'podcast' && !isPodcastsEnabled) return false;
+                if (type === 'wiki' && !isWikiEnabled) return false;
+                if (type === 'clip' && !isClipsEnabled) return false;
                 return true;
             });
             const total = res?.totalCount || items.length;
@@ -173,7 +177,13 @@ export default function Search() {
         } finally {
             setIsSearching(false);
         }
-    }, [searchQuery, activeCategory, activeSort, activeDepartment, activeDateRange]);
+    }, [searchQuery, activeCategory, activeSort, activeDepartment, activeDateRange, isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled, isWikiEnabled, isClipsEnabled]);
+
+    useEffect(() => {
+        if (activeCategory !== 'All' && !activeCategories.some(c => c.id === activeCategory)) {
+            setActiveCategory('All');
+        }
+    }, [activeCategories, activeCategory]);
 
     useEffect(() => {
         const timer = setTimeout(() => {

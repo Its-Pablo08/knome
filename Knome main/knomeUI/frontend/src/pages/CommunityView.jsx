@@ -181,7 +181,7 @@ const normalizeMemberData = (m, contextUsers = []) => {
 };
 
 export default function CommunityView() {
-    const { isMessagingEnabled, isPostsEnabled } = useSystemConfig();
+    const { isMessagingEnabled, isPostsEnabled, isArticlesEnabled } = useSystemConfig();
     const { currentUser, users: contextUsers, awardRuleKarma, refreshKarma } = useUser();
     const confirm = useConfirm();
     const navigate = useNavigate();
@@ -4966,7 +4966,7 @@ export default function CommunityView() {
                                         }
 
                                         const hasExplicitClipCard = isClipPost(post);
-                                        const hasExplicitArticleCard = Boolean(post.sharedArticle || post.type === 'article_share' || (post.content && (post.content.includes('Shared Article:') || post.content.includes('/article-view'))));
+                                        const hasExplicitArticleCard = Boolean(isArticlesEnabled && (post.sharedArticle || post.type === 'article_share' || (post.content && (post.content.includes('Shared Article:') || post.content.includes('/article-view')))));
                                         const hasExplicitPodcastCard = Boolean(post.sharedPodcast || post.type === 'podcast_share' || (post.content && (post.content.includes('Shared Podcast:') || post.content.includes('/podcasts'))));
                                         const hasExplicitVideoCard = !hasExplicitClipCard && Boolean(post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹'))));
                                         const hasExplicitProfileCard = Boolean(post.sharedProfile || post.isProfileShare || (post.content && post.content.includes('Shared Profile:')));
@@ -5229,7 +5229,7 @@ export default function CommunityView() {
                                                 )}
 
                                                 {/* Shared Article Interactive Preview Card */}
-                                                {(post.sharedArticle || post.type === 'article_share' || (post.content && (post.content.includes('Shared Article:') || post.content.includes('/article-view')))) && (
+                                                {isArticlesEnabled && (post.sharedArticle || post.type === 'article_share' || (post.content && (post.content.includes('Shared Article:') || post.content.includes('/article-view')))) && (
                                                     <div 
                                                         onClick={() => {
                                                             const articleUrlMatch = (post.content || '').match(/(?:https?:\/\/[^\s]+)?\/article-view\?id=(\d+)/i);

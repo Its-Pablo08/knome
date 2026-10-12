@@ -21,6 +21,7 @@ const KNOWN_ROSTER_NAMES = {
     'MPO105': 'Meghna',
     'MPO116': 'Meghna',
     'MPO089': 'Vilash Deshmukh',
+    'EMP100': 'Mayur Bansal',
     'MPO111': 'Mayur Bansal',
     'MPO652': 'Deepak Simrodia',
     'mpo652': 'Deepak Simrodia'
@@ -39,6 +40,7 @@ const KNOWN_ROSTER_ROLES = {
     'MPO105': { role: 'HR Admin', designation: 'Business Analyst' },
     'MPO116': { role: 'HR Admin', designation: 'Business Analyst' },
     'MPO089': { role: 'System Admin', designation: 'Associate Consultant' },
+    'EMP100': { role: 'Employee', designation: 'Software Developer' },
     'MPO111': { role: 'Employee', designation: 'Software Developer' },
     'MPO652': { role: 'Employee', designation: 'Software Developer' },
     'mpo652': { role: 'Employee', designation: 'Software Developer' }

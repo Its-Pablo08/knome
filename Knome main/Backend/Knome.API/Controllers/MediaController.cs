@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Knome.API.Exceptions;
 using Knome.API.Interfaces;
 using Knome.API.Responses;
+using Knome.API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -53,6 +54,17 @@ public class MediaController : KnomeControllerBase
         if (dto.File == null)
             throw new BadRequestException("No file provided.");
 
+        if (_settingService != null)
+        {
+            var t = dto.Type?.ToLower() ?? "";
+            if (t == "video")
+                await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnableVideosKey, "Videos");
+            else if (t == "clip")
+                await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnableClipsKey, "Clips");
+            else if (t == "podcast" || t == "audio")
+                await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnablePodcastsKey, "Podcasts");
+        }
+
         var url = await _fileStorageService.SaveMediaAsync(dto.File, dto.Type);
         
         return Ok(ApiResponse<object>.SuccessResponse(200, "File uploaded successfully.", new { url }));
@@ -63,6 +75,11 @@ public class MediaController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetVideoInfo([FromQuery] string url)
     {
+        if (_settingService != null)
+        {
+            await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnableVideosKey, "Videos");
+        }
+
         if (string.IsNullOrWhiteSpace(url))
             return BadRequest(ApiResponse<object>.FailureResponse(400, "URL is required."));
 
@@ -150,6 +167,24 @@ public class MediaController : KnomeControllerBase
         {
             var json = await System.IO.File.ReadAllTextAsync(filePath);
             var list = JsonSerializer.Deserialize<List<JsonElement>>(json) ?? new List<JsonElement>();
+
+            if (_settingService != null)
+            {
+                var enableVideos = await _settingService.GetEnableVideosAsync();
+                var enablePodcasts = await _settingService.GetEnablePodcastsAsync();
+                list = list.Where(item => {
+                    var mediaType = "video";
+                    if (item.TryGetProperty("mediaType", out var mtProp))
+                        mediaType = mtProp.GetString()?.ToLower() ?? "video";
+                    else if (item.TryGetProperty("type", out var tProp))
+                        mediaType = tProp.GetString()?.ToLower() ?? "video";
+
+                    if ((mediaType == "podcast" || mediaType == "audio") && !enablePodcasts) return false;
+                    if (mediaType != "podcast" && mediaType != "audio" && !enableVideos) return false;
+                    return true;
+                }).ToList();
+            }
+
             return Ok(ApiResponse<List<JsonElement>>.SuccessResponse(200, "Pending media retrieved.", list));
         }
         catch (Exception ex)
@@ -174,10 +209,12 @@ public class MediaController : KnomeControllerBase
         {
             if (mediaType == "podcast" || mediaType == "audio")
             {
+                await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnablePodcastsKey, "Podcasts");
                 requireApproval = await _settingService.GetRequirePodcastApprovalAsync();
             }
             else
             {
+                await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnableVideosKey, "Videos");
                 requireApproval = await _settingService.GetRequireVideoApprovalAsync();
             }
         }

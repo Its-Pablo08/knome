@@ -13,7 +13,7 @@ namespace Knome.API.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/posts")]
-public class PostController : KnomeControllerBase
+public class PostController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.Filters.IAsyncActionFilter
 {
     private readonly IPostService _postService;
     private readonly ISystemSettingService _settingService;
@@ -22,6 +22,13 @@ public class PostController : KnomeControllerBase
     {
         _postService = postService;
         _settingService = settingService;
+    }
+
+    [NonAction]
+    public async Task OnActionExecutionAsync(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context, Microsoft.AspNetCore.Mvc.Filters.ActionExecutionDelegate next)
+    {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnablePostsKey, "Posts");
+        await next();
     }
 
     [HttpGet]

@@ -175,6 +175,7 @@ export default function PeopleYouMayKnowWidget() {
                             'MPO105': 'Meghna',
                             'MPO116': 'Meghna',
                             'MPO089': 'Vilash Deshmukh',
+                            'EMP100': 'Mayur Bansal',
                             'MPO111': 'Mayur Bansal',
                             'MPO652': 'Deepak Simrodia',
                             'mpo652': 'Deepak Simrodia'

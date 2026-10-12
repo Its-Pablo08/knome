@@ -27,6 +27,22 @@ export default function Login() {
     const fullSsoLoginTarget = `${hubLoginUrl}?client_id=Knome-2026&returnUrl=${returnUrl}&redirect_uri=${encodeURIComponent(`${knomeBase}/sso`)}`;
 
     useEffect(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.get('logout') === 'true') {
+            const CENTRAL_LOGOUT_URL = 'https://counselling-1.mponline.demo.gov.in:3001/login?logout=true';
+            const authKeys = ['knome_jwt', 'accessToken', 'knome_employeeId', 'knome_refresh', 'userProfile', 'knome_token'];
+            authKeys.forEach(k => {
+                try { localStorage.removeItem(k); } catch {}
+            });
+            try { sessionStorage.removeItem('knome_logging_out'); } catch {}
+            try {
+                window.location.replace(CENTRAL_LOGOUT_URL);
+            } catch {
+                window.location.href = CENTRAL_LOGOUT_URL;
+            }
+            return;
+        }
+
         try {
             sessionStorage.removeItem('knome_logging_out');
         } catch {}

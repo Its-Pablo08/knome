@@ -4,6 +4,7 @@ using Knome.API.DTOs.Communities;
 using Knome.API.Exceptions;
 using Knome.API.Interfaces;
 using Knome.API.Responses;
+using Knome.API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -16,10 +17,12 @@ namespace Knome.API.Controllers;
 public class CommunityController : KnomeControllerBase
 {
     private readonly ICommunityService _communityService;
+    private readonly ISystemSettingService _settingService;
 
-    public CommunityController(ICommunityService communityService)
+    public CommunityController(ICommunityService communityService, ISystemSettingService settingService)
     {
         _communityService = communityService;
+        _settingService = settingService;
     }
 
     [HttpGet("categories")]
@@ -193,6 +196,11 @@ public class CommunityController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<List<CommunityPostItemDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCommunityPosts(int communityId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
     {
+        var enablePosts = await _settingService.GetEnablePostsAsync();
+        if (!enablePosts)
+        {
+            return Ok(ApiResponse<List<CommunityPostItemDto>>.SuccessResponse(200, "Posts module is disabled.", new List<CommunityPostItemDto>()));
+        }
         var posts = await _communityService.GetCommunityPostsAsync(communityId, pageNumber, pageSize, GetCurrentUserId());
         return Ok(ApiResponse<List<CommunityPostItemDto>>.SuccessResponse(200, "Community posts retrieved successfully.", posts));
     }
@@ -201,6 +209,7 @@ public class CommunityController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<CommunityPostItemDto>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateCommunityPost(int communityId, [FromBody] CreateCommunityPostDto dto)
     {
+        await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnablePostsKey, "Posts");
         var post = await _communityService.CreateCommunityPostAsync(communityId, GetCurrentUserId(), dto);
         return CreatedAtAction(nameof(GetCommunityPosts), new { communityId }, ApiResponse<CommunityPostItemDto>.SuccessResponse(201, "Community post created successfully.", post));
     }
@@ -209,6 +218,7 @@ public class CommunityController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<CommunityPostItemDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> PinPost(int communityId, long postId, [FromBody] PinCommunityPostDto dto)
     {
+        await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnablePostsKey, "Posts");
         var post = await _communityService.PinPostAsync(communityId, postId, GetCurrentUserId(), dto);
         var statusMsg = dto.IsPinned ? "pinned" : "unpinned";
         return Ok(ApiResponse<CommunityPostItemDto>.SuccessResponse(200, $"Post {statusMsg} successfully.", post));

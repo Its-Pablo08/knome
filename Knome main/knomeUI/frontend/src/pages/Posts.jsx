@@ -137,6 +137,41 @@ export default function Posts() {
                 return true;
             });
 
+            // Preserve highlighted post at the top, then drafts, then sort rest chronologically
+            accessiblePosts.sort((a, b) => {
+                if (a.isHighlighted && !b.isHighlighted) return -1;
+                if (!a.isHighlighted && b.isHighlighted) return 1;
+                if (a.status === 'Draft' && b.status !== 'Draft') return -1;
+                if (a.status !== 'Draft' && b.status === 'Draft') return 1;
+
+                const parseDate = (item) => {
+                    if (item.publishedDate) {
+                        const t = new Date(item.publishedDate).getTime();
+                        if (!isNaN(t)) return t;
+                    }
+                    if (item.createdDate) {
+                        const t = new Date(item.createdDate).getTime();
+                        if (!isNaN(t)) return t;
+                    }
+                    if (item.scheduledDate) {
+                        const t = new Date(item.scheduledDate).getTime();
+                        if (!isNaN(t)) return t;
+                    }
+                    if (item.time && typeof item.time === 'string') {
+                        const parts = item.time.match(/(\d{1,2})\/(\d{1,2})\/(\d{4}),\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+                        if (parts) {
+                            let [, dd, mm, yyyy, hh, min, ampm] = parts;
+                            let h = parseInt(hh, 10);
+                            if (ampm.toUpperCase() === 'PM' && h < 12) h += 12;
+                            if (ampm.toUpperCase() === 'AM' && h === 0) h = 0;
+                            return new Date(yyyy, mm - 1, dd, h, parseInt(min, 10)).getTime();
+                        }
+                    }
+                    return 0;
+                };
+                return parseDate(b) - parseDate(a);
+            });
+
             setPosts(accessiblePosts);
         } catch (error) {
             console.error('Failed to load posts', error);

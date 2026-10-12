@@ -13,7 +13,7 @@ namespace Knome.API.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/podcasts")]
-public class PodcastController : KnomeControllerBase
+public class PodcastController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.Filters.IAsyncActionFilter
 {
     private readonly IPodcastService _podcastService;
     private readonly ISystemSettingService _settingService;
@@ -22,6 +22,13 @@ public class PodcastController : KnomeControllerBase
     {
         _podcastService = podcastService;
         _settingService = settingService;
+    }
+
+    [NonAction]
+    public async Task OnActionExecutionAsync(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context, Microsoft.AspNetCore.Mvc.Filters.ActionExecutionDelegate next)
+    {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnablePodcastsKey, "Podcasts");
+        await next();
     }
 
     // --- Series Endpoints ---

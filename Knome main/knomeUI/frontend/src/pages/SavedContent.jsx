@@ -4,9 +4,8 @@ import { savedContentApi, resolveMediaUrl } from '../utils/apiService';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
 import { useScrollLoading } from '../hooks/useScrollLoading';
-import * as signalR from '@microsoft/signalr';
-import { getHubUrl } from '../utils/apiClient';
 import { analyzeContentCategory } from '../components/modals/SaveToCategoryModal';
+import { useSystemConfig } from '../utils/systemConfig';
 
 const DEFAULT_CATEGORIES = [
     { id: 'all', name: 'All Categories', icon: 'folder_open', color: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' },
@@ -48,11 +47,20 @@ const extractText = (val) => {
 
 export default function SavedContent() {
     const navigate = useNavigate();
+    const sysConfig = useSystemConfig();
 
     // Filter & Search State
     const [activeTab, setActiveTab] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState('NewestSaved');
+
+    // Auto reset activeTab if feature is disabled
+    useEffect(() => {
+        if (activeTab === 'Posts' && !sysConfig.isPostsEnabled) setActiveTab('All');
+        if (activeTab === 'Articles' && !sysConfig.isArticlesEnabled) setActiveTab('All');
+        if (activeTab === 'Videos' && !sysConfig.isVideosEnabled) setActiveTab('All');
+        if (activeTab === 'Podcasts' && !sysConfig.isPodcastsEnabled) setActiveTab('All');
+    }, [activeTab, sysConfig]);
 
     // Data State
     const [savedItems, setSavedItems] = useState([]);
@@ -102,13 +110,14 @@ export default function SavedContent() {
     // Modal State
     const [assigningItem, setAssigningItem] = useState(null);
 
-    const tabs = [
+    const allTabs = [
         { id: 'All', label: 'All Types', countKey: 'totalCount' },
-        { id: 'Posts', label: 'Posts', countKey: 'postsCount' },
-        { id: 'Articles', label: 'Articles', countKey: 'articlesCount' },
-        { id: 'Videos', label: 'Videos', countKey: 'videosCount' },
-        { id: 'Podcasts', label: 'Audio', countKey: 'podcastsCount' },
+        { id: 'Posts', label: 'Posts', countKey: 'postsCount', enabled: sysConfig.isPostsEnabled },
+        { id: 'Articles', label: 'Articles', countKey: 'articlesCount', enabled: sysConfig.isArticlesEnabled },
+        { id: 'Videos', label: 'Videos', countKey: 'videosCount', enabled: sysConfig.isVideosEnabled },
+        { id: 'Podcasts', label: 'Audio', countKey: 'podcastsCount', enabled: sysConfig.isPodcastsEnabled },
     ];
+    const tabs = allTabs.filter(t => t.id === 'All' || t.enabled !== false);
 
     // Load counts
     const loadCounts = useCallback(async () => {
@@ -134,16 +143,12 @@ export default function SavedContent() {
                 else if (t === 'podcast') localPodcasts++;
             });
 
-            const pCount = Math.max(apiCounts.postsCount || 0, localPosts);
-            const aCount = Math.max(apiCounts.articlesCount || 0, localArticles);
-            const vCount = Math.max(apiCounts.videosCount || 0, localVideos);
-            const podCount = Math.max(apiCounts.podcastsCount || 0, localPodcasts);
+            const pCount = sysConfig.isPostsEnabled ? Math.max(apiCounts.postsCount || 0, localPosts) : 0;
+            const aCount = sysConfig.isArticlesEnabled ? Math.max(apiCounts.articlesCount || 0, localArticles) : 0;
+            const vCount = sysConfig.isVideosEnabled ? Math.max(apiCounts.videosCount || 0, localVideos) : 0;
+            const podCount = sysConfig.isPodcastsEnabled ? Math.max(apiCounts.podcastsCount || 0, localPodcasts) : 0;
             const sumTypes = pCount + aCount + vCount + podCount;
-            const calculatedTotal = Math.max(
-                apiCounts.totalCount || 0,
-                sumTypes,
-                localCustomSaved.length
-            );
+            const calculatedTotal = sumTypes + (apiCounts.documentsCount || 0);
 
             setCounts({
                 totalCount: calculatedTotal,
@@ -156,7 +161,7 @@ export default function SavedContent() {
         } catch (e) {
             console.error('Failed to load saved counts', e);
         }
-    }, []);
+    }, [sysConfig]);
 
     // Load saved content list
     const loadSavedContent = useCallback(async () => {
@@ -217,16 +222,29 @@ export default function SavedContent() {
                 return sortBy === 'OldestSaved' ? dateA - dateB : dateB - dateA;
             });
 
-            setSavedItems(deduped);
-            setTotalCount(deduped.length);
+            const filteredDeduped = deduped.filter(item => {
+                const t = (item.contentType || 'Post').toLowerCase();
+                if (t === 'post' && !sysConfig.isPostsEnabled) return false;
+                if (t === 'article' && !sysConfig.isArticlesEnabled) return false;
+                if (t === 'video' && !sysConfig.isVideosEnabled) return false;
+                if (t === 'podcast' && !sysConfig.isPodcastsEnabled) return false;
+                return true;
+            });
+
+            setSavedItems(filteredDeduped);
+            setTotalCount(filteredDeduped.length);
         } catch (e) {
             console.error('Failed to load saved content', e);
             // Fall back to local saved items if API fails
             const localCustomSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
             const formattedLocal = localCustomSaved
                 .filter(s => {
-                    if (activeTab === 'All') return true;
                     const type = (s.contentType || 'Post').toLowerCase();
+                    if (type === 'post' && !sysConfig.isPostsEnabled) return false;
+                    if (type === 'article' && !sysConfig.isArticlesEnabled) return false;
+                    if (type === 'video' && !sysConfig.isVideosEnabled) return false;
+                    if (type === 'podcast' && !sysConfig.isPodcastsEnabled) return false;
+                    if (activeTab === 'All') return true;
                     const tab = activeTab.toLowerCase();
                     if (tab === 'posts') return type === 'post';
                     if (tab === 'articles') return type === 'article';
@@ -260,7 +278,7 @@ export default function SavedContent() {
         } finally {
             setIsLoading(false);
         }
-    }, [activeTab, searchQuery, sortBy, pageNumber]);
+    }, [activeTab, searchQuery, sortBy, pageNumber, sysConfig]);
 
     useEffect(() => {
         const handleBookmarkSaved = (e) => {
@@ -280,52 +298,15 @@ export default function SavedContent() {
         loadSavedContent();
     }, [loadCounts, loadSavedContent]);
 
-    // Real-time SignalR listener for live bookmark updates
+    // Real-time listener for live bookmark updates via global Navbar SignalR pipeline
     useEffect(() => {
-        const token = localStorage.getItem('knome_jwt');
-        const isLoggingOut = typeof window !== 'undefined' && sessionStorage.getItem('knome_logging_out') === 'true';
-        if (!token || isLoggingOut) return;
-
-        const protocol = (typeof window !== 'undefined' && window.location.protocol === 'https:') ? 'https:' : 'http:';
-        const host = (typeof window !== 'undefined' && window.location && window.location.hostname) ? window.location.hostname : 'localhost';
-        const hubUrl = getHubUrl ? getHubUrl() : `${protocol}//${host}:5096/hubs/notifications`;
-
-        const connection = new signalR.HubConnectionBuilder()
-            .withUrl(hubUrl, {
-                accessTokenFactory: () => localStorage.getItem('knome_jwt') || '',
-                transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling
-            })
-            .configureLogging(signalR.LogLevel.None)
-            .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-            .build();
-
-        let isStopped = false;
-        const stopConnection = () => {
-            isStopped = true;
-            try { connection.stop().catch(() => {}); } catch {}
+        const handleBookmarkUpdate = () => {
+            loadCounts();
+            loadSavedContent();
         };
-
-        const handleLogoutEvent = () => stopConnection();
-        window.addEventListener('knome:logout', handleLogoutEvent);
-
-        connection.on('BookmarkUpdated', () => {
-            if (!isStopped) {
-                loadCounts();
-                loadSavedContent();
-            }
-        });
-
-        connection.start().then(() => {
-            if (isStopped) {
-                stopConnection();
-            }
-        }).catch(() => {
-            /* Silently ignore */
-        });
-
+        window.addEventListener('knome:bookmark-updated', handleBookmarkUpdate);
         return () => {
-            window.removeEventListener('knome:logout', handleLogoutEvent);
-            stopConnection();
+            window.removeEventListener('knome:bookmark-updated', handleBookmarkUpdate);
         };
     }, [loadCounts, loadSavedContent]);
 

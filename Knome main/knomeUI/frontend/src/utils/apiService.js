@@ -820,7 +820,19 @@ export const settingsApi = {
 
     /** PUT /api/settings/approval */
     setApprovalSetting: (payload) => {
-        const body = typeof payload === 'boolean' ? { requireApproval: payload } : payload;
+        let body = typeof payload === 'boolean' ? { requireApproval: payload } : payload;
+        if (body && typeof body === 'object') {
+            const normalized = { ...body };
+            for (const [k, v] of Object.entries(body)) {
+                if (k.length > 0) {
+                    const pascalKey = k.charAt(0).toUpperCase() + k.slice(1);
+                    const camelKey = k.charAt(0).toLowerCase() + k.slice(1);
+                    normalized[pascalKey] = v;
+                    normalized[camelKey] = v;
+                }
+            }
+            body = normalized;
+        }
         return apiClient.put('/settings/approval', body);
     },
 
@@ -988,6 +1000,7 @@ export const KNOWN_ROSTER_NAMES = {
     'MPO105': 'Meghna',
     'MPO116': 'Meghna',
     'MPO089': 'Vilash Deshmukh',
+    'EMP100': 'Mayur Bansal',
     'MPO111': 'Mayur Bansal',
     'MPO652': 'Deepak Simrodia',
     'mpo652': 'Deepak Simrodia'

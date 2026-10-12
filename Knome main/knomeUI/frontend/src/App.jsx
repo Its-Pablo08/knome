@@ -81,7 +81,20 @@ function FeatureDisabledView({ featureName, icon = 'block' }) {
 
 function FeatureProtectedPage({ feature, featureName, icon, children }) {
   const config = useSystemConfig();
-  const isEnabled = config[feature] !== false && config[feature.replace(/^is/, 'enable')] !== false;
+  const rawKey = feature.replace(/^is/, '').replace(/Enabled$/, '');
+  const camelKey = 'enable' + rawKey;
+  const isEnabled = config[feature] !== false && config[camelKey] !== false;
+
+  if (!config.isLoaded) {
+    return (
+      <ProtectedPage>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+          <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-slate-500 font-medium">Verifying module permissions...</p>
+        </div>
+      </ProtectedPage>
+    );
+  }
 
   if (!isEnabled) {
     return (
@@ -197,7 +210,7 @@ function App() {
                     <Route path="/saved-content"   element={<ProtectedPage><SavedContent /></ProtectedPage>} />
                     <Route path="/posts"           element={<FeatureProtectedPage feature="isPostsEnabled" featureName="Posts" icon="dynamic_feed"><Posts /></FeatureProtectedPage>} />
                     <Route path="/posts/:id"       element={<FeatureProtectedPage feature="isPostsEnabled" featureName="Posts" icon="dynamic_feed"><Posts /></FeatureProtectedPage>} />
-                    <Route path="/messages"        element={<ProtectedPage><Messages /></ProtectedPage>} />
+                    <Route path="/messages"        element={<FeatureProtectedPage feature="isMessagingEnabled" featureName="Direct Messaging" icon="chat"><Messages /></FeatureProtectedPage>} />
                     <Route path="/chat"            element={<Navigate to="/messages" replace />} />
                     <Route path="*"               element={<Navigate to="/" replace />} />
                   </Routes>

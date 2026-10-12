@@ -16,25 +16,25 @@ export default function SsoLogoutPage() {
 
     useEffect(() => {
         const doLogout = async () => {
-            try {
-                if (logout) {
-                    await logout(false);
-                } else {
-                    localStorage.removeItem('knome_jwt');
-                    localStorage.removeItem('accessToken');
-                    localStorage.removeItem('knome_employeeId');
-                    localStorage.removeItem('knome_refresh');
-                }
-            } catch {
-                localStorage.removeItem('knome_jwt');
-                localStorage.removeItem('accessToken');
-                localStorage.removeItem('knome_employeeId');
+            const CENTRAL_LOGOUT_URL = 'https://counselling-1.mponline.demo.gov.in:3001/login?logout=true';
+            let returnUrl = searchParams.get('returnUrl') || CENTRAL_LOGOUT_URL;
+            if (returnUrl === '/login' || returnUrl.includes('localhost:5173/login') || returnUrl.includes('/applications')) {
+                returnUrl = CENTRAL_LOGOUT_URL;
             }
 
-            let returnUrl = searchParams.get('returnUrl') || 'https://counselling-1.mponline.demo.gov.in:3001/applications';
-            if (returnUrl === '/login' || returnUrl.includes('localhost:5173/login') || returnUrl.includes('login?logout=true')) {
-                returnUrl = 'https://counselling-1.mponline.demo.gov.in:3001/applications';
-            }
+            try {
+                if (logout) {
+                    await logout(returnUrl);
+                    return;
+                }
+            } catch {}
+
+            // Fallback token cleanup if logout provider method is not mounted
+            const authKeys = ['knome_jwt', 'accessToken', 'knome_employeeId', 'knome_refresh', 'userProfile', 'knome_token'];
+            authKeys.forEach(k => {
+                try { localStorage.removeItem(k); } catch {}
+            });
+            try { sessionStorage.removeItem('knome_logging_out'); } catch {}
 
             try {
                 window.location.replace(returnUrl);

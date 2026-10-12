@@ -169,7 +169,7 @@ export default function SsoPage() {
                 localStorage.removeItem('knome_employeeId');
                 
                 setTimeout(() => {
-                    window.location.href = 'https://counselling-1.mponline.demo.gov.in:3001/applications';
+                    window.location.href = 'https://counselling-1.mponline.demo.gov.in:3001/login?logout=true';
                 }, 2000);
             }
         };
@@ -182,7 +182,11 @@ export default function SsoPage() {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('knome_refresh');
         localStorage.removeItem('knome_employeeId');
-        window.location.href = 'https://counselling-1.mponline.demo.gov.in:3001/applications';
+        try {
+            window.location.replace('https://counselling-1.mponline.demo.gov.in:3001/login?logout=true');
+        } catch {
+            window.location.href = 'https://counselling-1.mponline.demo.gov.in:3001/login?logout=true';
+        }
     };
 
     if (suspendedUser) {

@@ -169,53 +169,64 @@ let backendSyncPromise = null;
 /**
  * Loads the authoritative approval policies and platform services from backend SQL Server.
  */
-export async function loadSystemApprovalSettingFromBackend() {
+export async function loadSystemApprovalSettingFromBackend(forceRefresh = false) {
     if (typeof window === 'undefined') return getSystemConfig();
+    if (forceRefresh) backendSyncPromise = null;
     if (backendSyncPromise) return backendSyncPromise;
 
     backendSyncPromise = (async () => {
         try {
             const { apiClient } = await import('./apiClient');
-            const res = await apiClient.get('/settings/approval');
-            const data = res?.data !== undefined ? res.data : res;
-            if (data) {
+            const res = await apiClient.get('/settings/approval', { noCache: true });
+            const data = (res && res.data !== undefined) ? res.data : res;
+            if (data && typeof data === 'object') {
+                const parseBool = (...keys) => {
+                    for (const k of keys) {
+                        const v = data[k];
+                        if (typeof v === 'boolean') return v;
+                        if (v === 'true' || v === 'True') return true;
+                        if (v === 'false' || v === 'False') return false;
+                    }
+                    return undefined;
+                };
+
                 const patch = {};
-                if (typeof data.requireApproval === 'boolean') {
-                    patch.requireContentAndCommunityApproval = data.requireApproval;
-                }
-                if (typeof data.requireCommunityApproval === 'boolean') {
-                    patch.requireCommunityApproval = data.requireCommunityApproval;
-                }
-                if (typeof data.requireVideoApproval === 'boolean') {
-                    patch.requireVideoApproval = data.requireVideoApproval;
-                }
-                if (typeof data.requirePodcastApproval === 'boolean') {
-                    patch.requirePodcastApproval = data.requirePodcastApproval;
-                }
-                if (typeof data.enableMessaging === 'boolean') {
-                    patch.enableMessaging = data.enableMessaging;
-                }
-                if (typeof data.enableEmail === 'boolean') {
-                    patch.enableEmail = data.enableEmail;
-                }
-                if (typeof data.enablePosts === 'boolean') {
-                    patch.enablePosts = data.enablePosts;
-                }
-                if (typeof data.enableArticles === 'boolean') {
-                    patch.enableArticles = data.enableArticles;
-                }
-                if (typeof data.enableClips === 'boolean') {
-                    patch.enableClips = data.enableClips;
-                }
-                if (typeof data.enableWiki === 'boolean') {
-                    patch.enableWiki = data.enableWiki;
-                }
-                if (typeof data.enableVideos === 'boolean') {
-                    patch.enableVideos = data.enableVideos;
-                }
-                if (typeof data.enablePodcasts === 'boolean') {
-                    patch.enablePodcasts = data.enablePodcasts;
-                }
+                const reqApp = parseBool('requireApproval', 'RequireApproval');
+                if (reqApp !== undefined) patch.requireContentAndCommunityApproval = reqApp;
+
+                const reqComm = parseBool('requireCommunityApproval', 'RequireCommunityApproval');
+                if (reqComm !== undefined) patch.requireCommunityApproval = reqComm;
+
+                const reqVid = parseBool('requireVideoApproval', 'RequireVideoApproval');
+                if (reqVid !== undefined) patch.requireVideoApproval = reqVid;
+
+                const reqPod = parseBool('requirePodcastApproval', 'RequirePodcastApproval');
+                if (reqPod !== undefined) patch.requirePodcastApproval = reqPod;
+
+                const enMsg = parseBool('enableMessaging', 'EnableMessaging');
+                if (enMsg !== undefined) patch.enableMessaging = enMsg;
+
+                const enEmail = parseBool('enableEmail', 'EnableEmail');
+                if (enEmail !== undefined) patch.enableEmail = enEmail;
+
+                const enPosts = parseBool('enablePosts', 'EnablePosts');
+                if (enPosts !== undefined) patch.enablePosts = enPosts;
+
+                const enArticles = parseBool('enableArticles', 'EnableArticles');
+                if (enArticles !== undefined) patch.enableArticles = enArticles;
+
+                const enClips = parseBool('enableClips', 'EnableClips');
+                if (enClips !== undefined) patch.enableClips = enClips;
+
+                const enWiki = parseBool('enableWiki', 'EnableWiki');
+                if (enWiki !== undefined) patch.enableWiki = enWiki;
+
+                const enVideos = parseBool('enableVideos', 'EnableVideos');
+                if (enVideos !== undefined) patch.enableVideos = enVideos;
+
+                const enPodcasts = parseBool('enablePodcasts', 'EnablePodcasts');
+                if (enPodcasts !== undefined) patch.enablePodcasts = enPodcasts;
+
                 const updated = saveSystemConfig(patch);
                 return updated;
             }
@@ -224,7 +235,7 @@ export async function loadSystemApprovalSettingFromBackend() {
         } finally {
             setTimeout(() => {
                 backendSyncPromise = null;
-            }, 3000);
+            }, 500);
         }
         return getSystemConfig();
     })();
@@ -232,19 +243,27 @@ export async function loadSystemApprovalSettingFromBackend() {
     return backendSyncPromise;
 }
 
+let isGlobalInitialSyncCompleted = false;
+
 /**
  * React hook to reactively subscribe to system configuration changes.
  */
 export function useSystemConfig() {
     const [config, setConfig] = useState(getSystemConfig);
+    const [isLoaded, setIsLoaded] = useState(isGlobalInitialSyncCompleted);
 
     useEffect(() => {
-        // Initial sync with backend database
-        loadSystemApprovalSettingFromBackend().then(latestConfig => {
+        // Initial sync with backend database bypassing cache
+        loadSystemApprovalSettingFromBackend(true).then(latestConfig => {
+            isGlobalInitialSyncCompleted = true;
+            setIsLoaded(true);
             if (latestConfig) {
                 setConfig(latestConfig);
             }
-        }).catch(() => {});
+        }).catch(() => {
+            isGlobalInitialSyncCompleted = true;
+            setIsLoaded(true);
+        });
 
         const handleConfigChange = (e) => {
             if (e?.detail) {
@@ -260,12 +279,35 @@ export function useSystemConfig() {
             }
         };
 
+        // Window focus & tab visibility re-sync: ensures regular users immediately receive admin changes
+        const handleReSync = () => {
+            loadSystemApprovalSettingFromBackend(true).then(latestConfig => {
+                if (latestConfig) setConfig(latestConfig);
+            }).catch(() => {});
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                handleReSync();
+            }
+        };
+
+        // Periodic light background re-sync (every 30 seconds)
+        const pollInterval = setInterval(() => {
+            handleReSync();
+        }, 30000);
+
         window.addEventListener(SYSTEM_CONFIG_EVENT, handleConfigChange);
         window.addEventListener('storage', handleStorage);
+        window.addEventListener('focus', handleReSync);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
+            clearInterval(pollInterval);
             window.removeEventListener(SYSTEM_CONFIG_EVENT, handleConfigChange);
             window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('focus', handleReSync);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, []);
 
@@ -277,6 +319,8 @@ export function useSystemConfig() {
     return {
         ...config,
         config,
+        isLoaded,
+        isSyncing: !isLoaded,
         isMessagingEnabled: config.enableMessaging !== false,
         isEmailEnabled: config.enableEmail !== false,
         isApprovalRequired: config.requireContentAndCommunityApproval !== false,

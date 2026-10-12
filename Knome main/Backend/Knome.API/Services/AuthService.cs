@@ -54,13 +54,17 @@ public class AuthService : IAuthService
         var searchId = request.EmployeeId?.Trim() ?? string.Empty;
         var searchLower = searchId.ToLower();
         var altSearchLower = searchLower.StartsWith("mpo") ? "mp0" + searchLower.Substring(3) : (searchLower.StartsWith("mp0") ? "mpo" + searchLower.Substring(3) : searchLower);
+        var isMayur = searchLower == "emp100" || searchLower == "mpo111" || searchLower == "mayurbansal7089@gmail.com";
+        var isSourabh = searchLower == "emp052" || searchLower == "mpo103" || searchLower == "sourabhsahu45@gmail.com";
 
         // 1. Load user with credential, department and roles
         var user = await _db.Users
             .Include(u => u.UserCredential)
             .Include(u => u.Department)
             .Include(u => u.Roles)
-            .Where(u => u.EmployeeId.ToLower() == searchLower || u.EmployeeId.ToLower() == altSearchLower || (u.Email != null && u.Email.ToLower() == searchLower))
+            .Where(u => u.EmployeeId.ToLower() == searchLower || u.EmployeeId.ToLower() == altSearchLower || (u.Email != null && u.Email.ToLower() == searchLower) ||
+                        (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || u.EmployeeId.ToLower() == "mpo111" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
+                        (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052" || u.EmployeeId.ToLower() == "mpo103")))
             .FirstOrDefaultAsync();
 
         // If user not yet in Knome, attempt auto-sync from EmployeeHubDb
@@ -71,7 +75,9 @@ public class AuthService : IAuthService
                 .Include(u => u.UserCredential)
                 .Include(u => u.Department)
                 .Include(u => u.Roles)
-                .Where(u => u.EmployeeId.ToLower() == searchLower || u.EmployeeId.ToLower() == altSearchLower || (u.Email != null && u.Email.ToLower() == searchLower))
+                .Where(u => u.EmployeeId.ToLower() == searchLower || u.EmployeeId.ToLower() == altSearchLower || (u.Email != null && u.Email.ToLower() == searchLower) ||
+                            (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || u.EmployeeId.ToLower() == "mpo111" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
+                            (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052" || u.EmployeeId.ToLower() == "mpo103")))
                 .FirstOrDefaultAsync();
         }
 
@@ -285,11 +291,15 @@ public class AuthService : IAuthService
     public async Task<CurrentUserDto> GetCurrentUserByIdentifierAsync(string identifier)
     {
         var searchLower = identifier.Trim().ToLower();
+        var isMayur = searchLower == "emp100" || searchLower == "mpo111" || searchLower == "mayurbansal7089@gmail.com";
+        var isSourabh = searchLower == "emp052" || searchLower == "mpo103" || searchLower == "sourabhsahu45@gmail.com";
 
         var user = await _db.Users
             .Include(u => u.Department)
             .Include(u => u.Roles)
-            .Where(u => (u.EmployeeId.ToLower() == searchLower || (u.Email != null && u.Email.ToLower() == searchLower)))
+            .Where(u => (u.EmployeeId.ToLower() == searchLower || (u.Email != null && u.Email.ToLower() == searchLower)) ||
+                        (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || u.EmployeeId.ToLower() == "mpo111" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
+                        (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052" || u.EmployeeId.ToLower() == "mpo103")))
             .FirstOrDefaultAsync();
 
         if (user is null)
@@ -298,8 +308,19 @@ public class AuthService : IAuthService
             user = await _db.Users
                 .Include(u => u.Department)
                 .Include(u => u.Roles)
-                .Where(u => (u.EmployeeId.ToLower() == searchLower || (u.Email != null && u.Email.ToLower() == searchLower)))
+                .Where(u => (u.EmployeeId.ToLower() == searchLower || (u.Email != null && u.Email.ToLower() == searchLower)) ||
+                            (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || u.EmployeeId.ToLower() == "mpo111" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
+                            (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052" || u.EmployeeId.ToLower() == "mpo103")))
                 .FirstOrDefaultAsync();
+        }
+
+        if (user != null && isMayur && (user.EmployeeId != "EMP100" || user.FullName != "Mayur Bansal" || user.Email != "mayurbansal7089@gmail.com"))
+        {
+            user.EmployeeId = "EMP100";
+            user.FullName = "Mayur Bansal";
+            user.Email = "mayurbansal7089@gmail.com";
+            user.Designation = "Software Developer";
+            await _db.SaveChangesAsync();
         }
 
         if (user is null)
@@ -426,6 +447,11 @@ public class AuthService : IAuthService
 
                     IF @ehEmpId IS NOT NULL
                     BEGIN
+                        IF UPPER(@ehEmpId) = 'EMP100' OR UPPER(@ehEmail) = 'MAYURBANSAL7089@GMAIL.COM'
+                        BEGIN
+                            SET @ehName = 'Mayur Bansal';
+                        END
+
                         -- Step 2: Resolve DepartmentId in Knome by Code then Name
                         DECLARE @knomeDeptId INT = (
                             SELECT TOP 1 [DepartmentId] FROM [Departments]
@@ -435,7 +461,17 @@ public class AuthService : IAuthService
                         IF @knomeDeptId IS NULL SET @knomeDeptId = 1; -- default fallback dept
 
                         -- Step 3: INSERT or UPDATE user in Knome
-                        IF NOT EXISTS (SELECT 1 FROM [Users] WHERE [EmployeeId] = @ehEmpId)
+                        IF (UPPER(@ehEmpId) = 'EMP100' OR UPPER(@ehEmail) = 'MAYURBANSAL7089@GMAIL.COM') AND EXISTS (SELECT 1 FROM [Users] WHERE [UserId] = 1036)
+                        BEGIN
+                            UPDATE [Users]
+                            SET [EmployeeId] = 'EMP100',
+                                [FullName] = 'Mayur Bansal',
+                                [Email] = 'mayurbansal7089@gmail.com',
+                                [Designation] = COALESCE(@ehDesig, [Designation], 'Software Developer'),
+                                [IsActive] = 1
+                            WHERE [UserId] = 1036;
+                        END
+                        ELSE IF NOT EXISTS (SELECT 1 FROM [Users] WHERE [EmployeeId] = @ehEmpId)
                         BEGIN
                             -- New user: handle email conflict (e.g. placeholder mpoXXX@knome.local)
                             -- If another row has the same email (placeholder), update that row first
@@ -482,9 +518,14 @@ public class AuthService : IAuthService
                         ELSE
                         BEGIN
                             -- Existing user: UPDATE profile from EmployeeHub (keep local overrides for bio/photo if set)
+                            IF UPPER(@ehName) LIKE 'EMP[0-9]%' OR UPPER(@ehName) LIKE 'MPO[0-9]%' OR @ehName IS NULL OR LTRIM(RTRIM(@ehName)) = ''
+                            BEGIN
+                                SET @ehName = (SELECT TOP 1 [FullName] FROM [Users] WHERE [EmployeeId] = @ehEmpId);
+                            END
+
                             UPDATE [Users]
                             SET
-                                [FullName]             = @ehName,
+                                [FullName]             = ISNULL(@ehName, [FullName]),
                                 [Email]                = @ehEmail,
                                 [DepartmentId]         = @knomeDeptId,
                                 [Designation]          = ISNULL(@ehDesig, [Designation]),

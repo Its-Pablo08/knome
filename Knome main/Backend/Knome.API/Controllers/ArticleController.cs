@@ -15,7 +15,7 @@ namespace Knome.API.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/articles")]
-public class ArticleController : KnomeControllerBase
+public class ArticleController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.Filters.IAsyncActionFilter
 {
     private readonly IArticleService _articleService;
     private readonly ISystemSettingService _settingService;
@@ -24,6 +24,13 @@ public class ArticleController : KnomeControllerBase
     {
         _articleService = articleService;
         _settingService = settingService;
+    }
+
+    [NonAction]
+    public async Task OnActionExecutionAsync(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context, Microsoft.AspNetCore.Mvc.Filters.ActionExecutionDelegate next)
+    {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableArticlesKey, "Articles");
+        await next();
     }
 
     [HttpGet]
@@ -96,6 +103,7 @@ public class ArticleController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<List<CategoryDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCategories()
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableArticlesKey, "Articles");
         var categories = await _articleService.GetArticleCategoriesAsync();
         return Ok(ApiResponse<List<CategoryDto>>.SuccessResponse(200, "Article categories retrieved successfully.", categories));
     }
@@ -105,6 +113,7 @@ public class ArticleController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<CategoryDto>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateCategory([FromBody] CreateCategoryDto dto)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableArticlesKey, "Articles");
         var category = await _articleService.CreateArticleCategoryAsync(dto, GetCurrentUserId());
         return StatusCode(StatusCodes.Status201Created, ApiResponse<CategoryDto>.SuccessResponse(201, "Category created successfully.", category));
     }
@@ -113,6 +122,7 @@ public class ArticleController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<int>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RecordView(long articleId)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableArticlesKey, "Articles");
         var newCount = await _articleService.IncrementViewCountAsync(articleId, GetCurrentUserId());
         return Ok(ApiResponse<int>.SuccessResponse(200, "Article view recorded.", newCount));
     }

@@ -12,7 +12,7 @@ namespace Knome.API.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/wikis")]
-public class WikiController : KnomeControllerBase
+public class WikiController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.Filters.IAsyncActionFilter
 {
     private readonly IWikiService _wikiService;
     private readonly ISystemSettingService _settingService;
@@ -21,6 +21,13 @@ public class WikiController : KnomeControllerBase
     {
         _wikiService = wikiService;
         _settingService = settingService;
+    }
+
+    [NonAction]
+    public async Task OnActionExecutionAsync(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context, Microsoft.AspNetCore.Mvc.Filters.ActionExecutionDelegate next)
+    {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableWikiKey, "Wiki");
+        await next();
     }
 
     [HttpGet]

@@ -18,7 +18,7 @@ public class UpdateClipStatusDto
 [Authorize]
 [ApiController]
 [Route("api/clips")]
-public class ClipsController : KnomeControllerBase
+public class ClipsController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.Filters.IAsyncActionFilter
 {
     private readonly IClipService _clipService;
     private readonly ISystemSettingService _settingService;
@@ -27,6 +27,13 @@ public class ClipsController : KnomeControllerBase
     {
         _clipService = clipService;
         _settingService = settingService;
+    }
+
+    [NonAction]
+    public async Task OnActionExecutionAsync(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context, Microsoft.AspNetCore.Mvc.Filters.ActionExecutionDelegate next)
+    {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableClipsKey, "Clips");
+        await next();
     }
 
     private bool IsAdmin()
@@ -89,6 +96,7 @@ public class ClipsController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RecordView(long id)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableClipsKey, "Clips");
         var views = await _clipService.RecordViewAsync(id, GetCurrentUserId());
         return Ok(ApiResponse<object>.SuccessResponse(200, "View recorded.", new { viewCount = views }));
     }
@@ -97,6 +105,7 @@ public class ClipsController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<List<ClipViewerDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetViewers(long id)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableClipsKey, "Clips");
         var viewers = await _clipService.GetClipViewersAsync(id);
         return Ok(ApiResponse<List<ClipViewerDto>>.SuccessResponse(200, "Clip viewers retrieved successfully.", viewers));
     }
@@ -105,6 +114,7 @@ public class ClipsController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<ClipEngagementDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetEngagement(long id)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableClipsKey, "Clips");
         var engagement = await _clipService.GetClipEngagementAsync(id);
         return Ok(ApiResponse<ClipEngagementDto>.SuccessResponse(200, "Clip engagement retrieved successfully.", engagement));
     }
@@ -113,6 +123,7 @@ public class ClipsController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ToggleLike(long id)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableClipsKey, "Clips");
         var isLiked = await _clipService.ToggleLikeAsync(id, GetCurrentUserId());
         return Ok(ApiResponse<object>.SuccessResponse(200, isLiked ? "Clip liked." : "Clip unliked.", new { isLiked }));
     }
@@ -121,6 +132,7 @@ public class ClipsController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ToggleBookmark(long id)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableClipsKey, "Clips");
         var isBookmarked = await _clipService.ToggleBookmarkAsync(id, GetCurrentUserId());
         return Ok(ApiResponse<object>.SuccessResponse(200, isBookmarked ? "Clip saved to bookmarks." : "Clip removed from bookmarks.", new { isBookmarked }));
     }
@@ -129,6 +141,7 @@ public class ClipsController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> Share(long id, [FromBody] ShareClipDto dto)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableClipsKey, "Clips");
         await _clipService.ShareClipAsync(id, GetCurrentUserId(), dto);
         return Ok(ApiResponse.SuccessResponse(200, "Clip shared successfully."));
     }
@@ -137,6 +150,7 @@ public class ClipsController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<List<ClipDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUserClips(int userId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 50)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableClipsKey, "Clips");
         var clips = await _clipService.GetUserClipsAsync(userId, GetCurrentUserId(), pageNumber, pageSize);
         return Ok(ApiResponse<List<ClipDto>>.SuccessResponse(200, "User clips retrieved successfully.", clips));
     }
@@ -145,6 +159,7 @@ public class ClipsController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<List<ClipDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyClips([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 50)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableClipsKey, "Clips");
         var clips = await _clipService.GetUserClipsAsync(GetCurrentUserId(), GetCurrentUserId(), pageNumber, pageSize);
         return Ok(ApiResponse<List<ClipDto>>.SuccessResponse(200, "My clips retrieved successfully.", clips));
     }

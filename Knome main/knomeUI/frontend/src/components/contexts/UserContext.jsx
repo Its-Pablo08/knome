@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { apiClient } from '../../utils/apiClient';
 import { authApi, profileApi, karmaApi } from '../../utils/apiService';
+import { loadSystemApprovalSettingFromBackend } from '../../utils/systemConfig';
 
 /**
  * Maps a human-readable roleName (from Admin UI dropdown) to the short role code
@@ -71,6 +72,7 @@ export const KNOWN_ROSTER_NAMES = {
     'MPO105': 'Meghna',
     'MPO116': 'Meghna',
     'MPO089': 'Vilash Deshmukh',
+    'EMP100': 'Mayur Bansal',
     'MPO111': 'Mayur Bansal',
     'MPO652': 'Deepak Simrodia',
     'mpo652': 'Deepak Simrodia'
@@ -269,7 +271,7 @@ export const INITIAL_USERS = [
     { id: 1076, userId: 1076, employeeId: 'MP0664', email: 'vishendra.sharma@mponline.gov.in', name: 'Vishendra Sharma', fullName: 'Vishendra Sharma', role: 'CADM', roleName: 'Community Admin', designation: 'Track Lead', department: 'Higher Education', location: 'Bhopal HQ', avatar: null, karmaPoints: 225, karma: 225, isActive: true },
     { id: 3, userId: 3, employeeId: 'EMP052', email: 'sourabhsahu45@gmail.com', name: 'Sourabh Sahu', fullName: 'Sourabh Sahu', role: 'HRADM', roleName: 'HR Admin', designation: 'Talent Acquisition Manager', department: 'Human Resources', location: 'Bhopal HQ', avatar: null, karmaPoints: 306, karma: 306, isActive: true },
     { id: 5, userId: 5, employeeId: 'Emp101', email: 'meghna@gmail.com', name: 'Meghna', fullName: 'Meghna', role: 'HRADM', roleName: 'HR Admin', designation: 'Business Analyst', department: 'Product Design', location: 'Bhopal HQ', avatar: null, karmaPoints: 123, karma: 123, isActive: true },
-    { id: 1036, userId: 1036, employeeId: 'MPO111', email: 'mayurbansal7089@gmail.com', name: 'Mayur Bansal', fullName: 'Mayur Bansal', role: 'EMP', roleName: 'Employee', designation: 'Software Developer', department: 'Technology', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
+    { id: 1036, userId: 1036, employeeId: 'EMP100', email: 'mayurbansal7089@gmail.com', name: 'Mayur Bansal', fullName: 'Mayur Bansal', role: 'EMP', roleName: 'Employee', designation: 'Software Developer', department: 'Technology', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
     { id: 1050, userId: 1050, employeeId: 'MPO089', email: 'vilash.deshmukh@mponline.gov.in', name: 'Vilash Deshmukh', fullName: 'Vilash Deshmukh', role: 'SYSADM', roleName: 'System Admin', designation: 'Associate Consultant', department: 'HR', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
     { id: 1057, userId: 1057, employeeId: 'MPO652', email: 'deepak.simrodia@mponline.gov.in', name: 'Deepak Simrodia', fullName: 'Deepak Simrodia', role: 'EMP', roleName: 'Employee', designation: 'Software Developer', department: 'University', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
 ];
@@ -322,6 +324,7 @@ export const UserProvider = ({ children }) => {
     const initialUser = (savedEmpId && initialUsersList.find(u => 
         u.employeeId?.toUpperCase() === savedEmpId.toUpperCase() ||
         (savedEmpId.toUpperCase() === 'MPO103' && (u.employeeId === 'EMP052' || u.userId === 3)) ||
+        ((savedEmpId.toUpperCase() === 'MPO111' || savedEmpId.toUpperCase() === 'EMP100') && (u.employeeId === 'EMP100' || u.employeeId === 'MPO111' || u.userId === 1036)) ||
         (u.email && u.email.toLowerCase() === savedEmpId.toLowerCase()) ||
         String(u.userId) === String(savedEmpId) ||
         String(u.id) === String(savedEmpId)
@@ -517,6 +520,7 @@ export const UserProvider = ({ children }) => {
 
             setCurrentUser(finalUser);
             setIsAuthenticated(true);
+            loadSystemApprovalSettingFromBackend(true).catch(() => {});
         } catch (error) {
             const errMsg = (error?.message || '').toLowerCase();
             const isSuspendedError = error?.isSuspended || errMsg.includes('suspended') || errMsg.includes('inactive') || errMsg.includes('forbidden') || error?.status === 403;
@@ -674,9 +678,13 @@ export const UserProvider = ({ children }) => {
                     if (ssoEmpId.toUpperCase() === 'MPO664') {
                         ssoEmpId = 'MP0664';
                     }
+                    if (ssoEmpId.toUpperCase() === 'MPO111' || ssoEmpId.toUpperCase() === 'EMP100' || ssoEmpId.toLowerCase() === 'mayurbansal7089@gmail.com') {
+                        ssoEmpId = 'EMP100';
+                    }
                     let localUser = INITIAL_USERS.find(u => 
                         (u.employeeId && u.employeeId.toUpperCase() === ssoEmpId.toUpperCase()) ||
-                        (u.email && u.email.toLowerCase() === ssoEmpId.toLowerCase())
+                        (u.email && u.email.toLowerCase() === ssoEmpId.toLowerCase()) ||
+                        ((ssoEmpId.toUpperCase() === 'EMP100' || ssoEmpId.toUpperCase() === 'MPO111') && (u.employeeId === 'EMP100' || u.employeeId === 'MPO111' || u.userId === 1036))
                     );
                     if (!localUser) {
                         localUser = {
@@ -790,6 +798,8 @@ export const UserProvider = ({ children }) => {
             if (savedEmployeeId) {
                 let localUser = usersList.find(u => 
                     (u.employeeId && u.employeeId.toUpperCase() === savedEmployeeId.toUpperCase()) ||
+                    (savedEmployeeId.toUpperCase() === 'MPO103' && (u.employeeId === 'EMP052' || u.userId === 3)) ||
+                    ((savedEmployeeId.toUpperCase() === 'MPO111' || savedEmployeeId.toUpperCase() === 'EMP100') && (u.employeeId === 'EMP100' || u.employeeId === 'MPO111' || u.userId === 1036)) ||
                     (u.email && u.email.toLowerCase() === savedEmployeeId.toLowerCase()) ||
                     String(u.userId) === String(savedEmployeeId) ||
                     String(u.id) === String(savedEmployeeId)
@@ -844,6 +854,7 @@ export const UserProvider = ({ children }) => {
                             profile.employeeId?.toUpperCase() === savedEmployeeId.toUpperCase() ||
                             (localUser?.email && profile.email && localUser.email.toLowerCase() === profile.email.toLowerCase()) ||
                             (localUser?.employeeId && profile.employeeId && localUser.employeeId.toUpperCase() === profile.employeeId.toUpperCase()) ||
+                            ((savedEmployeeId.toUpperCase() === 'EMP100' || savedEmployeeId.toUpperCase() === 'MPO111') && (profile.employeeId?.toUpperCase() === 'EMP100' || profile.employeeId?.toUpperCase() === 'MPO111' || profile.userId === 1036)) ||
                             String(profile.userId) === String(savedEmployeeId)
                         )) {
                             const isProfileSuspended = profile.isSuspended === true || profile.isPermanentlySuspended === true || profile.isActive === false || (profile.suspendedUntil && new Date(profile.suspendedUntil) > new Date());
@@ -898,6 +909,7 @@ export const UserProvider = ({ children }) => {
                     console.warn('Session verification warning, maintaining active user session:', err?.message || err);
                     setCurrentUser(localUser);
                     setIsAuthenticated(true);
+                    loadSystemApprovalSettingFromBackend(true).catch(() => {});
                     setIsAuthLoading(false);
 
                     // If backend was offline during boot, automatically re-authenticate once backend finishes initializing
@@ -1053,15 +1065,49 @@ export const UserProvider = ({ children }) => {
             }
         } catch { /* ignore logout errors */ }
 
-        // 1. Destroy local application storage
-        localStorage.removeItem('knome_jwt');
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('userProfile');
-        localStorage.removeItem('knome_refresh');
-        localStorage.removeItem('knome_employeeId');
-        sessionStorage.removeItem('knome_auth_pwd');
-        sessionStorage.removeItem('knome_sso_return_url');
-        sessionStorage.removeItem('knome_intended_emp001');
+        // 1. Destroy local application storage, tokens, and credentials securely
+        const authKeysToRemove = [
+            'knome_jwt',
+            'accessToken',
+            'userProfile',
+            'knome_refresh',
+            'knome_employeeId',
+            'knome_token',
+            'knome_user',
+            'knome_user_session',
+            'knome_active_user_id',
+            'knome_auth',
+            'knome_intended_emp001',
+            'token',
+            'user'
+        ];
+        authKeysToRemove.forEach(k => {
+            try { localStorage.removeItem(k); } catch {}
+        });
+
+        const sessionKeysToRemove = [
+            'knome_auth_pwd',
+            'knome_sso_return_url',
+            'knome_intended_emp001',
+            'knome_return_url',
+            'knome_user_session'
+        ];
+        sessionKeysToRemove.forEach(k => {
+            try { sessionStorage.removeItem(k); } catch {}
+        });
+
+        // Expire any residual auth session cookies
+        try {
+            if (typeof document !== 'undefined' && document.cookie) {
+                document.cookie.split(';').forEach(c => {
+                    const eqPos = c.indexOf('=');
+                    const name = eqPos > -1 ? c.substring(0, eqPos).trim() : c.trim();
+                    if (name.includes('token') || name.includes('auth') || name.includes('jwt') || name.includes('session')) {
+                        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+                    }
+                });
+            }
+        } catch {}
 
         apiClient.clearCache();
         setCurrentUser(null);
@@ -1075,8 +1121,13 @@ export const UserProvider = ({ children }) => {
             return;
         }
 
-        // 2. Perform clean atomic navigation to target URL without intermediary crashing renders
-        const targetUrl = customRedirectUrl || 'https://counselling-1.mponline.demo.gov.in:3001/applications';
+        // 2. Perform clean atomic navigation to the centralized login portal with logout=true
+        const CENTRAL_LOGOUT_URL = 'https://counselling-1.mponline.demo.gov.in:3001/login?logout=true';
+        let targetUrl = customRedirectUrl;
+        if (!targetUrl || targetUrl === '/login' || targetUrl.includes('/applications') || targetUrl.includes('localhost:5173/login')) {
+            targetUrl = CENTRAL_LOGOUT_URL;
+        }
+
         try {
             window.location.replace(targetUrl);
         } catch {

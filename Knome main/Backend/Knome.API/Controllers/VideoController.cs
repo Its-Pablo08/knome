@@ -13,7 +13,7 @@ namespace Knome.API.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/videos")]
-public class VideoController : KnomeControllerBase
+public class VideoController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.Filters.IAsyncActionFilter
 {
     private readonly IVideoService _videoService;
     private readonly ISystemSettingService _settingService;
@@ -22,6 +22,13 @@ public class VideoController : KnomeControllerBase
     {
         _videoService = videoService;
         _settingService = settingService;
+    }
+
+    [NonAction]
+    public async Task OnActionExecutionAsync(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context, Microsoft.AspNetCore.Mvc.Filters.ActionExecutionDelegate next)
+    {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableVideosKey, "Videos");
+        await next();
     }
 
     [HttpGet]
@@ -91,6 +98,7 @@ public class VideoController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<int>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RecordView(long videoId)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableVideosKey, "Videos");
         var newCount = await _videoService.IncrementViewCountAsync(videoId, GetCurrentUserId());
         return Ok(ApiResponse<int>.SuccessResponse(200, "Video view recorded.", newCount));
     }

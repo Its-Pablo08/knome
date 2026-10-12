@@ -557,6 +557,7 @@ export default function AdminConsole() {
         return getSystemConfig();
     });
     const [isConfirmSaveModalOpen, setIsConfirmSaveModalOpen] = useState(false);
+    const [isSaveSuccess, setIsSaveSuccess] = useState(false);
     const [pendingChanges, setPendingChanges] = useState([]);
     const [isSavingConfig, setIsSavingConfig] = useState(false);
     const [configToast, setConfigToast] = useState(false);
@@ -2465,12 +2466,12 @@ export default function AdminConsole() {
                         requirePodcastApproval: typeof data.requirePodcastApproval === 'boolean' ? data.requirePodcastApproval : true,
                         enableMessaging: typeof data.enableMessaging === 'boolean' ? data.enableMessaging : true,
                         enableEmail: typeof data.enableEmail === 'boolean' ? data.enableEmail : true,
-                        enablePosts: typeof data.enablePosts === 'boolean' ? data.enablePosts : true,
-                        enableArticles: typeof data.enableArticles === 'boolean' ? data.enableArticles : true,
-                        enableClips: typeof data.enableClips === 'boolean' ? data.enableClips : true,
-                        enableWiki: typeof data.enableWiki === 'boolean' ? data.enableWiki : true,
-                        enableVideos: typeof data.enableVideos === 'boolean' ? data.enableVideos : true,
-                        enablePodcasts: typeof data.enablePodcasts === 'boolean' ? data.enablePodcasts : true,
+                        enablePosts: (typeof data.enablePosts === 'boolean' ? data.enablePosts : (typeof data.EnablePosts === 'boolean' ? data.EnablePosts : (data.enablePosts === 'false' || data.EnablePosts === 'false' || data.enablePosts === 'False' || data.EnablePosts === 'False' ? false : true))),
+                        enableArticles: (typeof data.enableArticles === 'boolean' ? data.enableArticles : (typeof data.EnableArticles === 'boolean' ? data.EnableArticles : (data.enableArticles === 'false' || data.EnableArticles === 'false' || data.enableArticles === 'False' || data.EnableArticles === 'False' ? false : true))),
+                        enableClips: (typeof data.enableClips === 'boolean' ? data.enableClips : (typeof data.EnableClips === 'boolean' ? data.EnableClips : (data.enableClips === 'false' || data.EnableClips === 'false' || data.enableClips === 'False' || data.EnableClips === 'False' ? false : true))),
+                        enableWiki: (typeof data.enableWiki === 'boolean' ? data.enableWiki : (typeof data.EnableWiki === 'boolean' ? data.EnableWiki : (data.enableWiki === 'false' || data.EnableWiki === 'false' || data.enableWiki === 'False' || data.EnableWiki === 'False' ? false : true))),
+                        enableVideos: (typeof data.enableVideos === 'boolean' ? data.enableVideos : (typeof data.EnableVideos === 'boolean' ? data.EnableVideos : (data.enableVideos === 'false' || data.EnableVideos === 'false' || data.enableVideos === 'False' || data.EnableVideos === 'False' ? false : true))),
+                        enablePodcasts: (typeof data.enablePodcasts === 'boolean' ? data.enablePodcasts : (typeof data.EnablePodcasts === 'boolean' ? data.EnablePodcasts : (data.enablePodcasts === 'false' || data.EnablePodcasts === 'false' || data.enablePodcasts === 'False' || data.EnablePodcasts === 'False' ? false : true))),
                     };
                     saveSystemConfig(serverConfig);
                     setConfigState(prev => {
@@ -2482,12 +2483,12 @@ export default function AdminConsole() {
                             requirePodcastApproval: typeof data.requirePodcastApproval === 'boolean' ? data.requirePodcastApproval : prev.requirePodcastApproval,
                             enableMessaging: typeof data.enableMessaging === 'boolean' ? data.enableMessaging : prev.enableMessaging,
                             enableEmail: typeof data.enableEmail === 'boolean' ? data.enableEmail : prev.enableEmail,
-                            enablePosts: typeof data.enablePosts === 'boolean' ? data.enablePosts : (prev.enablePosts !== undefined ? prev.enablePosts : true),
-                            enableArticles: typeof data.enableArticles === 'boolean' ? data.enableArticles : (prev.enableArticles !== undefined ? prev.enableArticles : true),
-                            enableClips: typeof data.enableClips === 'boolean' ? data.enableClips : (prev.enableClips !== undefined ? prev.enableClips : true),
-                            enableWiki: typeof data.enableWiki === 'boolean' ? data.enableWiki : (prev.enableWiki !== undefined ? prev.enableWiki : true),
-                            enableVideos: typeof data.enableVideos === 'boolean' ? data.enableVideos : (prev.enableVideos !== undefined ? prev.enableVideos : true),
-                            enablePodcasts: typeof data.enablePodcasts === 'boolean' ? data.enablePodcasts : (prev.enablePodcasts !== undefined ? prev.enablePodcasts : true),
+                            enablePosts: serverConfig.enablePosts,
+                            enableArticles: serverConfig.enableArticles,
+                            enableClips: serverConfig.enableClips,
+                            enableWiki: serverConfig.enableWiki,
+                            enableVideos: serverConfig.enableVideos,
+                            enablePodcasts: serverConfig.enablePodcasts,
                         };
 
                         return updated;
@@ -2503,6 +2504,7 @@ export default function AdminConsole() {
         const cur = configState[settingKey] !== false;
         const next = !cur;
         setConfigState(prev => ({ ...prev, [settingKey]: next }));
+
         setCommittedConfig(prev => ({ ...prev, [settingKey]: next }));
         saveSystemConfig({ [settingKey]: next });
         try {
@@ -2533,6 +2535,7 @@ export default function AdminConsole() {
             requireVideoApproval: next,
             requirePodcastApproval: next
         }));
+
         const patch = {
             requireContentAndCommunityApproval: next,
             requireCommunityApproval: next,
@@ -2561,6 +2564,7 @@ export default function AdminConsole() {
             enablePodcasts: enabled,
         };
         setConfigState(prev => ({ ...prev, ...patch }));
+
         setCommittedConfig(prev => ({ ...prev, ...patch }));
         saveSystemConfig(patch);
         try {
@@ -2697,7 +2701,8 @@ export default function AdminConsole() {
     // When System Admin clicks "Save & Commit All Changes"
     const handleSaveConfigClick = () => {
         const changes = getPendingGovernanceChanges();
-        if (changes.length === 0) {
+        setIsSaveSuccess(false);
+        if (false) {
             showToast('No changes to save.', 'info');
             return;
         }
@@ -2726,11 +2731,11 @@ export default function AdminConsole() {
 
             saveSystemConfig(configState);
             setCommittedConfig({ ...configState });
-            setIsConfirmSaveModalOpen(false);
+            setIsSaveSuccess(true);
 
             const summaryText = pendingChanges
                 .map(c => `${c.name}: ${c.prev} → ${c.new}`)
-                .join(', ');
+                .join(', ') || 'Synchronized all 11 platform settings';
 
             logAuditEntry(
                 'GovernancePolicyCommitted',
@@ -6982,6 +6987,18 @@ export default function AdminConsole() {
                                     configState.enablePodcasts !== false
                                 ].filter(Boolean).length} / 6 Features Active
                             </span>
+                            <button
+                                type="button"
+                                onClick={handleSaveConfigClick}
+                                className={`px-4 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${
+                                    getPendingGovernanceChanges().length > 0
+                                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30 animate-pulse'
+                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
+                                <span>Save Changes {getPendingGovernanceChanges().length > 0 ? `(${getPendingGovernanceChanges().length})` : ''}</span>
+                            </button>
                         </div>
                     </div>
 
@@ -7801,7 +7818,7 @@ export default function AdminConsole() {
                                 className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                             >
                                 <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
-                                <span>Save & Commit All Changes</span>
+                                <span>Save & Commit All Changes {getPendingGovernanceChanges().length > 0 ? `(${getPendingGovernanceChanges().length})` : ''}</span>
                             </button>
                         </div>
                     </div>
@@ -9552,16 +9569,102 @@ export default function AdminConsole() {
                 document.body
             )}
 
+            {/* ─── STICKY FLOATING GOVERNANCE ACTION BAR (WHEN CHANGES ARE PENDING) ─── */}
+            {activeTab === 'approval_policy' && getPendingGovernanceChanges().length > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl bg-slate-900/95 dark:bg-slate-800/95 text-white shadow-2xl border border-slate-700/60 backdrop-blur-md">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+                    <span className="text-xs font-bold whitespace-nowrap">
+                        {getPendingGovernanceChanges().length} pending change{getPendingGovernanceChanges().length > 1 ? 's' : ''} staged
+                    </span>
+                    <div className="h-4 w-px bg-slate-700 mx-1"></div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setConfigState({ ...committedConfig });
+                            showToast('All pending changes have been discarded.');
+                        }}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                    >
+                        Discard
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSaveConfigClick}
+                        className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition cursor-pointer"
+                    >
+                        <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
+                        <span>Save & Commit Changes</span>
+                    </button>
+                </div>
+            )}
+
             {/* ─── CONFIRMATION MODAL: SAVE & COMMIT GOVERNANCE CHANGES ─── */}
             {isConfirmSaveModalOpen && createPortal(
                 <div 
-                    className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in"
+                    className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in"
                     onClick={() => !isSavingConfig && setIsConfirmSaveModalOpen(false)}
                 >
                     <div 
                         className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-scale-up"
                         onClick={e => e.stopPropagation()}
                     >
+                        {isSaveSuccess ? (
+                            <div className="p-8 text-center space-y-5 animate-scale-up">
+                                <div className="w-16 h-16 rounded-3xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-xl shadow-emerald-500/20">
+                                    <span className="material-symbols-outlined text-[38px]">check_circle</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                                        Changes Successfully Saved & Applied! ✨
+                                    </h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                                        All platform governance policies, module access controls, and database records have been committed and broadcasted across Knome.
+                                    </p>
+                                </div>
+                                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 max-w-sm mx-auto text-left space-y-2">
+                                    <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">Platform Status</div>
+                                    <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        <span>Active Modules:</span>
+                                        <span className="text-indigo-600 dark:text-indigo-400 font-black">
+                                            {[
+                                                configState.enablePosts !== false,
+                                                configState.enableArticles !== false,
+                                                configState.enableClips !== false,
+                                                configState.enableWiki !== false,
+                                                configState.enableVideos !== false,
+                                                configState.enablePodcasts !== false
+                                            ].filter(Boolean).length} / 6 Active
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        <span>Governance Policies:</span>
+                                        <span className="text-emerald-600 dark:text-emerald-400 font-black">
+                                            {[
+                                                configState.requireContentAndCommunityApproval !== false,
+                                                configState.requireCommunityApproval !== false,
+                                                configState.requireVideoApproval !== false,
+                                                configState.requirePodcastApproval !== false,
+                                                configState.enableMessaging !== false,
+                                                configState.enableEmail !== false
+                                            ].filter(Boolean).length} / 6 Enforced
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsConfirmSaveModalOpen(false);
+                                            setIsSaveSuccess(false);
+                                        }}
+                                        className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-lg shadow-emerald-600/30 transition cursor-pointer"
+                                    >
+                                        Done & Close
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
                         {/* Modal Header */}
                         <div className="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-4 bg-gradient-to-r from-slate-50 to-indigo-50/40 dark:from-slate-900 dark:to-indigo-950/20">
                             <div className="flex items-center gap-3.5">
@@ -9570,10 +9673,10 @@ export default function AdminConsole() {
                                 </div>
                                 <div>
                                     <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                                        Confirm Governance Changes
+                                        {pendingChanges.length > 0 ? 'Confirm Governance Changes' : 'Platform Configuration Overview'}
                                     </h3>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                        Review summary of pending modifications before saving to the database.
+                                        {pendingChanges.length > 0 ? 'Review summary of pending modifications before saving to the database.' : 'All platform modules and governance policies are currently synchronized with the database.'}
                                     </p>
                                 </div>
                             </div>
@@ -9590,7 +9693,9 @@ export default function AdminConsole() {
 
                         {/* Modal Body / Summary List */}
                         <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
-                            <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
+                            {pendingChanges.length > 0 ? (
+                                <>
+                                    <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
                                 <span>Settings to be Updated ({pendingChanges.length})</span>
                                 <span className="text-[11px] font-medium text-slate-400">Previous → New</span>
                             </div>
@@ -9650,6 +9755,56 @@ export default function AdminConsole() {
                                     Confirming will apply these policies immediately across the platform and record a permanent audit entry.
                                 </span>
                             </div>
+                                </>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-3">
+                                        <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl shrink-0">verified</span>
+                                        <div>
+                                            <h4 className="text-xs font-black text-emerald-900 dark:text-emerald-200">Database Synchronized</h4>
+                                            <p className="text-[11px] text-emerald-700 dark:text-emerald-300">All 12 platform governance settings and feature modules are active and aligned with the database. You can re-sync to ensure all clients and workers have the latest policies.</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Posts</span>
+                                            <span className={`font-black ${configState.enablePosts !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                {configState.enablePosts !== false ? '● ACTIVE' : '○ DISABLED'}
+                                            </span>
+                                        </div>
+                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Articles</span>
+                                            <span className={`font-black ${configState.enableArticles !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                {configState.enableArticles !== false ? '● ACTIVE' : '○ DISABLED'}
+                                            </span>
+                                        </div>
+                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Clips</span>
+                                            <span className={`font-black ${configState.enableClips !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                {configState.enableClips !== false ? '● ACTIVE' : '○ DISABLED'}
+                                            </span>
+                                        </div>
+                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Wiki</span>
+                                            <span className={`font-black ${configState.enableWiki !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                {configState.enableWiki !== false ? '● ACTIVE' : '○ DISABLED'}
+                                            </span>
+                                        </div>
+                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Videos</span>
+                                            <span className={`font-black ${configState.enableVideos !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                {configState.enableVideos !== false ? '● ACTIVE' : '○ DISABLED'}
+                                            </span>
+                                        </div>
+                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Podcasts</span>
+                                            <span className={`font-black ${configState.enablePodcasts !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                {configState.enablePodcasts !== false ? '● ACTIVE' : '○ DISABLED'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Modal Footer */}
@@ -9660,7 +9815,7 @@ export default function AdminConsole() {
                                 disabled={isSavingConfig}
                                 className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer disabled:opacity-50"
                             >
-                                Cancel
+                                {pendingChanges.length > 0 ? 'Cancel' : 'Close'}
                             </button>
                             <button
                                 type="button"
@@ -9676,11 +9831,13 @@ export default function AdminConsole() {
                                 ) : (
                                     <>
                                         <span className="material-symbols-outlined text-[18px]">done_all</span>
-                                        <span>Confirm & Save</span>
+                                        <span>{pendingChanges.length > 0 ? `Confirm & Save (${pendingChanges.length})` : 'Re-Sync & Save All'}</span>
                                     </>
                                 )}
                             </button>
                         </div>
+                            </>
+                        )}
                     </div>
                 </div>,
                 document.body

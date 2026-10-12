@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resolveMediaUrl, getVideoThumbnail, clipsApi } from '../../utils/apiService';
+import { useSystemConfig } from '../../utils/systemConfig';
 
 /**
  * Formats duration in seconds to M:SS display.
@@ -152,9 +153,12 @@ export const resolveClipInfo = (post) => {
  * Clicking ANYWHERE on the card opens and plays the exact Clip directly.
  */
 export default function SharedClipCard({ post }) {
+    const { isClipsEnabled } = useSystemConfig();
     const navigate = useNavigate();
     const clipInfo = resolveClipInfo(post);
     const [clipDetails, setClipDetails] = useState(null);
+
+    if (!isClipsEnabled) return null;
 
     useEffect(() => {
         const cid = clipInfo.clipId;

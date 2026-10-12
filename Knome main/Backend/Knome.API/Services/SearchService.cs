@@ -32,6 +32,7 @@ public class SearchService : ISearchService
         var enableVideos = await _settingService.GetEnableVideosAsync();
         var enablePodcasts = await _settingService.GetEnablePodcastsAsync();
         var enableWiki = await _settingService.GetEnableWikiAsync();
+        var enableClips = await _settingService.GetEnableClipsAsync();
 
         result.Items = result.Items.Where(item => {
             if (item.ContentType == "Post" && !enablePosts) return false;
@@ -39,6 +40,7 @@ public class SearchService : ISearchService
             if (item.ContentType == "Video" && !enableVideos) return false;
             if (item.ContentType == "Podcast" && !enablePodcasts) return false;
             if (item.ContentType == "Wiki" && !enableWiki) return false;
+            if (item.ContentType == "Clip" && !enableClips) return false;
             return true;
         }).ToList();
 
@@ -82,14 +84,28 @@ public class SearchService : ISearchService
         if (string.IsNullOrWhiteSpace(query)) return new List<SearchSuggestionDto>();
 
         var cacheKey = $"search_suggestions_{query.Trim().ToLower()}_{count}";
-        if (_cache.TryGetValue(cacheKey, out List<SearchSuggestionDto>? cachedSuggestions) && cachedSuggestions != null)
+        if (!_cache.TryGetValue(cacheKey, out List<SearchSuggestionDto>? suggestions) || suggestions == null)
         {
-            return cachedSuggestions;
+            suggestions = await _repository.GetSuggestionsAsync(query.Trim(), count);
+            _cache.Set(cacheKey, suggestions, TimeSpan.FromSeconds(30)); // 30-second cache for instant responsiveness
         }
 
-        var suggestions = await _repository.GetSuggestionsAsync(query.Trim(), count);
-        _cache.Set(cacheKey, suggestions, TimeSpan.FromSeconds(30)); // 30-second cache for instant responsiveness
-        return suggestions;
+        var enablePosts = await _settingService.GetEnablePostsAsync();
+        var enableArticles = await _settingService.GetEnableArticlesAsync();
+        var enableVideos = await _settingService.GetEnableVideosAsync();
+        var enablePodcasts = await _settingService.GetEnablePodcastsAsync();
+        var enableWiki = await _settingService.GetEnableWikiAsync();
+        var enableClips = await _settingService.GetEnableClipsAsync();
+
+        return suggestions.Where(item => {
+            if (item.ContentType == "Post" && !enablePosts) return false;
+            if (item.ContentType == "Article" && !enableArticles) return false;
+            if (item.ContentType == "Video" && !enableVideos) return false;
+            if (item.ContentType == "Podcast" && !enablePodcasts) return false;
+            if (item.ContentType == "Wiki" && !enableWiki) return false;
+            if (item.ContentType == "Clip" && !enableClips) return false;
+            return true;
+        }).ToList();
     }
 
     public async Task<List<string>> GetTrendingSearchesAsync(int count = 10)
@@ -112,5 +128,30 @@ public class SearchService : ISearchService
         => await _repository.SearchCommunitiesAsync(query, pageNumber, pageSize);
 
     public async Task<List<SearchItemDto>> SearchContentAsync(string query, string? contentType, int pageNumber, int pageSize)
-        => await _repository.SearchContentAsync(query, contentType, pageNumber, pageSize);
+    {
+        var enablePosts = await _settingService.GetEnablePostsAsync();
+        var enableArticles = await _settingService.GetEnableArticlesAsync();
+        var enableVideos = await _settingService.GetEnableVideosAsync();
+        var enablePodcasts = await _settingService.GetEnablePodcastsAsync();
+        var enableWiki = await _settingService.GetEnableWikiAsync();
+        var enableClips = await _settingService.GetEnableClipsAsync();
+
+        if (contentType == "Post" && !enablePosts) return new List<SearchItemDto>();
+        if (contentType == "Article" && !enableArticles) return new List<SearchItemDto>();
+        if (contentType == "Video" && !enableVideos) return new List<SearchItemDto>();
+        if (contentType == "Podcast" && !enablePodcasts) return new List<SearchItemDto>();
+        if (contentType == "Wiki" && !enableWiki) return new List<SearchItemDto>();
+        if (contentType == "Clip" && !enableClips) return new List<SearchItemDto>();
+
+        var items = await _repository.SearchContentAsync(query, contentType, pageNumber, pageSize);
+        return items.Where(item => {
+            if (item.ContentType == "Post" && !enablePosts) return false;
+            if (item.ContentType == "Article" && !enableArticles) return false;
+            if (item.ContentType == "Video" && !enableVideos) return false;
+            if (item.ContentType == "Podcast" && !enablePodcasts) return false;
+            if (item.ContentType == "Wiki" && !enableWiki) return false;
+            if (item.ContentType == "Clip" && !enableClips) return false;
+            return true;
+        }).ToList();
+    }
 }
