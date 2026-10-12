@@ -40,6 +40,8 @@ const PageLoader = () => (
   </div>
 );
 
+import { useSystemConfig } from './utils/systemConfig'
+
 /**
  * Wraps a page in Layout + AuthGuard for protected routes.
  */
@@ -49,6 +51,47 @@ function ProtectedPage({ children }) {
       <Layout>{children}</Layout>
     </AuthGuard>
   );
+}
+
+function FeatureDisabledView({ featureName, icon = 'block' }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[65vh] p-6 text-center">
+      <div className="w-20 h-20 rounded-3xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-5 shadow-lg shadow-rose-500/10">
+        <span className="material-symbols-outlined text-[42px]">{icon}</span>
+      </div>
+      <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800 mb-3">
+        Feature Disabled
+      </span>
+      <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2">
+        {featureName} is Currently Unavailable
+      </h2>
+      <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mb-6 leading-relaxed">
+        The {featureName} module has been temporarily disabled by the System Administrator in the Approval Policy settings. Please check back later or return to the main dashboard.
+      </p>
+      <a
+        href="/"
+        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-rose-600 hover:from-indigo-700 hover:to-rose-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20 transition-all flex items-center gap-2 cursor-pointer"
+      >
+        <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+        <span>Return to Dashboard</span>
+      </a>
+    </div>
+  );
+}
+
+function FeatureProtectedPage({ feature, featureName, icon, children }) {
+  const config = useSystemConfig();
+  const isEnabled = config[feature] !== false && config[feature.replace(/^is/, 'enable')] !== false;
+
+  if (!isEnabled) {
+    return (
+      <ProtectedPage>
+        <FeatureDisabledView featureName={featureName} icon={icon} />
+      </ProtectedPage>
+    );
+  }
+
+  return <ProtectedPage>{children}</ProtectedPage>;
 }
 
 import ErrorBoundary from './components/ui/ErrorBoundary'
@@ -129,16 +172,19 @@ function App() {
                     <Route path="/communities"     element={<ProtectedPage><Communities /></ProtectedPage>} />
                     <Route path="/community/view"  element={<ProtectedPage><CommunityView /></ProtectedPage>} />
                     <Route path="/jobs"            element={<ProtectedPage><Jobs /></ProtectedPage>} />
-                    <Route path="/videos"          element={<ProtectedPage><Videos /></ProtectedPage>} />
-                    <Route path="/clips"           element={<ProtectedPage><Clips /></ProtectedPage>} />
-                    <Route path="/clips/:id"       element={<ProtectedPage><Clips /></ProtectedPage>} />
-                    <Route path="/podcasts"        element={<ProtectedPage><Podcasts /></ProtectedPage>} />
-                    <Route path="/articles"        element={<ProtectedPage><Articles /></ProtectedPage>} />
-                    <Route path="/article-view"    element={<ProtectedPage><ArticleView /></ProtectedPage>} />
-                    <Route path="/wiki"            element={<ProtectedPage><Wiki /></ProtectedPage>} />
-                    <Route path="/wikis"           element={<ProtectedPage><Wiki /></ProtectedPage>} />
-                    <Route path="/wiki/view"       element={<ProtectedPage><WikiView /></ProtectedPage>} />
-                    <Route path="/wiki/:id"        element={<ProtectedPage><WikiView /></ProtectedPage>} />
+                    <Route path="/videos"          element={<FeatureProtectedPage feature="isVideosEnabled" featureName="Videos" icon="videocam"><Videos /></FeatureProtectedPage>} />
+                    <Route path="/videos/:id"      element={<FeatureProtectedPage feature="isVideosEnabled" featureName="Videos" icon="videocam"><Videos /></FeatureProtectedPage>} />
+                    <Route path="/clips"           element={<FeatureProtectedPage feature="isClipsEnabled" featureName="Clips" icon="movie"><Clips /></FeatureProtectedPage>} />
+                    <Route path="/clips/:id"       element={<FeatureProtectedPage feature="isClipsEnabled" featureName="Clips" icon="movie"><Clips /></FeatureProtectedPage>} />
+                    <Route path="/podcasts"        element={<FeatureProtectedPage feature="isPodcastsEnabled" featureName="Podcasts" icon="podcasts"><Podcasts /></FeatureProtectedPage>} />
+                    <Route path="/podcasts/:id"    element={<FeatureProtectedPage feature="isPodcastsEnabled" featureName="Podcasts" icon="podcasts"><Podcasts /></FeatureProtectedPage>} />
+                    <Route path="/articles"        element={<FeatureProtectedPage feature="isArticlesEnabled" featureName="Articles" icon="article"><Articles /></FeatureProtectedPage>} />
+                    <Route path="/articles/:id"    element={<FeatureProtectedPage feature="isArticlesEnabled" featureName="Articles" icon="article"><ArticleView /></FeatureProtectedPage>} />
+                    <Route path="/article-view"    element={<FeatureProtectedPage feature="isArticlesEnabled" featureName="Articles" icon="article"><ArticleView /></FeatureProtectedPage>} />
+                    <Route path="/wiki"            element={<FeatureProtectedPage feature="isWikiEnabled" featureName="Wiki" icon="menu_book"><Wiki /></FeatureProtectedPage>} />
+                    <Route path="/wikis"           element={<FeatureProtectedPage feature="isWikiEnabled" featureName="Wiki" icon="menu_book"><Wiki /></FeatureProtectedPage>} />
+                    <Route path="/wiki/view"       element={<FeatureProtectedPage feature="isWikiEnabled" featureName="Wiki" icon="menu_book"><WikiView /></FeatureProtectedPage>} />
+                    <Route path="/wiki/:id"        element={<FeatureProtectedPage feature="isWikiEnabled" featureName="Wiki" icon="menu_book"><WikiView /></FeatureProtectedPage>} />
                     <Route path="/hr-analytics"    element={<ProtectedPage><HRAnalytics /></ProtectedPage>} />
                     <Route path="/analytics"       element={<ProtectedPage><HRAnalytics /></ProtectedPage>} />
                     <Route path="/admin-console"   element={<ProtectedPage><AdminConsole /></ProtectedPage>} />
@@ -149,7 +195,8 @@ function App() {
                     <Route path="/suggested-people" element={<ProtectedPage><Network /></ProtectedPage>} />
                     <Route path="/network"         element={<ProtectedPage><Network /></ProtectedPage>} />
                     <Route path="/saved-content"   element={<ProtectedPage><SavedContent /></ProtectedPage>} />
-                    <Route path="/posts"           element={<ProtectedPage><Posts /></ProtectedPage>} />
+                    <Route path="/posts"           element={<FeatureProtectedPage feature="isPostsEnabled" featureName="Posts" icon="dynamic_feed"><Posts /></FeatureProtectedPage>} />
+                    <Route path="/posts/:id"       element={<FeatureProtectedPage feature="isPostsEnabled" featureName="Posts" icon="dynamic_feed"><Posts /></FeatureProtectedPage>} />
                     <Route path="/messages"        element={<ProtectedPage><Messages /></ProtectedPage>} />
                     <Route path="/chat"            element={<Navigate to="/messages" replace />} />
                     <Route path="*"               element={<Navigate to="/" replace />} />

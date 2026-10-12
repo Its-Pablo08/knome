@@ -5,10 +5,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 using Knome.API.Constants;
 using Knome.API.Data;
 using Knome.API.DTOs.Settings;
 using Knome.API.Exceptions;
+using Knome.API.Hubs;
 using Knome.API.Interfaces;
 using Knome.API.Responses;
 
@@ -20,11 +22,13 @@ public class SystemSettingsController : KnomeControllerBase
 {
     private readonly ISystemSettingService _settingService;
     private readonly KnomeDbContext _db;
+    private readonly IHubContext<NotificationHub> _hubContext;
 
-    public SystemSettingsController(ISystemSettingService settingService, KnomeDbContext db)
+    public SystemSettingsController(ISystemSettingService settingService, KnomeDbContext db, IHubContext<NotificationHub> hubContext)
     {
         _settingService = settingService;
         _db = db;
+        _hubContext = hubContext;
     }
 
     /// <summary>
@@ -88,6 +92,15 @@ public class SystemSettingsController : KnomeControllerBase
         }
 
         var dto = await _settingService.UpdateApprovalSettingsAsync(updateDto, currentUserId);
+        try
+        {
+            await _hubContext.Clients.All.SendAsync("SystemConfigUpdated", dto);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Warning(ex, "Failed to broadcast SystemConfigUpdated via NotificationHub.");
+        }
+
         return Ok(ApiResponse<ApprovalSettingDto>.SuccessResponse(200, "Platform configuration policies updated successfully.", dto));
     }
 

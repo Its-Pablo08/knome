@@ -514,6 +514,7 @@ public class ContentInteractionRepository : IContentInteractionRepository
             ContentTypes.Job => await _db.Jobs.Where(j => j.JobId == (int)contentId).Select(j => (int?)j.PostedByUserId).FirstOrDefaultAsync(),
             ContentTypes.Comment => await _db.Comments.Where(c => c.CommentId == contentId).Select(c => (int?)c.UserId).FirstOrDefaultAsync(),
             ContentTypes.Clip => await _db.Clips.Where(c => c.ClipId == contentId).Select(c => (int?)c.CreatedByUserId).FirstOrDefaultAsync(),
+            ContentTypes.Wiki => await _db.Wikis.Where(w => w.WikiId == contentId).Select(w => (int?)w.CreatedByUserId).FirstOrDefaultAsync(),
             _ => null
         };
     }
@@ -545,6 +546,11 @@ public class ContentInteractionRepository : IContentInteractionRepository
         {
             var clip = await _db.Clips.AsNoTracking().FirstOrDefaultAsync(c => c.ClipId == contentId);
             return clip?.ViewCount ?? 0;
+        }
+        else if (norm == ContentTypes.Wiki)
+        {
+            var wiki = await _db.Wikis.AsNoTracking().FirstOrDefaultAsync(w => w.WikiId == contentId);
+            return wiki?.ViewCount ?? 0;
         }
         return 0;
     }
@@ -635,6 +641,17 @@ public class ContentInteractionRepository : IContentInteractionRepository
             {
                 clip.ViewCount++;
                 newCount = clip.ViewCount;
+            }
+        }
+        else if (norm == ContentTypes.Wiki)
+        {
+            var wiki = await _db.Wikis.FindAsync(contentId);
+            if (wiki != null)
+            {
+                var uniqueViews = await _db.ContentViews
+                    .CountAsync(cv => cv.ContentType == ContentTypes.Wiki && cv.ContentId == contentId);
+                wiki.ViewCount = (int)uniqueViews;
+                newCount = wiki.ViewCount;
             }
         }
 

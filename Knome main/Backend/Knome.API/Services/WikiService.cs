@@ -8,8 +8,10 @@ using Knome.API.Constants;
 using Knome.API.Data;
 using Knome.API.DTOs.Wiki;
 using Knome.API.Exceptions;
+using Knome.API.Hubs;
 using Knome.API.Interfaces;
 using Knome.API.Models;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace Knome.API.Services;
@@ -22,6 +24,7 @@ public class WikiService : IWikiService
     private readonly ISuspensionGuard _suspensionGuard;
     private readonly IAuditLogService _auditLog;
     private readonly INotificationService _notificationService;
+    private readonly IHubContext<NotificationHub> _hubContext;
 
     public WikiService(
         IWikiRepository repo,
@@ -29,7 +32,8 @@ public class WikiService : IWikiService
         IMapper mapper,
         ISuspensionGuard suspensionGuard,
         IAuditLogService auditLog,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IHubContext<NotificationHub> hubContext)
     {
         _repo = repo;
         _db = db;
@@ -37,6 +41,7 @@ public class WikiService : IWikiService
         _suspensionGuard = suspensionGuard;
         _auditLog = auditLog;
         _notificationService = notificationService;
+        _hubContext = hubContext;
     }
 
     private async Task<bool> IsAdministratorAsync(int userId)
@@ -224,6 +229,24 @@ public class WikiService : IWikiService
         var isAdmin = await IsAdministratorAsync(currentUserId);
         await EnsureCanViewWikiAsync(wiki, currentUserId, isAdmin);
 
+        // Record unique view on open
+        if (currentUserId > 0)
+        {
+            var authoritativeCount = await _repo.RecordUniqueWikiViewAsync(wikiId, currentUserId);
+            wiki.ViewCount = authoritativeCount;
+
+            try
+            {
+                await _hubContext.Clients.All.SendAsync("ViewCountUpdated", new
+                {
+                    contentType = ContentTypes.Wiki,
+                    contentId = wikiId,
+                    viewCount = authoritativeCount
+                });
+            }
+            catch { }
+        }
+
         var dto = _mapper.Map<WikiDetailDto>(wiki);
         var perm = await ResolveUserPermissionForWikiAsync(wiki, currentUserId, isAdmin);
         dto.UserPermission = perm;
@@ -232,8 +255,9 @@ public class WikiService : IWikiService
         dto.CanManageCollaborators = perm == "Owner";
 
         // Map Sections hierarchically (recursive n-tier nesting)
-        var allSections = wiki.WikiSections.Where(s => !s.IsDeleted).OrderBy(s => s.SortOrder).ToList();
+        var allSections = await _repo.GetSectionsByWikiIdAsync(wikiId);
         dto.Sections = BuildHierarchicalSections(allSections, null, wiki, currentUserId, perm, isAdmin);
+        dto.SectionsCount = allSections.Count;
 
         // Collaborators
         dto.Collaborators = wiki.WikiCollaborators.Select(c => _mapper.Map<WikiCollaboratorDto>(c)).ToList();
@@ -300,7 +324,9 @@ public class WikiService : IWikiService
         bool isAdmin)
     {
         var children = allSections
-            .Where(s => s.ParentSectionId == parentId)
+            .Where(s => parentId == null
+                ? (!s.ParentSectionId.HasValue || s.ParentSectionId.Value <= 0)
+                : (s.ParentSectionId == parentId))
             .OrderBy(s => s.SortOrder)
             .ThenBy(s => s.SectionId)
             .ToList();
@@ -412,6 +438,17 @@ public class WikiService : IWikiService
 
                 // Log audit activity
                 await _auditLog.RecordAsync(currentUserId, "WikiCreated", "Wiki", created.WikiId, $"Created Wiki '{created.Title}'");
+
+                // Seed initial unique view for creator
+                _db.ContentViews.Add(new ContentView
+                {
+                    ContentType = ContentTypes.Wiki,
+                    ContentId = created.WikiId,
+                    UserId = currentUserId,
+                    ViewedDate = KnomeTime.Now
+                });
+                created.ViewCount = 1;
+                await _db.SaveChangesAsync();
 
                 await tx.CommitAsync();
 
@@ -560,8 +597,21 @@ public class WikiService : IWikiService
         var isAdmin = await IsAdministratorAsync(currentUserId);
         await EnsureCanViewWikiAsync(wiki, currentUserId, isAdmin);
 
-        await _repo.IncrementViewCountAsync(wikiId);
-        return wiki.ViewCount + 1;
+        var newCount = await _repo.RecordUniqueWikiViewAsync(wikiId, currentUserId);
+
+        // Broadcast real-time view count update to all connected clients
+        try
+        {
+            await _hubContext.Clients.All.SendAsync("ViewCountUpdated", new
+            {
+                contentType = ContentTypes.Wiki,
+                contentId = wikiId,
+                viewCount = newCount
+            });
+        }
+        catch { }
+
+        return newCount;
     }
 
     public async Task<List<string>> GetPopularTagsAsync(int count = 20)
@@ -618,9 +668,13 @@ public class WikiService : IWikiService
         var isAdmin = await IsAdministratorAsync(currentUserId);
         await EnsureCanEditWikiAsync(wiki, currentUserId, isAdmin);
 
-        if (dto.ParentSectionId.HasValue && dto.ParentSectionId.Value > 0)
+        long? validParentId = (dto.ParentSectionId.HasValue && dto.ParentSectionId.Value > 0)
+            ? dto.ParentSectionId.Value
+            : null;
+
+        if (validParentId.HasValue)
         {
-            var parentSection = await _repo.GetSectionByIdAsync(dto.ParentSectionId.Value);
+            var parentSection = await _repo.GetSectionByIdAsync(validParentId.Value);
             if (parentSection == null || parentSection.WikiId != wikiId || parentSection.IsDeleted)
             {
                 throw new BadRequestException("The specified parent section does not exist in this Wiki.");
@@ -632,7 +686,7 @@ public class WikiService : IWikiService
         var section = new WikiSection
         {
             WikiId = wikiId,
-            ParentSectionId = dto.ParentSectionId,
+            ParentSectionId = validParentId,
             Title = dto.Title.Trim(),
             ContentHtml = sanitizedContent,
             SortOrder = dto.SortOrder,
@@ -657,7 +711,7 @@ public class WikiService : IWikiService
         await _auditLog.RecordAsync(currentUserId, "SectionAdded", "Wiki", wikiId, $"Added section '{created.Title}'");
 
         var result = await _repo.GetSectionByIdAsync(created.SectionId);
-        var resultDto = _mapper.Map<WikiSectionDto>(result);
+        var resultDto = _mapper.Map<WikiSectionDto>(result ?? created);
         resultDto.UserPermission = "Owner";
         resultDto.CanEdit = true;
         resultDto.CanDelete = true;
@@ -688,14 +742,18 @@ public class WikiService : IWikiService
             throw new ConflictException("This section has been modified by another collaborator since you loaded it. Please reload the latest changes to avoid overwriting them.");
         }
 
-        if (dto.ParentSectionId.HasValue && dto.ParentSectionId.Value > 0)
+        long? validParentId = (dto.ParentSectionId.HasValue && dto.ParentSectionId.Value > 0)
+            ? dto.ParentSectionId.Value
+            : null;
+
+        if (validParentId.HasValue)
         {
-            if (dto.ParentSectionId.Value == sectionId)
+            if (validParentId.Value == sectionId)
             {
                 throw new BadRequestException("A section cannot be its own parent.");
             }
 
-            var parentSection = await _repo.GetSectionByIdAsync(dto.ParentSectionId.Value);
+            var parentSection = await _repo.GetSectionByIdAsync(validParentId.Value);
             if (parentSection == null || parentSection.WikiId != wikiId || parentSection.IsDeleted)
             {
                 throw new BadRequestException("The specified parent section does not exist in this Wiki.");
@@ -703,7 +761,7 @@ public class WikiService : IWikiService
 
             // Cycle detection: ensure sectionId is not an ancestor of parentSection
             var visited = new HashSet<long> { sectionId };
-            var currParentId = (long?)dto.ParentSectionId.Value;
+            var currParentId = (long?)validParentId.Value;
             while (currParentId.HasValue)
             {
                 if (visited.Contains(currParentId.Value))
@@ -715,7 +773,7 @@ public class WikiService : IWikiService
                 currParentId = ancestor?.ParentSectionId;
             }
 
-            section.ParentSectionId = dto.ParentSectionId;
+            section.ParentSectionId = validParentId;
         }
         else
         {
@@ -744,7 +802,7 @@ public class WikiService : IWikiService
         await _auditLog.RecordAsync(currentUserId, "SectionUpdated", "Wiki", wikiId, $"Updated section '{section.Title}' (Version {nextVersion})");
 
         var updated = await _repo.GetSectionByIdAsync(sectionId);
-        var resultDto = _mapper.Map<WikiSectionDto>(updated);
+        var resultDto = _mapper.Map<WikiSectionDto>(updated ?? section);
         resultDto.UserPermission = secPerm;
         resultDto.CanEdit = true;
         resultDto.CanDelete = secPerm == "Owner";

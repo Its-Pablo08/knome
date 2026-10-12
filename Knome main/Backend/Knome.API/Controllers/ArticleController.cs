@@ -18,16 +18,19 @@ namespace Knome.API.Controllers;
 public class ArticleController : KnomeControllerBase
 {
     private readonly IArticleService _articleService;
+    private readonly ISystemSettingService _settingService;
 
-    public ArticleController(IArticleService articleService)
+    public ArticleController(IArticleService articleService, ISystemSettingService settingService)
     {
         _articleService = articleService;
+        _settingService = settingService;
     }
 
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponse<List<ArticleDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetArticles([FromQuery] int? categoryId, [FromQuery] string? tag, [FromQuery] string? status, [FromQuery] string? search, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableArticlesKey, "Articles");
         var articles = await _articleService.GetArticlesAsync(categoryId, tag, status, search, pageNumber, pageSize, GetCurrentUserId());
         return Ok(ApiResponse<List<ArticleDto>>.SuccessResponse(200, "Articles retrieved successfully.", articles));
     }
@@ -36,6 +39,7 @@ public class ArticleController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<List<ArticleDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyArticles([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableArticlesKey, "Articles");
         var articles = await _articleService.GetMyArticlesAsync(GetCurrentUserId(), pageNumber, pageSize);
         return Ok(ApiResponse<List<ArticleDto>>.SuccessResponse(200, "User articles retrieved successfully.", articles));
     }
@@ -44,6 +48,7 @@ public class ArticleController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<List<ArticleDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUserArticles(int userId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableArticlesKey, "Articles");
         var articles = await _articleService.GetUserArticlesAsync(userId, GetCurrentUserId(), pageNumber, pageSize);
         return Ok(ApiResponse<List<ArticleDto>>.SuccessResponse(200, "User articles retrieved successfully.", articles));
     }
@@ -52,6 +57,7 @@ public class ArticleController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<ArticleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetArticle(long articleId)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableArticlesKey, "Articles");
         var article = await _articleService.GetArticleAsync(articleId, GetCurrentUserId());
         return Ok(ApiResponse<ArticleDto>.SuccessResponse(200, "Article retrieved successfully.", article));
     }
@@ -61,6 +67,7 @@ public class ArticleController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<ArticleDto>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateArticle([FromBody] CreateArticleDto dto)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableArticlesKey, "Articles");
         var result = await _articleService.CreateArticleAsync(GetCurrentUserId(), dto);
         return CreatedAtAction(nameof(GetArticle), new { articleId = result.ArticleId }, ApiResponse<ArticleDto>.SuccessResponse(201, "Article created successfully.", result));
     }
@@ -70,6 +77,7 @@ public class ArticleController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<ArticleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateArticle(long articleId, [FromBody] UpdateArticleDto dto)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableArticlesKey, "Articles");
         var result = await _articleService.UpdateArticleAsync(articleId, GetCurrentUserId(), dto);
         return Ok(ApiResponse<ArticleDto>.SuccessResponse(200, "Article updated successfully.", result));
     }
@@ -79,6 +87,7 @@ public class ArticleController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteArticle(long articleId)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableArticlesKey, "Articles");
         await _articleService.DeleteArticleAsync(articleId, GetCurrentUserId());
         return Ok(ApiResponse.SuccessResponse(200, "Article deleted successfully."));
     }

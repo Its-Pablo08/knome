@@ -181,7 +181,7 @@ const normalizeMemberData = (m, contextUsers = []) => {
 };
 
 export default function CommunityView() {
-    const { isMessagingEnabled } = useSystemConfig();
+    const { isMessagingEnabled, isPostsEnabled } = useSystemConfig();
     const { currentUser, users: contextUsers, awardRuleKarma, refreshKarma } = useUser();
     const confirm = useConfirm();
     const navigate = useNavigate();
@@ -4784,7 +4784,12 @@ export default function CommunityView() {
                         <div className="space-y-6">
                             
                             {/* FR-CM-06: Member Composer (Can post & comment) */}
-                            {membershipStatus === 'joined' ? (
+                            {membershipStatus === 'joined' && !isPostsEnabled ? (
+                                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 text-center flex items-center justify-center gap-2 text-xs font-bold text-slate-500">
+                                    <span className="material-symbols-outlined text-[18px] text-rose-500">block</span>
+                                    <span>Posting has been temporarily disabled by the administrator in the Approval Policy settings.</span>
+                                </div>
+                            ) : membershipStatus === 'joined' ? (
                                 <form onSubmit={handleCreatePost} className="glass card-lift bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-3">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center font-bold shrink-0 shadow-md shadow-indigo-500/20">

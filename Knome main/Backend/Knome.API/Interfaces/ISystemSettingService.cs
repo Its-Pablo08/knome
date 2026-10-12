@@ -27,6 +27,27 @@ public interface ISystemSettingService
     Task<bool> GetEnableEmailAsync();
     Task<bool> SetEnableEmailAsync(bool enabled, int actorUserId);
 
+    // Feature Modules (Posts, Articles, Clips, Wiki, Videos, Podcasts)
+    Task<bool> GetEnablePostsAsync();
+    Task<bool> SetEnablePostsAsync(bool enabled, int actorUserId);
+
+    Task<bool> GetEnableArticlesAsync();
+    Task<bool> SetEnableArticlesAsync(bool enabled, int actorUserId);
+
+    Task<bool> GetEnableClipsAsync();
+    Task<bool> SetEnableClipsAsync(bool enabled, int actorUserId);
+
+    Task<bool> GetEnableWikiAsync();
+    Task<bool> SetEnableWikiAsync(bool enabled, int actorUserId);
+
+    Task<bool> GetEnableVideosAsync();
+    Task<bool> SetEnableVideosAsync(bool enabled, int actorUserId);
+
+    Task<bool> GetEnablePodcastsAsync();
+    Task<bool> SetEnablePodcastsAsync(bool enabled, int actorUserId);
+
+    Task EnsureFeatureEnabledAsync(string featureKey, string featureDisplayName);
+
     // Full Settings DTO
     Task<ApprovalSettingDto> GetFullApprovalSettingsAsync();
     Task<ApprovalSettingDto> UpdateApprovalSettingsAsync(UpdateApprovalSettingDto updateDto, int actorUserId);

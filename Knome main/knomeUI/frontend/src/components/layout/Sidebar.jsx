@@ -6,7 +6,7 @@ import { resolveMediaUrl } from '../../utils/apiService';
 import { useSystemConfig } from '../../utils/systemConfig';
 
 export default function Sidebar() {
-    const { isMessagingEnabled } = useSystemConfig();
+    const { isMessagingEnabled, isPostsEnabled, isClipsEnabled, isArticlesEnabled, isWikiEnabled, isVideosEnabled, isPodcastsEnabled } = useSystemConfig();
     const { openPostModal } = useModal();
     const { currentUser } = useUser();
     const { pathname } = useLocation();
@@ -124,15 +124,16 @@ export default function Sidebar() {
         navItems.push({ to: '/hr-analytics', icon: 'bar_chart', label: 'HR Analytics', color: '#ef4444' });
     }
 
-    const quickLinks = [
-        { to: '/posts',    label: 'Posts',     icon: 'dynamic_feed', color: '#2563eb' },
-        { to: '/clips',    label: 'Clips',     icon: 'movie',        color: '#f43f5e', matchPaths: ['/clips'] },
-        { to: '/articles', label: 'Articles',  icon: 'article',      color: '#0ea5e9', matchPaths: ['/articles', '/article-view'] },
-        { to: '/wiki',     label: 'Wiki',      icon: 'menu_book',    color: '#6366f1', matchPaths: ['/wiki', '/wikis', '/wiki/view'] },
-        { to: '/videos',   label: 'Videos',    icon: 'videocam',     color: '#ef4444' },
-        { to: '/podcasts', label: 'Podcasts',  icon: 'podcasts',     color: '#d946ef' },
-        { to: '/jobs',     label: 'Openings',  icon: 'work',         color: '#10b981' },
+    const allQuickLinks = [
+        { to: '/posts',    label: 'Posts',     icon: 'dynamic_feed', color: '#2563eb', enabled: isPostsEnabled },
+        { to: '/clips',    label: 'Clips',     icon: 'movie',        color: '#f43f5e', matchPaths: ['/clips'], enabled: isClipsEnabled },
+        { to: '/articles', label: 'Articles',  icon: 'article',      color: '#0ea5e9', matchPaths: ['/articles', '/article-view'], enabled: isArticlesEnabled },
+        { to: '/wiki',     label: 'Wiki',      icon: 'menu_book',    color: '#6366f1', matchPaths: ['/wiki', '/wikis', '/wiki/view'], enabled: isWikiEnabled },
+        { to: '/videos',   label: 'Videos',    icon: 'videocam',     color: '#ef4444', enabled: isVideosEnabled },
+        { to: '/podcasts', label: 'Podcasts',  icon: 'podcasts',     color: '#d946ef', enabled: isPodcastsEnabled },
+        { to: '/jobs',     label: 'Openings',  icon: 'work',         color: '#10b981', enabled: true },
     ];
+    const quickLinks = allQuickLinks.filter(item => item.enabled !== false);
 
     const userAvatar = resolveMediaUrl(currentUser?.profilePhotoUrl) || currentUser?.avatar || 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff';
     const userName = currentUser?.fullName || currentUser?.name || 'Employee';
@@ -363,7 +364,7 @@ export default function Sidebar() {
                 </Link>
 
                 {/* Center Create Post Floating Action Button */}
-                {currentUser?.role !== 'SYSADM' && (
+                {currentUser?.role !== 'SYSADM' && isPostsEnabled && (
                     <button
                         onClick={openPostModal}
                         className="w-11 h-11 -mt-4 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-500 to-pink-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/35 active:scale-95 transition-transform cursor-pointer"

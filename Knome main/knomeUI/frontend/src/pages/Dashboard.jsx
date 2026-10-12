@@ -16,10 +16,12 @@ import { dashboardApi, profileApi, karmaApi, mapFeedItem, resolveMediaUrl, notif
 import { useScrollLoading } from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import BroadcastModal from '../components/modals/BroadcastModal';
+import { useSystemConfig } from '../utils/systemConfig';
 
 export default function Dashboard() {
     const navigate = useNavigate();
     const { currentUser } = useUser();
+    const { isPostsEnabled, isArticlesEnabled, isVideosEnabled } = useSystemConfig();
     const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
     const [isCreateArticleOpen, setIsCreateArticleOpen] = useState(false);
     const [isUploadVideoOpen, setIsUploadVideoOpen] = useState(false);
@@ -182,6 +184,8 @@ export default function Dashboard() {
                 if (deletedIds.includes(itemIdStr)) return false;
                 const type = (item.type || item.contentType || '').toLowerCase();
                 if (type === 'video' || type === 'podcast') return false;
+                if ((type === 'post' || !type) && !isPostsEnabled) return false;
+                if (type === 'article' && !isArticlesEnabled) return false;
 
                 // Scheduled publication privacy: future scheduled posts visible to author only
                 if (item.status === 'Scheduled' && item.scheduledDate) {
@@ -227,6 +231,8 @@ export default function Dashboard() {
                     if (deletedIds.includes(itemIdStr)) return false;
                     const type = (item.type || item.contentType || '').toLowerCase();
                     if (type === 'video' || type === 'podcast') return false;
+                    if ((type === 'post' || !type) && !isPostsEnabled) return false;
+                    if (type === 'article' && !isArticlesEnabled) return false;
 
                     // Scheduled publication privacy: future scheduled posts visible to author only
                     if (item.status === 'Scheduled' && item.scheduledDate) {
@@ -410,7 +416,7 @@ export default function Dashboard() {
                     )}
 
                     {/* Create Post Composer */}
-                    {currentUser?.role !== 'SYSADM' && (
+                    {currentUser?.role !== 'SYSADM' && (isPostsEnabled || isArticlesEnabled || isVideosEnabled) && (
                         <div className="rounded-2xl overflow-hidden transition-all duration-300 hover:border-indigo-500/30"
                             style={{
                                 background: 'var(--bg-card)',
@@ -419,7 +425,11 @@ export default function Dashboard() {
                             }}>
                             {/* Top row */}
                             <div
-                                onClick={() => setIsCreatePostOpen(true)}
+                                onClick={() => {
+                                    if (isPostsEnabled) setIsCreatePostOpen(true);
+                                    else if (isArticlesEnabled) setIsCreateArticleOpen(true);
+                                    else if (isVideosEnabled) setIsUploadVideoOpen(true);
+                                }}
                                 className="flex items-center gap-3 p-4 cursor-pointer group">
                                 <div className="relative shrink-0 p-[1.5px] rounded-full bg-gradient-to-tr from-indigo-500 to-pink-500 shadow-xs">
                                     <img 
@@ -445,9 +455,9 @@ export default function Dashboard() {
                             {/* Action Buttons */}
                             <div className="flex items-center border-t px-4 py-2.5 gap-2" style={{borderColor: 'var(--border-subtle)'}}>
                                 {[
-                                    { icon: 'image', label: 'Post', color: '#10b981', action: () => setIsCreatePostOpen(true) },
-                                    { icon: 'article', label: 'Article', color: '#8b5cf6', action: () => setIsCreateArticleOpen(true) },
-                                    { icon: 'videocam', label: 'Videos', color: '#ef4444', action: () => setIsUploadVideoOpen(true) },
+                                    ...(isPostsEnabled ? [{ icon: 'image', label: 'Post', color: '#10b981', action: () => setIsCreatePostOpen(true) }] : []),
+                                    ...(isArticlesEnabled ? [{ icon: 'article', label: 'Article', color: '#8b5cf6', action: () => setIsCreateArticleOpen(true) }] : []),
+                                    ...(isVideosEnabled ? [{ icon: 'videocam', label: 'Videos', color: '#ef4444', action: () => setIsUploadVideoOpen(true) }] : []),
                                 ].map(btn => (
                                     <button
                                         key={btn.label}
@@ -501,13 +511,15 @@ export default function Dashboard() {
                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm leading-relaxed">
                                     There are no posts published on the platform currently. Be the first to share an update with your colleagues!
                                 </p>
-                                <button
-                                    onClick={() => setIsCreatePostOpen(true)}
-                                    className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                                >
-                                    <span className="material-symbols-outlined text-[16px]">add_circle</span>
-                                    <span>Create a Post</span>
-                                </button>
+                                {isPostsEnabled && (
+                                    <button
+                                        onClick={() => setIsCreatePostOpen(true)}
+                                        className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">add_circle</span>
+                                        <span>Create a Post</span>
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -516,7 +528,7 @@ export default function Dashboard() {
                 {/* Right Sidebar Widgets */}
                 <aside className="w-full xl:w-[340px] shrink-0 flex flex-col gap-5">
                     <MyCommunitiesWidget />
-                    <HotPostsWidget />
+                    {isPostsEnabled && <HotPostsWidget />}
 
                     {/* Trending Tags Widget */}
                     <TrendingTagsWidget />

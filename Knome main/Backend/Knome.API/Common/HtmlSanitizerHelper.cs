@@ -16,8 +16,8 @@ public static class HtmlSanitizerHelper
         @"\s+on[a-zA-Z]+\s*=\s*(""[^""]*""|'[^']*'|[^\s>]+)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly Regex JavascriptProtocolsRegex = new(
-        @"(href|src)\s*=\s*[""']?\s*(javascript|data|vbscript):[^""'>]*[""']?",
+    private static readonly Regex DangerousProtocolsRegex = new(
+        @"(href\s*=\s*[""']?\s*(javascript|vbscript|data):[^""'>]*[""']?)|(src\s*=\s*[""']?\s*(javascript|vbscript|data:(?!image\/))[^""'>]*[""']?)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
@@ -34,8 +34,8 @@ public static class HtmlSanitizerHelper
         // 2. Remove all inline event handlers (onload, onerror, onclick, etc.)
         sanitized = EventHandlersRegex.Replace(sanitized, string.Empty);
 
-        // 3. Remove dangerous protocols (javascript:, vbscript:, data:) in href and src
-        sanitized = JavascriptProtocolsRegex.Replace(sanitized, "$1=\"#\"");
+        // 3. Remove dangerous protocols (javascript:, vbscript:, data: non-image)
+        sanitized = DangerousProtocolsRegex.Replace(sanitized, string.Empty);
 
         return sanitized.Trim();
     }

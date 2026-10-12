@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useSystemConfig } from '../utils/systemConfig';
 import { searchApi, resolveMediaUrl, saveRecentSearch, getLocalRecentSearches, clearLocalRecentSearches } from '../utils/apiService';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
@@ -21,9 +22,20 @@ const CATEGORIES = [
 
 export default function Search() {
     const navigate = useNavigate();
+    const { isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled } = useSystemConfig();
     const queryParams = useQuery();
     const initialQuery = queryParams.get('q') || '';
     const initialType = queryParams.get('type') || 'All';
+
+    const activeCategories = useMemo(() => {
+        return CATEGORIES.filter(cat => {
+            if (cat.id === 'Post' && !isPostsEnabled) return false;
+            if (cat.id === 'Article' && !isArticlesEnabled) return false;
+            if (cat.id === 'Video' && !isVideosEnabled) return false;
+            if (cat.id === 'Podcast' && !isPodcastsEnabled) return false;
+            return true;
+        });
+    }, [isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled]);
 
     const [searchQuery, setSearchQuery] = useState(initialQuery);
     const [activeCategory, setActiveCategory] = useState(initialType);
@@ -130,7 +142,15 @@ export default function Search() {
                 toDate
             );
 
-            const items = res?.items || (Array.isArray(res) ? res : []);
+            const rawItems = res?.items || (Array.isArray(res) ? res : []);
+            const items = rawItems.filter(item => {
+                const type = (item.contentType || item.type || '').toLowerCase();
+                if (type === 'post' && !isPostsEnabled) return false;
+                if (type === 'article' && !isArticlesEnabled) return false;
+                if (type === 'video' && !isVideosEnabled) return false;
+                if (type === 'podcast' && !isPodcastsEnabled) return false;
+                return true;
+            });
             const total = res?.totalCount || items.length;
 
             if (isLoadMore) {
@@ -258,7 +278,7 @@ export default function Search() {
 
             {/* Category Navigation Bar */}
             <div className="flex overflow-x-auto custom-scrollbar gap-2 pb-2">
-                {CATEGORIES.map(cat => (
+                {activeCategories.map(cat => (
                     <button
                         key={cat.id}
                         onClick={() => {

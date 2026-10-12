@@ -16,7 +16,7 @@ import { formatNotificationDate, getTimeGroup, isNotificationForUser, isSelfNoti
 import { subscribeToLiveMessages } from '../../utils/realtimeMessenger';
 import { getKarmaLevelInfo } from '../../utils/karmaEngine';
 import { KarmaLevelMedal } from '../ui/KarmaBadge';
-import { isMessagingEnabled } from '../../utils/systemConfig';
+import { isMessagingEnabled, saveSystemConfig, useSystemConfig } from '../../utils/systemConfig';
 
 const DISCOVER_CATEGORIES = [
     { id: 'All', label: 'All', icon: 'grid_view' },
@@ -37,6 +37,17 @@ export default function Navbar() {
     const userStatusConfig = getUserStatusConfig(currentUser);
     const { pathname } = useLocation();
     const navigate = useNavigate();
+    const { isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled, isWikiEnabled } = useSystemConfig();
+    const activeDiscoverCategories = useMemo(() => {
+        return DISCOVER_CATEGORIES.filter(cat => {
+            if (cat.id === 'Post' && !isPostsEnabled) return false;
+            if (cat.id === 'Article' && !isArticlesEnabled) return false;
+            if (cat.id === 'Video' && !isVideosEnabled) return false;
+            if (cat.id === 'Podcast' && !isPodcastsEnabled) return false;
+            if (cat.id === 'Wiki' && !isWikiEnabled) return false;
+            return true;
+        });
+    }, [isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled, isWikiEnabled]);
     
     // User Karma Points State
     const [userKarma, setUserKarma] = useState(currentUser?.karmaPoints ?? currentUser?.karma ?? 0);
@@ -236,7 +247,16 @@ export default function Navbar() {
             try {
                 const res = await searchApi.getSuggestions(searchQuery, 8);
                 const items = Array.isArray(res) ? res : (res?.data || []);
-                setSuggestions(items);
+                const filtered = items.filter(item => {
+                    const type = (item.contentType || item.type || '').toLowerCase();
+                    if (type === 'post' && !isPostsEnabled) return false;
+                    if (type === 'article' && !isArticlesEnabled) return false;
+                    if (type === 'video' && !isVideosEnabled) return false;
+                    if (type === 'podcast' && !isPodcastsEnabled) return false;
+                    if (type === 'wiki' && !isWikiEnabled) return false;
+                    return true;
+                });
+                setSuggestions(filtered);
             } catch (e) {
                 console.error('Failed to fetch search suggestions', e);
                 setSuggestions([]);
@@ -1119,6 +1139,25 @@ export default function Navbar() {
             window.dispatchEvent(new CustomEvent('knome:clip-engagement-updated', { detail: data }));
         });
 
+        connection.on("SystemConfigUpdated", (data) => {
+            if (data) {
+                const patch = {};
+                if (typeof data.requireApproval === 'boolean') patch.requireContentAndCommunityApproval = data.requireApproval;
+                if (typeof data.requireCommunityApproval === 'boolean') patch.requireCommunityApproval = data.requireCommunityApproval;
+                if (typeof data.requireVideoApproval === 'boolean') patch.requireVideoApproval = data.requireVideoApproval;
+                if (typeof data.requirePodcastApproval === 'boolean') patch.requirePodcastApproval = data.requirePodcastApproval;
+                if (typeof data.enableMessaging === 'boolean') patch.enableMessaging = data.enableMessaging;
+                if (typeof data.enableEmail === 'boolean') patch.enableEmail = data.enableEmail;
+                if (typeof data.enablePosts === 'boolean') patch.enablePosts = data.enablePosts;
+                if (typeof data.enableArticles === 'boolean') patch.enableArticles = data.enableArticles;
+                if (typeof data.enableClips === 'boolean') patch.enableClips = data.enableClips;
+                if (typeof data.enableWiki === 'boolean') patch.enableWiki = data.enableWiki;
+                if (typeof data.enableVideos === 'boolean') patch.enableVideos = data.enableVideos;
+                if (typeof data.enablePodcasts === 'boolean') patch.enablePodcasts = data.enablePodcasts;
+                saveSystemConfig(patch);
+            }
+        });
+
         const joinGroup = () => {
             const currentUid = currentUser?.userId || currentUser?.id;
             if (currentUid && connection.state === signalR.HubConnectionState.Connected) {
@@ -1633,7 +1672,7 @@ export default function Navbar() {
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-0.5">
-                                        {DISCOVER_CATEGORIES.map(cat => (
+                                        {activeDiscoverCategories.map(cat => (
                                             <button
                                                 key={cat.id}
                                                 type="button"

@@ -19,6 +19,12 @@ export const DEFAULT_SYSTEM_CONFIG = {
     requireCommunityApproval: true,
     requireVideoApproval: true,
     requirePodcastApproval: true,
+    enablePosts: true,
+    enableArticles: true,
+    enableClips: true,
+    enableWiki: true,
+    enableVideos: true,
+    enablePodcasts: true,
 };
 
 /**
@@ -52,7 +58,15 @@ export function saveSystemConfig(newConfig) {
             ...newConfig,
         };
         localStorage.setItem(SYSTEM_CONFIG_KEY, JSON.stringify(merged));
-        window.dispatchEvent(new CustomEvent(SYSTEM_CONFIG_EVENT, { detail: merged }));
+        if (typeof queueMicrotask === 'function') {
+            queueMicrotask(() => {
+                window.dispatchEvent(new CustomEvent(SYSTEM_CONFIG_EVENT, { detail: merged }));
+            });
+        } else {
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent(SYSTEM_CONFIG_EVENT, { detail: merged }));
+            }, 0);
+        }
         return merged;
     } catch (e) {
         console.error('Failed to save system config:', e);
@@ -118,41 +132,104 @@ export function isPodcastApprovalRequired() {
 }
 
 /**
+ * Fast synchronous checks for independent feature module toggles
+ */
+export function isPostsEnabled() {
+    const config = getSystemConfig();
+    return config.enablePosts !== false;
+}
+
+export function isArticlesEnabled() {
+    const config = getSystemConfig();
+    return config.enableArticles !== false;
+}
+
+export function isClipsEnabled() {
+    const config = getSystemConfig();
+    return config.enableClips !== false;
+}
+
+export function isWikiEnabled() {
+    const config = getSystemConfig();
+    return config.enableWiki !== false;
+}
+
+export function isVideosEnabled() {
+    const config = getSystemConfig();
+    return config.enableVideos !== false;
+}
+
+export function isPodcastsEnabled() {
+    const config = getSystemConfig();
+    return config.enablePodcasts !== false;
+}
+
+let backendSyncPromise = null;
+
+/**
  * Loads the authoritative approval policies and platform services from backend SQL Server.
  */
 export async function loadSystemApprovalSettingFromBackend() {
     if (typeof window === 'undefined') return getSystemConfig();
-    try {
-        const { apiClient } = await import('./apiClient');
-        const res = await apiClient.get('/settings/approval');
-        const data = res?.data !== undefined ? res.data : res;
-        if (data) {
-            const patch = {};
-            if (typeof data.requireApproval === 'boolean') {
-                patch.requireContentAndCommunityApproval = data.requireApproval;
+    if (backendSyncPromise) return backendSyncPromise;
+
+    backendSyncPromise = (async () => {
+        try {
+            const { apiClient } = await import('./apiClient');
+            const res = await apiClient.get('/settings/approval');
+            const data = res?.data !== undefined ? res.data : res;
+            if (data) {
+                const patch = {};
+                if (typeof data.requireApproval === 'boolean') {
+                    patch.requireContentAndCommunityApproval = data.requireApproval;
+                }
+                if (typeof data.requireCommunityApproval === 'boolean') {
+                    patch.requireCommunityApproval = data.requireCommunityApproval;
+                }
+                if (typeof data.requireVideoApproval === 'boolean') {
+                    patch.requireVideoApproval = data.requireVideoApproval;
+                }
+                if (typeof data.requirePodcastApproval === 'boolean') {
+                    patch.requirePodcastApproval = data.requirePodcastApproval;
+                }
+                if (typeof data.enableMessaging === 'boolean') {
+                    patch.enableMessaging = data.enableMessaging;
+                }
+                if (typeof data.enableEmail === 'boolean') {
+                    patch.enableEmail = data.enableEmail;
+                }
+                if (typeof data.enablePosts === 'boolean') {
+                    patch.enablePosts = data.enablePosts;
+                }
+                if (typeof data.enableArticles === 'boolean') {
+                    patch.enableArticles = data.enableArticles;
+                }
+                if (typeof data.enableClips === 'boolean') {
+                    patch.enableClips = data.enableClips;
+                }
+                if (typeof data.enableWiki === 'boolean') {
+                    patch.enableWiki = data.enableWiki;
+                }
+                if (typeof data.enableVideos === 'boolean') {
+                    patch.enableVideos = data.enableVideos;
+                }
+                if (typeof data.enablePodcasts === 'boolean') {
+                    patch.enablePodcasts = data.enablePodcasts;
+                }
+                const updated = saveSystemConfig(patch);
+                return updated;
             }
-            if (typeof data.requireCommunityApproval === 'boolean') {
-                patch.requireCommunityApproval = data.requireCommunityApproval;
-            }
-            if (typeof data.requireVideoApproval === 'boolean') {
-                patch.requireVideoApproval = data.requireVideoApproval;
-            }
-            if (typeof data.requirePodcastApproval === 'boolean') {
-                patch.requirePodcastApproval = data.requirePodcastApproval;
-            }
-            if (typeof data.enableMessaging === 'boolean') {
-                patch.enableMessaging = data.enableMessaging;
-            }
-            if (typeof data.enableEmail === 'boolean') {
-                patch.enableEmail = data.enableEmail;
-            }
-            const updated = saveSystemConfig(patch);
-            return updated;
+        } catch (e) {
+            // Fallback to locally stored configuration if backend is temporarily unreachable
+        } finally {
+            setTimeout(() => {
+                backendSyncPromise = null;
+            }, 3000);
         }
-    } catch (e) {
-        // Fallback to locally stored configuration if backend is temporarily unreachable
-    }
-    return getSystemConfig();
+        return getSystemConfig();
+    })();
+
+    return backendSyncPromise;
 }
 
 /**
@@ -198,6 +275,7 @@ export function useSystemConfig() {
     };
 
     return {
+        ...config,
         config,
         isMessagingEnabled: config.enableMessaging !== false,
         isEmailEnabled: config.enableEmail !== false,
@@ -205,6 +283,18 @@ export function useSystemConfig() {
         isCommunityApprovalRequired: config.requireCommunityApproval !== false,
         isVideoApprovalRequired: config.requireVideoApproval !== false,
         isPodcastApprovalRequired: config.requirePodcastApproval !== false,
+        isPostsEnabled: config.enablePosts !== false,
+        isArticlesEnabled: config.enableArticles !== false,
+        isClipsEnabled: config.enableClips !== false,
+        isWikiEnabled: config.enableWiki !== false,
+        isVideosEnabled: config.enableVideos !== false,
+        isPodcastsEnabled: config.enablePodcasts !== false,
+        enablePosts: config.enablePosts !== false,
+        enableArticles: config.enableArticles !== false,
+        enableClips: config.enableClips !== false,
+        enableWiki: config.enableWiki !== false,
+        enableVideos: config.enableVideos !== false,
+        enablePodcasts: config.enablePodcasts !== false,
         updateConfig,
     };
 }

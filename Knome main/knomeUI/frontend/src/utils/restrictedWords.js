@@ -36,7 +36,7 @@ export const RESTRICTED_WORDS = [
 
     // Corporate Governance & Confidentiality
     "classified", "confidential", "internal only", "nda", "proprietary",
-    "restricted", "salary"
+    "restricted"
 ];
 
 // Load persisted custom restricted words from localStorage
@@ -45,7 +45,7 @@ try {
     if (Array.isArray(saved)) {
         saved.forEach(w => {
             const lower = (w || '').trim().toLowerCase();
-            if (lower && !RESTRICTED_WORDS.includes(lower)) {
+            if (lower && lower !== 'salary' && !RESTRICTED_WORDS.includes(lower)) {
                 RESTRICTED_WORDS.push(lower);
             }
         });
@@ -75,7 +75,7 @@ export const syncRestrictedWordsFromBackend = async () => {
                 const added = [];
                 items.forEach(item => {
                     const kw = (typeof item === 'string' ? item : item?.keyword || '').trim().toLowerCase();
-                    if (kw && !RESTRICTED_WORDS.includes(kw)) {
+                    if (kw && kw !== 'salary' && !RESTRICTED_WORDS.includes(kw)) {
                         RESTRICTED_WORDS.push(kw);
                         added.push(kw);
                     }
@@ -107,6 +107,7 @@ syncRestrictedWordsFromBackend();
 export const addRestrictedWord = (keyword) => {
     if (!keyword) return;
     const lower = keyword.trim().toLowerCase();
+    if (lower === 'salary') return;
     if (!RESTRICTED_WORDS.includes(lower)) {
         RESTRICTED_WORDS.push(lower);
     }

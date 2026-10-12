@@ -13,17 +13,34 @@ public class SearchService : ISearchService
     private readonly ISearchRepository _repository;
     private readonly IContentInteractionService _interactionService;
     private readonly IMemoryCache _cache;
+    private readonly ISystemSettingService _settingService;
 
-    public SearchService(ISearchRepository repository, IContentInteractionService interactionService, IMemoryCache cache)
+    public SearchService(ISearchRepository repository, IContentInteractionService interactionService, IMemoryCache cache, ISystemSettingService settingService)
     {
         _repository = repository;
         _interactionService = interactionService;
         _cache = cache;
+        _settingService = settingService;
     }
 
     public async Task<GlobalSearchResultDto> SearchAsync(GlobalSearchRequestDto request)
     {
         var result = await _repository.SearchGlobalAsync(request);
+
+        var enablePosts = await _settingService.GetEnablePostsAsync();
+        var enableArticles = await _settingService.GetEnableArticlesAsync();
+        var enableVideos = await _settingService.GetEnableVideosAsync();
+        var enablePodcasts = await _settingService.GetEnablePodcastsAsync();
+        var enableWiki = await _settingService.GetEnableWikiAsync();
+
+        result.Items = result.Items.Where(item => {
+            if (item.ContentType == "Post" && !enablePosts) return false;
+            if (item.ContentType == "Article" && !enableArticles) return false;
+            if (item.ContentType == "Video" && !enableVideos) return false;
+            if (item.ContentType == "Podcast" && !enablePodcasts) return false;
+            if (item.ContentType == "Wiki" && !enableWiki) return false;
+            return true;
+        }).ToList();
 
         // Enrich the returned page of content hits with live engagement metrics.
         foreach (var item in result.Items)

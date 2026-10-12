@@ -15,10 +15,12 @@ namespace Knome.API.Controllers;
 public class WikiController : KnomeControllerBase
 {
     private readonly IWikiService _wikiService;
+    private readonly ISystemSettingService _settingService;
 
-    public WikiController(IWikiService wikiService)
+    public WikiController(IWikiService wikiService, ISystemSettingService settingService)
     {
         _wikiService = wikiService;
+        _settingService = settingService;
     }
 
     [HttpGet]
@@ -32,6 +34,7 @@ public class WikiController : KnomeControllerBase
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 20)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableWikiKey, "Wiki");
         var (items, total) = await _wikiService.GetWikisAsync(tab, search, tag, status, communityId, pageNumber, pageSize, GetCurrentUserId());
         var paged = PagedResponse<WikiDto>.Create(items, pageNumber, pageSize, total);
         return Ok(ApiResponse<PagedResponse<WikiDto>>.SuccessResponse(200, "Wikis retrieved successfully.", paged));
@@ -41,6 +44,7 @@ public class WikiController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<WikiDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyWikis([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableWikiKey, "Wiki");
         var (items, total) = await _wikiService.GetMyWikisAsync(GetCurrentUserId(), pageNumber, pageSize);
         var paged = PagedResponse<WikiDto>.Create(items, pageNumber, pageSize, total);
         return Ok(ApiResponse<PagedResponse<WikiDto>>.SuccessResponse(200, "My Wikis retrieved successfully.", paged));
@@ -50,6 +54,7 @@ public class WikiController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<WikiDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSharedWithMeWikis([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableWikiKey, "Wiki");
         var (items, total) = await _wikiService.GetSharedWithMeWikisAsync(GetCurrentUserId(), pageNumber, pageSize);
         var paged = PagedResponse<WikiDto>.Create(items, pageNumber, pageSize, total);
         return Ok(ApiResponse<PagedResponse<WikiDto>>.SuccessResponse(200, "Shared Wikis retrieved successfully.", paged));
@@ -59,6 +64,7 @@ public class WikiController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<List<WikiDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRecentlyUpdatedWikis([FromQuery] int count = 10)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableWikiKey, "Wiki");
         var items = await _wikiService.GetRecentlyUpdatedWikisAsync(GetCurrentUserId(), count);
         return Ok(ApiResponse<List<WikiDto>>.SuccessResponse(200, "Recently updated Wikis retrieved successfully.", items));
     }
@@ -67,6 +73,7 @@ public class WikiController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<List<string>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPopularTags([FromQuery] int count = 10)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableWikiKey, "Wiki");
         var tags = await _wikiService.GetPopularTagsAsync(Math.Min(count, 10));
         return Ok(ApiResponse<List<string>>.SuccessResponse(200, "Wiki tags retrieved successfully.", tags));
     }
@@ -75,6 +82,7 @@ public class WikiController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<WikiDetailDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetWikiDetail(long id)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableWikiKey, "Wiki");
         var wiki = await _wikiService.GetWikiDetailAsync(id, GetCurrentUserId());
         return Ok(ApiResponse<WikiDetailDto>.SuccessResponse(200, "Wiki detail retrieved successfully.", wiki));
     }
@@ -83,6 +91,7 @@ public class WikiController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<WikiDto>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateWiki([FromBody] CreateWikiDto dto)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableWikiKey, "Wiki");
         var created = await _wikiService.CreateWikiAsync(GetCurrentUserId(), dto);
         return StatusCode(StatusCodes.Status201Created, ApiResponse<WikiDto>.SuccessResponse(201, "Wiki created successfully.", created));
     }
@@ -91,6 +100,7 @@ public class WikiController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse<WikiDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateWiki(long id, [FromBody] UpdateWikiDto dto)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableWikiKey, "Wiki");
         var updated = await _wikiService.UpdateWikiAsync(id, GetCurrentUserId(), dto);
         return Ok(ApiResponse<WikiDto>.SuccessResponse(200, "Wiki updated successfully.", updated));
     }
@@ -99,6 +109,7 @@ public class WikiController : KnomeControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteWiki(long id)
     {
+        await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableWikiKey, "Wiki");
         await _wikiService.DeleteWikiAsync(id, GetCurrentUserId());
         return Ok(ApiResponse.SuccessResponse(200, "Wiki deleted successfully."));
     }

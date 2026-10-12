@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { useUser, getUserStatusConfig, deduplicateMembers, roleNameToCode } from '../components/contexts/UserContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
+import { useToast } from '../components/contexts/ToastContext';
 
 const localRoleMap = {
     'Employee': 'EMP',
@@ -338,7 +339,7 @@ export default function AdminConsole() {
     // Hierarchical Domain Derived from Active Tab
     const activeDomain = useMemo(() => {
         if (['users', 'role_requests'].includes(activeTab)) return 'governance';
-        if (['system', 'audit', 'serilog', 'analytics'].includes(activeTab)) return 'operations';
+        if (['audit', 'serilog', 'analytics'].includes(activeTab)) return 'operations';
         if (['approval_policy', 'moderation', 'media_approvals'].includes(activeTab)) return 'moderation';
         return 'moderation';
     }, [activeTab]);
@@ -378,7 +379,9 @@ export default function AdminConsole() {
         showToast(toastMsg);
     };
 
+    const { addToast } = useToast();
     const [actionToast, setActionToast] = useState('');
+    const [actionToastType, setActionToastType] = useState('info');
 
     // User Management State
     const [usersList, setUsersList] = useState(() => contextUsers || []);
@@ -550,6 +553,12 @@ export default function AdminConsole() {
     const [configState, setConfigState] = useState(() => {
         return getSystemConfig();
     });
+    const [committedConfig, setCommittedConfig] = useState(() => {
+        return getSystemConfig();
+    });
+    const [isConfirmSaveModalOpen, setIsConfirmSaveModalOpen] = useState(false);
+    const [pendingChanges, setPendingChanges] = useState([]);
+    const [isSavingConfig, setIsSavingConfig] = useState(false);
     const [configToast, setConfigToast] = useState(false);
     const [suspendSearchTerm, setSuspendSearchTerm] = useState('');
 
@@ -593,9 +602,13 @@ export default function AdminConsole() {
     const [recentAddedKeywords, setRecentAddedKeywords] = useState([]);
 
     // Toast Notification helper
-    const showToast = (msg) => {
+    const showToast = (msg, type = 'info') => {
         setActionToast(msg);
+        setActionToastType(type);
         setTimeout(() => setActionToast(''), 4000);
+        if (addToast) {
+            addToast(msg, type);
+        }
     };
 
     // Pending Media Approvals & Preview State
@@ -2439,12 +2452,27 @@ export default function AdminConsole() {
         );
     };
 
-    // Fetch and sync independent approval & communication policies from backend on mount
+    // Fetch and sync independent approval, feature & communication policies from backend on mount
     useEffect(() => {
         settingsApi.getApprovalSetting()
             .then(res => {
                 const data = res?.data !== undefined ? res.data : res;
                 if (data) {
+                    const serverConfig = {
+                        requireContentAndCommunityApproval: typeof data.requireApproval === 'boolean' ? data.requireApproval : true,
+                        requireCommunityApproval: typeof data.requireCommunityApproval === 'boolean' ? data.requireCommunityApproval : true,
+                        requireVideoApproval: typeof data.requireVideoApproval === 'boolean' ? data.requireVideoApproval : true,
+                        requirePodcastApproval: typeof data.requirePodcastApproval === 'boolean' ? data.requirePodcastApproval : true,
+                        enableMessaging: typeof data.enableMessaging === 'boolean' ? data.enableMessaging : true,
+                        enableEmail: typeof data.enableEmail === 'boolean' ? data.enableEmail : true,
+                        enablePosts: typeof data.enablePosts === 'boolean' ? data.enablePosts : true,
+                        enableArticles: typeof data.enableArticles === 'boolean' ? data.enableArticles : true,
+                        enableClips: typeof data.enableClips === 'boolean' ? data.enableClips : true,
+                        enableWiki: typeof data.enableWiki === 'boolean' ? data.enableWiki : true,
+                        enableVideos: typeof data.enableVideos === 'boolean' ? data.enableVideos : true,
+                        enablePodcasts: typeof data.enablePodcasts === 'boolean' ? data.enablePodcasts : true,
+                    };
+                    saveSystemConfig(serverConfig);
                     setConfigState(prev => {
                         const updated = {
                             ...prev,
@@ -2454,88 +2482,232 @@ export default function AdminConsole() {
                             requirePodcastApproval: typeof data.requirePodcastApproval === 'boolean' ? data.requirePodcastApproval : prev.requirePodcastApproval,
                             enableMessaging: typeof data.enableMessaging === 'boolean' ? data.enableMessaging : prev.enableMessaging,
                             enableEmail: typeof data.enableEmail === 'boolean' ? data.enableEmail : prev.enableEmail,
+                            enablePosts: typeof data.enablePosts === 'boolean' ? data.enablePosts : (prev.enablePosts !== undefined ? prev.enablePosts : true),
+                            enableArticles: typeof data.enableArticles === 'boolean' ? data.enableArticles : (prev.enableArticles !== undefined ? prev.enableArticles : true),
+                            enableClips: typeof data.enableClips === 'boolean' ? data.enableClips : (prev.enableClips !== undefined ? prev.enableClips : true),
+                            enableWiki: typeof data.enableWiki === 'boolean' ? data.enableWiki : (prev.enableWiki !== undefined ? prev.enableWiki : true),
+                            enableVideos: typeof data.enableVideos === 'boolean' ? data.enableVideos : (prev.enableVideos !== undefined ? prev.enableVideos : true),
+                            enablePodcasts: typeof data.enablePodcasts === 'boolean' ? data.enablePodcasts : (prev.enablePodcasts !== undefined ? prev.enablePodcasts : true),
                         };
-                        saveSystemConfig(updated);
+
                         return updated;
                     });
+                    setCommittedConfig(prev => ({ ...prev, ...serverConfig }));
                 }
             })
             .catch(err => console.warn('Could not fetch approval setting from backend:', err));
     }, []);
 
-    // Toggle individual setting independently
+    // Toggle individual setting independently (draft state until committed)
     const handleToggleIndependentSetting = async (settingKey, displayName) => {
         const cur = configState[settingKey] !== false;
         const next = !cur;
-
-        // Optimistic local state update
-        const updated = { ...configState, [settingKey]: next };
-        setConfigState(updated);
-        saveSystemConfig(updated);
-
+        setConfigState(prev => ({ ...prev, [settingKey]: next }));
+        setCommittedConfig(prev => ({ ...prev, [settingKey]: next }));
+        saveSystemConfig({ [settingKey]: next });
         try {
             await settingsApi.setApprovalSetting({ [settingKey]: next });
-            showToast(`${displayName} is now ${next ? 'ENABLED (Active)' : 'DISABLED (Bypassed)'}`);
-        } catch (apiErr) {
-            console.error(`Failed to update ${settingKey} on backend:`, apiErr);
-            showToast(`Could not persist ${displayName} to server: ${apiErr?.message || 'Error'}`, 'error');
+            showToast(`${displayName || settingKey} is now globally ${next ? 'ACTIVATED (ON)' : 'DISABLED (OFF)'}. ✨`, 'success');
+            logAuditEntry(
+                'GovernancePolicyCommitted',
+                `System Administrator toggled ${displayName || settingKey} to ${next ? 'ON' : 'OFF'}`,
+                next ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'
+            );
+        } catch (err) {
+            console.error(`Failed to persist ${settingKey} toggle:`, err);
+            setConfigState(prev => ({ ...prev, [settingKey]: cur }));
+            setCommittedConfig(prev => ({ ...prev, [settingKey]: cur }));
+            saveSystemConfig({ [settingKey]: cur });
+            showToast(`Failed to update ${displayName || settingKey}: ${err?.message || 'Server error'}`, 'error');
         }
-
-        setAuditTrail(prev => [
-            {
-                id: Date.now(),
-                time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
-                moderator: currentUser?.name || 'System Admin',
-                action: 'ConfigUpdate',
-                target: `${displayName}: ${next ? 'ON' : 'OFF'}`,
-                color: next ? 'text-indigo-600' : 'text-slate-500'
-            },
-            ...prev
-        ]);
     };
 
-    // Toggle Content & Community Approval master policy
+    // Toggle Content & Community Approval master policy (draft state until committed)
     const handleToggleApprovalPolicy = async () => {
         const cur = configState.requireContentAndCommunityApproval !== false;
         const next = !cur;
-        try {
-            await settingsApi.setApprovalSetting({
-                requireApproval: next,
-                requireCommunityApproval: next,
-                requireVideoApproval: next,
-                requirePodcastApproval: next
-            });
-        } catch (apiErr) {
-            console.warn('Backend approval setting update fallback:', apiErr);
-        }
-        const updated = { 
-            ...configState, 
+        setConfigState(prev => ({ 
+            ...prev, 
+            requireContentAndCommunityApproval: next,
+            requireCommunityApproval: next,
+            requireVideoApproval: next,
+            requirePodcastApproval: next
+        }));
+        const patch = {
             requireContentAndCommunityApproval: next,
             requireCommunityApproval: next,
             requireVideoApproval: next,
             requirePodcastApproval: next
         };
-        setConfigState(updated);
-        saveSystemConfig(updated);
-        showToast(next 
-            ? 'All Content Approvals enabled: communities, videos, and podcasts require admin approval.' 
-            : 'All Content Approvals disabled: communities, videos, and podcasts will publish immediately without approval.');
-
-        setAuditTrail(prev => [
-            {
-                id: Date.now(),
-                time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
-                moderator: currentUser?.name || 'System Admin',
-                action: 'ConfigUpdate',
-                target: `Master Approval Policy: ${next ? 'ON (Approval Required)' : 'OFF (Instant Publish)'}`,
-                color: next ? 'text-indigo-600' : 'text-emerald-500'
-            },
-            ...prev
-        ]);
+        setCommittedConfig(prev => ({ ...prev, ...patch }));
+        saveSystemConfig(patch);
+        try {
+            await settingsApi.setApprovalSetting(patch);
+            showToast(`Master Approval Policy is now globally ${next ? 'ACTIVATED (ON)' : 'DISABLED (OFF)'}. ✨`, 'success');
+        } catch (err) {
+            console.error('Failed to update approval policy:', err);
+            showToast(`Failed to update approval policy: ${err?.message || 'Server error'}`, 'error');
+        }
     };
 
-    // Handle System Config Save (All settings synchronized to SQL Server)
-    const handleSaveConfig = async () => {
+    // Immediately toggle all 6 platform features ON or OFF globally
+    const handleSetAllFeatures = async (enabled) => {
+        const patch = {
+            enablePosts: enabled,
+            enableArticles: enabled,
+            enableClips: enabled,
+            enableWiki: enabled,
+            enableVideos: enabled,
+            enablePodcasts: enabled,
+        };
+        setConfigState(prev => ({ ...prev, ...patch }));
+        setCommittedConfig(prev => ({ ...prev, ...patch }));
+        saveSystemConfig(patch);
+        try {
+            await settingsApi.setApprovalSetting(patch);
+            showToast(`All 6 platform features are now globally ${enabled ? 'ACTIVATED (ON)' : 'DISABLED (OFF)'}. ✨`, 'success');
+            logAuditEntry(
+                'GovernancePolicyCommitted',
+                `System Administrator set all 6 platform features to ${enabled ? 'ON' : 'OFF'}`,
+                enabled ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'
+            );
+        } catch (err) {
+            console.error('Failed to update all features:', err);
+            showToast(`Failed to update features: ${err?.message || 'Server error'}`, 'error');
+        }
+    };
+
+    // Calculate pending governance changes compared to committed database baseline
+    const getPendingGovernanceChanges = useCallback(() => {
+        const trackedSettings = [
+            {
+                key: 'requireCommunityApproval',
+                name: 'Community Approval',
+                description: 'Requires admin approval before communities are published.',
+                icon: 'groups',
+                color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40'
+            },
+            {
+                key: 'requireVideoApproval',
+                name: 'Video Approval',
+                description: 'Requires admin approval before user videos are published.',
+                icon: 'videocam',
+                color: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-950/40'
+            },
+            {
+                key: 'requirePodcastApproval',
+                name: 'Podcast Approval',
+                description: 'Requires admin approval before audio podcasts are published.',
+                icon: 'podcasts',
+                color: 'text-pink-600 bg-pink-50 dark:bg-pink-950/40'
+            },
+            {
+                key: 'enableMessaging',
+                name: 'Direct Messaging (Chat & DMs)',
+                description: 'Enables 1-on-1 direct user messaging, chat channels, and DMs.',
+                icon: 'chat',
+                color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40'
+            },
+            {
+                key: 'enableEmail',
+                name: 'Email Notifications & Alerts',
+                description: 'Enables outgoing SMTP email alerts, digests, and notifications.',
+                icon: 'mail',
+                color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/40'
+            },
+            {
+                key: 'enablePosts',
+                name: 'Posts Module',
+                description: 'Controls feed discussions, timeline posts, composer, and post interactions.',
+                icon: 'dynamic_feed',
+                color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40'
+            },
+            {
+                key: 'enableArticles',
+                name: 'Articles Module',
+                description: 'Controls editorial publishing, article reader view, and long-form publications.',
+                icon: 'article',
+                color: 'text-sky-600 bg-sky-50 dark:bg-sky-950/40'
+            },
+            {
+                key: 'enableClips',
+                name: 'Clips Module',
+                description: 'Controls short-form vertical video reels, clips feed, and clip creation.',
+                icon: 'movie',
+                color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/40'
+            },
+            {
+                key: 'enableWiki',
+                name: 'Wiki Knowledge Base',
+                description: 'Controls wiki documentation, nested section hierarchy, and view counts.',
+                icon: 'menu_book',
+                color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40'
+            },
+            {
+                key: 'enableVideos',
+                name: 'Videos Portal',
+                description: 'Controls enterprise video library, streaming playback, and video uploads.',
+                icon: 'videocam',
+                color: 'text-red-600 bg-red-50 dark:bg-red-950/40'
+            },
+            {
+                key: 'enablePodcasts',
+                name: 'Podcasts Studio',
+                description: 'Controls audio podcast series, episodes catalog, and background player.',
+                icon: 'podcasts',
+                color: 'text-fuchsia-600 bg-fuchsia-50 dark:bg-fuchsia-950/40'
+            },
+        ];
+
+        const changes = [];
+        for (const item of trackedSettings) {
+            const prevVal = committedConfig[item.key] !== false ? 'ON' : 'OFF';
+            const newVal = configState[item.key] !== false ? 'ON' : 'OFF';
+            if (prevVal !== newVal) {
+                changes.push({
+                    key: item.key,
+                    name: item.name,
+                    description: item.description,
+                    icon: item.icon,
+                    color: item.color,
+                    prev: prevVal,
+                    new: newVal
+                });
+            }
+        }
+
+        // Also track master approval policy if changed
+        const prevMaster = committedConfig.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF';
+        const newMaster = configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF';
+        if (prevMaster !== newMaster && !changes.some(c => c.key === 'requireCommunityApproval')) {
+            changes.push({
+                key: 'requireContentAndCommunityApproval',
+                name: 'Master Content Approval Policy',
+                description: 'Global master policy enforcing approval workflow requirements.',
+                icon: 'fact_check',
+                color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/40',
+                prev: prevMaster,
+                new: newMaster
+            });
+        }
+
+        return changes;
+    }, [configState, committedConfig]);
+
+    // When System Admin clicks "Save & Commit All Changes"
+    const handleSaveConfigClick = () => {
+        const changes = getPendingGovernanceChanges();
+        if (changes.length === 0) {
+            showToast('No changes to save.', 'info');
+            return;
+        }
+        setPendingChanges(changes);
+        setIsConfirmSaveModalOpen(true);
+    };
+
+    // When System Admin clicks "Confirm & Save" inside the confirmation modal
+    const handleConfirmAndSave = async () => {
+        setIsSavingConfig(true);
         try {
             await settingsApi.setApprovalSetting({
                 requireApproval: configState.requireContentAndCommunityApproval !== false,
@@ -2544,27 +2716,40 @@ export default function AdminConsole() {
                 requirePodcastApproval: configState.requirePodcastApproval !== false,
                 enableMessaging: configState.enableMessaging !== false,
                 enableEmail: configState.enableEmail !== false,
+                enablePosts: configState.enablePosts !== false,
+                enableArticles: configState.enableArticles !== false,
+                enableClips: configState.enableClips !== false,
+                enableWiki: configState.enableWiki !== false,
+                enableVideos: configState.enableVideos !== false,
+                enablePodcasts: configState.enablePodcasts !== false,
             });
-            showToast('All system configuration policies saved & synchronized to SQL Server.');
-        } catch (e) {
-            console.warn('Backend approval save note:', e);
-            showToast('Configuration saved locally, backend sync note: ' + (e?.message || 'Check connection'), 'warning');
-        }
-        saveSystemConfig(configState);
-        setConfigToast(true);
-        setTimeout(() => setConfigToast(false), 4000);
 
-        setAuditTrail(prev => [
-            {
-                id: Date.now(),
-                time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
-                moderator: currentUser?.name || 'System Admin',
-                action: 'ConfigUpdate',
-                target: `All 5 Policies Synchronized (Community: ${configState.requireCommunityApproval !== false ? 'ON' : 'OFF'}, Video: ${configState.requireVideoApproval !== false ? 'ON' : 'OFF'}, Podcast: ${configState.requirePodcastApproval !== false ? 'ON' : 'OFF'}, Messaging: ${configState.enableMessaging !== false ? 'ON' : 'OFF'}, Email: ${configState.enableEmail !== false ? 'ON' : 'OFF'})`,
-                color: 'text-emerald-500'
-            },
-            ...prev
-        ]);
+            saveSystemConfig(configState);
+            setCommittedConfig({ ...configState });
+            setIsConfirmSaveModalOpen(false);
+
+            const summaryText = pendingChanges
+                .map(c => `${c.name}: ${c.prev} → ${c.new}`)
+                .join(', ');
+
+            logAuditEntry(
+                'GovernancePolicyCommitted',
+                `Committed governance changes: ${summaryText}`,
+                'text-indigo-600 font-bold'
+            );
+
+            showToast('All changes have been successfully saved and applied! ✨', 'success');
+        } catch (e) {
+            console.error('Failed to commit governance settings:', e);
+            showToast(`Failed to save changes: ${e?.message || 'Server error occurred'}`, 'error');
+        } finally {
+            setIsSavingConfig(false);
+        }
+    };
+
+    // Fallback direct save for parameters tab
+    const handleSaveConfig = async () => {
+        handleSaveConfigClick();
     };
 
     // ── AI Moderation Test Presets & Real-Time Evaluator ──
@@ -3174,8 +3359,18 @@ export default function AdminConsole() {
         <main className="flex-grow p-3 md:p-4 min-h-screen bg-slate-50 dark:bg-slate-950 relative text-slate-800 dark:text-slate-100 font-sans">
             {/* Action Toast Notification */}
             {actionToast && (
-                <div className="fixed top-20 right-6 z-[110] px-4 py-2.5 bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700 text-xs font-bold flex items-center gap-2.5 animate-in fade-in zoom-in">
-                    <span className="material-symbols-outlined text-emerald-400 text-[18px]">check_circle</span>
+                <div className={`fixed top-20 right-6 z-[110] px-4 py-2.5 text-white rounded-xl shadow-2xl border text-xs font-bold flex items-center gap-2.5 animate-in fade-in zoom-in ${
+                    actionToastType === 'error'
+                        ? 'bg-rose-950 border-rose-800'
+                        : actionToastType === 'warning'
+                        ? 'bg-amber-950 border-amber-800'
+                        : 'bg-slate-900 border-slate-700'
+                }`}>
+                    <span className={`material-symbols-outlined text-[18px] ${
+                        actionToastType === 'error' ? 'text-rose-400' : actionToastType === 'warning' ? 'text-amber-400' : 'text-emerald-400'
+                    }`}>
+                        {actionToastType === 'error' ? 'error' : actionToastType === 'warning' ? 'warning' : 'check_circle'}
+                    </span>
                     <span>{actionToast}</span>
                 </div>
             )}
@@ -3218,7 +3413,6 @@ export default function AdminConsole() {
                              activeTab === 'communities' ? 'Community Moderation' :
                              activeTab === 'users' ? 'User Directory' :
                              activeTab === 'role_requests' ? 'Role Elevation Requests' :
-                             activeTab === 'system' ? 'System Parameters' :
                              activeTab === 'audit' ? 'Audit Trail' :
                              activeTab === 'serilog' ? 'Server Logs (Serilog)' :
                              activeTab === 'analytics' ? 'Platform Analytics' : activeTab}
@@ -3571,17 +3765,6 @@ export default function AdminConsole() {
 
                     {activeDomain === 'operations' && (
                         <>
-                            <button
-                                onClick={() => setActiveTab('system')}
-                                className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
-                                    activeTab === 'system'
-                                        ? 'bg-cyan-600 text-white shadow-xs'
-                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                }`}
-                            >
-                                <span className="material-symbols-outlined text-[16px] text-cyan-400">tune</span>
-                                <span>System Parameters</span>
-                            </button>
                             <button
                                 onClick={() => setActiveTab('audit')}
                                 className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
@@ -4256,190 +4439,15 @@ export default function AdminConsole() {
                             <span className="material-symbols-outlined text-[18px]">cancel</span>
                             <span className="text-[10px] font-bold text-rose-500">Declined</span>
                         </div>
-                        <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{roleRequests.filter(r => r.status === 'Rejected').length}</p>
+                        <p className="text-lg font-black text-rose-500 leading-none">{roleRequests.filter(r => r.status === 'Rejected').length}</p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Rejected Requests</p>
                     </div>
                 </div>
             )}
 
-            {/* TAB 7: SYSTEM PARAMETERS QUICK TOGGLES */}
-            {activeTab === 'system' && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-2 mb-3">
-                    {/* 1. Platform Online */}
-                    <div className="p-2.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-                        <div className="flex items-center justify-between text-emerald-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">cloud_done</span>
-                            <span className="text-[10px] font-black text-emerald-600 bg-emerald-500/15 px-1.5 py-0.2 rounded-full">Live</span>
-                        </div>
-                        <p className="text-lg font-black text-slate-900 dark:text-white leading-none">Healthy</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Platform Status</p>
-                    </div>
 
-                    {/* 2. Toggle Maintenance Mode */}
-                    <div 
-                        onClick={() => {
-                            const next = !configState.maintenanceMode;
-                            const updated = { ...configState, maintenanceMode: next };
-                            setConfigState(updated);
-                            saveSystemConfig(updated);
-                            showToast(`Maintenance mode ${next ? 'activated' : 'deactivated'}`);
-                        }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            configState.maintenanceMode
-                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-500/40 shadow-xs'
-                        }`}
-                    >
-                        <div className="flex items-center justify-between text-amber-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">construction</span>
-                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.maintenanceMode ? 'bg-amber-500/20 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
-                                {configState.maintenanceMode ? 'ACTIVE' : 'OFF'}
-                            </span>
-                        </div>
-                        <p className="text-base font-black text-slate-900 dark:text-white leading-none mt-1">Maintenance</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Click to Toggle</p>
-                    </div>
 
-                    {/* 3. Toggle Auto-Moderation */}
-                    <div 
-                        onClick={() => {
-                            const next = !configState.autoModeration;
-                            const updated = { ...configState, autoModeration: next };
-                            setConfigState(updated);
-                            saveSystemConfig(updated);
-                            showToast(`Auto-moderation ${next ? 'activated' : 'deactivated'}`);
-                        }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            configState.autoModeration
-                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
-                        }`}
-                    >
-                        <div className="flex items-center justify-between text-indigo-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">smart_toy</span>
-                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.autoModeration ? 'bg-indigo-500/20 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>
-                                {configState.autoModeration ? 'ACTIVE' : 'OFF'}
-                            </span>
-                        </div>
-                        <p className="text-base font-black text-slate-900 dark:text-white leading-none mt-1">Auto-Moderation</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Click to Toggle</p>
-                    </div>
 
-                    {/* 4. Cycle Upload Limit */}
-                    <div 
-                        onClick={() => {
-                            const cur = configState.maxUploadMb || 100;
-                            const next = cur === 100 ? 200 : (cur === 200 ? 50 : 100);
-                            const updated = { ...configState, maxUploadMb: next };
-                            setConfigState(updated);
-                            saveSystemConfig(updated);
-                            showToast(`Max upload limit set to ${next} MB`);
-                        }}
-                        className="p-2.5 rounded-xl transition-all cursor-pointer group border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs"
-                    >
-                        <div className="flex items-center justify-between text-cyan-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">upload_file</span>
-                            <span className="text-[10px] font-black text-cyan-600 bg-cyan-500/15 px-1.5 py-0.2 rounded-full">Cycle</span>
-                        </div>
-                        <p className="text-lg font-black text-cyan-600 leading-none">{configState.maxUploadMb || 100} MB</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Max Upload Limit</p>
-                    </div>
-
-                    {/* 5. Cycle JWT Session TTL */}
-                    <div 
-                        onClick={() => {
-                            const cur = configState.jwtTtlHours || 24;
-                            const next = cur === 24 ? 48 : (cur === 48 ? 12 : 24);
-                            const updated = { ...configState, jwtTtlHours: next };
-                            setConfigState(updated);
-                            saveSystemConfig(updated);
-                            showToast(`Session TTL set to ${next} Hours`);
-                        }}
-                        className="p-2.5 rounded-xl transition-all cursor-pointer group border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs"
-                    >
-                        <div className="flex items-center justify-between text-slate-400 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">timer</span>
-                            <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded-full">Cycle</span>
-                        </div>
-                        <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{configState.jwtTtlHours || 24}h</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Session Duration</p>
-                    </div>
-
-                    {/* 6. Toggle Direct Messaging */}
-                    <div 
-                        onClick={() => {
-                            const next = configState.enableMessaging === false ? true : false;
-                            const updated = { ...configState, enableMessaging: next };
-                            setConfigState(updated);
-                            saveSystemConfig(updated);
-                            showToast(`Direct messaging ${next ? 'enabled' : 'disabled'}`);
-                        }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            configState.enableMessaging !== false
-                                ? 'bg-blue-500/10 border-blue-500 ring-2 ring-blue-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-500/40 shadow-xs'
-                        }`}
-                        title="Click to toggle Direct Messaging on/off"
-                    >
-                        <div className="flex items-center justify-between text-blue-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">chat</span>
-                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.enableMessaging !== false ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
-                                {configState.enableMessaging !== false ? 'ACTIVE' : 'OFF'}
-                            </span>
-                        </div>
-                        <p className="text-base font-black text-slate-900 dark:text-white leading-none mt-1">Messaging</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Click to Toggle</p>
-                    </div>
-
-                    {/* 7. Toggle Email Service */}
-                    <div 
-                        onClick={() => {
-                            const next = configState.enableEmail === false ? true : false;
-                            const updated = { ...configState, enableEmail: next };
-                            setConfigState(updated);
-                            saveSystemConfig(updated);
-                            showToast(`Email service ${next ? 'enabled' : 'disabled'}`);
-                        }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            configState.enableEmail !== false
-                                ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-500/40 shadow-xs'
-                        }`}
-                        title="Click to toggle Email Service on/off"
-                    >
-                        <div className="flex items-center justify-between text-purple-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">mail</span>
-                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.enableEmail !== false ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
-                                {configState.enableEmail !== false ? 'ACTIVE' : 'OFF'}
-                            </span>
-                        </div>
-                        <p className="text-base font-black text-slate-900 dark:text-white leading-none mt-1">Email Service</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Click to Toggle</p>
-                    </div>
-
-                    {/* 8. Toggle Content & Community Approval */}
-                    <div 
-                        onClick={handleToggleApprovalPolicy}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            configState.requireContentAndCommunityApproval !== false
-                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-500/40 shadow-xs'
-                        }`}
-                        title="Click to toggle Content & Community Approval on/off"
-                    >
-                        <div className="flex items-center justify-between text-rose-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">fact_check</span>
-                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.requireContentAndCommunityApproval !== false ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
-                                {configState.requireContentAndCommunityApproval !== false ? 'REQUIRED' : 'OFF'}
-                            </span>
-                        </div>
-                        <p className="text-base font-black text-slate-900 dark:text-white leading-none mt-1 truncate">Content Approval</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">
-                            {configState.requireContentAndCommunityApproval !== false ? 'Admin Approval Req.' : 'Instant Publish'}
-                        </p>
-                    </div>
-                </div>
-            )}
 
             {/* TAB 8: AUDIT TRAIL ACTION FILTERS */}
             {activeTab === 'audit' && (
@@ -5877,178 +5885,9 @@ export default function AdminConsole() {
                                 </div>
                                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
                                     Clean content goes live; borderline content enters review queue; &gt;95% toxicity is quarantined immediately.
+
                                 </p>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ─── TAB 5: SYSTEM PARAMETERS ─── */}
-            {activeTab === 'system' && (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs p-4">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-base font-black text-slate-900 dark:text-white">System Parameters & Platform Settings</h2>
-                        <button onClick={handleSaveConfig} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs cursor-pointer shadow-sm flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[16px]">save</span>
-                            <span>Save Parameters</span>
-                        </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-semibold">
-                        {/* Content & Community Approval ON/OFF Toggle (Primary Policy Card) */}
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between col-span-1 md:col-span-2">
-                            <div className="flex items-start justify-between gap-4">
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-[20px] text-rose-500">fact_check</span>
-                                        <p className="font-bold text-slate-900 dark:text-white text-sm">Content & Community Approval</p>
-                                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${configState.requireContentAndCommunityApproval !== false ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'}`}>
-                                            {configState.requireContentAndCommunityApproval !== false ? 'Approval Required (ON)' : 'Direct Publish (OFF)'}
-                                        </span>
-                                    </div>
-                                    <p className="text-slate-600 dark:text-slate-300 font-medium text-xs mt-1">
-                                        Require administrator approval before communities, videos and podcasts are published.
-                                    </p>
-                                </div>
-                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                                    <input
-                                        type="checkbox"
-                                        checked={configState.requireContentAndCommunityApproval !== false}
-                                        onChange={handleToggleApprovalPolicy}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
-                                </label>
-                            </div>
-                            <div className="mt-3 pt-3 border-t border-slate-200/70 dark:border-slate-700/70 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                                <div className={`p-2 rounded-lg border ${configState.requireContentAndCommunityApproval !== false ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200/60 dark:border-rose-900/40 text-rose-800 dark:text-rose-300 font-medium' : 'bg-slate-100/40 dark:bg-slate-800/40 border-transparent'}`}>
-                                    <span className="font-bold">When ON:</span> Communities (Public & Private), user videos, and podcasts enter Admin Approval before going live.
-                                </div>
-                                <div className={`p-2 rounded-lg border ${configState.requireContentAndCommunityApproval === false ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-medium' : 'bg-slate-100/40 dark:bg-slate-800/40 border-transparent'}`}>
-                                    <span className="font-bold">When OFF:</span> Communities (Public & Private) are active immediately. User videos and podcasts publish live with zero delay.
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Direct Messaging ON/OFF Toggle */}
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-[18px] text-blue-500">chat</span>
-                                    <p className="font-bold text-slate-900 dark:text-white">Direct Messaging (1-to-1 Chat)</p>
-                                    <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${configState.enableMessaging !== false ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-200 text-slate-500 dark:bg-slate-700'}`}>
-                                        {configState.enableMessaging !== false ? 'Enabled' : 'Disabled'}
-                                    </span>
-                                </div>
-                                <p className="text-slate-400 font-normal text-[11px] mt-0.5">Enable or disable 1-to-1 direct messaging, chat routes, and floating launcher for all users</p>
-                            </div>
-                            <input
-                                type="checkbox"
-                                checked={configState.enableMessaging !== false}
-                                onChange={() => handleToggleIndependentSetting('enableMessaging', 'Direct Messaging')}
-                                className="w-4 h-4 accent-blue-600 cursor-pointer"
-                            />
-                        </div>
-
-                        {/* Email Service ON/OFF Toggle */}
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-[18px] text-purple-500">mail</span>
-                                    <p className="font-bold text-slate-900 dark:text-white">Email Service & Contact Visibility</p>
-                                    <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${configState.enableEmail !== false ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-slate-200 text-slate-500 dark:bg-slate-700'}`}>
-                                        {configState.enableEmail !== false ? 'Enabled' : 'Disabled'}
-                                    </span>
-                                </div>
-                                <p className="text-slate-400 font-normal text-[11px] mt-0.5">Enable or disable employee official email address visibility and contact links platform-wide</p>
-                            </div>
-                            <input
-                                type="checkbox"
-                                checked={configState.enableEmail !== false}
-                                onChange={() => handleToggleIndependentSetting('enableEmail', 'Email Notifications')}
-                                className="w-4 h-4 accent-purple-600 cursor-pointer"
-                            />
-                        </div>
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                            <div>
-                                <p className="font-bold text-slate-900 dark:text-white">Maintenance Mode</p>
-                                <p className="text-slate-400 font-normal text-[11px]">Restrict platform access to System Admins only</p>
-                            </div>
-                            <input
-                                type="checkbox"
-                                checked={configState.maintenanceMode}
-                                onChange={e => setConfigState({ ...configState, maintenanceMode: e.target.checked })}
-                                className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                            />
-                        </div>
-
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                            <div>
-                                <p className="font-bold text-slate-900 dark:text-white">Auto-Moderation Engine</p>
-                                <p className="text-slate-400 font-normal text-[11px]">Automatically flag reported posts matching keywords</p>
-                            </div>
-                            <input
-                                type="checkbox"
-                                checked={configState.autoModeration}
-                                onChange={e => setConfigState({ ...configState, autoModeration: e.target.checked })}
-                                className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                            />
-                        </div>
-
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                            <div>
-                                <p className="font-bold text-slate-900 dark:text-white">Notify Admins on New Report</p>
-                                <p className="text-slate-400 font-normal text-[11px]">Send immediate in-app toast & bell notifications to HR/System admins</p>
-                            </div>
-                            <input
-                                type="checkbox"
-                                checked={configState.notifyAdminsOnReport}
-                                onChange={e => setConfigState({ ...configState, notifyAdminsOnReport: e.target.checked })}
-                                className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                            />
-                        </div>
-
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                            <div>
-                                <p className="font-bold text-slate-900 dark:text-white">Max File Upload Size (MB)</p>
-                                <p className="text-slate-400 font-normal text-[11px]">Maximum attachment size allowed per post</p>
-                            </div>
-                            <input
-                                type="number"
-                                value={configState.maxUploadMb || 100}
-                                onChange={e => setConfigState({ ...configState, maxUploadMb: Number(e.target.value) })}
-                                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 w-20 text-center text-xs text-slate-900 dark:text-white font-bold"
-                            />
-                        </div>
-
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                            <div>
-                                <p className="font-bold text-slate-900 dark:text-white">JWT Session Token TTL (Hours)</p>
-                                <p className="text-slate-400 font-normal text-[11px]">Security session validity before requiring re-auth</p>
-                            </div>
-                            <input
-                                type="number"
-                                value={configState.jwtTtlHours || 24}
-                                onChange={e => setConfigState({ ...configState, jwtTtlHours: Number(e.target.value) })}
-                                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 w-20 text-center text-xs text-slate-900 dark:text-white font-bold"
-                            />
-                        </div>
-
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between col-span-1 md:col-span-2">
-                            <div>
-                                <p className="font-bold text-slate-900 dark:text-white">Global Moderation Sensitivity Policy</p>
-                                <p className="text-slate-400 font-normal text-[11px]">Default safety policy applied across company discussions</p>
-                            </div>
-                            <select
-                                value={configState.moderationSensitivity || 'High (Strict AI)'}
-                                onChange={e => setConfigState({ ...configState, moderationSensitivity: e.target.value })}
-                                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-bold cursor-pointer"
-                            >
-                                <option value="High (Strict AI)">High (Strict AI Quarantine)</option>
-                                <option value="Standard (Flag & Hold)">Standard (Flag & Hold for Review)</option>
-                                <option value="Relaxed (Permissive)">Relaxed (Post First, Flag Later)</option>
-                            </select>
                         </div>
                     </div>
                 </div>
@@ -7130,15 +6969,19 @@ export default function AdminConsole() {
                                     configState.requirePodcastApproval !== false,
                                     configState.enableMessaging !== false,
                                     configState.enableEmail !== false
-                                ].filter(Boolean).length} / 5 Services Active
+                                ].filter(Boolean).length} / 5 Governance Policies
                             </span>
-                            <button
-                                onClick={handleSaveConfig}
-                                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                            >
-                                <span className="material-symbols-outlined text-[16px]">save</span>
-                                <span>Save & Sync All to SQL Server</span>
-                            </button>
+                            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                                {[
+                                    configState.enablePosts !== false,
+                                    configState.enableArticles !== false,
+                                    configState.enableClips !== false,
+                                    configState.enableWiki !== false,
+                                    configState.enableVideos !== false,
+                                    configState.enablePodcasts !== false
+                                ].filter(Boolean).length} / 6 Features Active
+                            </span>
                         </div>
                     </div>
 
@@ -7158,30 +7001,23 @@ export default function AdminConsole() {
                                 Toggle All Content Approvals
                             </button>
                             <button
-                                onClick={async () => {
-                                    const next = true;
-                                    const allOn = {
-                                        ...configState,
+                                onClick={() => {
+                                    setConfigState(prev => ({
+                                        ...prev,
                                         requireContentAndCommunityApproval: true,
                                         requireCommunityApproval: true,
                                         requireVideoApproval: true,
                                         requirePodcastApproval: true,
                                         enableMessaging: true,
                                         enableEmail: true,
-                                    };
-                                    setConfigState(allOn);
-                                    saveSystemConfig(allOn);
-                                    try {
-                                        await settingsApi.setApprovalSetting({
-                                            requireApproval: true,
-                                            requireCommunityApproval: true,
-                                            requireVideoApproval: true,
-                                            requirePodcastApproval: true,
-                                            enableMessaging: true,
-                                            enableEmail: true,
-                                        });
-                                    } catch (e) {}
-                                    showToast("All 5 platform governance services enabled.");
+                                        enablePosts: true,
+                                        enableArticles: true,
+                                        enableClips: true,
+                                        enableWiki: true,
+                                        enableVideos: true,
+                                        enablePodcasts: true,
+                                    }));
+                                    showToast("All governance policies and 6 platform modules staged to ON. Click 'Save & Commit All Changes' to apply.");
                                 }}
                                 className="px-3 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[11px] font-bold cursor-pointer transition-all"
                             >
@@ -7206,13 +7042,20 @@ export default function AdminConsole() {
                                             <h3 className="text-sm font-black text-slate-900 dark:text-white">Community Approval</h3>
                                         </div>
                                     </div>
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                        configState.requireCommunityApproval !== false
-                                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                                    }`}>
-                                        {configState.requireCommunityApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
-                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                        {(committedConfig.requireCommunityApproval !== false) !== (configState.requireCommunityApproval !== false) && (
+                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                PENDING
+                                            </span>
+                                        )}
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                            configState.requireCommunityApproval !== false
+                                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                        }`}>
+                                            {configState.requireCommunityApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                        </span>
+                                    </div>
                                 </div>
 
                                 <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
@@ -7231,8 +7074,7 @@ export default function AdminConsole() {
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                <span className="text-[10px] text-slate-400 font-mono">SystemSettings.RequireCommunityApproval</span>
+                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                                         {configState.requireCommunityApproval !== false ? 'Approval Required' : 'Instant Publish'}
@@ -7263,13 +7105,20 @@ export default function AdminConsole() {
                                             <h3 className="text-sm font-black text-slate-900 dark:text-white">Video Approval</h3>
                                         </div>
                                     </div>
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                        configState.requireVideoApproval !== false
-                                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                                    }`}>
-                                        {configState.requireVideoApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
-                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                        {(committedConfig.requireVideoApproval !== false) !== (configState.requireVideoApproval !== false) && (
+                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                PENDING
+                                            </span>
+                                        )}
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                            configState.requireVideoApproval !== false
+                                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                        }`}>
+                                            {configState.requireVideoApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                        </span>
+                                    </div>
                                 </div>
 
                                 <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
@@ -7288,8 +7137,7 @@ export default function AdminConsole() {
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                <span className="text-[10px] text-slate-400 font-mono">SystemSettings.RequireVideoApproval</span>
+                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                                         {configState.requireVideoApproval !== false ? 'Approval Required' : 'Instant Publish'}
@@ -7320,13 +7168,20 @@ export default function AdminConsole() {
                                             <h3 className="text-sm font-black text-slate-900 dark:text-white">Podcast Approval</h3>
                                         </div>
                                     </div>
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                        configState.requirePodcastApproval !== false
-                                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                                    }`}>
-                                        {configState.requirePodcastApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
-                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                        {(committedConfig.requirePodcastApproval !== false) !== (configState.requirePodcastApproval !== false) && (
+                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                PENDING
+                                            </span>
+                                        )}
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                            configState.requirePodcastApproval !== false
+                                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                        }`}>
+                                            {configState.requirePodcastApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                        </span>
+                                    </div>
                                 </div>
 
                                 <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
@@ -7345,8 +7200,7 @@ export default function AdminConsole() {
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                <span className="text-[10px] text-slate-400 font-mono">SystemSettings.RequirePodcastApproval</span>
+                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                                         {configState.requirePodcastApproval !== false ? 'Approval Required' : 'Instant Publish'}
@@ -7377,13 +7231,20 @@ export default function AdminConsole() {
                                             <h3 className="text-sm font-black text-slate-900 dark:text-white">Direct Messaging (Chat & DMs)</h3>
                                         </div>
                                     </div>
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                        configState.enableMessaging !== false
-                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                    }`}>
-                                        {configState.enableMessaging !== false ? 'ONLINE (ACTIVE)' : 'DISABLED (LOCKED)'}
-                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                        {(committedConfig.enableMessaging !== false) !== (configState.enableMessaging !== false) && (
+                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                PENDING
+                                            </span>
+                                        )}
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                            configState.enableMessaging !== false
+                                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                        }`}>
+                                            {configState.enableMessaging !== false ? 'ONLINE (ACTIVE)' : 'DISABLED (LOCKED)'}
+                                        </span>
+                                    </div>
                                 </div>
 
                                 <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
@@ -7402,8 +7263,7 @@ export default function AdminConsole() {
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                <span className="text-[10px] text-slate-400 font-mono">SystemSettings.EnableMessaging</span>
+                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                                         {configState.enableMessaging !== false ? 'Messaging Enabled' : 'Messaging Disabled'}
@@ -7434,13 +7294,20 @@ export default function AdminConsole() {
                                             <h3 className="text-sm font-black text-slate-900 dark:text-white">Email Notifications & Alerts</h3>
                                         </div>
                                     </div>
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                        configState.enableEmail !== false
-                                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                    }`}>
-                                        {configState.enableEmail !== false ? 'ACTIVE (SENDING)' : 'PAUSED (MUTED)'}
-                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                        {(committedConfig.enableEmail !== false) !== (configState.enableEmail !== false) && (
+                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                PENDING
+                                            </span>
+                                        )}
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                            configState.enableEmail !== false
+                                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                        }`}>
+                                            {configState.enableEmail !== false ? 'ACTIVE (SENDING)' : 'PAUSED (MUTED)'}
+                                        </span>
+                                    </div>
                                 </div>
 
                                 <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
@@ -7459,8 +7326,7 @@ export default function AdminConsole() {
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                <span className="text-[10px] text-slate-400 font-mono">SystemSettings.EnableEmail</span>
+                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                                         {configState.enableEmail !== false ? 'Email Dispatch Active' : 'Email Dispatch Paused'}
@@ -7480,15 +7346,458 @@ export default function AdminConsole() {
 
                     </div>
 
+                    {/* ── SECTION: PLATFORM FEATURE ACCESS CONTROL (MODULE TOGGLES) ── */}
+                    <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                                    <span className="material-symbols-outlined text-[22px]">tune</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                                        Platform Feature Access Control (Module Toggles)
+                                    </h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        Configure individual module availability across Knome. When a feature is toggled OFF, navigation links are hidden, direct routes are blocked, and backend APIs are protected.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => handleSetAllFeatures(true)}
+                                    className="px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 text-[11px] font-bold cursor-pointer transition-all"
+                                >
+                                    Enable All Features
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSetAllFeatures(false)}
+                                    className="px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 text-[11px] font-bold cursor-pointer transition-all"
+                                >
+                                    Disable All Features
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* ── 6 INDEPENDENT FEATURE CARDS GRID ── */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                            {/* 1. POSTS MODULE CARD */}
+                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-blue-400/50 transition-all flex flex-col justify-between">
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                                <span className="material-symbols-outlined text-[22px]">dynamic_feed</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-blue-500 block">Core Social Feed</span>
+                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Posts</h3>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            {(committedConfig.enablePosts !== false) !== (configState.enablePosts !== false) && (
+                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                    PENDING
+                                                </span>
+                                            )}
+                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                                configState.enablePosts !== false
+                                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                            }`}>
+                                                {configState.enablePosts !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                        Social posts feed, user timelines, discussions, composer attachments, and employee reactions.
+                                    </p>
+
+                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                        <div className={`p-2.5 rounded-xl border ${configState.enablePosts !== false ? 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-900 dark:text-blue-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-blue-600 dark:text-blue-400">When ON:</div>
+                                            <span>Full feed, composer, reactions, and post APIs enabled.</span>
+                                        </div>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enablePosts === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                            <span>Posts hidden in UI, composer locked, APIs return 403.</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                            {configState.enablePosts !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                        </span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={configState.enablePosts !== false}
+                                                onChange={() => handleToggleIndependentSetting('enablePosts', 'Posts')}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 2. ARTICLES MODULE CARD */}
+                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-sky-400/50 transition-all flex flex-col justify-between">
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                                                <span className="material-symbols-outlined text-[22px]">article</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-sky-500 block">Editorial & Knowledge</span>
+                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Articles</h3>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            {(committedConfig.enableArticles !== false) !== (configState.enableArticles !== false) && (
+                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                    PENDING
+                                                </span>
+                                            )}
+                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                                configState.enableArticles !== false
+                                                    ? 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
+                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                            }`}>
+                                                {configState.enableArticles !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                        Long-form articles, editorial publication, reader views, rich-text editor, and article exploration.
+                                    </p>
+
+                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableArticles !== false ? 'bg-sky-50/70 dark:bg-sky-950/20 border-sky-200 dark:border-sky-900/50 text-sky-900 dark:text-sky-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-sky-600 dark:text-sky-400">When ON:</div>
+                                            <span>Articles portal, reading view, editor, and search active.</span>
+                                        </div>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableArticles === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                            <span>Articles hidden in nav, route guarded, APIs return 403.</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                            {configState.enableArticles !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                        </span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={configState.enableArticles !== false}
+                                                onChange={() => handleToggleIndependentSetting('enableArticles', 'Articles')}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 3. CLIPS MODULE CARD */}
+                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-rose-400/50 transition-all flex flex-col justify-between">
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                                                <span className="material-symbols-outlined text-[22px]">movie</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-rose-500 block">Short-Form Video</span>
+                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Clips</h3>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            {(committedConfig.enableClips !== false) !== (configState.enableClips !== false) && (
+                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                    PENDING
+                                                </span>
+                                            )}
+                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                                configState.enableClips !== false
+                                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                            }`}>
+                                                {configState.enableClips !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                        Vertical video reels, swipeable clips feed, mobile media playback, and short video creation.
+                                    </p>
+
+                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableClips !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                            <span>Clips feed, reels player, creator uploads, and APIs live.</span>
+                                        </div>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableClips === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                            <span>Clips hidden in nav, route guarded, APIs return 403.</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                            {configState.enableClips !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                        </span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={configState.enableClips !== false}
+                                                onChange={() => handleToggleIndependentSetting('enableClips', 'Clips')}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 4. WIKI MODULE CARD */}
+                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-indigo-400/50 transition-all flex flex-col justify-between">
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                                                <span className="material-symbols-outlined text-[22px]">menu_book</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500 block">Documentation & Knowledge</span>
+                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Wiki</h3>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            {(committedConfig.enableWiki !== false) !== (configState.enableWiki !== false) && (
+                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                    PENDING
+                                                </span>
+                                            )}
+                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                                configState.enableWiki !== false
+                                                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                            }`}>
+                                                {configState.enableWiki !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                        Enterprise wiki documentation, multi-level hierarchy sections, markdown guides, and unique view tracking.
+                                    </p>
+
+                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableWiki !== false ? 'bg-indigo-50/70 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/50 text-indigo-900 dark:text-indigo-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-indigo-600 dark:text-indigo-400">When ON:</div>
+                                            <span>Wiki catalog, hierarchical editor, reader, and APIs live.</span>
+                                        </div>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableWiki === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                            <span>Wiki hidden in nav, route guarded, APIs return 403.</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                            {configState.enableWiki !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                        </span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={configState.enableWiki !== false}
+                                                onChange={() => handleToggleIndependentSetting('enableWiki', 'Wiki')}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 5. VIDEOS MODULE CARD */}
+                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-red-400/50 transition-all flex flex-col justify-between">
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                                                <span className="material-symbols-outlined text-[22px]">videocam</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-red-500 block">Multimedia Streaming</span>
+                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Videos</h3>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            {(committedConfig.enableVideos !== false) !== (configState.enableVideos !== false) && (
+                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                    PENDING
+                                                </span>
+                                            )}
+                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                                configState.enableVideos !== false
+                                                    ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                            }`}>
+                                                {configState.enableVideos !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                        Enterprise video portal, on-demand streaming, channel uploads, and multimedia player.
+                                    </p>
+
+                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableVideos !== false ? 'bg-red-50/70 dark:bg-red-950/20 border-red-200 dark:border-red-900/50 text-red-900 dark:text-red-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-red-600 dark:text-red-400">When ON:</div>
+                                            <span>Video hub, streaming playback, uploads, and APIs live.</span>
+                                        </div>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableVideos === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                            <span>Videos hidden in nav, route guarded, APIs return 403.</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                            {configState.enableVideos !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                        </span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={configState.enableVideos !== false}
+                                                onChange={() => handleToggleIndependentSetting('enableVideos', 'Videos')}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 6. PODCASTS MODULE CARD */}
+                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-fuchsia-400/50 transition-all flex flex-col justify-between">
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-10 h-10 rounded-xl bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 flex items-center justify-center shrink-0">
+                                                <span className="material-symbols-outlined text-[22px]">podcasts</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-fuchsia-500 block">Audio Broadcasting</span>
+                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Podcasts</h3>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            {(committedConfig.enablePodcasts !== false) !== (configState.enablePodcasts !== false) && (
+                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                    PENDING
+                                                </span>
+                                            )}
+                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                                configState.enablePodcasts !== false
+                                                    ? 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300'
+                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                            }`}>
+                                                {configState.enablePodcasts !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                        Audio podcast studio, corporate series, audio episode streams, and background audio player.
+                                    </p>
+
+                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                        <div className={`p-2.5 rounded-xl border ${configState.enablePodcasts !== false ? 'bg-fuchsia-50/70 dark:bg-fuchsia-950/20 border-fuchsia-200 dark:border-fuchsia-900/50 text-fuchsia-900 dark:text-fuchsia-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-fuchsia-600 dark:text-fuchsia-400">When ON:</div>
+                                            <span>Podcast series, episodes, audio player, and APIs live.</span>
+                                        </div>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enablePodcasts === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                            <span>Podcasts hidden in nav, route guarded, APIs return 403.</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                            {configState.enablePodcasts !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                        </span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={configState.enablePodcasts !== false}
+                                                onChange={() => handleToggleIndependentSetting('enablePodcasts', 'Podcasts')}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-fuchsia-600"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
                     {/* Bottom Status & Persistence Bar */}
                     <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
-                        <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-                            <span className="material-symbols-outlined text-[18px] text-indigo-500">database</span>
-                            <span>Direct SQL Server Database Synchronization (<code className="font-mono text-slate-800 dark:text-slate-200 font-bold">Knome.dbo.SystemSettings</code>)</span>
+                        <div className="flex items-center gap-2 text-xs">
+                            {getPendingGovernanceChanges().length > 0 ? (
+                                <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                    <span>
+                                        {getPendingGovernanceChanges().length} pending change{getPendingGovernanceChanges().length > 1 ? 's' : ''} ready to review & commit
+                                    </span>
+                                </span>
+                            ) : (
+                                <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span>All platform governance settings are synchronized</span>
+                                </span>
+                            )}
                         </div>
                         <div className="flex items-center gap-2">
+                            {getPendingGovernanceChanges().length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setConfigState({ ...committedConfig });
+                                        showToast('All pending changes have been discarded.');
+                                    }}
+                                    className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
+                                >
+                                    Discard Draft
+                                </button>
+                            )}
                             <button
-                                onClick={handleSaveConfig}
+                                type="button"
+                                onClick={handleSaveConfigClick}
                                 className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                             >
                                 <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
@@ -9237,6 +9546,140 @@ export default function AdminConsole() {
                                         : '👤 Standard Employee: Access to feed posting, media channels, communities collaboration, and karma rewards.'}
                                 </p>
                             </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* ─── CONFIRMATION MODAL: SAVE & COMMIT GOVERNANCE CHANGES ─── */}
+            {isConfirmSaveModalOpen && createPortal(
+                <div 
+                    className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in"
+                    onClick={() => !isSavingConfig && setIsConfirmSaveModalOpen(false)}
+                >
+                    <div 
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-scale-up"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-4 bg-gradient-to-r from-slate-50 to-indigo-50/40 dark:from-slate-900 dark:to-indigo-950/20">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 shrink-0">
+                                    <span className="material-symbols-outlined text-[24px]">cloud_sync</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                                        Confirm Governance Changes
+                                    </h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Review summary of pending modifications before saving to the database.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => !isSavingConfig && setIsConfirmSaveModalOpen(false)}
+                                disabled={isSavingConfig}
+                                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer disabled:opacity-50"
+                                title="Close"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">close</span>
+                            </button>
+                        </div>
+
+                        {/* Modal Body / Summary List */}
+                        <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
+                            <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
+                                <span>Settings to be Updated ({pendingChanges.length})</span>
+                                <span className="text-[11px] font-medium text-slate-400">Previous → New</span>
+                            </div>
+
+                            <div className="space-y-2.5">
+                                {pendingChanges.map((change) => (
+                                    <div 
+                                        key={change.key}
+                                        className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 hover:border-indigo-300 dark:hover:border-indigo-800/60 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${change.color}`}>
+                                                <span className="material-symbols-outlined text-[20px]">{change.icon}</span>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+                                                    {change.name}
+                                                </h4>
+                                                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                                    {change.description}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                            {/* Previous Value Badge */}
+                                            <div className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 ${
+                                                change.prev === 'ON'
+                                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50'
+                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                                            }`}>
+                                                <span className="text-[10px] text-slate-400 uppercase font-semibold">Prev:</span>
+                                                <span className={`w-1.5 h-1.5 rounded-full ${change.prev === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                                                <span className="font-black">{change.prev}</span>
+                                            </div>
+
+                                            <span className="material-symbols-outlined text-slate-400 text-sm">arrow_forward</span>
+
+                                            {/* New Value Badge */}
+                                            <div className={`px-3 py-1 rounded-xl text-[11px] font-black border flex items-center gap-1.5 shadow-xs ${
+                                                change.new === 'ON'
+                                                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-emerald-500/20'
+                                                    : 'bg-rose-600 text-white border-rose-700 shadow-rose-500/20'
+                                            }`}>
+                                                <span className="text-[10px] text-white/80 uppercase font-semibold">New:</span>
+                                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                                                <span>{change.new}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-200">
+                                <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-[18px] shrink-0 mt-0.5">info</span>
+                                <span>
+                                    Confirming will apply these policies immediately across the platform and record a permanent audit entry.
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => !isSavingConfig && setIsConfirmSaveModalOpen(false)}
+                                disabled={isSavingConfig}
+                                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmAndSave}
+                                disabled={isSavingConfig}
+                                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer disabled:opacity-50"
+                            >
+                                {isSavingConfig ? (
+                                    <>
+                                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                        <span>Saving & Applying...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="material-symbols-outlined text-[18px]">done_all</span>
+                                        <span>Confirm & Save</span>
+                                    </>
+                                )}
+                            </button>
                         </div>
                     </div>
                 </div>,

@@ -105,6 +105,28 @@ export default function Wiki() {
         loadPopularTags();
     }, []);
 
+    // Listen for real-time SignalR view count updates
+    useEffect(() => {
+        const handleViewUpdated = (e) => {
+            const detail = e.detail;
+            if (!detail) return;
+            const normType = (detail.contentType || '').toLowerCase();
+            if (normType && normType !== 'wiki') return;
+            const targetId = String(detail.contentId || detail.wikiId || detail.id);
+            if (!targetId) return;
+
+            setWikis(prev => prev.map(w => {
+                if (String(w.wikiId) === targetId && detail.viewCount !== undefined) {
+                    return { ...w, viewCount: Number(detail.viewCount) };
+                }
+                return w;
+            }));
+        };
+
+        window.addEventListener('knome:view-updated', handleViewUpdated);
+        return () => window.removeEventListener('knome:view-updated', handleViewUpdated);
+    }, []);
+
     const handleDeleteWiki = async (wiki, e) => {
         e.stopPropagation();
         const ok = await confirm({
@@ -411,8 +433,8 @@ export default function Wiki() {
                                                 <span className="material-symbols-outlined text-[14px] text-indigo-500">group</span>
                                                 {wiki.collaboratorsCount || 0}
                                             </span>
-                                            <span className="flex items-center gap-1" title="Views">
-                                                <span className="material-symbols-outlined text-[14px] text-slate-400">visibility</span>
+                                            <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300" title="Total Unique Views">
+                                                <span className="material-symbols-outlined text-[14px] text-indigo-500">visibility</span>
                                                 {wiki.viewCount || 0}
                                             </span>
                                         </div>

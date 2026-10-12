@@ -17,13 +17,15 @@ public class FeedService : IFeedService
     private readonly IContentInteractionService _interactionService;
     private readonly IKarmaService _karmaService;
     private readonly KnomeDbContext _db;
+    private readonly ISystemSettingService _settingService;
 
-    public FeedService(IFeedRepository repo, IContentInteractionService interactionService, IKarmaService karmaService, KnomeDbContext db)
+    public FeedService(IFeedRepository repo, IContentInteractionService interactionService, IKarmaService karmaService, KnomeDbContext db, ISystemSettingService settingService)
     {
         _repo = repo;
         _interactionService = interactionService;
         _karmaService = karmaService;
         _db = db;
+        _settingService = settingService;
     }
 
     public async Task<List<FeedItemDto>> GetPersonalizedFeedAsync(int currentUserId, string? contentTypeFilter, int pageNumber, int pageSize)
@@ -31,12 +33,17 @@ public class FeedService : IFeedService
         if (pageNumber < 1) pageNumber = 1;
         if (pageSize < 1 || pageSize > 50) pageSize = 20;
 
+        var enablePosts = await _settingService.GetEnablePostsAsync();
+        var enableArticles = await _settingService.GetEnableArticlesAsync();
+        var enableVideos = await _settingService.GetEnableVideosAsync();
+        var enablePodcasts = await _settingService.GetEnablePodcastsAsync();
+
         var followedUserIds = await _repo.GetFollowedUserIdsAsync(currentUserId);
         var myCommunityIds = await _repo.GetMyCommunityIdsAsync(currentUserId);
 
         var candidateItems = new List<FeedItemDto>();
 
-        if (string.IsNullOrEmpty(contentTypeFilter) || contentTypeFilter.Equals(ContentTypes.Post, StringComparison.OrdinalIgnoreCase))
+        if (enablePosts && (string.IsNullOrEmpty(contentTypeFilter) || contentTypeFilter.Equals(ContentTypes.Post, StringComparison.OrdinalIgnoreCase)))
         {
             var posts = await _repo.GetCandidatePostsAsync(followedUserIds, myCommunityIds, currentUserId, 50);
             var candidatePostIds = posts.Select(p => p.PostId).ToList();
@@ -86,7 +93,7 @@ public class FeedService : IFeedService
             }
         }
 
-        if (string.IsNullOrEmpty(contentTypeFilter) || contentTypeFilter.Equals(ContentTypes.Article, StringComparison.OrdinalIgnoreCase))
+        if (enableArticles && (string.IsNullOrEmpty(contentTypeFilter) || contentTypeFilter.Equals(ContentTypes.Article, StringComparison.OrdinalIgnoreCase)))
         {
             var articles = await _repo.GetCandidateArticlesAsync(followedUserIds, currentUserId, 50);
             foreach (var a in articles)
@@ -119,7 +126,7 @@ public class FeedService : IFeedService
             }
         }
 
-        if (string.IsNullOrEmpty(contentTypeFilter) || contentTypeFilter.Equals(ContentTypes.Video, StringComparison.OrdinalIgnoreCase))
+        if (enableVideos && (string.IsNullOrEmpty(contentTypeFilter) || contentTypeFilter.Equals(ContentTypes.Video, StringComparison.OrdinalIgnoreCase)))
         {
             var videos = await _repo.GetCandidateVideosAsync(followedUserIds, currentUserId, 30);
             foreach (var v in videos)
@@ -142,7 +149,7 @@ public class FeedService : IFeedService
             }
         }
 
-        if (string.IsNullOrEmpty(contentTypeFilter) || contentTypeFilter.Equals(ContentTypes.Podcast, StringComparison.OrdinalIgnoreCase))
+        if (enablePodcasts && (string.IsNullOrEmpty(contentTypeFilter) || contentTypeFilter.Equals(ContentTypes.Podcast, StringComparison.OrdinalIgnoreCase)))
         {
             var podcasts = await _repo.GetCandidatePodcastsAsync(followedUserIds, currentUserId, 30);
             foreach (var p in podcasts)
@@ -204,6 +211,11 @@ public class FeedService : IFeedService
 
     public async Task<List<FeedItemDto>> GetHotFeedAsync(int currentUserId, string window, int top = 10)
     {
+        if (!await _settingService.GetEnablePostsAsync())
+        {
+            return new List<FeedItemDto>();
+        }
+
         if (!FeedWindows.IsValid(window)) window = FeedWindows.Daily;
         if (top <= 0 || top > 50) top = 10;
 

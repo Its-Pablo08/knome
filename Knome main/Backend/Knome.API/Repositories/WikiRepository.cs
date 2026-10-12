@@ -285,9 +285,75 @@ public class WikiRepository : IWikiRepository
 
     public async Task IncrementViewCountAsync(long wikiId)
     {
-        await _db.Wikis
-            .Where(w => w.WikiId == wikiId)
-            .ExecuteUpdateAsync(s => s.SetProperty(w => w.ViewCount, w => w.ViewCount + 1));
+        await RecordUniqueWikiViewAsync(wikiId, 0);
+    }
+
+    public async Task<int> RecordUniqueWikiViewAsync(long wikiId, int userId)
+    {
+        var wiki = await _db.Wikis.FindAsync(wikiId);
+        if (wiki == null) return 0;
+
+        // Ensure creator is recorded in ContentViews if not already present
+        if (wiki.CreatedByUserId > 0)
+        {
+            var creatorRecorded = await _db.ContentViews
+                .AnyAsync(cv => cv.ContentType == ContentTypes.Wiki && cv.ContentId == wikiId && cv.UserId == wiki.CreatedByUserId);
+
+            if (!creatorRecorded)
+            {
+                try
+                {
+                    _db.ContentViews.Add(new ContentView
+                    {
+                        ContentType = ContentTypes.Wiki,
+                        ContentId = wikiId,
+                        UserId = wiki.CreatedByUserId,
+                        ViewedDate = wiki.CreatedDate
+                    });
+                    await _db.SaveChangesAsync();
+                }
+                catch (DbUpdateException) { }
+            }
+        }
+
+        // Record the viewing user's unique view
+        if (userId > 0)
+        {
+            var alreadyViewed = await _db.ContentViews
+                .AnyAsync(cv => cv.ContentType == ContentTypes.Wiki && cv.ContentId == wikiId && cv.UserId == userId);
+
+            if (!alreadyViewed)
+            {
+                try
+                {
+                    _db.ContentViews.Add(new ContentView
+                    {
+                        ContentType = ContentTypes.Wiki,
+                        ContentId = wikiId,
+                        UserId = userId,
+                        ViewedDate = KnomeTime.Now
+                    });
+                    await _db.SaveChangesAsync();
+                }
+                catch (DbUpdateException)
+                {
+                    // UK_ContentViews_User_Content unique constraint hit concurrently
+                }
+            }
+        }
+
+        // Authoritative unique count of distinct users who have viewed this wiki
+        var uniqueCount = await _db.ContentViews
+            .CountAsync(cv => cv.ContentType == ContentTypes.Wiki && cv.ContentId == wikiId);
+
+        // Update Wiki.ViewCount to store the authoritative unique count
+        if (wiki.ViewCount != uniqueCount)
+        {
+            wiki.ViewCount = uniqueCount;
+            await _db.SaveChangesAsync();
+        }
+
+        return wiki.ViewCount;
     }
 
     public async Task<List<string>> GetPopularTagsAsync(int count = 20)

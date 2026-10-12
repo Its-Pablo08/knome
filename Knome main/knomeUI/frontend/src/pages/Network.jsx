@@ -891,6 +891,7 @@ function NetworkAvatar({ avatar, name, size = 'w-20 h-20', textSize = 'text-xl' 
 
 function PersonCard({ person, searchQuery = '', onConnect, onCancel, onAccept, onReject, onRemove }) {
     const navigate = useNavigate();
+    const { isMessagingEnabled } = useSystemConfig();
     const [showMenu, setShowMenu] = useState(false);
     const status = person.connectionStatus || 'NotConnected';
 

@@ -75,7 +75,7 @@ const PRESET_BANNERS = [
 ];
 
 export default function Profile() {
-    const { isMessagingEnabled, isEmailEnabled } = useSystemConfig();
+    const { isMessagingEnabled, isEmailEnabled, isPostsEnabled, isClipsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled } = useSystemConfig();
     const { currentUser, refreshCurrentUser } = useUser();
     const { addToast } = useToast();
     const confirm = useConfirm();
@@ -818,9 +818,25 @@ export default function Profile() {
 
     const tabs = isSysAdmin 
         ? ['About', 'Communities', 'Network'] 
-        : ['About', 'Posts', 'Clips', 'Articles', 'Videos', 'Audio', 'Communities', 'Network', 'Karma'];
+        : [
+            'About',
+            ...(isPostsEnabled ? ['Posts'] : []),
+            ...(isClipsEnabled ? ['Clips'] : []),
+            ...(isArticlesEnabled ? ['Articles'] : []),
+            ...(isVideosEnabled ? ['Videos'] : []),
+            ...(isPodcastsEnabled ? ['Audio'] : []),
+            'Communities',
+            'Network',
+            'Karma'
+          ];
 
     const avatarSource = resolveImageUrl(displayUser?.avatar || displayUser?.profilePhotoUrl, displayUser?.name || displayUser?.fullName);
+
+    useEffect(() => {
+        if (!tabs.includes(activeTab)) {
+            setActiveTab('About');
+        }
+    }, [tabs, activeTab]);
 
     return (
         <main className="flex-1 min-w-0">

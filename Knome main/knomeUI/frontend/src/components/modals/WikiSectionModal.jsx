@@ -27,13 +27,21 @@ export default function WikiSectionModal({
     const editorImageInputRef = useRef(null);
     const isEditMode = Boolean(initialData && initialData.sectionId);
 
+    const prevOpenRef = useRef(false);
+
     useEffect(() => {
-        if (isOpen) {
+        const justOpened = isOpen && !prevOpenRef.current;
+        prevOpenRef.current = isOpen;
+
+        if (justOpened) {
             if (initialData) {
                 setTitle(initialData.title || '');
                 setParentSectionId(initialData.parentSectionId ? String(initialData.parentSectionId) : '');
                 setSortOrder(initialData.sortOrder || 0);
                 setChangeSummary('');
+                if (editorRef.current) {
+                    editorRef.current.innerHTML = initialData.contentHtml || '';
+                }
                 setTimeout(() => {
                     if (editorRef.current) {
                         editorRef.current.innerHTML = initialData.contentHtml || '';
@@ -48,9 +56,12 @@ export default function WikiSectionModal({
                         const d = JSON.parse(savedDraftStr);
                         if (d && (d.title || d.contentHtml)) {
                             setTitle(d.title || '');
-                            setParentSectionId(d.parentSectionId !== undefined ? String(d.parentSectionId) : (defaultParentId ? String(defaultParentId) : ''));
+                            setParentSectionId(defaultParentId ? String(defaultParentId) : (d.parentSectionId !== undefined && d.parentSectionId !== null && d.parentSectionId !== '' ? String(d.parentSectionId) : ''));
                             setSortOrder(d.sortOrder || (availableSections.length * 10));
                             setChangeSummary('');
+                            if (editorRef.current) {
+                                editorRef.current.innerHTML = d.contentHtml || '';
+                            }
                             setTimeout(() => {
                                 if (editorRef.current) {
                                     editorRef.current.innerHTML = d.contentHtml || '';
@@ -66,6 +77,9 @@ export default function WikiSectionModal({
                     setParentSectionId(defaultParentId ? String(defaultParentId) : '');
                     setSortOrder(availableSections.length * 10);
                     setChangeSummary('');
+                    if (editorRef.current) {
+                        editorRef.current.innerHTML = '';
+                    }
                     setTimeout(() => {
                         if (editorRef.current) {
                             editorRef.current.innerHTML = '';
@@ -300,7 +314,8 @@ export default function WikiSectionModal({
             return;
         }
 
-        if (!contentHtml || contentHtml === '<br>' || contentHtml === '<p><br></p>') {
+        const textContent = (editorRef.current?.innerText || editorRef.current?.textContent || '').trim();
+        if (!textContent && (!contentHtml || contentHtml === '<br>' || contentHtml === '<p><br></p>' || contentHtml === '<div><br></div>') && !contentHtml.includes('<img')) {
             addToast('Section content is required.', 'error');
             return;
         }
@@ -311,32 +326,41 @@ export default function WikiSectionModal({
             return;
         }
 
+        const effectiveWikiId = wikiId || initialData?.wikiId;
+        if (!effectiveWikiId) {
+            addToast('Wiki identifier not found. Cannot save section.', 'error');
+            return;
+        }
+
         setIsSaving(true);
         try {
-            const parsedParentId = parentSectionId ? parseInt(parentSectionId, 10) : null;
+            const parsedParentId = (parentSectionId && parseInt(parentSectionId, 10) > 0) ? parseInt(parentSectionId, 10) : null;
             const payload = {
                 title: trimmedTitle,
                 parentSectionId: parsedParentId,
                 sortOrder: parseInt(sortOrder, 10) || 0,
-                contentHtml,
+                contentHtml: contentHtml || '<p></p>',
                 changeSummary: changeSummary.trim() || (isEditMode ? 'Updated section content' : 'Created section')
             };
 
             if (isEditMode) {
                 payload.expectedUpdatedDate = initialData.updatedDate;
-                const updated = await wikiApi.updateSection(wikiId, initialData.sectionId, payload);
+                const updated = await wikiApi.updateSection(effectiveWikiId, initialData.sectionId, payload);
                 addToast('Section updated successfully!', 'success');
-                onSaved && onSaved(updated);
+                if (onSaved) await onSaved(updated);
             } else {
-                const created = await wikiApi.createSection(wikiId, payload);
-                localStorage.removeItem(`wiki_section_draft_${wikiId}`);
+                const created = await wikiApi.createSection(effectiveWikiId, payload);
+                try {
+                    localStorage.removeItem(`wiki_section_draft_${effectiveWikiId}`);
+                } catch {}
                 addToast('Section created successfully!', 'success');
-                onSaved && onSaved(created);
+                if (onSaved) await onSaved(created);
             }
             onClose();
         } catch (err) {
             console.error('Error saving section:', err);
-            addToast(err?.response?.data?.message || err?.message || 'Failed to save section.', 'error');
+            const errMsg = err?.data?.message || err?.response?.data?.message || err?.message || 'Failed to save section.';
+            addToast(errMsg, 'error');
         } finally {
             setIsSaving(false);
         }
@@ -380,14 +404,19 @@ export default function WikiSectionModal({
                     <select
                         value={parentSectionId}
                         onChange={(e) => setParentSectionId(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer font-medium"
                     >
-                        <option value="">📁 Top-Level Root Section</option>
-                        {selectableParents.map(s => (
-                            <option key={s.sectionId} value={s.sectionId}>
-                                ↳ Subsection under: {s.title}
-                            </option>
-                        ))}
+                        <option value="">📁 Top-Level Root Section (1, 2, 3...)</option>
+                        {selectableParents.map(s => {
+                            const indent = '\u00A0\u00A0'.repeat(s.depth || 0);
+                            const prefixStr = s.numberPrefix ? `${s.numberPrefix} ` : '';
+                            const willBeStr = s.numberPrefix ? `(will be numbered ${s.numberPrefix}.x)` : '(will be subsection)';
+                            return (
+                                <option key={s.sectionId} value={s.sectionId}>
+                                    {indent}↳ Under: {prefixStr}{s.title} {willBeStr}
+                                </option>
+                            );
+                        })}
                     </select>
                 </div>
 

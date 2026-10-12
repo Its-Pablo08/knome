@@ -15,6 +15,14 @@ public class ApprovalSettingDto
     public bool EnableMessaging { get; set; } = true;
     public bool EnableEmail { get; set; } = true;
 
+    // Feature Module Toggles
+    public bool EnablePosts { get; set; } = true;
+    public bool EnableArticles { get; set; } = true;
+    public bool EnableClips { get; set; } = true;
+    public bool EnableWiki { get; set; } = true;
+    public bool EnableVideos { get; set; } = true;
+    public bool EnablePodcasts { get; set; } = true;
+
     public DateTime? UpdatedDate { get; set; }
     public int? UpdatedByUserId { get; set; }
 }
@@ -27,4 +35,12 @@ public class UpdateApprovalSettingDto
     public bool? RequirePodcastApproval { get; set; }
     public bool? EnableMessaging { get; set; }
     public bool? EnableEmail { get; set; }
+
+    // Feature Module Toggles
+    public bool? EnablePosts { get; set; }
+    public bool? EnableArticles { get; set; }
+    public bool? EnableClips { get; set; }
+    public bool? EnableWiki { get; set; }
+    public bool? EnableVideos { get; set; }
+    public bool? EnablePodcasts { get; set; }
 }

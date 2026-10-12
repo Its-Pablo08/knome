@@ -9,7 +9,6 @@ import CreateClipModal from '../components/modals/CreateClipModal';
 import ClipCommentsDrawer from '../components/modals/ClipCommentsDrawer';
 import ClipShareModal from '../components/modals/ClipShareModal';
 import ReportClipModal from '../components/modals/ReportClipModal';
-import EditClipModal from '../components/modals/EditClipModal';
 
 // Seed demo clips matching database clip IDs (1, 2, 3)
 const FALLBACK_CLIPS = [
@@ -141,7 +140,6 @@ export default function Clips() {
     const [isCommentsOpen, setIsCommentsOpen] = useState(false);
     const [isShareOpen, setIsShareOpen] = useState(false);
     const [isReportOpen, setIsReportOpen] = useState(false);
-    const [isEditOpen, setIsEditOpen] = useState(false);
     const [selectedClipForModal, setSelectedClipForModal] = useState(null);
 
     // Refs for synchronization and zero-jitter scrolling
@@ -485,7 +483,7 @@ export default function Clips() {
         let wheelTimer = null;
 
         const handleWheel = (e) => {
-            if (isCreateOpen || isCommentsOpen || isShareOpen || isReportOpen || isEditOpen) return;
+            if (isCreateOpen || isCommentsOpen || isShareOpen || isReportOpen) return;
             if (e.target.closest('input') || e.target.closest('textarea')) return;
 
             e.preventDefault();
@@ -514,12 +512,12 @@ export default function Clips() {
             container.removeEventListener('wheel', handleWheel);
             clearTimeout(wheelTimer);
         };
-    }, [isCreateOpen, isCommentsOpen, isShareOpen, isReportOpen, isEditOpen, scrollToClip]);
+    }, [isCreateOpen, isCommentsOpen, isShareOpen, isReportOpen, scrollToClip]);
 
     // Keyboard navigation (ArrowDown, ArrowUp, PageDown, PageUp, j, k, Space, m)
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (isCreateOpen || isCommentsOpen || isShareOpen || isReportOpen || isEditOpen) return;
+            if (isCreateOpen || isCommentsOpen || isShareOpen || isReportOpen) return;
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
             if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === 'j') {
@@ -539,7 +537,7 @@ export default function Clips() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isCreateOpen, isCommentsOpen, isShareOpen, isReportOpen, isEditOpen, scrollToClip]);
+    }, [isCreateOpen, isCommentsOpen, isShareOpen, isReportOpen, scrollToClip]);
 
     // Track active video & manage play / pause cleanly
     useEffect(() => {
@@ -888,7 +886,7 @@ export default function Clips() {
         }
     };
     const handleTouchEnd = (e) => {
-        if (isCreateOpen || isCommentsOpen || isShareOpen || isReportOpen || isEditOpen) return;
+        if (isCreateOpen || isCommentsOpen || isShareOpen || isReportOpen) return;
         if (e.changedTouches && e.changedTouches[0]) {
             const diff = touchStartYRef.current - e.changedTouches[0].clientY;
             if (Math.abs(diff) > 45) {
@@ -1295,31 +1293,17 @@ export default function Clips() {
 
                                                 <div className="flex items-center gap-1.5 pointer-events-auto">
                                                     {(clip.isMyClip || String(clip.createdByUserId) === String(currentUser?.userId || currentUser?.id)) && (
-                                                        <>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedClipForModal(clip);
-                                                                    setIsEditOpen(true);
-                                                                }}
-                                                                className="p-2 rounded-xl bg-black/40 backdrop-blur-md text-white/80 hover:text-white hover:bg-black/60 transition cursor-pointer"
-                                                                title="Edit Clip"
-                                                            >
-                                                                <span className="material-symbols-outlined text-sm">edit</span>
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDeleteClip(clip);
-                                                                }}
-                                                                className="p-2 rounded-xl bg-rose-500/30 backdrop-blur-md text-rose-300 hover:text-rose-100 hover:bg-rose-500/50 transition cursor-pointer"
-                                                                title="Delete Clip"
-                                                            >
-                                                                <span className="material-symbols-outlined text-sm">delete</span>
-                                                            </button>
-                                                        </>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteClip(clip);
+                                                            }}
+                                                            className="p-2 rounded-xl bg-rose-500/30 backdrop-blur-md text-rose-300 hover:text-rose-100 hover:bg-rose-500/50 transition cursor-pointer"
+                                                            title="Delete Clip"
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">delete</span>
+                                                        </button>
                                                     )}
                                                             <button
                                                                 type="button"
@@ -1677,15 +1661,6 @@ export default function Clips() {
                 isOpen={isReportOpen}
                 onClose={() => setIsReportOpen(false)}
                 clip={selectedClipForModal}
-            />
-
-            <EditClipModal
-                isOpen={isEditOpen}
-                onClose={() => setIsEditOpen(false)}
-                clip={selectedClipForModal}
-                onClipUpdated={(updated) => {
-                    setClips(prev => prev.map(c => c.clipId === updated.clipId ? { ...c, ...updated } : c));
-                }}
             />
 
         </div>

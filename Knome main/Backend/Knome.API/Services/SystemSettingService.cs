@@ -22,6 +22,12 @@ public class SystemSettingService : ISystemSettingService
     public const string RequirePodcastApprovalKey = "RequirePodcastApproval";
     public const string EnableMessagingKey = "EnableMessaging";
     public const string EnableEmailKey = "EnableEmail";
+    public const string EnablePostsKey = "EnablePosts";
+    public const string EnableArticlesKey = "EnableArticles";
+    public const string EnableClipsKey = "EnableClips";
+    public const string EnableWikiKey = "EnableWiki";
+    public const string EnableVideosKey = "EnableVideos";
+    public const string EnablePodcastsKey = "EnablePodcasts";
 
     public const string DefaultApprovalDescription = "Require administrator approval before communities, videos and podcasts are published.";
 
@@ -208,6 +214,39 @@ public class SystemSettingService : ISystemSettingService
         );
     }
 
+    // ── Posts ──
+    public Task<bool> GetEnablePostsAsync() => GetBooleanSettingAsync(EnablePostsKey, true);
+    public Task<bool> SetEnablePostsAsync(bool enabled, int actorUserId) => SetBooleanSettingAsync(EnablePostsKey, enabled, actorUserId, "Enable posts feed, status sharing, and discussions.");
+
+    // ── Articles ──
+    public Task<bool> GetEnableArticlesAsync() => GetBooleanSettingAsync(EnableArticlesKey, true);
+    public Task<bool> SetEnableArticlesAsync(bool enabled, int actorUserId) => SetBooleanSettingAsync(EnableArticlesKey, enabled, actorUserId, "Enable technical articles, categories, and publications.");
+
+    // ── Clips ──
+    public Task<bool> GetEnableClipsAsync() => GetBooleanSettingAsync(EnableClipsKey, true);
+    public Task<bool> SetEnableClipsAsync(bool enabled, int actorUserId) => SetBooleanSettingAsync(EnableClipsKey, enabled, actorUserId, "Enable short-form video clips and reels.");
+
+    // ── Wiki ──
+    public Task<bool> GetEnableWikiAsync() => GetBooleanSettingAsync(EnableWikiKey, true);
+    public Task<bool> SetEnableWikiAsync(bool enabled, int actorUserId) => SetBooleanSettingAsync(EnableWikiKey, enabled, actorUserId, "Enable knowledge base wiki documentation and hierarchies.");
+
+    // ── Videos ──
+    public Task<bool> GetEnableVideosAsync() => GetBooleanSettingAsync(EnableVideosKey, true);
+    public Task<bool> SetEnableVideosAsync(bool enabled, int actorUserId) => SetBooleanSettingAsync(EnableVideosKey, enabled, actorUserId, "Enable enterprise video media portal and streaming.");
+
+    // ── Podcasts ──
+    public Task<bool> GetEnablePodcastsAsync() => GetBooleanSettingAsync(EnablePodcastsKey, true);
+    public Task<bool> SetEnablePodcastsAsync(bool enabled, int actorUserId) => SetBooleanSettingAsync(EnablePodcastsKey, enabled, actorUserId, "Enable audio podcast series, episodes, and streaming.");
+
+    public async Task EnsureFeatureEnabledAsync(string featureKey, string featureDisplayName)
+    {
+        var isEnabled = await GetBooleanSettingAsync(featureKey, true);
+        if (!isEnabled)
+        {
+            throw new Knome.API.Exceptions.ForbiddenException($"The {featureDisplayName} module is currently disabled by administrator.");
+        }
+    }
+
     // ── Full Aggregated Settings DTO ──
     public async Task<ApprovalSettingDto> GetFullApprovalSettingsAsync()
     {
@@ -217,6 +256,12 @@ public class SystemSettingService : ISystemSettingService
         var pod = await GetRequirePodcastApprovalAsync();
         var msg = await GetEnableMessagingAsync();
         var email = await GetEnableEmailAsync();
+        var posts = await GetEnablePostsAsync();
+        var articles = await GetEnableArticlesAsync();
+        var clips = await GetEnableClipsAsync();
+        var wiki = await GetEnableWikiAsync();
+        var videos = await GetEnableVideosAsync();
+        var podcasts = await GetEnablePodcastsAsync();
 
         var masterRow = await _db.SystemSettings.AsNoTracking().FirstOrDefaultAsync(s => s.SettingKey == RequireApprovalKey);
 
@@ -229,6 +274,12 @@ public class SystemSettingService : ISystemSettingService
             RequirePodcastApproval = pod,
             EnableMessaging = msg,
             EnableEmail = email,
+            EnablePosts = posts,
+            EnableArticles = articles,
+            EnableClips = clips,
+            EnableWiki = wiki,
+            EnableVideos = videos,
+            EnablePodcasts = podcasts,
             Description = DefaultApprovalDescription,
             UpdatedDate = masterRow?.UpdatedDate ?? Knome.API.Common.KnomeTime.Now,
             UpdatedByUserId = masterRow?.UpdatedByUserId
@@ -260,6 +311,32 @@ public class SystemSettingService : ISystemSettingService
         if (updateDto.EnableEmail.HasValue)
         {
             await SetEnableEmailAsync(updateDto.EnableEmail.Value, actorUserId);
+        }
+
+        // Feature Modules
+        if (updateDto.EnablePosts.HasValue)
+        {
+            await SetEnablePostsAsync(updateDto.EnablePosts.Value, actorUserId);
+        }
+        if (updateDto.EnableArticles.HasValue)
+        {
+            await SetEnableArticlesAsync(updateDto.EnableArticles.Value, actorUserId);
+        }
+        if (updateDto.EnableClips.HasValue)
+        {
+            await SetEnableClipsAsync(updateDto.EnableClips.Value, actorUserId);
+        }
+        if (updateDto.EnableWiki.HasValue)
+        {
+            await SetEnableWikiAsync(updateDto.EnableWiki.Value, actorUserId);
+        }
+        if (updateDto.EnableVideos.HasValue)
+        {
+            await SetEnableVideosAsync(updateDto.EnableVideos.Value, actorUserId);
+        }
+        if (updateDto.EnablePodcasts.HasValue)
+        {
+            await SetEnablePodcastsAsync(updateDto.EnablePodcasts.Value, actorUserId);
         }
 
         return await GetFullApprovalSettingsAsync();
@@ -306,6 +383,12 @@ public class SystemSettingService : ISystemSettingService
         if (!dict.ContainsKey(RequirePodcastApprovalKey)) dict[RequirePodcastApprovalKey] = "true";
         if (!dict.ContainsKey(EnableMessagingKey)) dict[EnableMessagingKey] = "true";
         if (!dict.ContainsKey(EnableEmailKey)) dict[EnableEmailKey] = "true";
+        if (!dict.ContainsKey(EnablePostsKey)) dict[EnablePostsKey] = "true";
+        if (!dict.ContainsKey(EnableArticlesKey)) dict[EnableArticlesKey] = "true";
+        if (!dict.ContainsKey(EnableClipsKey)) dict[EnableClipsKey] = "true";
+        if (!dict.ContainsKey(EnableWikiKey)) dict[EnableWikiKey] = "true";
+        if (!dict.ContainsKey(EnableVideosKey)) dict[EnableVideosKey] = "true";
+        if (!dict.ContainsKey(EnablePodcastsKey)) dict[EnablePodcastsKey] = "true";
         return dict;
     }
 }

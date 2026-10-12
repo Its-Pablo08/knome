@@ -26,6 +26,7 @@ public interface IWikiRepository
     Task RestoreWikiAsync(Wiki wiki);
     Task ArchiveWikiAsync(Wiki wiki, bool isArchived);
     Task IncrementViewCountAsync(long wikiId);
+    Task<int> RecordUniqueWikiViewAsync(long wikiId, int userId);
     Task<List<string>> GetPopularTagsAsync(int count = 20);
 
     // Sections
