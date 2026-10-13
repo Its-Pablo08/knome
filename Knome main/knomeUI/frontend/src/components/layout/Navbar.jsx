@@ -1026,6 +1026,9 @@ export default function Navbar() {
             .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
             .build();
 
+        connection.serverTimeoutInMilliseconds = 60000;
+        connection.keepAliveIntervalInMilliseconds = 15000;
+
         let isStopped = false;
         const stopConnection = () => {
             isStopped = true;

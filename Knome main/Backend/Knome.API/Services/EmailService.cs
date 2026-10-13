@@ -50,7 +50,8 @@ public class EmailService : IEmailService
             message.To.Add(MailboxAddress.Parse(toEmail.Trim()));
             message.Subject = subject;
             message.Date = DateTimeOffset.UtcNow;
-            message.MessageId = MimeKit.Utils.MimeUtils.GenerateMessageId("gmail.com");
+            var domain = fromEmail.Contains('@') ? fromEmail.Split('@')[1] : "mponline.gov.in";
+            message.MessageId = MimeKit.Utils.MimeUtils.GenerateMessageId(domain);
 
             // Anti-Spam Compliance Headers
             message.Headers.Add("X-Mailer", "Knome-Enterprise-Mailer-v1");
@@ -67,12 +68,27 @@ public class EmailService : IEmailService
             message.Body = bodyBuilder.ToMessageBody();
 
             using var client = new SmtpClient();
-            var secureOption = _settings.EnableSsl 
-                ? (_settings.Port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto) 
-                : SecureSocketOptions.None;
+            var secureOption = SecureSocketOptions.None;
+            if (string.Equals(_settings.Encryption, "SSL", StringComparison.OrdinalIgnoreCase))
+            {
+                secureOption = SecureSocketOptions.SslOnConnect;
+            }
+            else if (string.Equals(_settings.Encryption, "TLS", StringComparison.OrdinalIgnoreCase) || 
+                     string.Equals(_settings.Encryption, "StartTls", StringComparison.OrdinalIgnoreCase))
+            {
+                secureOption = SecureSocketOptions.StartTls;
+            }
+            else if (_settings.EnableSsl)
+            {
+                secureOption = _settings.Port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
+            }
+            else
+            {
+                secureOption = SecureSocketOptions.None;
+            }
             
             await client.ConnectAsync(_settings.Host, _settings.Port, secureOption);
-            if (!string.IsNullOrEmpty(_settings.Username) && !string.IsNullOrEmpty(_settings.Password))
+            if (_settings.AuthRequired && !string.IsNullOrEmpty(_settings.Username) && !string.IsNullOrEmpty(_settings.Password))
             {
                 await client.AuthenticateAsync(_settings.Username, _settings.Password);
             }

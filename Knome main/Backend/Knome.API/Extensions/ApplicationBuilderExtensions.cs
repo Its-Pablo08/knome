@@ -42,44 +42,68 @@ public static class ApplicationBuilderExtensions
             app.UseHttpsRedirection();
         }
 
+        // Response Compression Middleware (Brotli & Gzip)
+        app.UseResponseCompression();
+
         // Enable CORS
         app.UseCors(ApiConstants.CorsPolicyName);
 
         // Serve uploaded files (images, videos, audio, docs) from custom StorageSettings:BasePath if configured
-        var customStoragePath = app.Configuration["StorageSettings:BasePath"];
-        if (!string.IsNullOrWhiteSpace(customStoragePath))
+        try
         {
-            if (!Directory.Exists(customStoragePath)) Directory.CreateDirectory(customStoragePath);
-            app.UseStaticFiles(new StaticFileOptions
+            var customStoragePath = app.Configuration["StorageSettings:BasePath"];
+            if (!string.IsNullOrWhiteSpace(customStoragePath))
             {
-                FileProvider = new PhysicalFileProvider(customStoragePath),
-                RequestPath = string.Empty,
-                ServeUnknownFileTypes = true,
-                OnPrepareResponse = ctx =>
+                if (!Directory.Exists(customStoragePath))
                 {
-                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
-                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Headers", "*");
-                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+                    try { Directory.CreateDirectory(customStoragePath); } catch { /* Ignore network share creation failures */ }
                 }
-            });
+
+                if (Directory.Exists(customStoragePath))
+                {
+                    app.UseStaticFiles(new StaticFileOptions
+                    {
+                        FileProvider = new PhysicalFileProvider(customStoragePath),
+                        RequestPath = string.Empty,
+                        ServeUnknownFileTypes = true,
+                        OnPrepareResponse = ctx =>
+                        {
+                            ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
+                            ctx.Context.Response.Headers.Append("Access-Control-Allow-Headers", "*");
+                            ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+                        }
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Warning(ex, "Could not initialize custom storage path static file provider. Falling back to local storage.");
         }
 
         // Serve archived uploads transparently as fallback
-        var archiveStoragePath = app.Configuration["StorageSettings:ArchivePath"];
-        if (!string.IsNullOrWhiteSpace(archiveStoragePath) && Directory.Exists(archiveStoragePath))
+        try
         {
-            app.UseStaticFiles(new StaticFileOptions
+            var archiveStoragePath = app.Configuration["StorageSettings:ArchivePath"];
+            if (!string.IsNullOrWhiteSpace(archiveStoragePath) && Directory.Exists(archiveStoragePath))
             {
-                FileProvider = new PhysicalFileProvider(archiveStoragePath),
-                RequestPath = string.Empty,
-                ServeUnknownFileTypes = true,
-                OnPrepareResponse = ctx =>
+                app.UseStaticFiles(new StaticFileOptions
                 {
-                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
-                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Headers", "*");
-                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-                }
-            });
+                    FileProvider = new PhysicalFileProvider(archiveStoragePath),
+                    RequestPath = string.Empty,
+                    ServeUnknownFileTypes = true,
+                    OnPrepareResponse = ctx =>
+                    {
+                        ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
+                        ctx.Context.Response.Headers.Append("Access-Control-Allow-Headers", "*");
+                        ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+                    }
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Warning(ex, "Could not initialize archive storage static file provider.");
         }
 
         // Also serve fallback from wwwroot for default / legacy assets

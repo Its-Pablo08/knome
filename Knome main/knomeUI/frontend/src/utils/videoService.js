@@ -287,6 +287,11 @@ export async function getVideos() {
             }
         });
 
+        // Sync shared imported videos across all users
+        try {
+            await syncSharedImportedVideos();
+        } catch (_) {}
+
         try {
             const imported = JSON.parse(localStorage.getItem('knome_imported_yt_videos') || '[]');
             if (Array.isArray(imported)) {
@@ -560,6 +565,117 @@ const PLAYLISTS_STORAGE_KEY = 'knome_video_playlists_v1';
 
 const DEFAULT_PLAYLISTS = [
     {
+        id: 'pl_series_testing',
+        title: 'testing',
+        description: 'Enterprise Incident Response Pipeline and System Architecture testing series.',
+        category: 'Training & Tutorials',
+        author: 'Loveneesh Sharma',
+        authorId: 1,
+        authorDesignation: 'HR Administrator',
+        thumbnail: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=90&w=1200',
+        type: 'Series',
+        createdDate: '2026-10-12',
+        videoIds: ['yt_test_1', 'yt_test_2'],
+        episodes: [
+            {
+                id: 'yt_test_1',
+                videoId: 'ER9SspLe4Hg',
+                title: '#1: Incident Response Pipeline Overview | System Architecture',
+                description: 'Part 1 of Incident Response Pipeline: Database Failure, Server Clones, and Rollback Strategies.',
+                thumbnail: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=90&w=1200',
+                duration: '18:24',
+                views: '0',
+                likes: 0,
+                category: 'Training & Tutorials',
+                date: 'Oct 12, 2026',
+                author: 'Loveneesh Sharma',
+                authorId: 1,
+                authorDesignation: 'HR Administrator',
+                tags: ['IncidentResponse', 'Pipeline', 'Architecture'],
+                sourceUrl: 'https://www.youtube.com/watch?v=ER9SspLe4Hg',
+                sourceType: 'YouTube',
+                playlistId: 'pl_series_testing',
+                episodeIndex: 1
+            },
+            {
+                id: 'yt_test_2',
+                videoId: 'hKB-YGF14SY',
+                title: '#2: Automated Diagnostics & System Recovery Runbooks',
+                description: 'Part 2 of Incident Response Pipeline: Hands-on implementation of automated diagnostics and runbooks.',
+                thumbnail: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=90&w=1200',
+                duration: '24:10',
+                views: '0',
+                likes: 0,
+                category: 'Training & Tutorials',
+                date: 'Oct 12, 2026',
+                author: 'Loveneesh Sharma',
+                authorId: 1,
+                authorDesignation: 'HR Administrator',
+                tags: ['IncidentResponse', 'Diagnostics', 'Recovery'],
+                sourceUrl: 'https://www.youtube.com/watch?v=hKB-YGF14SY',
+                sourceType: 'YouTube',
+                playlistId: 'pl_series_testing',
+                episodeIndex: 2
+            }
+        ]
+    },
+    {
+        id: 'pl_series_codex',
+        title: 'codex series',
+        description: 'This is codex series.',
+        category: 'Training & Tutorials',
+        author: 'Deepak Simrodia',
+        authorId: 1057,
+        authorDesignation: 'Software Developer',
+        channelName: 'Deepak Simrodia',
+        thumbnail: 'https://img.youtube.com/vi/ajDRvxDWH4w/hqdefault.jpg',
+        type: 'Series',
+        createdDate: '2026-10-13',
+        videoIds: ['yt_codex_1', 'yt_codex_2'],
+        episodes: [
+            {
+                id: 'yt_codex_1',
+                videoId: 'ajDRvxDWH4w',
+                title: '#1: Complete Masterclass | AI tool Codex for developers',
+                description: 'Episode 1: Getting started with OpenAI Codex, autocomplete models, and prompt scaffolding.',
+                thumbnail: 'https://img.youtube.com/vi/ajDRvxDWH4w/hqdefault.jpg',
+                duration: '21:30',
+                views: '0',
+                likes: 0,
+                category: 'Training & Tutorials',
+                date: 'Oct 13, 2026',
+                author: 'Deepak Simrodia',
+                authorId: 1057,
+                authorDesignation: 'Software Developer',
+                tags: ['Codex', 'AI', 'Masterclass'],
+                sourceUrl: 'https://www.youtube.com/watch?v=ajDRvxDWH4w',
+                sourceType: 'YouTube',
+                playlistId: 'pl_series_codex',
+                episodeIndex: 1
+            },
+            {
+                id: 'yt_codex_2',
+                videoId: 'VlPiVmYuoqw',
+                title: '#2: Advanced Autonomous Workflows with Codex and Language Models',
+                description: 'Episode 2: Integrating Codex into continuous development pipelines and writing test suites.',
+                thumbnail: 'https://img.youtube.com/vi/VlPiVmYuoqw/hqdefault.jpg',
+                duration: '28:45',
+                views: '0',
+                likes: 0,
+                category: 'Training & Tutorials',
+                date: 'Oct 13, 2026',
+                author: 'Deepak Simrodia',
+                authorId: 1057,
+                authorDesignation: 'Software Developer',
+                tags: ['Codex', 'AI', 'Pipelines'],
+                sourceUrl: 'https://www.youtube.com/watch?v=VlPiVmYuoqw',
+                sourceType: 'YouTube',
+                playlistId: 'pl_series_codex',
+                episodeIndex: 2
+            }
+        ]
+    },
+    {
         id: 'pl_series_apna_js',
         title: 'JavaScript Full Course (Shradha Khapra — Apna College)',
         description: 'Complete 14-lecture JavaScript Masterclass course by Shradha Khapra covering Variables, Operators, Loops, Arrays, Functions, DOM Manipulation, Async/Await, and Currency Converter Project.',
@@ -652,7 +768,70 @@ export function getPlaylists() {
     return DEFAULT_PLAYLISTS;
 }
 
-export function savePlaylist(playlistData) {
+export async function syncSharedImportedVideos() {
+    let localImported = [];
+    try {
+        localImported = JSON.parse(localStorage.getItem('knome_imported_yt_videos') || '[]');
+    } catch (_) {}
+
+    try {
+        const res = await fetch('/api/shared-imported-videos/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videos: localImported })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.videos)) {
+                localStorage.setItem('knome_imported_yt_videos', JSON.stringify(data.videos));
+                return data.videos;
+            }
+        }
+    } catch (err) {
+        console.warn('Imported videos server sync fallback:', err);
+    }
+    return localImported;
+}
+
+export async function fetchPlaylists() {
+    let localPlaylists = [];
+    try {
+        const stored = localStorage.getItem(PLAYLISTS_STORAGE_KEY);
+        if (stored) {
+            localPlaylists = JSON.parse(stored);
+        }
+    } catch (_) {}
+
+    try {
+        const res = await fetch('/api/shared-playlists/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playlists: localPlaylists })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.playlists) && data.playlists.length > 0) {
+                const normalized = data.playlists.map(pl => {
+                    if (pl.id === 'pl_series_apna_js' && (!pl.episodes || pl.episodes.length === 0)) {
+                        return { ...pl, episodes: APNA_JS_EPISODES };
+                    }
+                    if (pl.id === 'pl_series_cwh_js' && (!pl.episodes || pl.episodes.length === 0)) {
+                        return { ...pl, episodes: CWH_JS_EPISODES };
+                    }
+                    return pl;
+                });
+                localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(normalized));
+                return normalized;
+            }
+        }
+    } catch (err) {
+        console.warn('Playlists server sync fallback to localStorage:', err);
+    }
+
+    return getPlaylists();
+}
+
+export async function savePlaylist(playlistData) {
     const existing = getPlaylists();
     const newPl = {
         id: playlistData.id || `pl_${Date.now()}_${Math.random().toString(36).slice(2)}`,
@@ -671,14 +850,46 @@ export function savePlaylist(playlistData) {
     };
     const updated = [newPl, ...existing.filter(p => p.id !== newPl.id)];
     localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(updated));
+
+    // Persist to server store asynchronously
+    try {
+        await fetch('/api/shared-playlists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newPl)
+        });
+    } catch (e) {
+        console.warn('Failed to sync saved playlist to server:', e);
+    }
+
     return newPl;
 }
 
-export function deletePlaylist(playlistId) {
+export async function deletePlaylist(playlistId) {
     try {
         const existing = getPlaylists();
         const updated = existing.filter(p => p.id !== playlistId);
         localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(updated));
+
+        // Clean up imported videos belonging to this playlist
+        try {
+            const imported = JSON.parse(localStorage.getItem('knome_imported_yt_videos') || '[]');
+            const cleaned = imported.filter(v => v.playlistId !== playlistId);
+            localStorage.setItem('knome_imported_yt_videos', JSON.stringify(cleaned));
+        } catch (_) {}
+
+        // Persist deletion to server store asynchronously
+        try {
+            await fetch(`/api/shared-playlists?id=${encodeURIComponent(playlistId)}`, {
+                method: 'DELETE'
+            });
+            await fetch(`/api/shared-imported-videos?playlistId=${encodeURIComponent(playlistId)}`, {
+                method: 'DELETE'
+            });
+        } catch (e) {
+            console.warn('Failed to delete playlist from server store:', e);
+        }
+
         return true;
     } catch (e) {
         console.error('Failed to delete playlist:', e);
@@ -834,20 +1045,21 @@ export async function fetchYouTubePlaylistDetails(url) {
 
 // ── Import YouTube Playlist / Series ─────────────────────────────────────────
 export function importYouTubePlaylist({ playlistUrl, title, author, category, episodeCount = 6, user = null, preloadedEpisodes = [] }) {
-    let listId = 'PLfqMhTWNBTe2C_dQAP1UoemcgAxBTlItp';
+    let listId = null;
     const match = (playlistUrl || '').match(/[?&]list=([a-zA-Z0-9_-]+)/);
     if (match && match[1]) listId = match[1];
 
     let videoId = null;
     const vMatch = (playlistUrl || '').match(/(?:v=|\/embed\/|\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
     if (vMatch && vMatch[1]) videoId = vMatch[1];
-    if (!videoId && listId === 'PLfqMhTWNBTe2C_dQAP1UoemcgAxBTlItp') {
+    if (!videoId && !listId) {
+        listId = 'PLfqMhTWNBTe2C_dQAP1UoemcgAxBTlItp';
         videoId = 'ajDRvxDWH4w';
     }
 
     const cleanTitle = (title || '').trim() || 'YouTube Masterclass Course';
-    const knomeAuthorName = user?.name || 'Meghna Tiwari';
-    const knomeAuthorId = user?.id || 5;
+    const knomeAuthorName = user?.name || user?.fullName || (author || '').trim() || 'Creator';
+    const knomeAuthorId = user?.id || user?.userId || 5;
     const channelCreatorName = (author || '').trim() || 'YouTube Creator';
 
     const plId = `pl_yt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

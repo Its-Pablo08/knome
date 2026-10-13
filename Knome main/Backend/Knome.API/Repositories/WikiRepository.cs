@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Knome.API.Common;
+using Knome.API.Constants;
 using Knome.API.Data;
 using Knome.API.DTOs.Wiki;
 using Knome.API.Interfaces;

@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import { resolveMediaUrl, formatToDDMMYYYY } from './apiService';
+import { resolveMediaUrl, formatToDDMMYYYY, getInitialsAvatar } from './apiService';
 
 const DEFAULT_COVER_IMAGES = [
     'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=1200',
@@ -72,7 +72,7 @@ export function mapArticle(art) {
     const authorName = art.authorFullName || 'Enterprise Author';
     const authorAvatar = art.authorProfilePhotoUrl 
         ? resolveMediaUrl(art.authorProfilePhotoUrl) 
-        : `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}&background=6366f1&color=fff&size=256&bold=true`;
+        : getInitialsAvatar(authorName);
 
     const isScheduledFuture = art.status === 'Scheduled' && art.scheduledDate && new Date(art.scheduledDate).getTime() > Date.now();
     const displayDate = isScheduledFuture

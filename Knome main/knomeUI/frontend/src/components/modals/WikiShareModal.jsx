@@ -482,6 +482,10 @@ export default function WikiShareModal({
                                         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
                                             {`${window.location.origin}/wiki/view?id=${wikiId}`}
                                         </p>
+                                        <p className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-0.5 flex items-center gap-1 font-medium">
+                                            <span className="material-symbols-outlined text-[12px]">chat</span>
+                                            Paste in chat messages for interactive preview cards
+                                        </p>
                                     </div>
                                 </div>
                                 <button

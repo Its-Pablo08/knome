@@ -693,13 +693,14 @@ const FILE_LIMITS = {
                 let savedId = activeDraftId;
                 const isNumericId = /^\d+$/.test(String(activeDraftId));
                 
+                const safeDraftAtts = attachments.filter(a => a.backendUrl || (!a.url?.startsWith('blob:')));
                 const payload = {
                     contentText: text,
                     audienceType: selectedCommunity ? 'Community' : (selectedConnections.length > 0 ? 'Connections' : 'Everyone'),
                     status: 'Draft',
                     scheduledDate: null,
-                    attachmentUrls: attachments.map(a => a.backendUrl || a.url),
-                    attachmentTypes: attachments.map(a => a.type === 'doc' ? 'Document' : a.type === 'image' ? 'Image' : a.type === 'video' ? 'Video' : 'Audio'),
+                    attachmentUrls: safeDraftAtts.map(a => a.backendUrl || a.url),
+                    attachmentTypes: safeDraftAtts.map(a => a.type === 'doc' ? 'Document' : a.type === 'image' ? 'Image' : a.type === 'video' ? 'Video' : 'Audio'),
                     mentionedUserIds: [],
                     audienceUserIds: selectedConnections.map(c => c.id),
                     audienceCommunityIds: selectedCommunity ? [selectedCommunity.id] : []
@@ -789,8 +790,9 @@ const FILE_LIMITS = {
                             setAttachments(prev => prev.map(a => a.id === att.id ? { ...a, progress: percent } : a));
                         });
                         att.backendUrl = result.fileUrl || result.url;
+                        att.url = att.backendUrl;
                         
-                        setAttachments(prev => prev.map(a => a.id === att.id ? { ...a, backendUrl: att.backendUrl, isUploading: false, progress: 100 } : a));
+                        setAttachments(prev => prev.map(a => a.id === att.id ? { ...a, backendUrl: att.backendUrl, url: att.backendUrl, isUploading: false, progress: 100 } : a));
                     } catch (err) {
                         console.error('File upload failed', err);
                         addToast(`Failed to upload ${att.name}`, 'error');
@@ -821,13 +823,21 @@ const FILE_LIMITS = {
                 isoScheduledDate = parsed.toISOString();
             }
 
+            const finalSafeAttachments = updatedAttachments
+                .filter(a => a.backendUrl || (a.url && !a.url.startsWith('blob:')))
+                .map(a => ({
+                    ...a,
+                    url: a.backendUrl || a.url,
+                    fileUrl: a.backendUrl || a.url
+                }));
+
             const payload = {
                 contentText: text,
                 audienceType: selectedCommunity ? 'Community' : (selectedConnections.length > 0 ? 'Connections' : 'Everyone'),
                 status: status,
                 scheduledDate: isoScheduledDate,
-                attachmentUrls: updatedAttachments.map(a => a.backendUrl || a.url),
-                attachmentTypes: updatedAttachments.map(a => a.type === 'doc' ? 'Document' : a.type === 'image' ? 'Image' : a.type === 'video' ? 'Video' : 'Audio'),
+                attachmentUrls: finalSafeAttachments.map(a => a.url),
+                attachmentTypes: finalSafeAttachments.map(a => a.type === 'doc' ? 'Document' : a.type === 'image' ? 'Image' : a.type === 'video' ? 'Video' : 'Audio'),
                 mentionedUserIds: [], // Extension point
                 audienceUserIds: selectedConnections.map(c => c.id),
                 audienceCommunityIds: selectedCommunity ? [selectedCommunity.id] : [],
@@ -896,7 +906,7 @@ const FILE_LIMITS = {
                         createdDate: new Date().toISOString(),
                         likesCount: 0,
                         commentsCount: 0,
-                        attachments: attachments,
+                        attachments: finalSafeAttachments,
                         audienceType: payload.audienceType,
                         communityId: selectedCommunity?.id || null,
                         communityName: selectedCommunity?.name || null,
@@ -938,8 +948,9 @@ const FILE_LIMITS = {
                         avatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
                         time: 'Just now',
                         content: text,
-                        attachments: attachments || [],
-                        images: (attachments || []).filter(a => a.type === 'image' || a.attachmentType === 'image'),
+                        attachments: finalSafeAttachments,
+                        attachmentUrls: finalSafeAttachments.map(a => a.url),
+                        images: finalSafeAttachments.filter(a => a.type === 'image' || a.attachmentType === 'image'),
                         likes: 0,
                         comments: 0,
                         isPinned: false

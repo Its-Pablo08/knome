@@ -262,7 +262,6 @@ export default function Wiki() {
                         <option value="All">All Statuses</option>
                         <option value="Published">Published Only</option>
                         <option value="Draft">Drafts Only</option>
-                        <option value="Archived">Archived</option>
                     </select>
 
                     {selectedTag && (

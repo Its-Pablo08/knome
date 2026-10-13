@@ -29,6 +29,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddMemoryCache();
+        services.AddResponseCompression(options =>
+        {
+            options.EnableForHttps = true;
+            options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+            options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+        });
         AddCorsPolicy(services, configuration);
         AddDatabase(services, configuration);
         AddAuthentication(services, configuration);
@@ -36,7 +42,14 @@ public static class ServiceCollectionExtensions
         AddRateLimiting(services);
         AddApplicationServices(services, configuration);
         AddSwagger(services);
-        services.AddSignalR();
+        services.AddSignalR(options =>
+        {
+            options.EnableDetailedErrors = true;
+            options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+            options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+            options.HandshakeTimeout = TimeSpan.FromSeconds(30);
+            options.MaximumReceiveMessageSize = 10 * 1024 * 1024;
+        });
 
         return services;
     }
@@ -604,8 +617,16 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationService, NotificationService>();
 
-        // SMTP & Email Notification Service
-        services.Configure<SmtpSettings>(configuration.GetSection("SmtpSettings"));
+        // SMTP & Email Notification Service (supports EmailSettings and SmtpSettings)
+        var emailSettingsSection = configuration.GetSection("EmailSettings");
+        if (emailSettingsSection.Exists())
+        {
+            services.Configure<SmtpSettings>(emailSettingsSection);
+        }
+        else
+        {
+            services.Configure<SmtpSettings>(configuration.GetSection("SmtpSettings"));
+        }
         services.AddScoped<IEmailService, EmailService>();
 
         // Abbreviations Module

@@ -29,14 +29,26 @@ export default function TrendingTagsWidget({ onTagClick }) {
 
         const loadTrendingHashtags = async () => {
             try {
-                // 1. Fetch real posts from backend API
-                const apiPosts = await postsApi.getPosts(null, null, 1, 100).catch(() => []);
+                // Check short-lived cached tags first for instant load
+                try {
+                    const cached = sessionStorage.getItem('knome_trending_tags_cache');
+                    if (cached) {
+                        const parsed = JSON.parse(cached);
+                        if (Array.isArray(parsed) && parsed.length > 0 && isMounted) {
+                            setTags(parsed);
+                            setIsLoading(false);
+                        }
+                    }
+                } catch (_) {}
+
+                // 1. Fetch lightweight batch of recent posts from backend API (25 instead of 100)
+                const apiPosts = await postsApi.getPosts(null, null, 1, 25).catch(() => []);
                 const postsList = Array.isArray(apiPosts) ? apiPosts : (apiPosts?.data || []);
 
                 // 2. Merge local fallback posts if any
                 try {
                     const localPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
-                    localPosts.forEach(lp => {
+                    localPosts.slice(0, 15).forEach(lp => {
                         if (!postsList.some(p => String(p.id || p.postId) === String(lp.id || lp.postId))) {
                             postsList.push(lp);
                         }
@@ -111,6 +123,9 @@ export default function TrendingTagsWidget({ onTagClick }) {
                         color: PALETTE[idx % PALETTE.length]
                     }));
                     setTags(dynamicList);
+                    try {
+                        sessionStorage.setItem('knome_trending_tags_cache', JSON.stringify(dynamicList));
+                    } catch (_) {}
                 }
             } catch (err) {
                 console.warn('Failed to load dynamic trending tags:', err);

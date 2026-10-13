@@ -707,29 +707,23 @@ export const jobsApi = {
     /** GET /Jobs */
     getAll: () => apiClient.get('/Jobs'),
 
-    /** GET Live Jobs from central HRMS Integration API */
+    /** GET Live Jobs from central HRMS Integration API via safe server proxy */
     getLiveServerJobs: async () => {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3500);
-            const res = await fetch('http://counselling-1.mponline.demo.gov.in:5110/api/v1/job-postings/integration/list', {
+            const timeoutId = setTimeout(() => controller.abort(), 2500);
+            const res = await fetch('/api/hrms-jobs', {
                 method: 'GET',
-                headers: {
-                    'X-Client-Id': 'mpo-hrms-Client',
-                    'X-Client-Secret': 'hrms-super-secret-key-12345'
-                },
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
             if (res.ok) {
                 const json = await res.json();
-                if (json?.success && Array.isArray(json.data)) {
+                if (json?.success && Array.isArray(json.data) && json.data.length > 0) {
                     return json.data;
                 }
             }
-        } catch (e) {
-            console.warn('Could not fetch from live HRMS server API, falling back to local database:', e);
-        }
+        } catch (_) {}
         return null;
     },
 
@@ -882,9 +876,51 @@ export const detectFileType = (url, fallbackType = 'image') => {
 };
 
 
+/**
+ * Offline-safe local SVG data URI generator for user initials avatar.
+ * Eliminates external ui-avatars.com requests, preventing net::ERR_NAME_NOT_RESOLVED errors.
+ */
+export const getInitialsAvatar = (name = 'User', bg = '6366f1', color = 'fff', size = 96) => {
+    const cleanName = String(name || 'User').trim();
+    const parts = cleanName.split(/\s+/).filter(Boolean);
+    let initials = 'U';
+    if (parts.length >= 2) {
+        initials = (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    } else if (parts.length === 1 && parts[0].length > 0) {
+        initials = parts[0].slice(0, 2).toUpperCase();
+    }
+    const cleanBg = String(bg || '6366f1').replace(/^#/, '');
+    const cleanColor = String(color || 'fff').replace(/^#/, '');
+    const safeBg = `#${cleanBg.replace(/[^0-9a-fA-F]/g, '') || '6366f1'}`;
+    const safeColor = `#${cleanColor.replace(/[^0-9a-fA-F]/g, '') || 'ffffff'}`;
+    const safeSize = Number(size) || 96;
+    const fontSize = Math.round(safeSize * 0.42);
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${safeSize} ${safeSize}" width="${safeSize}" height="${safeSize}"><rect width="100%" height="100%" rx="${Math.round(safeSize * 0.1)}" fill="${safeBg}"/><text x="50%" y="50%" dy="0.36em" fill="${safeColor}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="700" text-anchor="middle">${initials}</text></svg>`;
+
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+};
+
 export const resolveMediaUrl = (url) => {
     if (!url) return null;
     if (typeof url !== 'string') return url;
+
+    // Intercept and convert external ui-avatars.com calls into local offline SVG data URIs
+    if (url.includes('ui-avatars.com')) {
+        try {
+            const u = new URL(url);
+            const name = u.searchParams.get('name') || 'User';
+            const bg = u.searchParams.get('background') || '6366f1';
+            const color = u.searchParams.get('color') || 'fff';
+            const size = u.searchParams.get('size') || '96';
+            return getInitialsAvatar(name, bg, color, size);
+        } catch {
+            const nameMatch = url.match(/[?&]name=([^&]+)/);
+            const name = nameMatch ? decodeURIComponent(nameMatch[1]) : 'User';
+            return getInitialsAvatar(name);
+        }
+    }
+
     if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('data:')) {
         return url;
     }
@@ -1033,7 +1069,7 @@ export const mapPost = (post) => {
         : (rawAuthorName && rawAuthorName !== 'User' && rawAuthorName !== 'Unknown' ? rawAuthorName : 'Employee');
     const authorRole = post.authorDesignation || post.authorUser?.designation || post.authorRole || post.author?.role || 'Contributor';
     const authorAvatar = resolveMediaUrl(post.authorProfilePhotoUrl || post.authorUser?.profilePhotoUrl || post.authorAvatar || post.author?.avatar) ||
-        `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}&background=6366f1&color=fff&size=256&bold=true`;
+        getInitialsAvatar(authorName);
     const authorId = post.authorId || post.authorUserId || post.userId || post.author?.id;
 
     const commentsCount = post.commentsCount ?? post.commentCount ?? post.engagementSummary?.commentsCount ?? post.engagementSummary?.commentCount ?? (Array.isArray(post.comments) ? post.comments.length : 0);
@@ -1175,7 +1211,7 @@ export const mapArticle = (article) => {
     const authorName = article.authorFullName || article.authorUser?.fullName || article.authorName || article.author?.name || 'Writer';
     const authorRole = article.authorDesignation || article.authorUser?.designation || article.authorRole || article.author?.role || 'Writer';
     const authorAvatar = resolveMediaUrl(article.authorProfilePhotoUrl || article.authorUser?.profilePhotoUrl || article.authorAvatar || article.author?.avatar) ||
-        `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}&background=6366f1&color=fff&size=256&bold=true`;
+        getInitialsAvatar(authorName);
     const readMins = article.estimatedReadMinutes || (article.avgReadTimeSeconds ? Math.max(1, Math.round(article.avgReadTimeSeconds / 60)) : 5);
 
     return {
@@ -1245,8 +1281,8 @@ export const mapVideo = (v) => {
         author: {
             id: v.authorId,
             name: v.authorFullName,
-            avatar: v.authorProfilePhotoUrl ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(v.authorFullName || 'User')}&background=6366f1&color=fff&size=256&bold=true`,
+            avatar: resolveMediaUrl(v.authorProfilePhotoUrl) ||
+                getInitialsAvatar(v.authorFullName || 'User'),
         },
         views: v.viewCount || 0,
         likes: likesCount,
@@ -1288,8 +1324,8 @@ export const mapPodcast = (p) => {
         author: {
             id: p.authorId,
             name: p.authorFullName,
-            avatar: p.authorProfilePhotoUrl ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(p.authorFullName || 'User')}&background=6366f1&color=fff&size=256&bold=true`,
+            avatar: resolveMediaUrl(p.authorProfilePhotoUrl) ||
+                getInitialsAvatar(p.authorFullName || 'User'),
         },
         episodeNumber: p.episodeNumber || 1,
         likes: likesCount,
@@ -1358,7 +1394,7 @@ export const mapFeedItem = (item) => {
         fullName: authorName,
         role: authorRole,
         avatar: resolveMediaUrl(item.authorProfilePhotoUrl || item.authorAvatar || item.author?.avatar) ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}&background=6366f1&color=fff`,
+            getInitialsAvatar(authorName),
         isVerified: false,
     };
 

@@ -211,16 +211,24 @@ export const initMessengerSignalR = (userId, forceReconnect = false) => {
 
     activeRegisteredUserId = uId;
 
-    if (!forceReconnect && messengerHubConnection && messengerHubConnection.state === signalR.HubConnectionState.Connected) {
-        messengerHubConnection.invoke("JoinUserGroup", uId).catch(() => {});
-        return Promise.resolve(messengerHubConnection);
+    if (!forceReconnect && messengerHubConnection) {
+        if (messengerHubConnection.state === signalR.HubConnectionState.Connected) {
+            messengerHubConnection.invoke("JoinUserGroup", uId).catch(() => {});
+            return Promise.resolve(messengerHubConnection);
+        }
+        if (messengerHubConnection.state === signalR.HubConnectionState.Connecting ||
+            messengerHubConnection.state === signalR.HubConnectionState.Reconnecting) {
+            return connectionPromise || Promise.resolve(messengerHubConnection);
+        }
     }
 
     if (connectionPromise && !forceReconnect) return connectionPromise;
 
     if (forceReconnect && messengerHubConnection) {
         try {
-            messengerHubConnection.stop().catch(() => {});
+            if (messengerHubConnection.state !== signalR.HubConnectionState.Disconnected) {
+                messengerHubConnection.stop().catch(() => {});
+            }
         } catch {}
         messengerHubConnection = null;
     }
@@ -240,6 +248,10 @@ export const initMessengerSignalR = (userId, forceReconnect = false) => {
             }
         })
         .build();
+
+    // Prevent premature ping timeouts during background tab throttling or brief network latency
+    conn.serverTimeoutInMilliseconds = 60000;
+    conn.keepAliveIntervalInMilliseconds = 15000;
 
     // 1. Direct message handler
     conn.on("ReceiveDirectMessage", (data) => {
@@ -371,6 +383,10 @@ export const initMessengerSignalR = (userId, forceReconnect = false) => {
     conn.onreconnected((connectionId) => {
         console.log('[RealtimeMessenger] SignalR connection restored! Re-joining user group for user:', uId);
         reconnectAttemptCount = 0;
+        if (watchdogReconnectTimer) {
+            clearTimeout(watchdogReconnectTimer);
+            watchdogReconnectTimer = null;
+        }
         conn.invoke("JoinUserGroup", uId).catch(() => {});
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('knome_messenger_reconnected', { detail: { connectionId, userId: uId } }));
@@ -379,7 +395,9 @@ export const initMessengerSignalR = (userId, forceReconnect = false) => {
 
     conn.onclose((error) => {
         console.warn('[RealtimeMessenger] SignalR connection closed completely:', error);
-        messengerHubConnection = null;
+        if (messengerHubConnection === conn) {
+            messengerHubConnection = null;
+        }
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('knome_messenger_disconnected', { detail: { error, userId: uId } }));
         }
@@ -392,6 +410,10 @@ export const initMessengerSignalR = (userId, forceReconnect = false) => {
     connectionPromise = conn.start().then(() => {
         messengerHubConnection = conn;
         reconnectAttemptCount = 0;
+        if (watchdogReconnectTimer) {
+            clearTimeout(watchdogReconnectTimer);
+            watchdogReconnectTimer = null;
+        }
         conn.invoke("JoinUserGroup", uId).catch(() => {});
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('knome_messenger_reconnected', { detail: { userId: uId } }));
@@ -433,11 +455,17 @@ function scheduleWatchdogReconnect(userId) {
 export const ensureMessengerConnected = (userId) => {
     const uId = Number(userId || activeRegisteredUserId);
     if (!uId) return Promise.resolve(null);
-    if (messengerHubConnection && messengerHubConnection.state === signalR.HubConnectionState.Connected) {
-        messengerHubConnection.invoke("JoinUserGroup", uId).catch(() => {});
-        return Promise.resolve(messengerHubConnection);
+    if (messengerHubConnection) {
+        if (messengerHubConnection.state === signalR.HubConnectionState.Connected) {
+            messengerHubConnection.invoke("JoinUserGroup", uId).catch(() => {});
+            return Promise.resolve(messengerHubConnection);
+        }
+        if (messengerHubConnection.state === signalR.HubConnectionState.Connecting ||
+            messengerHubConnection.state === signalR.HubConnectionState.Reconnecting) {
+            return connectionPromise || Promise.resolve(messengerHubConnection);
+        }
     }
-    return initMessengerSignalR(uId, true);
+    return initMessengerSignalR(uId, false);
 };
 
 // Global Browser Online / Offline Watchdogs

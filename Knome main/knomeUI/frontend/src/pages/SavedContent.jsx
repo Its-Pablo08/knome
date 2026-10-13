@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { savedContentApi, resolveMediaUrl } from '../utils/apiService';
+import { savedContentApi, resolveMediaUrl, getInitialsAvatar } from '../utils/apiService';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
 import { useScrollLoading } from '../hooks/useScrollLoading';
@@ -19,22 +19,24 @@ export const getDefaultThumbnail = (contentType = '', category = '') => {
     const typeLower = (contentType || '').toLowerCase();
     const catLower = (category || '').toLowerCase();
 
+    let bg1 = '#4f46e5', bg2 = '#06b6d4', label = 'POST', symbol = '&#9776;';
     if (typeLower === 'video') {
-        return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=600';
+        bg1 = '#dc2626'; bg2 = '#f97316'; label = 'VIDEO'; symbol = '&#9658;';
+    } else if (typeLower === 'podcast' || typeLower === 'audio') {
+        bg1 = '#7c3aed'; bg2 = '#c026d3'; label = 'PODCAST'; symbol = '&#9835;';
+    } else if (typeLower === 'article') {
+        if (catLower.includes('hr')) {
+            bg1 = '#e11d48'; bg2 = '#f43f5e'; label = 'HR ARTICLE'; symbol = '&#9733;';
+        } else {
+            bg1 = '#2563eb'; bg2 = '#38bdf8'; label = 'ARTICLE'; symbol = '&#9998;';
+        }
+    } else if (typeLower === 'document' || typeLower === 'job') {
+        bg1 = '#059669'; bg2 = '#10b981'; label = 'DOCUMENT'; symbol = '&#128196;';
     }
-    if (typeLower === 'podcast') {
-        return 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=80&w=600';
-    }
-    if (typeLower === 'article') {
-        if (catLower.includes('design')) return 'https://images.unsplash.com/photo-1561070791-2526d30994b5?auto=format&fit=crop&q=80&w=600';
-        if (catLower.includes('hr') || catLower.includes('policy')) return 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&q=80&w=600';
-        return 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=600';
-    }
-    if (typeLower === 'document' || typeLower === 'job') {
-        return 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&q=80&w=600';
-    }
-    // Default for Posts & General Content
-    return 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=600';
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="320" height="200"><defs><linearGradient id="g_${label.replace(/\s+/g, '')}" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${bg1}"/><stop offset="100%" stop-color="${bg2}"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g_${label.replace(/\s+/g, '')})"/><circle cx="160" cy="85" r="32" fill="white" fill-opacity="0.18"/><text x="160" y="96" fill="white" font-size="26" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">${symbol}</text><text x="160" y="148" fill="white" font-size="13" font-weight="700" letter-spacing="1.5" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" fill-opacity="0.95">${label}</text></svg>`;
+
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
 const extractText = (val) => {
@@ -47,7 +49,7 @@ const extractText = (val) => {
 
 export default function SavedContent() {
     const navigate = useNavigate();
-    const sysConfig = useSystemConfig();
+    const { isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled } = useSystemConfig();
 
     // Filter & Search State
     const [activeTab, setActiveTab] = useState('All');
@@ -56,11 +58,11 @@ export default function SavedContent() {
 
     // Auto reset activeTab if feature is disabled
     useEffect(() => {
-        if (activeTab === 'Posts' && !sysConfig.isPostsEnabled) setActiveTab('All');
-        if (activeTab === 'Articles' && !sysConfig.isArticlesEnabled) setActiveTab('All');
-        if (activeTab === 'Videos' && !sysConfig.isVideosEnabled) setActiveTab('All');
-        if (activeTab === 'Podcasts' && !sysConfig.isPodcastsEnabled) setActiveTab('All');
-    }, [activeTab, sysConfig]);
+        if (activeTab === 'Posts' && !isPostsEnabled) setActiveTab('All');
+        if (activeTab === 'Articles' && !isArticlesEnabled) setActiveTab('All');
+        if (activeTab === 'Videos' && !isVideosEnabled) setActiveTab('All');
+        if (activeTab === 'Podcasts' && !isPodcastsEnabled) setActiveTab('All');
+    }, [activeTab, isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled]);
 
     // Data State
     const [savedItems, setSavedItems] = useState([]);
@@ -112,10 +114,10 @@ export default function SavedContent() {
 
     const allTabs = [
         { id: 'All', label: 'All Types', countKey: 'totalCount' },
-        { id: 'Posts', label: 'Posts', countKey: 'postsCount', enabled: sysConfig.isPostsEnabled },
-        { id: 'Articles', label: 'Articles', countKey: 'articlesCount', enabled: sysConfig.isArticlesEnabled },
-        { id: 'Videos', label: 'Videos', countKey: 'videosCount', enabled: sysConfig.isVideosEnabled },
-        { id: 'Podcasts', label: 'Audio', countKey: 'podcastsCount', enabled: sysConfig.isPodcastsEnabled },
+        { id: 'Posts', label: 'Posts', countKey: 'postsCount', enabled: isPostsEnabled },
+        { id: 'Articles', label: 'Articles', countKey: 'articlesCount', enabled: isArticlesEnabled },
+        { id: 'Videos', label: 'Videos', countKey: 'videosCount', enabled: isVideosEnabled },
+        { id: 'Podcasts', label: 'Audio', countKey: 'podcastsCount', enabled: isPodcastsEnabled },
     ];
     const tabs = allTabs.filter(t => t.id === 'All' || t.enabled !== false);
 
@@ -143,25 +145,35 @@ export default function SavedContent() {
                 else if (t === 'podcast') localPodcasts++;
             });
 
-            const pCount = sysConfig.isPostsEnabled ? Math.max(apiCounts.postsCount || 0, localPosts) : 0;
-            const aCount = sysConfig.isArticlesEnabled ? Math.max(apiCounts.articlesCount || 0, localArticles) : 0;
-            const vCount = sysConfig.isVideosEnabled ? Math.max(apiCounts.videosCount || 0, localVideos) : 0;
-            const podCount = sysConfig.isPodcastsEnabled ? Math.max(apiCounts.podcastsCount || 0, localPodcasts) : 0;
+            const pCount = isPostsEnabled ? Math.max(apiCounts.postsCount || 0, localPosts) : 0;
+            const aCount = isArticlesEnabled ? Math.max(apiCounts.articlesCount || 0, localArticles) : 0;
+            const vCount = isVideosEnabled ? Math.max(apiCounts.videosCount || 0, localVideos) : 0;
+            const podCount = isPodcastsEnabled ? Math.max(apiCounts.podcastsCount || 0, localPodcasts) : 0;
             const sumTypes = pCount + aCount + vCount + podCount;
             const calculatedTotal = sumTypes + (apiCounts.documentsCount || 0);
 
-            setCounts({
-                totalCount: calculatedTotal,
-                postsCount: pCount,
-                articlesCount: aCount,
-                videosCount: vCount,
-                podcastsCount: podCount,
-                documentsCount: apiCounts.documentsCount || 0,
+            setCounts(prev => {
+                if (prev.totalCount === calculatedTotal &&
+                    prev.postsCount === pCount &&
+                    prev.articlesCount === aCount &&
+                    prev.videosCount === vCount &&
+                    prev.podcastsCount === podCount &&
+                    prev.documentsCount === (apiCounts.documentsCount || 0)) {
+                    return prev;
+                }
+                return {
+                    totalCount: calculatedTotal,
+                    postsCount: pCount,
+                    articlesCount: aCount,
+                    videosCount: vCount,
+                    podcastsCount: podCount,
+                    documentsCount: apiCounts.documentsCount || 0,
+                };
             });
         } catch (e) {
             console.error('Failed to load saved counts', e);
         }
-    }, [sysConfig]);
+    }, [isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled]);
 
     // Load saved content list
     const loadSavedContent = useCallback(async () => {
@@ -204,7 +216,13 @@ export default function SavedContent() {
                     savedAt: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
                     savedDate: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
                     userCategory: s.category,
-                    categoryName: s.category
+                    categoryName: s.category,
+                    targetUrl: s.targetUrl || (
+                        (s.contentType || '').toLowerCase() === 'video' ? `/videos?id=${s.contentId || s.id}&title=${encodeURIComponent(s.title || '')}` :
+                        (s.contentType || '').toLowerCase() === 'article' ? `/article-view?id=${s.contentId || s.id}` :
+                        (s.contentType || '').toLowerCase() === 'podcast' ? `/podcasts?id=${s.contentId || s.id}` :
+                        `/?postId=${s.contentId || s.id}`
+                    )
                 }));
 
             const formattedApiItems = items.map(i => ({
@@ -224,10 +242,10 @@ export default function SavedContent() {
 
             const filteredDeduped = deduped.filter(item => {
                 const t = (item.contentType || 'Post').toLowerCase();
-                if (t === 'post' && !sysConfig.isPostsEnabled) return false;
-                if (t === 'article' && !sysConfig.isArticlesEnabled) return false;
-                if (t === 'video' && !sysConfig.isVideosEnabled) return false;
-                if (t === 'podcast' && !sysConfig.isPodcastsEnabled) return false;
+                if (t === 'post' && !isPostsEnabled) return false;
+                if (t === 'article' && !isArticlesEnabled) return false;
+                if (t === 'video' && !isVideosEnabled) return false;
+                if (t === 'podcast' && !isPodcastsEnabled) return false;
                 return true;
             });
 
@@ -240,10 +258,10 @@ export default function SavedContent() {
             const formattedLocal = localCustomSaved
                 .filter(s => {
                     const type = (s.contentType || 'Post').toLowerCase();
-                    if (type === 'post' && !sysConfig.isPostsEnabled) return false;
-                    if (type === 'article' && !sysConfig.isArticlesEnabled) return false;
-                    if (type === 'video' && !sysConfig.isVideosEnabled) return false;
-                    if (type === 'podcast' && !sysConfig.isPodcastsEnabled) return false;
+                    if (type === 'post' && !isPostsEnabled) return false;
+                    if (type === 'article' && !isArticlesEnabled) return false;
+                    if (type === 'video' && !isVideosEnabled) return false;
+                    if (type === 'podcast' && !isPodcastsEnabled) return false;
                     if (activeTab === 'All') return true;
                     const tab = activeTab.toLowerCase();
                     if (tab === 'posts') return type === 'post';
@@ -264,7 +282,13 @@ export default function SavedContent() {
                     savedAt: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
                     savedDate: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
                     userCategory: s.category,
-                    categoryName: s.category
+                    categoryName: s.category,
+                    targetUrl: s.targetUrl || (
+                        (s.contentType || '').toLowerCase() === 'video' ? `/videos?id=${s.contentId || s.id}&title=${encodeURIComponent(s.title || '')}` :
+                        (s.contentType || '').toLowerCase() === 'article' ? `/article-view?id=${s.contentId || s.id}` :
+                        (s.contentType || '').toLowerCase() === 'podcast' ? `/podcasts?id=${s.contentId || s.id}` :
+                        `/?postId=${s.contentId || s.id}`
+                    )
                 }));
 
             formattedLocal.sort((a, b) => {
@@ -278,7 +302,7 @@ export default function SavedContent() {
         } finally {
             setIsLoading(false);
         }
-    }, [activeTab, searchQuery, sortBy, pageNumber, sysConfig]);
+    }, [activeTab, searchQuery, sortBy, pageNumber, isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled]);
 
     useEffect(() => {
         const handleBookmarkSaved = (e) => {
@@ -732,8 +756,14 @@ export default function SavedContent() {
                             <div
                                 key={itemKey}
                                 onClick={() => {
-                                    if (isAvailable && item.targetUrl) {
-                                        navigate(item.targetUrl);
+                                    if (isAvailable) {
+                                        const url = item.targetUrl || (
+                                            (item.contentType || '').toLowerCase() === 'video' ? `/videos?id=${item.contentId || item.id}&title=${encodeURIComponent(item.title || '')}` :
+                                            (item.contentType || '').toLowerCase() === 'article' ? `/article-view?id=${item.contentId || item.id}` :
+                                            (item.contentType || '').toLowerCase() === 'podcast' ? `/podcasts?id=${item.contentId || item.id}` :
+                                            `/?postId=${item.contentId || item.id}`
+                                        );
+                                        if (url) navigate(url);
                                     }
                                 }}
                                 className={`group glass bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col md:flex-row gap-4 relative overflow-hidden transition-all duration-200 ${
@@ -746,6 +776,7 @@ export default function SavedContent() {
                                     alt={extractText(item.title)}
                                     className="w-full md:w-44 h-28 object-cover rounded-xl shrink-0 border border-slate-100 dark:border-slate-800"
                                     onError={(e) => {
+                                        e.target.onerror = null;
                                         e.target.src = getDefaultThumbnail(item.contentType, item.userCategory || item.categoryName);
                                     }}
                                 />
@@ -802,6 +833,10 @@ export default function SavedContent() {
                                                     src={resolveMediaUrl(item.authorAvatar)}
                                                     alt={extractText(item.authorName || item.authorFullName)}
                                                     className="w-5 h-5 rounded-full object-cover shrink-0"
+                                                    onError={(e) => {
+                                                        e.target.onerror = null;
+                                                        e.target.src = getInitialsAvatar(item.authorName || item.authorFullName || 'User');
+                                                    }}
                                                 />
                                             ) : (
                                                 <div className="w-5 h-5 rounded-full bg-indigo-500 text-white font-bold text-[10px] flex items-center justify-center shrink-0">

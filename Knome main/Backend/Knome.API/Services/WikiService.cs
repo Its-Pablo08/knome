@@ -107,17 +107,11 @@ public class WikiService : IWikiService
         if (isAdministrator) return;
         if (wiki.CreatedByUserId == userId) return;
 
-        // Drafts are strictly private to creator, owner, and editors
-        if (wiki.Status == "Draft")
-        {
-            var isCollab = wiki.WikiCollaborators.Any(c => c.UserId == userId && (c.Role == "Owner" || c.Role == "Editor"));
-            if (!isCollab)
-                throw new ForbiddenException("This Wiki is currently a Draft and only accessible to its authors/collaborators.");
-            return;
-        }
-
-        // Check collaborators
+        // Check wiki-level collaborators (Owner, Editor, Viewer)
         if (wiki.WikiCollaborators.Any(c => c.UserId == userId)) return;
+
+        // Check section-level collaborators
+        if (wiki.WikiSections.Any(sec => sec.WikiCollaborators.Any(wc => wc.UserId == userId))) return;
 
         // Check direct user share
         if (wiki.WikiShares.Any(s => s.ShareType == "User" && s.TargetId == userId)) return;
@@ -129,6 +123,12 @@ public class WikiService : IWikiService
         // Check department sphere ("Group") share
         var userDeptId = await _db.Users.Where(u => u.UserId == userId).Select(u => u.DepartmentId).FirstOrDefaultAsync();
         if (userDeptId.HasValue && wiki.WikiShares.Any(s => s.ShareType == "Group" && s.TargetId == userDeptId.Value)) return;
+
+        // Drafts are strictly private to creator, collaborators, and shared recipients
+        if (wiki.Status == "Draft")
+        {
+            throw new ForbiddenException("This Wiki is currently a Draft and only accessible to its authors/collaborators.");
+        }
 
         // If Published or Archived and no restricted target shares, public to organization
         var hasRestrictedShares = wiki.WikiShares.Any(s => s.ShareType == "User" || s.ShareType == "Community" || s.ShareType == "Group");

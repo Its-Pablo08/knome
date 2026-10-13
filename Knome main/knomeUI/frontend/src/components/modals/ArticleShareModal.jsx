@@ -328,10 +328,16 @@ export default function ArticleShareModal({ isOpen, onClose, article, post, item
                 ...(contentTypeStr === 'Video' ? {
                     sharedVideo: {
                         id: contentId,
+                        videoId: contentId,
                         title: itemTitle,
                         sourceUrl: item?.videoUrl || item?.url || item?.sourceUrl || shareUrl,
                         thumbnail: itemThumbnail,
-                        author: itemAuthor
+                        author: itemAuthor,
+                        authorAvatar: item?.authorAvatar || item?.avatar || null,
+                        authorRole: item?.authorRole || item?.authorDesignation || item?.role || 'Enterprise Contributor',
+                        description: item?.description || item?.content || '',
+                        duration: item?.duration || item?.durationSeconds || 'Video Session',
+                        category: item?.category || item?.categoryName || 'Training & Tutorials'
                     },
                     videoUrl: item?.videoUrl || item?.url || item?.sourceUrl || shareUrl,
                     thumbnail: itemThumbnail

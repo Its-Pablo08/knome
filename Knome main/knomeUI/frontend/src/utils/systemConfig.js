@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 export const SYSTEM_CONFIG_KEY = 'knome_system_config';
 export const SYSTEM_CONFIG_EVENT = 'knome_config_updated';
@@ -243,26 +243,26 @@ export async function loadSystemApprovalSettingFromBackend(forceRefresh = false)
     return backendSyncPromise;
 }
 
-let isGlobalInitialSyncCompleted = false;
+let isGlobalInitialSyncCompleted = true;
 
 /**
  * React hook to reactively subscribe to system configuration changes.
+ * Initializes instantaneously using locally cached system configuration (0ms latency),
+ * then synchronizes with backend asynchronously in the background (SWR pattern).
  */
 export function useSystemConfig() {
     const [config, setConfig] = useState(getSystemConfig);
-    const [isLoaded, setIsLoaded] = useState(isGlobalInitialSyncCompleted);
+    const [isLoaded, setIsLoaded] = useState(true);
 
     useEffect(() => {
-        // Initial sync with backend database bypassing cache
-        loadSystemApprovalSettingFromBackend(true).then(latestConfig => {
+        // Asynchronous background sync with backend database without blocking initial UI paint
+        loadSystemApprovalSettingFromBackend(false).then(latestConfig => {
             isGlobalInitialSyncCompleted = true;
-            setIsLoaded(true);
             if (latestConfig) {
                 setConfig(latestConfig);
             }
         }).catch(() => {
             isGlobalInitialSyncCompleted = true;
-            setIsLoaded(true);
         });
 
         const handleConfigChange = (e) => {
@@ -316,7 +316,7 @@ export function useSystemConfig() {
         setConfig(updated);
     };
 
-    return {
+    return useMemo(() => ({
         ...config,
         config,
         isLoaded,
@@ -340,5 +340,5 @@ export function useSystemConfig() {
         enableVideos: config.enableVideos !== false,
         enablePodcasts: config.enablePodcasts !== false,
         updateConfig,
-    };
+    }), [config, isLoaded]);
 }

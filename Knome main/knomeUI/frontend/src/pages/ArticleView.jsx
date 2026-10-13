@@ -351,9 +351,6 @@ export default function ArticleView() {
         );
     }
 
-    // Related content excludes the current article
-    const relatedArticles = articles.filter(art => art.id !== article.id).slice(0, 3);
-    
     // Calculate total comments
     const totalComments = comments.length + comments.reduce((acc, c) => acc + (c.replies?.length || 0), 0);
 
@@ -823,61 +820,6 @@ export default function ArticleView() {
                     </div>
                 </section>
             </main>
-
-            <aside className="hidden xl:block w-[300px] p-6 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 h-[calc(100vh-72px)] sticky top-[72px] overflow-y-auto">
-                <div className="space-y-6">
-                    {/*  Community Widget  */}
-                    <div className="bg-slate-50 dark:bg-slate-800/40 p-5 rounded-xl border border-slate-200 dark:border-slate-800">
-                        <h4 className="font-bold text-slate-900 dark:text-white text-sm mb-4">About the Community</h4>
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="h-12 w-12 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-600 dark:text-teal-400">
-                                <span className="material-symbols-outlined text-2xl" style={{fontVariationSettings: "'FILL' 1"}}>architecture</span>
-                            </div>
-                            <div>
-                                <p className="font-bold text-xs text-slate-900 dark:text-white">{article.community}</p>
-                                <p className="text-[10px] text-slate-500">{article.members}</p>
-                            </div>
-                        </div>
-                        <p className="text-xs text-slate-500 leading-relaxed mb-4">
-                            {article.communityDesc}
-                        </p>
-                        <button className="w-full py-2 border border-blue-500 text-blue-500 font-bold text-xs rounded-lg hover:bg-blue-500/5 transition-all">Joined</button>
-                    </div>
-
-                    {/*  Related Content  */}
-                    <div className="bg-slate-50 dark:bg-slate-800/40 p-5 rounded-xl border border-slate-200 dark:border-slate-800">
-                        <h4 className="font-bold text-slate-900 dark:text-white text-sm mb-4">Related Content</h4>
-                        <ul className="space-y-4">
-                            {relatedArticles.length > 0 ? (
-                                relatedArticles.map(art => (
-                                    <li key={art.id} className="group">
-                                        <Link to={`/article-view?id=${art.id}`}>
-                                            <p className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-blue-500 transition-colors mb-1 line-clamp-2 leading-snug">
-                                                {art.title}
-                                            </p>
-                                            <p className="text-[10px] text-slate-500">{art.readTime} • By {art.author.name}</p>
-                                        </Link>
-                                    </li>
-                                ))
-                            ) : (
-                                <p className="text-xs text-slate-500">No other articles available.</p>
-                            )}
-                        </ul>
-                    </div>
-
-                    {/*  Trending Topics  */}
-                    <div>
-                        <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-650 uppercase tracking-widest mb-3">Trending Topics</h4>
-                        <div className="flex flex-wrap gap-2">
-                            {['strategy2024', 'knome_hq', 'product_ops', 'design_trends'].map(topic => (
-                                <span key={topic} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded text-[10px] font-bold cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                                    #{topic}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </aside>
 
             {/* Report Article Modal */}
             <ReportModal

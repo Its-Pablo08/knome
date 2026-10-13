@@ -1212,7 +1212,6 @@ export default function Clips() {
                                                     playsInline
                                                     preload="auto"
                                                     muted={isMuted}
-                                                    defaultMuted
                                                     onClick={handleVideoClick}
                                                     onTimeUpdate={isCurrent ? handleTimeUpdate : undefined}
                                                     onWaiting={() => { if (isCurrent) setIsBuffering(true); }}

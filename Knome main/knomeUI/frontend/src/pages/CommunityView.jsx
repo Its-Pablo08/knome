@@ -9,6 +9,7 @@ import ArticleShareModal from '../components/modals/ArticleShareModal';
 import SuspendUserModal from '../components/modals/SuspendUserModal';
 import { ImageGrid, ImageLightbox } from '../components/widgets/PostCard';
 import SharedClipCard, { isClipPost } from '../components/widgets/SharedClipCard';
+import SharedVideoCard, { isSharedVideoPost } from '../components/widgets/SharedVideoCard';
 import useScrollLoading from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
@@ -320,69 +321,106 @@ export default function CommunityView() {
         if (!a) return false;
         const u = (a.url || a.fileUrl || a.backendUrl || (typeof a === 'string' ? a : '')).split('?')[0].toLowerCase();
         const t = (a.type || a.fileType || a.attachmentType || '').toLowerCase();
-        if (u.match(/\.(mp4|webm|ogg|mov|mkv|avi|mp3|wav|aac|m4a|flac|pdf|doc|docx|txt|xls|xlsx|ppt|pptx|csv)$/i)) {
+        // Stale or dead blob URLs without in-memory File/Blob must never be loaded
+        if (u.startsWith('blob:') && !(a?.file instanceof Blob)) {
             return false;
         }
-        if (t === 'image' || t === 'img' || t === 'photo') return true;
-        return Boolean(u.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)$/i)) || u.startsWith('data:image/');
+        if (u.match(/\.(mp4|webm|ogg|mov|mkv|avi|mp3|wav|aac|m4a|flac|pdf|doc|docx|txt|xls|xlsx|ppt|pptx|csv|zip|rar)$/i)) {
+            return false;
+        }
+        if (Boolean(u.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)$/i)) || u.startsWith('data:image/')) {
+            return true;
+        }
+        if (t === 'image' || t === 'img' || t === 'photo') {
+            return !u.match(/\.(pdf|doc|docx|txt|xls|xlsx|ppt|pptx|csv|zip|rar|bin|exe)$/i);
+        }
+        return false;
+    };
+
+    const inferAttachmentType = (url) => {
+        if (!url || typeof url !== 'string') return 'doc';
+        const clean = url.split('?')[0].toLowerCase();
+        if (clean.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)$/i) || clean.startsWith('data:image/')) return 'image';
+        if (clean.match(/\.(mp4|webm|ogg|mov|mkv|avi)$/i)) return 'video';
+        if (clean.match(/\.(mp3|wav|aac|m4a|flac)$/i)) return 'audio';
+        return 'doc';
     };
 
     // Helper to normalize attachments from all backend DTO shapes & local storage formats
     const normalizePostAttachments = (p) => {
         if (!p) return { attachments: [], images: [], attachmentUrls: [] };
 
+        const isDeadBlob = (val, fileObj) => {
+            const str = typeof val === 'string' ? val : (val?.url || val?.fileUrl || '');
+            return typeof str === 'string' && str.startsWith('blob:') && !(fileObj instanceof Blob || val?.file instanceof Blob);
+        };
+
         const rawList = [];
         if (Array.isArray(p.attachments) && p.attachments.length > 0) {
-            rawList.push(...p.attachments);
+            p.attachments.forEach(att => {
+                if (!att) return;
+                const effectiveUrl = att.backendUrl || att.url || att.fileUrl || (typeof att === 'string' ? att : '');
+                if (!isDeadBlob(effectiveUrl, att.file)) {
+                    rawList.push(typeof att === 'object' ? { ...att, url: effectiveUrl, fileUrl: effectiveUrl } : att);
+                }
+            });
         }
         if (Array.isArray(p.postAttachments) && p.postAttachments.length > 0) {
-            rawList.push(...p.postAttachments);
+            p.postAttachments.forEach(att => {
+                if (!att) return;
+                const effectiveUrl = att.backendUrl || att.url || att.fileUrl || (typeof att === 'string' ? att : '');
+                if (!isDeadBlob(effectiveUrl, att.file)) {
+                    rawList.push(typeof att === 'object' ? { ...att, url: effectiveUrl, fileUrl: effectiveUrl } : att);
+                }
+            });
         }
         if (Array.isArray(p.attachmentUrls) && p.attachmentUrls.length > 0) {
             p.attachmentUrls.forEach((u, i) => {
-                if (u && !rawList.some(r => (r.url === u || r.fileUrl === u || r === u))) {
-                    rawList.push({ id: `att_url_${i}`, url: u, fileUrl: u, type: 'image' });
+                if (u && !isDeadBlob(u) && !rawList.some(r => (r.url === u || r.fileUrl === u || r === u))) {
+                    rawList.push({ id: `att_url_${i}`, url: u, fileUrl: u, type: inferAttachmentType(u) });
                 }
             });
         }
         if (Array.isArray(p.mediaUrls) && p.mediaUrls.length > 0) {
             p.mediaUrls.forEach((u, i) => {
-                if (u && !rawList.some(r => (r.url === u || r.fileUrl === u || r === u))) {
-                    rawList.push({ id: `media_url_${i}`, url: u, fileUrl: u, type: 'image' });
+                if (u && !isDeadBlob(u) && !rawList.some(r => (r.url === u || r.fileUrl === u || r === u))) {
+                    rawList.push({ id: `media_url_${i}`, url: u, fileUrl: u, type: inferAttachmentType(u) });
                 }
             });
         }
         if (Array.isArray(p.images) && p.images.length > 0) {
             p.images.forEach((img, i) => {
-                const u = img?.url || img?.fileUrl || (typeof img === 'string' ? img : '');
-                if (u && !rawList.some(r => (r.url === u || r.fileUrl === u || r === u))) {
-                    rawList.push(typeof img === 'object' ? img : { id: `img_${i}`, url: u, fileUrl: u, type: 'image' });
+                const u = img?.backendUrl || img?.url || img?.fileUrl || (typeof img === 'string' ? img : '');
+                if (u && !isDeadBlob(u, img?.file) && !rawList.some(r => (r.url === u || r.fileUrl === u || r === u))) {
+                    rawList.push(typeof img === 'object' ? { ...img, url: u, fileUrl: u } : { id: `img_${i}`, url: u, fileUrl: u, type: 'image' });
                 }
             });
         }
-        if (p.attachmentUrl && !rawList.some(r => (r.url === p.attachmentUrl || r.fileUrl === p.attachmentUrl || r === p.attachmentUrl))) {
-            rawList.push({ id: 'att_url_single', url: p.attachmentUrl, fileUrl: p.attachmentUrl, type: 'image' });
+        if (p.attachmentUrl && !isDeadBlob(p.attachmentUrl) && !rawList.some(r => (r.url === p.attachmentUrl || r.fileUrl === p.attachmentUrl || r === p.attachmentUrl))) {
+            rawList.push({ id: 'att_url_single', url: p.attachmentUrl, fileUrl: p.attachmentUrl, type: inferAttachmentType(p.attachmentUrl) });
         }
-        if (p.imageUrl && !rawList.some(r => (r.url === p.imageUrl || r.fileUrl === p.imageUrl || r === p.imageUrl))) {
+        if (p.imageUrl && !isDeadBlob(p.imageUrl) && !rawList.some(r => (r.url === p.imageUrl || r.fileUrl === p.imageUrl || r === p.imageUrl))) {
             rawList.push({ id: 'img_url_single', url: p.imageUrl, fileUrl: p.imageUrl, type: 'image' });
         }
-        if (p.image && typeof p.image === 'string' && !rawList.some(r => (r.url === p.image || r.fileUrl === p.image || r === p.image))) {
+        if (p.image && typeof p.image === 'string' && !isDeadBlob(p.image) && !rawList.some(r => (r.url === p.image || r.fileUrl === p.image || r === p.image))) {
             rawList.push({ id: 'image_single', url: p.image, fileUrl: p.image, type: 'image' });
         }
 
         const normalized = rawList.map((a, idx) => {
-            const rawUrl = a.url || a.fileUrl || a.backendUrl || (typeof a === 'string' ? a : '');
+            const rawUrl = a.backendUrl || a.url || a.fileUrl || (typeof a === 'string' ? a : '');
+            if (isDeadBlob(rawUrl, a.file)) return null;
             const isImg = isImageAttachment(a) || isImageAttachment(rawUrl);
             const rawType = (a.type || a.fileType || a.attachmentType || '').toLowerCase();
             return {
                 id: a.id || a.attachmentId || idx + 1,
                 url: rawUrl,
                 fileUrl: rawUrl,
+                backendUrl: a.backendUrl || (rawUrl.startsWith('http') || rawUrl.startsWith('/') ? rawUrl : null),
                 type: isImg ? 'image' : (rawType || 'doc'),
                 attachmentType: isImg ? 'image' : (rawType || 'doc'),
                 name: a.name || rawUrl?.split('/').pop()?.split('?')[0] || 'attachment'
             };
-        }).filter(a => a.url && typeof a.url === 'string' && a.url.trim().length > 0);
+        }).filter(a => a && a.url && typeof a.url === 'string' && a.url.trim().length > 0 && !isDeadBlob(a.url, a.file));
 
         const imageAttachments = normalized.filter(isImageAttachment);
         const attachmentUrls = normalized.map(a => a.url);
@@ -2260,7 +2298,24 @@ export default function CommunityView() {
             // Unified Persistent Community Feed Posts Loading
             // ─────────────────────────────────────────
             const savedPostsKey = `knome_community_posts_${resolvedTargetId}`;
-            const localCommunityPosts = JSON.parse(localStorage.getItem(savedPostsKey) || '[]');
+            const rawLocalPosts = JSON.parse(localStorage.getItem(savedPostsKey) || '[]');
+            const cleanPostAttachments = (postItem) => {
+                if (!postItem) return postItem;
+                const filterAtts = (list) => (list || []).filter(a => {
+                    const u = typeof a === 'string' ? a : (a?.url || a?.fileUrl || '');
+                    return !(typeof u === 'string' && u.startsWith('blob:') && !(a?.file instanceof Blob));
+                });
+                return {
+                    ...postItem,
+                    attachments: filterAtts(postItem.attachments),
+                    images: filterAtts(postItem.images),
+                    attachmentUrls: (postItem.attachmentUrls || []).filter(u => typeof u === 'string' && !u.startsWith('blob:'))
+                };
+            };
+            const localCommunityPosts = rawLocalPosts.map(cleanPostAttachments);
+            if (JSON.stringify(localCommunityPosts) !== JSON.stringify(rawLocalPosts)) {
+                safeSetStorage(savedPostsKey, localCommunityPosts);
+            }
 
             let mergedPosts = [];
             if (postsData && Array.isArray(postsData) && postsData.length > 0) {
@@ -4968,7 +5023,7 @@ export default function CommunityView() {
                                         const hasExplicitClipCard = isClipPost(post);
                                         const hasExplicitArticleCard = Boolean(isArticlesEnabled && (post.sharedArticle || post.type === 'article_share' || (post.content && (post.content.includes('Shared Article:') || post.content.includes('/article-view')))));
                                         const hasExplicitPodcastCard = Boolean(post.sharedPodcast || post.type === 'podcast_share' || (post.content && (post.content.includes('Shared Podcast:') || post.content.includes('/podcasts'))));
-                                        const hasExplicitVideoCard = !hasExplicitClipCard && Boolean(post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹'))));
+                                        const hasExplicitVideoCard = !hasExplicitClipCard && isSharedVideoPost(post);
                                         const hasExplicitProfileCard = Boolean(post.sharedProfile || post.isProfileShare || (post.content && post.content.includes('Shared Profile:')));
 
                                         const isWikiShare = Boolean(target?.type === 'Wiki' || post.sharedWiki || post.type === 'wiki_share' || (post.postType || '').toLowerCase() === 'wiki' || (post.content && (post.content.includes('Shared Wiki:') || post.content.includes('/wiki/view') || post.content.includes('/wiki'))));
@@ -4987,11 +5042,12 @@ export default function CommunityView() {
 
                                         // Clean user commentary if this is a shared post, article, video, profile, or clip:
                                         let userCommentary = post.content || '';
-                                        if (isSharedPost || hasExplicitClipCard || (post.content && (post.content.includes('Shared Article:') || post.content.includes('Shared Video:') || post.content.includes('Shared Profile:') || post.content.includes('Shared Clip:') || post.content.includes('Check out this Clip:')))) {
+                                        if (isSharedPost || hasExplicitClipCard || hasExplicitVideoCard || (post.content && (post.content.includes('Shared Article:') || post.content.includes('Shared Video:') || post.content.includes('Shared Profile:') || post.content.includes('Shared Clip:') || post.content.includes('Check out this Clip:')))) {
                                             userCommentary = userCommentary
                                                 .replace(/(?:Shared Clip|Check out this Clip):\s*"[^"]*"\s*(?:🎬)?/gi, '')
                                                 .replace(/🎬\s*(?:Shared Clip|Check out this Clip):\s*"[^"]*"/gi, '')
                                                 .replace(/Shared\s+(?:Post|Article|Video|Profile|Clip):\s*"[^"]*"/gi, '')
+                                                .replace(/^[📹🎥🎬]\s*/, '')
                                                 .replace(/(?:https?:\/\/[^\s]+)?\/(?:posts|article-view|videos|profile|clips)\?[^\s]+/gi, '')
                                                 .replace(/(?:https?:\/\/[^\s]+)?\/clips\/[^\s]+/gi, '')
                                                 .trim();
@@ -5074,7 +5130,7 @@ export default function CommunityView() {
 
                                         return (
                                             <>
-                                                {post.title && !post.title.startsWith('Shared Post:') && (
+                                                {post.title && !post.title.startsWith('Shared Post:') && !hasExplicitVideoCard && !hasExplicitClipCard && (
                                                     <h5 
                                                         onClick={() => {
                                                             if (targetComm) navigate(`/community/view?id=${targetComm.id}`);
@@ -5096,13 +5152,13 @@ export default function CommunityView() {
                                                 {(() => {
                                                     const postMedia = normalizePostAttachments(post);
                                                     const postImages = postMedia.images;
-                                                    if (hasExplicitClipCard || !postImages || postImages.length === 0) return null;
+                                                    if (hasExplicitClipCard || hasExplicitVideoCard || !postImages || postImages.length === 0) return null;
                                                     return (
                                                         <div className="mb-4 w-full rounded-2xl overflow-hidden">
                                                             <ImageGrid 
                                                                 images={postImages} 
-                                                                onImageClick={(idx) => {
-                                                                    setLightboxImages(postImages);
+                                                                onImageClick={(idx, workingImages) => {
+                                                                    setLightboxImages(workingImages || postImages);
                                                                     setLightboxStartIndex(idx);
                                                                 }} 
                                                             />
@@ -5113,7 +5169,14 @@ export default function CommunityView() {
                                                 {/* Non-Image Attachments (Documents / Archives / Media) */}
                                                 {(() => {
                                                     const postMedia = normalizePostAttachments(post);
-                                                    const otherAtts = (postMedia.attachments || []).filter(a => !isImageAttachment(a));
+                                                    const otherAtts = (postMedia.attachments || []).filter(a => {
+                                                        if (isImageAttachment(a)) return false;
+                                                        if (hasExplicitVideoCard || hasExplicitClipCard) {
+                                                            const u = (a.url || a.fileUrl || '').split('?')[0].toLowerCase();
+                                                            if (u.match(/\.(mp4|webm|ogg|mov|mkv|avi)$/i)) return false;
+                                                        }
+                                                        return true;
+                                                    });
                                                     if (!otherAtts || otherAtts.length === 0) return null;
                                                     return (
                                                         <div className="mb-4 flex flex-col gap-2">
@@ -5336,69 +5399,8 @@ export default function CommunityView() {
                                                 )}
 
                                                 {/* Shared Video Player / Card inside Community Feed Post */}
-                                                {!hasExplicitClipCard && (post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹')))) && (
-                                                    <div className="mb-4 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-xl">
-                                                        {(() => {
-                                                            const vidObj = post.sharedVideo || {
-                                                                id: post.id || `shared_vid_${Date.now()}`,
-                                                                title: post.title?.replace('📹 Shared Video: ', '').replace(/ — uploaded by.*/, '') || post.content?.replace(/^.*Shared Video: "/, '').replace(/".*/, '') || 'Shared Video',
-                                                                sourceUrl: post.videoUrl || post.sourceUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-                                                                thumbnail: post.thumbnail || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=1200',
-                                                                author: post.authorName || post.author || 'MPOnline Team'
-                                                            };
-                                                            const vUrl = vidObj.sourceUrl || vidObj.videoUrl || post.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-                                                            const isYT = vUrl && (vUrl.includes('youtube.com') || vUrl.includes('youtu.be'));
-                                                            const thumb = vidObj.thumbnail || getVideoThumbnail(vidObj);
-
-                                                            return (
-                                                                <div className="flex flex-col">
-                                                                    <div 
-                                                                        onClick={() => navigate(`/videos?id=${vidObj.id || ''}&title=${encodeURIComponent(vidObj.title || '')}&url=${encodeURIComponent(vUrl)}`)}
-                                                                        className="relative aspect-video w-full bg-slate-950 overflow-hidden group cursor-pointer"
-                                                                    >
-                                                                        {thumb ? (
-                                                                            <img 
-                                                                                src={thumb} 
-                                                                                alt={vidObj.title} 
-                                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                                                            />
-                                                                        ) : (
-                                                                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-black">
-                                                                                <span className="material-symbols-outlined text-slate-700 text-6xl">movie</span>
-                                                                            </div>
-                                                                        )}
-                                                                        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all flex items-center justify-center">
-                                                                            <div className="w-16 h-16 rounded-full bg-indigo-600/90 group-hover:bg-indigo-500 text-white flex items-center justify-center shadow-xl shadow-indigo-500/40 group-hover:scale-110 transition-transform">
-                                                                                <span className="material-symbols-outlined text-3xl ml-1">play_arrow</span>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-sm text-[11px] font-semibold text-white flex items-center gap-1.5">
-                                                                            <span className="material-symbols-outlined text-[14px] text-cyan-400">open_in_full</span>
-                                                                            <span>Click to watch on large screen</span>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="p-3.5 bg-slate-900 flex items-center justify-between gap-3 border-t border-slate-800">
-                                                                        <div className="min-w-0">
-                                                                            <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
-                                                                                <span className="material-symbols-outlined text-[12px]">play_circle</span>
-                                                                                SHARED VIDEO
-                                                                            </span>
-                                                                            <h5 className="font-extrabold text-white text-xs sm:text-sm truncate mt-1">
-                                                                                {vidObj.title}
-                                                                            </h5>
-                                                                        </div>
-                                                                        <button
-                                                                            onClick={() => navigate(`/videos?id=${vidObj.id || ''}&title=${encodeURIComponent(vidObj.title || '')}&url=${encodeURIComponent(vUrl)}`)}
-                                                                            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-600 hover:to-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shrink-0 transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
-                                                                        >
-                                                                            <span className="material-symbols-outlined text-[16px]">open_in_full</span>
-                                                                            <span>Watch on Large Screen</span>
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })()}
-                                                    </div>
+                                                {!hasExplicitClipCard && hasExplicitVideoCard && (
+                                                    <SharedVideoCard post={post} />
                                                 )}
                                                 
                                                 {/* Shared Profile Card inside Community Post */}

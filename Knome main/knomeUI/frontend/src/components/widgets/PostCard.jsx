@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useUser, resolveEmployeeName, KNOWN_ROSTER_NAMES } from '../contexts/UserContext';
@@ -14,6 +14,7 @@ import HighlightText from '../ui/HighlightText';
 import { interactionsApi, postsApi, notificationsApi, searchApi, communitiesApi, resolveMediaUrl, getVideoThumbnail, formatToDDMMYYYY, resolveSharedTarget } from '../../utils/apiService';
 import { checkRestrictedContent } from '../../utils/restrictedWords';
 import SharedClipCard, { isClipPost } from './SharedClipCard';
+import SharedVideoCard, { isSharedVideoPost } from './SharedVideoCard';
 
 // Available reactions (FR-CI-01)
 const REACTION_TYPES = {
@@ -281,37 +282,64 @@ export function LargeVideoModal({ video, onClose }) {
     );
 }
 
-// ─── Image Grid (full-width cover layout) ────────────────────
-const FALLBACK_GRID_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500"><defs><linearGradient id="bgG" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%231e293b"/><stop offset="100%" stop-color="%230f172a"/></linearGradient></defs><rect width="800" height="500" fill="url(%23bgG)"/><circle cx="400" cy="210" r="52" fill="%236366f1" fill-opacity="0.15"/><path d="M380 195l16-20 14 18 12-14 18 24H360z" fill="%23818cf8"/><circle cx="375" cy="180" r="6" fill="%23a5b4fc"/><text x="400" y="295" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="%23f1f5f9" text-anchor="middle">Knome Enterprise Media</text><text x="400" y="322" font-family="system-ui,-apple-system,sans-serif" font-size="13" font-weight="500" fill="%2394a3b8" text-anchor="middle">Attachment</text></svg>`;
-
+// ─── Image Grid (Dynamic Resilient Layout) ────────────────────
 export function ImageGrid({ images, onImageClick }) {
     const [isImagesExpanded, setIsImagesExpanded] = useState(false);
-    const validImages = (images || []).filter(img => {
-        if (!img) return false;
-        const u = typeof img === 'string' ? img : (img.url || img.fileUrl);
-        return typeof u === 'string' && u.trim().length > 0;
-    });
-    if (validImages.length === 0) return null;
+    const [failedUrls, setFailedUrls] = useState(() => new Set());
 
-    const getImgUrl = (img) => {
+    const getImgUrl = useCallback((img) => {
+        if (!img) return '';
         const u = typeof img === 'string' ? img : (img.url || img.fileUrl);
-        return resolveMediaUrl(u) || u;
-    };
+        return resolveMediaUrl(u) || u || '';
+    }, []);
 
-    // Single image — full width, tall cover
-    if (validImages.length === 1) {
+    const validImages = useMemo(() => {
+        return (images || []).filter(img => {
+            if (!img) return false;
+            const u = typeof img === 'string' ? img : (img.url || img.fileUrl);
+            if (typeof u !== 'string' || u.trim().length === 0) return false;
+            if (u.startsWith('blob:') && !(img?.file instanceof Blob)) return false;
+            return true;
+        });
+    }, [images]);
+
+    const activeImages = useMemo(() => {
+        return validImages.filter(img => {
+            const u = getImgUrl(img);
+            return u && !failedUrls.has(u);
+        });
+    }, [validImages, failedUrls, getImgUrl]);
+
+    const handleImageError = useCallback((url) => {
+        if (!url) return;
+        setFailedUrls(prev => {
+            if (prev.has(url)) return prev;
+            const next = new Set(prev);
+            next.add(url);
+            return next;
+        });
+    }, []);
+
+    if (activeImages.length === 0) return null;
+
+    // Single image — full width, responsive height, crisp cover layout
+    if (activeImages.length === 1) {
+        const singleUrl = getImgUrl(activeImages[0]);
         return (
             <div
-                className="w-full overflow-hidden cursor-zoom-in group relative"
+                className="w-full overflow-hidden cursor-zoom-in group relative rounded-xl bg-slate-900/5 dark:bg-slate-900/50"
                 style={{ maxHeight: '520px' }}
-                onClick={() => onImageClick(0)}
+                onClick={() => onImageClick && onImageClick(0, activeImages)}
             >
                 <img
-                    src={getImgUrl(validImages[0])}
-                    onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_GRID_SVG; }}
+                    src={singleUrl}
+                    onError={(e) => {
+                        e.target.style.display = 'none';
+                        handleImageError(singleUrl);
+                    }}
                     alt="Post media"
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-                    style={{ maxHeight: '520px', display: 'block' }}
+                    className="w-full h-auto max-h-[520px] object-cover transition-transform duration-500 group-hover:scale-[1.01]"
+                    style={{ display: 'block' }}
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
             </div>
@@ -319,84 +347,114 @@ export function ImageGrid({ images, onImageClick }) {
     }
 
     // Two images — side by side
-    if (validImages.length === 2) {
+    if (activeImages.length === 2) {
         return (
-            <div className="w-full grid grid-cols-2 gap-0.5" style={{ height: '360px' }}>
-                {validImages.map((img, i) => (
-                    <div
-                        key={i}
-                        className="overflow-hidden cursor-zoom-in group relative"
-                        onClick={() => onImageClick(i)}
-                    >
-                        <img 
-                            src={getImgUrl(img)} 
-                            onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_GRID_SVG; }} 
-                            alt="Post media" 
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" 
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
-                    </div>
-                ))}
+            <div className="w-full grid grid-cols-2 gap-1 rounded-xl overflow-hidden" style={{ height: '360px' }}>
+                {activeImages.map((img, i) => {
+                    const url = getImgUrl(img);
+                    return (
+                        <div
+                            key={url || i}
+                            className="overflow-hidden cursor-zoom-in group relative h-full bg-slate-900/5 dark:bg-slate-900/50"
+                            onClick={() => onImageClick && onImageClick(i, activeImages)}
+                        >
+                            <img 
+                                src={url} 
+                                onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    handleImageError(url);
+                                }} 
+                                alt="Post media" 
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" 
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                        </div>
+                    );
+                })}
             </div>
         );
     }
 
     // Three images — 1 big left, 2 stacked right
-    if (validImages.length === 3) {
+    if (activeImages.length === 3) {
+        const leftUrl = getImgUrl(activeImages[0]);
         return (
-            <div className="w-full grid grid-cols-2 gap-0.5" style={{ height: '380px' }}>
-                <div className="overflow-hidden cursor-zoom-in group relative row-span-2" onClick={() => onImageClick(0)}>
+            <div className="w-full grid grid-cols-2 gap-1 rounded-xl overflow-hidden" style={{ height: '380px' }}>
+                <div 
+                    className="overflow-hidden cursor-zoom-in group relative row-span-2 h-full bg-slate-900/5 dark:bg-slate-900/50" 
+                    onClick={() => onImageClick && onImageClick(0, activeImages)}
+                >
                     <img 
-                        src={getImgUrl(validImages[0])} 
-                        onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_GRID_SVG; }} 
+                        src={leftUrl} 
+                        onError={(e) => {
+                            e.target.style.display = 'none';
+                            handleImageError(leftUrl);
+                        }} 
                         alt="Post media" 
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" 
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                 </div>
-                {validImages.slice(1, 3).map((img, i) => (
-                    <div key={i} className="overflow-hidden cursor-zoom-in group relative" style={{ height: '189px' }} onClick={() => onImageClick(i + 1)}>
-                        <img 
-                            src={getImgUrl(img)} 
-                            onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_GRID_SVG; }} 
-                            alt="Post media" 
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" 
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
-                    </div>
-                ))}
+                {activeImages.slice(1, 3).map((img, i) => {
+                    const rightUrl = getImgUrl(img);
+                    return (
+                        <div 
+                            key={rightUrl || i} 
+                            className="overflow-hidden cursor-zoom-in group relative bg-slate-900/5 dark:bg-slate-900/50" 
+                            style={{ height: '188px' }} 
+                            onClick={() => onImageClick && onImageClick(i + 1, activeImages)}
+                        >
+                            <img 
+                                src={rightUrl} 
+                                onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    handleImageError(rightUrl);
+                                }} 
+                                alt="Post media" 
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" 
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                        </div>
+                    );
+                })}
             </div>
         );
     }
 
     // Four or more images — show 4 with Read More button after 4 images
-    const showImages = validImages.slice(0, 4);
-    const extraCount = validImages.length - 4;
+    const showImages = activeImages.slice(0, 4);
+    const extraCount = activeImages.length - 4;
 
     if (extraCount > 0 && isImagesExpanded) {
         return (
-            <div className="w-full flex flex-col">
+            <div className="w-full flex flex-col rounded-xl overflow-hidden">
                 <div className="w-full grid grid-cols-2 sm:grid-cols-3 gap-1 p-1 bg-slate-100/60 dark:bg-slate-900/60">
-                    {validImages.map((img, i) => (
-                        <div
-                            key={i}
-                            className="overflow-hidden cursor-zoom-in group relative rounded-lg"
-                            style={{ height: '200px' }}
-                            onClick={() => onImageClick(i)}
-                        >
-                            <img 
-                                src={getImgUrl(img)} 
-                                onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_GRID_SVG; }} 
-                                alt={`Post media ${i + 1}`} 
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" 
-                            />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
-                        </div>
-                    ))}
+                    {activeImages.map((img, i) => {
+                        const url = getImgUrl(img);
+                        return (
+                            <div
+                                key={url || i}
+                                className="overflow-hidden cursor-zoom-in group relative rounded-lg bg-slate-900/5 dark:bg-slate-900/50"
+                                style={{ height: '200px' }}
+                                onClick={() => onImageClick && onImageClick(i, activeImages)}
+                            >
+                                <img 
+                                    src={url} 
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        handleImageError(url);
+                                    }} 
+                                    alt={`Post media ${i + 1}`} 
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" 
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                            </div>
+                        );
+                    })}
                 </div>
                 <div className="px-4 py-2 bg-slate-50/80 dark:bg-slate-900/60 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                        Showing all {validImages.length} images
+                        Showing all {activeImages.length} images
                     </span>
                     <button
                         type="button"
@@ -415,47 +473,53 @@ export function ImageGrid({ images, onImageClick }) {
     }
 
     return (
-        <div className="w-full flex flex-col">
-            <div className="w-full grid grid-cols-2 gap-0.5" style={{ height: '380px' }}>
-                {showImages.map((img, i) => (
-                    <div
-                        key={i}
-                        className="overflow-hidden cursor-zoom-in group relative"
-                        onClick={() => {
-                            if (i === 3 && extraCount > 0) {
-                                setIsImagesExpanded(true);
-                            } else {
-                                onImageClick(i);
-                            }
-                        }}
-                    >
-                        <img 
-                            src={getImgUrl(img)} 
-                            onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_GRID_SVG; }} 
-                            alt="Post media" 
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" 
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
-                        {/* Read more overlay on 4th cell when extraCount > 0 */}
-                        {i === 3 && extraCount > 0 && (
-                            <div 
-                                className="absolute inset-0 flex flex-col items-center justify-center gap-1 cursor-pointer"
-                                style={{ background: 'rgba(0,0,0,0.6)' }}
-                            >
-                                <span className="text-white text-2xl font-black">+{extraCount}</span>
-                                <span className="text-white text-[11px] font-bold bg-white/20 hover:bg-white/30 px-2.5 py-0.5 rounded-full backdrop-blur-sm flex items-center gap-1 transition-colors">
-                                    <span className="material-symbols-outlined text-[13px]">collections</span>
-                                    Read more
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                ))}
+        <div className="w-full flex flex-col rounded-xl overflow-hidden">
+            <div className="w-full grid grid-cols-2 gap-1" style={{ height: '380px' }}>
+                {showImages.map((img, i) => {
+                    const url = getImgUrl(img);
+                    return (
+                        <div
+                            key={url || i}
+                            className="overflow-hidden cursor-zoom-in group relative bg-slate-900/5 dark:bg-slate-900/50"
+                            onClick={() => {
+                                if (i === 3 && extraCount > 0) {
+                                    setIsImagesExpanded(true);
+                                } else {
+                                    onImageClick && onImageClick(i, activeImages);
+                                }
+                            }}
+                        >
+                            <img 
+                                src={url} 
+                                onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    handleImageError(url);
+                                }} 
+                                alt="Post media" 
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" 
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                            {/* Read more overlay on 4th cell when extraCount > 0 */}
+                            {i === 3 && extraCount > 0 && (
+                                <div 
+                                    className="absolute inset-0 flex flex-col items-center justify-center gap-1 cursor-pointer"
+                                    style={{ background: 'rgba(0,0,0,0.6)' }}
+                                >
+                                    <span className="text-white text-2xl font-black">+{extraCount}</span>
+                                    <span className="text-white text-[11px] font-bold bg-white/20 hover:bg-white/30 px-2.5 py-0.5 rounded-full backdrop-blur-sm flex items-center gap-1 transition-colors">
+                                        <span className="material-symbols-outlined text-[13px]">collections</span>
+                                        Read more
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
             {extraCount > 0 && (
                 <div className="px-4 py-2 bg-slate-50/80 dark:bg-slate-900/60 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                        Showing 4 of {validImages.length} images
+                        Showing 4 of {activeImages.length} images
                     </span>
                     <button
                         type="button"
@@ -632,6 +696,7 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
 
     // Lightbox & Document Viewer & Large Video Modal state
     const [lightboxIndex, setLightboxIndex] = useState(null);
+    const [lightboxImages, setLightboxImages] = useState(null);
     const [activeDocViewer, setActiveDocViewer] = useState(null);
     const [activeVideoModal, setActiveVideoModal] = useState(null);
     
@@ -862,20 +927,35 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
     // Helper to identify true image attachments
     const isImageAttachment = (a) => {
         if (!a) return false;
-        const u = (a.url || a.fileUrl || '').split('?')[0].toLowerCase();
+        const raw = typeof a === 'string' ? a : (a.backendUrl || a.url || a.fileUrl || '');
+        const u = raw.split('?')[0].toLowerCase();
         const t = (a.type || a.fileType || '').toLowerCase();
-        if (u.match(/\.(mp4|webm|ogg|mov|mkv|avi|mp3|wav|aac|m4a|flac|pdf|doc|docx|txt|xls|xlsx|ppt|pptx|csv)$/i)) {
+        if (u.startsWith('blob:') && !(a?.file instanceof Blob)) {
             return false;
         }
-        if (t === 'image' || t === 'img' || t === 'photo') return true;
-        return Boolean(u.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)$/i)) || u.startsWith('data:image/');
+        if (u.match(/\.(mp4|webm|ogg|mov|mkv|avi|mp3|wav|aac|m4a|flac|pdf|doc|docx|txt|xls|xlsx|ppt|pptx|csv|zip|rar)$/i)) {
+            return false;
+        }
+        if (Boolean(u.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)$/i)) || u.startsWith('data:image/')) {
+            return true;
+        }
+        if (t === 'image' || t === 'img' || t === 'photo') {
+            return !u.match(/\.(pdf|doc|docx|txt|xls|xlsx|ppt|pptx|csv|zip|rar|bin|exe)$/i);
+        }
+        return false;
     };
 
-    // Separate image attachments from other attachments (exclude clip media so clip card handles it self-contained)
+    // Separate image attachments from other attachments (exclude clip and video media so dedicated cards handle it self-contained)
     const isClip = isClipPost(post);
     const hasExplicitClipCard = isClip;
-    const imageAttachments = isClip ? [] : (post.attachments || []).filter(isImageAttachment);
-    const otherAttachments = isClip ? [] : (post.attachments || []).filter(a => !isImageAttachment(a));
+    const isVideoShare = isSharedVideoPost(post);
+    const hasExplicitVideoCard = !hasExplicitClipCard && isVideoShare;
+    const isDeadBlob = (a) => {
+        const u = typeof a === 'string' ? a : (a?.backendUrl || a?.url || a?.fileUrl || '');
+        return typeof u === 'string' && u.startsWith('blob:') && !(a?.file instanceof Blob);
+    };
+    const imageAttachments = (isClip || isVideoShare) ? [] : (post.attachments || []).filter(a => !isDeadBlob(a) && isImageAttachment(a));
+    const otherAttachments = (isClip || isVideoShare) ? [] : (post.attachments || []).filter(a => !isDeadBlob(a) && !isImageAttachment(a));
 
     const handleCopyPostLink = () => {
         const link = `${window.location.origin}/posts?id=${post.id}`;
@@ -1828,7 +1908,7 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
 
                     const hasExplicitArticleCard = Boolean(post.sharedArticle || post.type === 'article_share' || (post.content && (post.content.includes('Shared Article:') || post.content.includes('/article-view'))));
                     const hasExplicitPodcastCard = Boolean(post.sharedPodcast || post.type === 'podcast_share' || (post.content && (post.content.includes('Shared Podcast:') || post.content.includes('/podcasts'))));
-                    const hasExplicitVideoCard = !hasExplicitClipCard && Boolean(post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹'))));
+                    const hasExplicitVideoCard = !hasExplicitClipCard && isSharedVideoPost(post);
                     const hasExplicitProfileCard = Boolean(post.sharedProfile || post.isProfileShare || (post.content && post.content.includes('Shared Profile:')));
 
                     const isWikiShare = Boolean(target?.type === 'Wiki' || post.sharedWiki || post.type === 'wiki_share' || (post.postType || '').toLowerCase() === 'wiki' || (post.content && (post.content.includes('Shared Wiki:') || post.content.includes('/wiki/view') || post.content.includes('/wiki'))));
@@ -1848,11 +1928,12 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                     // Clean user commentary if this is a shared post, article, video, profile, or clip:
                     // Strip the automated template strings and internal URLs from rendered body
                     let userCommentary = post.content || '';
-                    if (isSharedPost || hasExplicitClipCard || (post.content && (post.content.includes('Shared Article:') || post.content.includes('Shared Video:') || post.content.includes('Shared Profile:') || post.content.includes('Shared Clip:') || post.content.includes('Check out this Clip:')))) {
+                    if (isSharedPost || hasExplicitClipCard || hasExplicitVideoCard || (post.content && (post.content.includes('Shared Article:') || post.content.includes('Shared Video:') || post.content.includes('Shared Profile:') || post.content.includes('Shared Clip:') || post.content.includes('Check out this Clip:')))) {
                         userCommentary = userCommentary
                             .replace(/(?:Shared Clip|Check out this Clip):\s*"[^"]*"\s*(?:🎬)?/gi, '')
                             .replace(/🎬\s*(?:Shared Clip|Check out this Clip):\s*"[^"]*"/gi, '')
                             .replace(/Shared\s+(?:Post|Article|Video|Profile|Clip):\s*"[^"]*"/gi, '')
+                            .replace(/^[📹🎥🎬]\s*/, '')
                             .replace(/(?:https?:\/\/[^\s]+)?\/(?:posts|article-view|videos|profile|clips)\?[^\s]+/gi, '')
                             .replace(/(?:https?:\/\/[^\s]+)?\/clips\/[^\s]+/gi, '')
                             .trim();
@@ -1981,7 +2062,7 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                     return (
                         <>
                             {/* Render post title only if not a repetitive "Shared Post:" prefix */}
-                            {post.title && !post.title.startsWith('Shared Post:') && (
+                            {post.title && !post.title.startsWith('Shared Post:') && !hasExplicitVideoCard && !hasExplicitClipCard && (
                                 <h3 
                                     onClick={() => {
                                         if (post.type === 'article') {
@@ -2201,70 +2282,8 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                 )}
 
                 {/* Shared Video Player / Card inside PostCard */}
-                {!hasExplicitClipCard && (post.sharedVideo || post.type === 'video_share' || post.videoUrl || (post.content && (post.content.includes('Shared Video:') || post.content.includes('📹')))) && (
-                    <div className="mt-3.5 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-xl">
-                        {(() => {
-                            const vidObj = post.sharedVideo || {
-                                id: post.id || `shared_vid_${Date.now()}`,
-                                title: post.title?.replace('📹 Shared Video: ', '').replace(/ — uploaded by.*/, '') || post.content?.replace(/^.*Shared Video: "/, '').replace(/".*/, '') || 'Shared Video',
-                                sourceUrl: post.videoUrl || post.sourceUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-                                thumbnail: post.thumbnail || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=1200',
-                                author: post.authorName || post.author || 'MPOnline Team'
-                            };
-                            const vUrl = vidObj.sourceUrl || vidObj.videoUrl || post.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-                            const isYT = vUrl && (vUrl.includes('youtube.com') || vUrl.includes('youtu.be'));
-                            const thumb = vidObj.thumbnail || getVideoThumbnail(vidObj);
-
-                            return (
-                                <div className="flex flex-col">
-                                    {/* Video preview thumbnail with Play button overlay */}
-                                    <div 
-                                        onClick={() => setActiveVideoModal({ url: resolveMediaUrl(vUrl) || vUrl, title: vidObj.title, isYT })}
-                                        className="relative aspect-video w-full bg-slate-950 overflow-hidden group cursor-pointer"
-                                    >
-                                        {thumb ? (
-                                            <img 
-                                                src={thumb} 
-                                                alt={vidObj.title} 
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-black">
-                                                <span className="material-symbols-outlined text-slate-700 text-6xl">movie</span>
-                                            </div>
-                                        )}
-                                        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all flex items-center justify-center">
-                                            <div className="w-16 h-16 rounded-full bg-indigo-600/90 group-hover:bg-indigo-500 text-white flex items-center justify-center shadow-xl shadow-indigo-500/40 group-hover:scale-110 transition-transform">
-                                                <span className="material-symbols-outlined text-3xl ml-1">play_arrow</span>
-                                            </div>
-                                        </div>
-                                        <div className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-sm text-[11px] font-semibold text-white flex items-center gap-1.5">
-                                            <span className="material-symbols-outlined text-[14px] text-cyan-400">open_in_full</span>
-                                            <span>Click to watch on large screen</span>
-                                        </div>
-                                    </div>
-                                    <div className="p-3.5 bg-slate-900 flex items-center justify-between gap-3 border-t border-slate-800">
-                                        <div className="min-w-0">
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
-                                                <span className="material-symbols-outlined text-[12px]">play_circle</span>
-                                                SHARED VIDEO
-                                            </span>
-                                            <h5 className="font-extrabold text-white text-xs sm:text-sm truncate mt-1">
-                                                {vidObj.title}
-                                            </h5>
-                                        </div>
-                                        <button
-                                            onClick={() => setActiveVideoModal({ url: resolveMediaUrl(vUrl) || vUrl, title: vidObj.title, isYT })}
-                                            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-600 hover:to-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shrink-0 transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">open_in_full</span>
-                                            <span>Watch on Large Screen</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-                    </div>
+                {!hasExplicitClipCard && hasExplicitVideoCard && (
+                    <SharedVideoCard post={post} />
                 )}
 
                 {post.type === 'article' && (
@@ -2290,7 +2309,10 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                 <div className="mt-2 w-full">
                     <ImageGrid
                         images={imageAttachments}
-                        onImageClick={(idx) => setLightboxIndex(idx)}
+                        onImageClick={(idx, workingImages) => {
+                            setLightboxImages(workingImages || imageAttachments);
+                            setLightboxIndex(idx);
+                        }}
                     />
                 </div>
             )}
@@ -2429,9 +2451,12 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
             {/* ── Fullscreen Lightbox ── */}
             {lightboxIndex !== null && (
                 <ImageLightbox
-                    images={imageAttachments}
+                    images={lightboxImages || imageAttachments}
                     startIndex={lightboxIndex}
-                    onClose={() => setLightboxIndex(null)}
+                    onClose={() => {
+                        setLightboxIndex(null);
+                        setLightboxImages(null);
+                    }}
                 />
             )}
 

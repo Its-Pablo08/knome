@@ -74,9 +74,9 @@ public class FeedService : IFeedService
                     CommunityName = comm?.Name,
                     SharedWithName = sharedWith,
                     AudienceUserIds = audUserIds,
-                    AttachmentUrl = p.PostAttachments.FirstOrDefault()?.FileUrl,
-                    AttachmentUrls = p.PostAttachments.Select(pa => pa.FileUrl).ToList(),
-                    Attachments = p.PostAttachments.Select(pa => new FeedAttachmentDto
+                    AttachmentUrl = p.PostAttachments.FirstOrDefault(pa => !pa.FileUrl.StartsWith("blob:"))?.FileUrl,
+                    AttachmentUrls = p.PostAttachments.Where(pa => !pa.FileUrl.StartsWith("blob:")).Select(pa => pa.FileUrl).ToList(),
+                    Attachments = p.PostAttachments.Where(pa => !pa.FileUrl.StartsWith("blob:")).Select(pa => new FeedAttachmentDto
                     {
                         AttachmentId = pa.AttachmentId,
                         FileUrl = pa.FileUrl,
@@ -246,9 +246,9 @@ public class FeedService : IFeedService
                     ContentText = p.ContentText,
                     Status = p.Status ?? "Published",
                     ScheduledDate = p.ScheduledDate,
-                    AttachmentUrl = p.PostAttachments.FirstOrDefault()?.FileUrl,
-                    AttachmentUrls = p.PostAttachments.Select(pa => pa.FileUrl).ToList(),
-                    Attachments = p.PostAttachments.Select(pa => new FeedAttachmentDto
+                    AttachmentUrl = p.PostAttachments.FirstOrDefault(pa => !pa.FileUrl.StartsWith("blob:"))?.FileUrl,
+                    AttachmentUrls = p.PostAttachments.Where(pa => !pa.FileUrl.StartsWith("blob:")).Select(pa => pa.FileUrl).ToList(),
+                    Attachments = p.PostAttachments.Where(pa => !pa.FileUrl.StartsWith("blob:")).Select(pa => new FeedAttachmentDto
                     {
                         AttachmentId = pa.AttachmentId,
                         FileUrl = pa.FileUrl,

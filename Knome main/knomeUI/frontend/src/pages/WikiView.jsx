@@ -202,7 +202,8 @@ export default function WikiView() {
             return data;
         } catch (err) {
             console.error('Failed to load wiki:', err);
-            addToast('Could not load Wiki document.', 'error');
+            const msg = err?.response?.data?.message || err?.message || 'Could not load Wiki document.';
+            addToast(msg, 'error');
             navigate('/wiki');
             return null;
         } finally {

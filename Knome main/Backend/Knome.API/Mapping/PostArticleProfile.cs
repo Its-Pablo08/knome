@@ -19,8 +19,8 @@ public class PostArticleProfile : Profile
             .ForMember(dest => dest.AuthorFullName, opt => opt.MapFrom(src => src.AuthorUser != null ? src.AuthorUser.FullName : "Unknown"))
             .ForMember(dest => dest.AuthorDesignation, opt => opt.MapFrom(src => src.AuthorUser != null ? src.AuthorUser.Designation : null))
             .ForMember(dest => dest.AuthorProfilePhotoUrl, opt => opt.MapFrom(src => src.AuthorUser != null ? src.AuthorUser.ProfilePhotoUrl : null))
-            .ForMember(dest => dest.AttachmentUrls, opt => opt.MapFrom(src => src.PostAttachments.Select(pa => pa.FileUrl).ToList()))
-            .ForMember(dest => dest.Attachments, opt => opt.MapFrom(src => src.PostAttachments))
+            .ForMember(dest => dest.AttachmentUrls, opt => opt.MapFrom(src => src.PostAttachments.Where(pa => !pa.FileUrl.StartsWith("blob:")).Select(pa => pa.FileUrl).ToList()))
+            .ForMember(dest => dest.Attachments, opt => opt.MapFrom(src => src.PostAttachments.Where(pa => !pa.FileUrl.StartsWith("blob:"))))
             .ForMember(dest => dest.MentionedUsers, opt => opt.MapFrom(src => src.MentionedUsers))
             .ForMember(dest => dest.EngagementSummary, opt => opt.Ignore());
 

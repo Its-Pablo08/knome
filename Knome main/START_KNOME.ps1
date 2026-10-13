@@ -30,9 +30,9 @@ if (-not (Test-Path "$ScriptDir\knomeUI\frontend\node_modules")) {
 # 0c. Database Connection Verification & Wiki Tables Check
 try {
     $dbTest = $null
-    foreach ($srv in @("localhost", "127.0.0.1,1433", "LAPTOP-458")) {
+    foreach ($srv in @("LAPTOP-458", "localhost", "127.0.0.1,1433")) {
         try {
-            $t = New-Object System.Data.SqlClient.SqlConnection("Server=$srv;Database=Knome;User ID=sa;Password=sa@123;TrustServerCertificate=True;Connect Timeout=5")
+            $t = New-Object System.Data.SqlClient.SqlConnection("Server=$srv;Database=Knome;User ID=sa;Password=sa@123;TrustServerCertificate=True;Connect Timeout=2")
             $t.Open()
             $dbTest = $t
             Write-Host " SQL Server: Knome database verified & accessible on $srv" -ForegroundColor Green

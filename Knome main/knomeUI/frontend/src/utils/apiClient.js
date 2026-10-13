@@ -113,7 +113,7 @@ async function silentReauth() {
 // High-speed in-memory response cache & in-flight promise deduplication
 const responseCache = new Map();
 const inFlightRequests = new Map();
-const CACHE_TTL_MS = 6000; // 6 seconds fast TTL for read requests
+const CACHE_TTL_MS = 10000; // 10 seconds fast TTL for read requests
 
 export const apiClient = {
     getBaseUrl() {

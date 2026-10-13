@@ -1172,7 +1172,7 @@ public class CommunityService : ICommunityService
             var summary = await _interactionService.GetContentSummaryAsync(ContentTypes.Post, cp.PostId, currentUserId);
 
             var attachments = await _db.PostAttachments
-                .Where(pa => pa.PostId == cp.PostId)
+                .Where(pa => pa.PostId == cp.PostId && !pa.FileUrl.StartsWith("blob:"))
                 .Select(pa => pa.FileUrl)
                 .ToListAsync();
 
@@ -1302,7 +1302,7 @@ public class CommunityService : ICommunityService
         var summary = await _interactionService.GetContentSummaryAsync(ContentTypes.Post, postId, currentUserId);
 
         var attachments = await _db.PostAttachments
-            .Where(pa => pa.PostId == postId)
+            .Where(pa => pa.PostId == postId && !pa.FileUrl.StartsWith("blob:"))
             .Select(pa => pa.FileUrl)
             .ToListAsync();
 

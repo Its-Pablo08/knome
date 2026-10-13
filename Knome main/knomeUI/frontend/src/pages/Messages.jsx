@@ -6,6 +6,8 @@ import { resolveMediaUrl, userApi, messagesApi, mediaApi, clipsApi } from '../ut
 import { apiClient } from '../utils/apiClient';
 import { useSystemConfig } from '../utils/systemConfig';
 import DeleteMessageModal from '../components/modals/DeleteMessageModal';
+import MessageWikiCard, { extractWikiIdFromText, formatConversationPreviewText } from '../components/widgets/MessageWikiCard';
+export { extractWikiIdFromText, formatConversationPreviewText };
 import {
     initMessengerSignalR,
     sendTypingIndicator,
@@ -274,7 +276,7 @@ function MessageClipCard({ clipId, isMe, navigate }) {
  */
 const renderMessageContentWithLinks = (text, isMe, navigate) => {
     if (!text) return null;
-    const tokenRegex = /(https?:\/\/[^\s]+|\/clips(?:\?id=|\/)[a-zA-Z0-9_-]+|@[a-zA-Z0-9_\s]+?(?=\s|[.,!?]|$))/gi;
+    const tokenRegex = /(https?:\/\/[^\s]+|\/(?:clips|wikis?)(?:\/[a-zA-Z0-9_?&=#-]+|\?[a-zA-Z0-9_?&=#-]+)?|@[a-zA-Z0-9_\s]+?(?=\s|[.,!?]|$))/gi;
     const parts = text.split(tokenRegex);
 
     return parts.map((part, idx) => {
@@ -296,17 +298,21 @@ const renderMessageContentWithLinks = (text, isMe, navigate) => {
             );
         }
 
-        // 2. URL or internal /clips link
-        const isUrl = /^https?:\/\//i.test(part) || /^\/clips(?:\?id=|\/)/i.test(part);
+        // 2. URL or internal /clips or /wiki link
+        const isUrl = /^https?:\/\//i.test(part) || /^\/(?:clips|wikis?)(?:\/|\?|$)/i.test(part);
         if (isUrl) {
             const clipIdMatch = /(?:https?:\/\/[^\s]+)?\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i.exec(part);
             const clipId = clipIdMatch ? clipIdMatch[1] : null;
+
+            const wikiId = extractWikiIdFromText(part);
 
             const handleLinkClick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 if (clipId) {
                     navigate(`/clips?id=${clipId}`);
+                } else if (wikiId) {
+                    navigate(`/wiki/view?id=${wikiId}`);
                 } else {
                     try {
                         const urlObj = new URL(part, window.location.origin);
@@ -329,12 +335,17 @@ const renderMessageContentWithLinks = (text, isMe, navigate) => {
                             ? 'text-cyan-200 hover:text-white decoration-cyan-300/60'
                             : 'text-indigo-600 dark:text-cyan-400 hover:underline decoration-indigo-400'
                     }`}
-                    title={clipId ? `Open & play Clip #${clipId}` : 'Open link'}
+                    title={clipId ? `Open & play Clip #${clipId}` : wikiId ? `Open Wiki #${wikiId}` : 'Open link'}
                 >
                     <span>{part}</span>
                     {clipId && (
                         <span className="material-symbols-outlined text-[13px] inline leading-none ml-0.5">
                             play_circle
+                        </span>
+                    )}
+                    {wikiId && (
+                        <span className="material-symbols-outlined text-[13px] inline leading-none ml-0.5">
+                            menu_book
                         </span>
                     )}
                 </a>
@@ -1759,7 +1770,7 @@ export default function Messages() {
                                                             <span>{drafts[conv.partnerId]}</span>
                                                         </span>
                                                     ) : (
-                                                        conv.lastMessage || 'No messages yet'
+                                                        formatConversationPreviewText(conv.lastMessage)
                                                     )}
                                                 </p>
                                                 {conv.unreadCount > 0 && (
@@ -2213,6 +2224,13 @@ export default function Messages() {
                                                                         <MessageClipCard clipId={clipId} isMe={isMe} navigate={navigate} />
                                                                     ) : null;
                                                                 })()}
+                                                                {/* Rich interactive Wiki preview card if message contains a wiki link */}
+                                                                {(() => {
+                                                                    const wikiId = extractWikiIdFromText(msg.text);
+                                                                    return wikiId ? (
+                                                                        <MessageWikiCard wikiId={wikiId} isMe={isMe} navigate={navigate} />
+                                                                    ) : null;
+                                                                })()}
                                                             </div>
                                                         )}
                                                     </div>
@@ -2469,6 +2487,31 @@ export default function Messages() {
                                     })}
                                 </div>
                             )}
+
+                            {/* Staged Wiki Link Preview before sending */}
+                            {(() => {
+                                const draftedWikiId = extractWikiIdFromText(inputMessage);
+                                return draftedWikiId && !replyingTo ? (
+                                    <div className="mb-2 p-2.5 rounded-2xl bg-cyan-50/80 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800 flex items-center justify-between gap-3 animate-in fade-in duration-150">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <div className="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0">
+                                                <span className="material-symbols-outlined text-[18px]">menu_book</span>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] font-bold text-cyan-800 dark:text-cyan-200 flex items-center gap-1">
+                                                    <span>Wiki Link Detected: #{draftedWikiId}</span>
+                                                </p>
+                                                <p className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
+                                                    A rich interactive preview card with cover, title, author, and quick open action will be generated automatically.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 shrink-0">
+                                            Auto-Preview
+                                        </span>
+                                    </div>
+                                ) : null;
+                            })()}
 
                             {/* @Mention Autocomplete Popover */}
                             {showMentionSuggestions && activePartner && (

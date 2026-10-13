@@ -25,13 +25,16 @@ const normalizeJobUrl = (url) => {
     const fetchJobsFromDb = async () => {
         setIsLoading(true);
         try {
-            // 1. First priority: Live HRMS Server Jobs API
-            let jobList = await jobsApi.getLiveServerJobs();
-
-            // 2. Fall back to local Knome database if live API returns empty
-            if (!jobList || jobList.length === 0) {
+            // 1. Primary: Knome internal database API
+            let jobList = null;
+            try {
                 const data = await jobsApi.getAll();
                 jobList = Array.isArray(data) ? data : (data?.items || []);
+            } catch (_) {}
+
+            // 2. Fall back to live HRMS integration API if local database returned empty
+            if (!jobList || jobList.length === 0) {
+                jobList = await jobsApi.getLiveServerJobs();
             }
 
             if (jobList && jobList.length > 0) {

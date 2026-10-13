@@ -117,6 +117,8 @@ public class PostRepository : IPostRepository
         for (int i = 0; i < attachmentUrls.Count; i++)
         {
             var url = attachmentUrls[i];
+            if (string.IsNullOrWhiteSpace(url) || url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
+                continue;
             var type = (attachmentTypes != null && i < attachmentTypes.Count) ? attachmentTypes[i] : AttachmentTypes.Document;
             
             _db.PostAttachments.Add(new PostAttachment
@@ -151,6 +153,8 @@ public class PostRepository : IPostRepository
         for (int i = 0; i < attachmentUrls.Count; i++)
         {
             var url = attachmentUrls[i];
+            if (string.IsNullOrWhiteSpace(url) || url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
+                continue;
             var type = (attachmentTypes != null && i < attachmentTypes.Count) ? attachmentTypes[i] : AttachmentTypes.Document;
             
             _db.PostAttachments.Add(new PostAttachment

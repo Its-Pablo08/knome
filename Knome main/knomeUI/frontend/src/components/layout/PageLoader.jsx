@@ -7,38 +7,20 @@ export default function PageLoader({ children }) {
     const location = useLocation();
 
     useEffect(() => {
-        // Trigger loading state on route change
+        // Instant snappy progress indicator on route change without artificial delays
         setIsLoading(true);
-        setProgress(0);
-
-        // Simulate network latency
-        const networkLatency = Math.floor(Math.random() * 500) + 400;
-
-        // Animate the top progress bar quickly to ~85%
-        const fastProgressInterval = setInterval(() => {
-            setProgress(prev => {
-                if (prev >= 85) {
-                    clearInterval(fastProgressInterval);
-                    return prev;
-                }
-                return prev + Math.random() * 15;
-            });
-        }, 40);
+        setProgress(60);
 
         const timer = setTimeout(() => {
             setProgress(100);
-            clearInterval(fastProgressInterval);
-            
-            // Wait for the 100% animation to finish before fading out
             setTimeout(() => {
                 setIsLoading(false);
-            }, 300);
-
-        }, networkLatency);
+                setProgress(0);
+            }, 120);
+        }, 60);
 
         return () => {
             clearTimeout(timer);
-            clearInterval(fastProgressInterval);
         };
     }, [location.pathname]);
 
