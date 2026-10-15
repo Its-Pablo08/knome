@@ -108,13 +108,14 @@ public class ContentInteractionRepository : IContentInteractionRepository
 
         var summary = new ReactionSummaryDto
         {
-            TotalCount = reactions.Count,
+            TotalCount = reactions.Count(r => r.ReactionType != ReactionTypes.Dislike),
             LikeCount = reactions.Count(r => r.ReactionType == ReactionTypes.Like),
             CelebrateCount = reactions.Count(r => r.ReactionType == ReactionTypes.Celebrate),
             SupportCount = reactions.Count(r => r.ReactionType == ReactionTypes.Support),
             HeartCount = reactions.Count(r => r.ReactionType == ReactionTypes.Heart),
+            DislikeCount = reactions.Count(r => r.ReactionType == ReactionTypes.Dislike),
             CurrentUserReactionType = reactions.FirstOrDefault(r => r.UserId == currentUserId)?.ReactionType,
-            TopReactionTypes = reactions.Select(r => r.ReactionType).Distinct().ToList(),
+            TopReactionTypes = reactions.Where(r => r.ReactionType != ReactionTypes.Dislike).Select(r => r.ReactionType).Distinct().ToList(),
             Reactions = reactions.Select(r => new ReactionDto
             {
                 ReactionId = r.ReactionId,
@@ -153,7 +154,15 @@ public class ContentInteractionRepository : IContentInteractionRepository
     {
         return await _db.Shares
             .Where(s => s.ContentType == contentType && s.ContentId == contentId)
+            .Select(s => s.UserId)
+            .Distinct()
             .CountAsync();
+    }
+
+    public async Task<bool> HasUserSharedAsync(string contentType, long contentId, int userId)
+    {
+        return await _db.Shares
+            .AnyAsync(s => s.ContentType == contentType && s.ContentId == contentId && s.UserId == userId);
     }
 
     // --- Bookmarks ---
@@ -234,7 +243,7 @@ public class ContentInteractionRepository : IContentInteractionRepository
                     item.AuthorAvatar = post.AuthorUser?.ProfilePhotoUrl;
                     item.AuthorRole = post.AuthorUser?.Designation;
                     item.CreatedAt = post.CreatedDate;
-                    item.TargetUrl = "/posts";
+                    item.TargetUrl = $"/posts?id={post.PostId}";
                     item.LikesCount = await _db.Reactions.CountAsync(r => r.ContentType == "Post" && r.ContentId == post.PostId);
                     item.CommentsCount = await _db.Comments.CountAsync(c => c.ContentType == "Post" && c.ContentId == post.PostId);
                 }
@@ -282,7 +291,7 @@ public class ContentInteractionRepository : IContentInteractionRepository
                     item.AuthorAvatar = video.UploaderUser?.ProfilePhotoUrl;
                     item.AuthorRole = video.UploaderUser?.Designation;
                     item.CreatedAt = video.UploadedDate;
-                    item.TargetUrl = "/videos";
+                    item.TargetUrl = $"/videos?id={video.VideoId}";
                     item.LikesCount = await _db.Reactions.CountAsync(r => r.ContentType == "Video" && r.ContentId == video.VideoId);
                     item.CommentsCount = await _db.Comments.CountAsync(c => c.ContentType == "Video" && c.ContentId == video.VideoId);
                 }
@@ -306,7 +315,7 @@ public class ContentInteractionRepository : IContentInteractionRepository
                     item.AuthorAvatar = podcast.UploaderUser?.ProfilePhotoUrl;
                     item.AuthorRole = podcast.UploaderUser?.Designation;
                     item.CreatedAt = podcast.UploadedDate;
-                    item.TargetUrl = "/podcasts";
+                    item.TargetUrl = $"/podcasts?id={podcast.PodcastId}";
                     item.LikesCount = await _db.Reactions.CountAsync(r => r.ContentType == "Podcast" && r.ContentId == podcast.PodcastId);
                     item.CommentsCount = await _db.Comments.CountAsync(c => c.ContentType == "Podcast" && c.ContentId == podcast.PodcastId);
                 }
@@ -329,7 +338,7 @@ public class ContentInteractionRepository : IContentInteractionRepository
                     item.AuthorAvatar = job.PostedByUser?.ProfilePhotoUrl;
                     item.AuthorRole = job.PostedByUser?.Designation;
                     item.CreatedAt = job.PostedDate;
-                    item.TargetUrl = "/jobs";
+                    item.TargetUrl = $"/jobs?id={job.JobId}";
                 }
             }
             else if (normalizedType.Equals("Clip", StringComparison.OrdinalIgnoreCase))

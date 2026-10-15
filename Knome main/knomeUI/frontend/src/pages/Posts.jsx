@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { useUser } from '../components/contexts/UserContext';
 import PostCard from '../components/widgets/PostCard';
 import DraftCard from '../components/widgets/DraftCard';
@@ -16,8 +16,9 @@ export default function Posts() {
     const { currentUser } = useUser();
     const { addToast } = useToast();
     const location = useLocation();
+    const routeParams = useParams();
     const queryParams = new URLSearchParams(location.search);
-    const targetPostId = queryParams.get('id') || queryParams.get('postId') || queryParams.get('highlight');
+    const targetPostId = routeParams?.id || queryParams.get('id') || queryParams.get('postId') || queryParams.get('highlight');
     const initialTag = queryParams.get('tag') || queryParams.get('hashtag') || null;
     const initialSearch = queryParams.get('q') || '';
     
@@ -97,13 +98,13 @@ export default function Posts() {
                 }
             } catch (e) {}
             
-            // If target post ID is specified via notification link, ensure it is fetched and prioritized
+            // If target post ID is specified via notification link or saved redirect, ensure it is fetched and prioritized
             if (targetPostId) {
-                const targetIdNum = parseInt(targetPostId, 10);
-                const exists = mapped.some(p => p.id === targetIdNum);
+                const targetIdStr = String(targetPostId);
+                const exists = mapped.some(p => String(p.id) === targetIdStr || String(p.postId) === targetIdStr);
                 if (!exists) {
                     try {
-                        const targetData = await postsApi.getById(targetIdNum);
+                        const targetData = await postsApi.getById(targetPostId);
                         if (targetData) {
                             const mappedTarget = mapPost(targetData);
                             mappedTarget.isHighlighted = true;
@@ -113,7 +114,7 @@ export default function Posts() {
                         console.warn("Could not fetch target post:", e);
                     }
                 } else {
-                    mapped = mapped.map(p => p.id === targetIdNum ? { ...p, isHighlighted: true } : p);
+                    mapped = mapped.map(p => (String(p.id) === targetIdStr || String(p.postId) === targetIdStr) ? { ...p, isHighlighted: true } : p);
                 }
             }
 
@@ -209,6 +210,24 @@ export default function Posts() {
         };
     }, [targetPostId, currentUser?.id]);
 
+    useEffect(() => {
+        if (targetPostId) {
+            setSelectedTag('All');
+            setSearchQuery('');
+        }
+    }, [targetPostId]);
+
+    useEffect(() => {
+        if (targetPostId && posts.length > 0) {
+            setTimeout(() => {
+                const el = document.getElementById(`post-${targetPostId}`);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 350);
+        }
+    }, [targetPostId, posts]);
+
 
 
     // Count author's upcoming scheduled posts and private drafts
@@ -217,6 +236,9 @@ export default function Posts() {
 
     // Filter and sort logic — highlighted target post always at top
     const rawPosts = posts.filter(post => {
+        if (targetPostId && (String(post.id) === String(targetPostId) || String(post.postId) === String(targetPostId))) {
+            return true;
+        }
         const matchesSearch = !searchQuery || (post.content || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                               (post.author?.name || '').toLowerCase().includes(searchQuery.toLowerCase());
         const matchesTag = selectedTag === 'All' ? post.status !== 'Draft' : 
@@ -240,6 +262,10 @@ export default function Posts() {
         })
         : rawPosts
     ).sort((a, b) => {
+        if (targetPostId) {
+            if (String(a.id) === String(targetPostId) || String(a.postId) === String(targetPostId)) return -1;
+            if (String(b.id) === String(targetPostId) || String(b.postId) === String(targetPostId)) return 1;
+        }
         if (a.isHighlighted) return -1;
         if (b.isHighlighted) return 1;
         return 0;

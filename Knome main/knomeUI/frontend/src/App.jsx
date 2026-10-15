@@ -232,6 +232,7 @@ function App() {
                     <Route path="/suggested-people" element={<ProtectedPage><Network /></ProtectedPage>} />
                     <Route path="/network"         element={<ProtectedPage><Network /></ProtectedPage>} />
                     <Route path="/saved-content"   element={<ProtectedPage><SavedContent /></ProtectedPage>} />
+                    <Route path="/saved"           element={<Navigate to="/saved-content" replace />} />
                     <Route path="/posts"           element={<FeatureProtectedPage feature="isPostsEnabled" featureName="Posts" icon="dynamic_feed"><Posts /></FeatureProtectedPage>} />
                     <Route path="/posts/:id"       element={<FeatureProtectedPage feature="isPostsEnabled" featureName="Posts" icon="dynamic_feed"><Posts /></FeatureProtectedPage>} />
                     <Route path="/messages"        element={<FeatureProtectedPage feature="isMessagingEnabled" featureName="Direct Messaging" icon="chat"><Messages /></FeatureProtectedPage>} />

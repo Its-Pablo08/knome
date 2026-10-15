@@ -1148,6 +1148,11 @@ export default function Navbar() {
             window.dispatchEvent(new CustomEvent('knome:clip-engagement-updated', { detail: data }));
         });
 
+        connection.on("CommunityMembersUpdated", (data) => {
+            window.dispatchEvent(new CustomEvent('community-members-updated', { detail: data }));
+            window.dispatchEvent(new Event('storage'));
+        });
+
         connection.on("SystemConfigUpdated", (data) => {
             if (data && typeof data === 'object') {
                 const parseBool = (...keys) => {

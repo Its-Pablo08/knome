@@ -85,6 +85,7 @@ public static class ServiceCollectionExtensions
                     maxRetryDelay: TimeSpan.FromSeconds(30),
                     errorNumbersToAdd: null);
                 sqlOptions.CommandTimeout(60);
+                sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
             }));
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
     }
@@ -360,15 +361,40 @@ public static class ServiceCollectionExtensions
 
         if (user != null && isMayur && (user.EmployeeId != "EMP100" || user.FullName != "Mayur Bansal" || user.Email != "mayurbansal7089@gmail.com"))
         {
-            var dbUser = await dbContext.Users.FindAsync(user.UserId);
-            if (dbUser != null)
+            try
             {
-                dbUser.EmployeeId = "EMP100";
-                dbUser.FullName = "Mayur Bansal";
-                dbUser.Email = "mayurbansal7089@gmail.com";
-                dbUser.Designation = "Software Developer";
-                await dbContext.SaveChangesAsync();
-                user = dbUser;
+                // Execute direct raw SQL update to prevent EF Core ChangeTracker from throwing
+                // InvalidOperationException on Principal Key property 'User.EmployeeId'.
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    @"IF NOT EXISTS (SELECT 1 FROM [dbo].[Users] WHERE [EmployeeId] = 'EMP100' AND [UserId] <> {0})
+                      BEGIN
+                          UPDATE [dbo].[Users] 
+                          SET [EmployeeId] = 'EMP100', 
+                              [FullName] = 'Mayur Bansal', 
+                              [Email] = 'mayurbansal7089@gmail.com', 
+                              [Designation] = 'Software Developer',
+                              [IsActive] = 1
+                          WHERE [UserId] = {0};
+                      END
+                      ELSE
+                      BEGIN
+                          UPDATE [dbo].[Users] 
+                          SET [FullName] = 'Mayur Bansal', 
+                              [Email] = 'mayurbansal7089@gmail.com', 
+                              [Designation] = 'Software Developer',
+                              [IsActive] = 1
+                          WHERE [UserId] = {0};
+                      END",
+                    user.UserId);
+
+                user.EmployeeId = "EMP100";
+                user.FullName = "Mayur Bansal";
+                user.Email = "mayurbansal7089@gmail.com";
+                user.Designation = "Software Developer";
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "[MPO SSO] Failed to sync Mayur identity: {Message}", ex.Message);
             }
         }
 

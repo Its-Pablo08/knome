@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useUser } from '../components/contexts/UserContext';
 import { useToast } from '../components/contexts/ToastContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
-import { getArticles, deleteArticle, recordArticleView } from '../utils/articleService';
+import { getArticles, getArticleById, deleteArticle, recordArticleView } from '../utils/articleService';
 import { resolveMediaUrl, interactionsApi } from '../utils/apiService';
 import { checkRestrictedContent } from '../utils/restrictedWords';
 import ReportModal from '../components/modals/ReportModal';
@@ -38,16 +38,41 @@ export default function ArticleView() {
     
     // Local state for fetched articles
     const [articles, setArticles] = useState([]);
+    const [currentArticle, setCurrentArticle] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     
     useEffect(() => {
+        let isMounted = true;
         const fetchArticles = async () => {
-            const data = await getArticles();
-            setArticles(data || []);
-            setIsLoading(false);
+            setIsLoading(true);
+            try {
+                let singleArt = null;
+                if (articleId) {
+                    singleArt = await getArticleById(articleId);
+                }
+                const data = await getArticles(null, null, null, 1, 50);
+                if (!isMounted) return;
+                const list = data || [];
+                setArticles(list);
+                if (singleArt) {
+                    setCurrentArticle(singleArt);
+                } else if (articleId) {
+                    const found = list.find(art => String(art.id) === String(articleId));
+                    setCurrentArticle(found || list[0] || null);
+                } else {
+                    setCurrentArticle(list[0] || null);
+                }
+            } catch (err) {
+                console.error('Failed to fetch article view data:', err);
+            } finally {
+                if (isMounted) setIsLoading(false);
+            }
         };
         fetchArticles();
+        return () => { isMounted = false; };
+    }, [articleId]);
 
+    useEffect(() => {
         // Strict DRM & Anti-Save/Print Blocker
         const preventSaveAndPrint = (e) => {
             if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S' || e.key === 'u' || e.key === 'U')) {
@@ -87,7 +112,7 @@ export default function ArticleView() {
     }, []);
     
     // Find current article or fallback
-    const article = articles.find(art => String(art.id) === String(articleId)) || articles.find(art => String(art.id) === '1') || articles[0];
+    const article = currentArticle || articles.find(art => String(art.id) === String(articleId)) || articles.find(art => String(art.id) === '1') || articles[0];
 
     const isSystemAdminOrAuthor = ['SYSADM', 'HRADM', 'SYSTEM ADMIN', 'HR ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
                                   ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin'].includes(currentUser?.roleName) || 

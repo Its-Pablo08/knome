@@ -31,6 +31,11 @@ public class SystemSettingService : ISystemSettingService
 
     public const string DefaultApprovalDescription = "Require administrator approval before communities, videos and podcasts are published.";
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (bool Value, DateTime Expiration)> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
+
+    public static void InvalidateCache() => _cache.Clear();
+
     public SystemSettingService(KnomeDbContext db, IAuditLogService auditLogService)
     {
         _db = db;
@@ -39,20 +44,34 @@ public class SystemSettingService : ISystemSettingService
 
     private async Task<bool> GetBooleanSettingAsync(string key, bool defaultValue = true)
     {
+        if (_cache.TryGetValue(key, out var entry) && entry.Expiration > DateTime.UtcNow)
+        {
+            return entry.Value;
+        }
+
         try
         {
             var setting = await _db.SystemSettings.AsNoTracking().FirstOrDefaultAsync(s => s.SettingKey == key);
+            bool result;
             if (setting == null)
             {
                 // If specific approval key not set, fallback to master approval setting
                 if (key == RequireCommunityApprovalKey || key == RequireVideoApprovalKey || key == RequirePodcastApprovalKey)
                 {
-                    return await GetRequireContentAndCommunityApprovalAsync();
+                    result = await GetRequireContentAndCommunityApprovalAsync();
                 }
-                return defaultValue;
+                else
+                {
+                    result = defaultValue;
+                }
+            }
+            else
+            {
+                result = !string.Equals(setting.SettingValue, "false", StringComparison.OrdinalIgnoreCase);
             }
 
-            return !string.Equals(setting.SettingValue, "false", StringComparison.OrdinalIgnoreCase);
+            _cache[key] = (result, DateTime.UtcNow.Add(CacheDuration));
+            return result;
         }
         catch (Exception ex)
         {
@@ -63,6 +82,7 @@ public class SystemSettingService : ISystemSettingService
 
     private async Task<bool> SetBooleanSettingAsync(string key, bool value, int actorUserId, string description)
     {
+        _cache.Clear();
         var stringVal = value ? "true" : "false";
         var existing = await _db.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == key);
         var oldVal = existing?.SettingValue ?? (value ? "false" : "true");
@@ -109,19 +129,9 @@ public class SystemSettingService : ISystemSettingService
     }
 
     // ── Master Setting ──
-    public async Task<bool> GetRequireContentAndCommunityApprovalAsync()
+    public Task<bool> GetRequireContentAndCommunityApprovalAsync()
     {
-        try
-        {
-            var setting = await _db.SystemSettings.AsNoTracking().FirstOrDefaultAsync(s => s.SettingKey == RequireApprovalKey);
-            if (setting == null) return true;
-            return !string.Equals(setting.SettingValue, "false", StringComparison.OrdinalIgnoreCase);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Error reading RequireContentAndCommunityApproval. Defaulting to true.");
-            return true;
-        }
+        return GetBooleanSettingAsync(RequireApprovalKey, true);
     }
 
     public async Task<bool> SetRequireContentAndCommunityApprovalAsync(bool requireApproval, int actorUserId)
@@ -250,20 +260,35 @@ public class SystemSettingService : ISystemSettingService
     // ── Full Aggregated Settings DTO ──
     public async Task<ApprovalSettingDto> GetFullApprovalSettingsAsync()
     {
-        var master = await GetRequireContentAndCommunityApprovalAsync();
-        var comm = await GetRequireCommunityApprovalAsync();
-        var video = await GetRequireVideoApprovalAsync();
-        var pod = await GetRequirePodcastApprovalAsync();
-        var msg = await GetEnableMessagingAsync();
-        var email = await GetEnableEmailAsync();
-        var posts = await GetEnablePostsAsync();
-        var articles = await GetEnableArticlesAsync();
-        var clips = await GetEnableClipsAsync();
-        var wiki = await GetEnableWikiAsync();
-        var videos = await GetEnableVideosAsync();
-        var podcasts = await GetEnablePodcastsAsync();
+        var allSettings = await _db.SystemSettings.AsNoTracking().ToListAsync();
+        var map = allSettings.ToDictionary(s => s.SettingKey, s => s, StringComparer.OrdinalIgnoreCase);
 
-        var masterRow = await _db.SystemSettings.AsNoTracking().FirstOrDefaultAsync(s => s.SettingKey == RequireApprovalKey);
+        bool parseSetting(string key, bool defaultVal)
+        {
+            if (map.TryGetValue(key, out var s) && !string.IsNullOrWhiteSpace(s.SettingValue))
+            {
+                var val = !string.Equals(s.SettingValue, "false", StringComparison.OrdinalIgnoreCase);
+                _cache[key] = (val, DateTime.UtcNow.Add(CacheDuration));
+                return val;
+            }
+            _cache[key] = (defaultVal, DateTime.UtcNow.Add(CacheDuration));
+            return defaultVal;
+        }
+
+        var master = parseSetting(RequireApprovalKey, true);
+        var comm = map.ContainsKey(RequireCommunityApprovalKey) ? parseSetting(RequireCommunityApprovalKey, true) : master;
+        var video = map.ContainsKey(RequireVideoApprovalKey) ? parseSetting(RequireVideoApprovalKey, true) : master;
+        var pod = map.ContainsKey(RequirePodcastApprovalKey) ? parseSetting(RequirePodcastApprovalKey, true) : master;
+        var msg = parseSetting(EnableMessagingKey, true);
+        var email = parseSetting(EnableEmailKey, true);
+        var posts = parseSetting(EnablePostsKey, true);
+        var articles = parseSetting(EnableArticlesKey, true);
+        var clips = parseSetting(EnableClipsKey, true);
+        var wiki = parseSetting(EnableWikiKey, true);
+        var videos = parseSetting(EnableVideosKey, true);
+        var podcasts = parseSetting(EnablePodcastsKey, true);
+
+        map.TryGetValue(RequireApprovalKey, out var masterRow);
 
         return new ApprovalSettingDto
         {

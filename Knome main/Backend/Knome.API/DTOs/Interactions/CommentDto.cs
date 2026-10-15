@@ -19,7 +19,9 @@ public class CommentDto
     public DateTime CreatedDate { get; set; }
     public int RepliesCount { get; set; }
     public int LikesCount { get; set; }
+    public int DislikesCount { get; set; }
     public bool IsLiked { get; set; }
+    public bool IsDisliked { get; set; }
     public string? UserReactionType { get; set; }
     public List<string> TopReactionTypes { get; set; } = new List<string>();
     public List<CommentDto> Replies { get; set; } = new List<CommentDto>();

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../components/contexts/UserContext';
 import CreatePostModal from '../components/modals/CreatePostModal';
 import CreateArticleModal from '../components/modals/CreateArticleModal';
@@ -20,6 +20,17 @@ import { useSystemConfig } from '../utils/systemConfig';
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Auto-forward any ?postId=X or ?id=X to /posts?id=X
+    useEffect(() => {
+        const qp = new URLSearchParams(location.search);
+        const pId = qp.get('postId') || qp.get('id');
+        if (pId) {
+            navigate(`/posts?id=${pId}`, { replace: true });
+        }
+    }, [location.search, navigate]);
+
     const { currentUser } = useUser();
     const { isPostsEnabled, isArticlesEnabled, isVideosEnabled } = useSystemConfig();
     const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);

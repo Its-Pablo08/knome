@@ -230,7 +230,13 @@ public class FeedService : IFeedService
         // Fetch recent posts
         if (enablePosts)
         {
-            var posts = await _db.Posts.Include(p => p.AuthorUser).Include(p => p.PostAttachments).Where(p => p.CreatedDate >= cutoff && p.AudienceType == AudienceTypes.Everyone).Take(50).ToListAsync();
+            var posts = await _db.Posts
+                .Include(p => p.AuthorUser)
+                .Include(p => p.PostAttachments)
+                .Where(p => p.CreatedDate >= cutoff && p.AudienceType == AudienceTypes.Everyone)
+                .OrderByDescending(p => p.CreatedDate)
+                .Take(50)
+                .ToListAsync();
             foreach (var p in posts)
             {
                 var summary = await _interactionService.GetContentSummaryAsync(ContentTypes.Post, p.PostId, currentUserId);
@@ -274,6 +280,7 @@ public class FeedService : IFeedService
                 .Include(a => a.AuthorUser)
                 .Include(a => a.ArticleAttachments)
                 .Where(a => (a.PublishedDate ?? a.CreatedDate) >= cutoff && (a.Status == ArticleStatuses.Published || string.IsNullOrEmpty(a.Status)))
+                .OrderByDescending(a => a.PublishedDate ?? a.CreatedDate)
                 .Take(50)
                 .ToListAsync();
 

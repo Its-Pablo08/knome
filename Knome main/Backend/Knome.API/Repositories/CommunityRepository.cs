@@ -126,9 +126,15 @@ public class CommunityRepository : ICommunityRepository
     // --- Community Admins ---
     public async Task<bool> IsCommunityAdminAsync(int communityId, int userId)
     {
-        return await _db.Communities
+        var inAdminsTable = await _db.Communities
             .Where(c => c.CommunityId == communityId && c.Users.Any(u => u.UserId == userId))
             .AnyAsync();
+
+        if (inAdminsTable)
+            return true;
+
+        return await _db.CommunityMembers
+            .AnyAsync(m => m.CommunityId == communityId && m.UserId == userId && m.MemberType == CommunityMemberTypes.Admin && (m.Status == CommunityMemberStatuses.Approved || m.Status == "Active"));
     }
 
     public async Task AddCommunityAdminAsync(int communityId, int userId)
@@ -149,14 +155,30 @@ public class CommunityRepository : ICommunityRepository
         if (community != null && user != null)
         {
             community.Users.Remove(user);
-            await _db.SaveChangesAsync();
         }
+
+        var member = await _db.CommunityMembers.FirstOrDefaultAsync(m => m.CommunityId == communityId && m.UserId == userId);
+        if (member != null && member.MemberType == CommunityMemberTypes.Admin)
+        {
+            member.MemberType = CommunityMemberTypes.Member;
+        }
+
+        await _db.SaveChangesAsync();
     }
 
     public async Task<int> GetCommunityAdminsCountAsync(int communityId)
     {
-        var community = await _db.Communities.Include(c => c.Users).FirstOrDefaultAsync(c => c.CommunityId == communityId);
-        return community?.Users.Count ?? 0;
+        var adminUserIds = await _db.Communities
+            .Where(c => c.CommunityId == communityId)
+            .SelectMany(c => c.Users.Select(u => u.UserId))
+            .ToListAsync();
+
+        var memberAdminUserIds = await _db.CommunityMembers
+            .Where(m => m.CommunityId == communityId && m.MemberType == CommunityMemberTypes.Admin && (m.Status == CommunityMemberStatuses.Approved || m.Status == "Active"))
+            .Select(m => m.UserId)
+            .ToListAsync();
+
+        return adminUserIds.Concat(memberAdminUserIds).Distinct().Count();
     }
 
     // --- Members ---
@@ -190,13 +212,23 @@ public class CommunityRepository : ICommunityRepository
     {
         var query = _db.CommunityMembers
             .Include(m => m.User)
+            .Include(m => m.ApprovedByUser)
             .Where(m => m.CommunityId == communityId)
             .AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(status))
+        if (string.Equals(status, CommunityMemberStatuses.Banned, StringComparison.OrdinalIgnoreCase) || 
+            string.Equals(status, "Suspended", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(m => m.Status == CommunityMemberStatuses.Banned || m.Status == "Suspended" || m.Status == "banned" || m.Status == "suspended");
+        }
+        else if (!string.IsNullOrWhiteSpace(status))
+        {
             query = query.Where(m => m.Status == status);
+        }
         else
+        {
             query = query.Where(m => m.Status == CommunityMemberStatuses.Approved || m.Status == "Active");
+        }
 
         return await query
             .OrderByDescending(m => m.RequestedDate)

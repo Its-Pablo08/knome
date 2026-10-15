@@ -179,12 +179,15 @@ public class ContentInteractionService : IContentInteractionService
             foreach (var item in allDtos)
             {
                 var commentReactions = reactions.Where(r => r.ContentId == item.CommentId).ToList();
-                item.LikesCount = commentReactions.Count;
-                item.IsLiked = currentUserId.HasValue && commentReactions.Any(r => r.UserId == currentUserId.Value);
+                item.LikesCount = commentReactions.Count(r => r.ReactionType != ReactionTypes.Dislike);
+                item.DislikesCount = commentReactions.Count(r => r.ReactionType == ReactionTypes.Dislike);
+                item.IsLiked = currentUserId.HasValue && commentReactions.Any(r => r.UserId == currentUserId.Value && r.ReactionType != ReactionTypes.Dislike);
+                item.IsDisliked = currentUserId.HasValue && commentReactions.Any(r => r.UserId == currentUserId.Value && r.ReactionType == ReactionTypes.Dislike);
                 item.UserReactionType = currentUserId.HasValue 
                     ? commentReactions.FirstOrDefault(r => r.UserId == currentUserId.Value)?.ReactionType 
                     : null;
                 item.TopReactionTypes = commentReactions
+                    .Where(r => r.ReactionType != ReactionTypes.Dislike)
                     .Select(r => r.ReactionType)
                     .Where(t => !string.IsNullOrEmpty(t))
                     .Distinct()
@@ -364,7 +367,7 @@ public class ContentInteractionService : IContentInteractionService
 
                     var viewCount = await _db.ContentViews.CountAsync(cv => (cv.ContentType == ContentTypes.Clip || cv.ContentType.ToLower() == "clip") && cv.ContentId == contentId);
                     var likesCount = await _db.Reactions.CountAsync(r => (r.ContentType == ContentTypes.Clip || r.ContentType.ToLower() == "clip") && r.ContentId == contentId && r.ReactionType == ReactionTypes.Like);
-                    var sharesCount = await _db.ClipShares.CountAsync(s => s.ClipId == contentId);
+                    var sharesCount = await _db.ClipShares.Where(s => s.ClipId == contentId).Select(s => s.SharedByUserId).Distinct().CountAsync();
 
                     await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
                     {
@@ -453,7 +456,7 @@ public class ContentInteractionService : IContentInteractionService
 
                     var viewCount = await _db.ContentViews.CountAsync(cv => (cv.ContentType == ContentTypes.Clip || cv.ContentType.ToLower() == "clip") && cv.ContentId == cId);
                     var likesCount = await _db.Reactions.CountAsync(r => (r.ContentType == ContentTypes.Clip || r.ContentType.ToLower() == "clip") && r.ContentId == cId && r.ReactionType == ReactionTypes.Like);
-                    var sharesCount = await _db.ClipShares.CountAsync(s => s.ClipId == cId);
+                    var sharesCount = await _db.ClipShares.Where(s => s.ClipId == cId).Select(s => s.SharedByUserId).Distinct().CountAsync();
 
                     await _hubContext.Clients.All.SendAsync("ClipEngagementUpdated", new
                     {
@@ -517,8 +520,11 @@ public class ContentInteractionService : IContentInteractionService
             };
             await _repo.AddReactionAsync(reaction);
 
-            // Award karma to the user who reacted
-            await _karmaService.AwardKarmaAsync(userId, KarmaActivityTypes.AddLike, KarmaPoints.AddLikePoints, contentType, contentId);
+            // Award karma to the user who reacted (only for positive reactions)
+            if (!string.Equals(dto.ReactionType, ReactionTypes.Dislike, StringComparison.OrdinalIgnoreCase))
+            {
+                await _karmaService.AwardKarmaAsync(userId, KarmaActivityTypes.AddLike, KarmaPoints.AddLikePoints, contentType, contentId);
+            }
 
             var reactor = await _userRepo.GetByIdAsync(userId);
             var reactorName = reactor?.FullName ?? "Someone";
@@ -526,7 +532,7 @@ public class ContentInteractionService : IContentInteractionService
             if (string.Equals(contentType, ContentTypes.Comment, StringComparison.OrdinalIgnoreCase))
             {
                 var comment = await _repo.GetCommentByIdAsync(contentId);
-                if (comment != null)
+                if (comment != null && !string.Equals(dto.ReactionType, ReactionTypes.Dislike, StringComparison.OrdinalIgnoreCase))
                 {
                     var parentContentType = !string.IsNullOrWhiteSpace(comment.ContentType) ? comment.ContentType : ContentTypes.Post;
 
@@ -568,7 +574,7 @@ public class ContentInteractionService : IContentInteractionService
             {
                 // Direct reaction to Post, Article, Video, Podcast, etc.
                 var authorId = await _repo.GetContentAuthorUserIdAsync(contentType, contentId);
-                if (authorId.HasValue && authorId.Value != userId)
+                if (authorId.HasValue && authorId.Value != userId && !string.Equals(dto.ReactionType, ReactionTypes.Dislike, StringComparison.OrdinalIgnoreCase))
                 {
                     await _karmaService.AwardKarmaAsync(authorId.Value, KarmaActivityTypes.ReceiveLike, KarmaPoints.ReceiveLikePoints, contentType, contentId);
                     string notifText = contentType switch
@@ -599,6 +605,7 @@ public class ContentInteractionService : IContentInteractionService
                 contentType,
                 contentId,
                 totalLikes = summary.TotalCount,
+                totalDislikes = summary.DislikeCount,
                 reactionsSummary = summary
             });
 
@@ -612,7 +619,7 @@ public class ContentInteractionService : IContentInteractionService
 
                     var viewCount = await _db.ContentViews.CountAsync(cv => (cv.ContentType == ContentTypes.Clip || cv.ContentType.ToLower() == "clip") && cv.ContentId == contentId);
                     var commentsCount = await _db.Comments.CountAsync(c => (c.ContentType == ContentTypes.Clip || c.ContentType.ToLower() == "clip") && c.ContentId == contentId);
-                    var sharesCount = await _db.ClipShares.CountAsync(s => s.ClipId == contentId);
+                    var sharesCount = await _db.ClipShares.Where(s => s.ClipId == contentId).Select(s => s.SharedByUserId).Distinct().CountAsync();
 
                     clip.CommentsCount = commentsCount;
                     await _db.SaveChangesAsync();
@@ -656,6 +663,8 @@ public class ContentInteractionService : IContentInteractionService
     {
         ValidateContentType(contentType);
 
+        var alreadyShared = await _repo.HasUserSharedAsync(contentType, contentId, userId);
+
         var share = new Share
         {
             ContentType = contentType,
@@ -668,8 +677,11 @@ public class ContentInteractionService : IContentInteractionService
 
         var saved = await _repo.AddShareAsync(share);
 
-        // Award karma to the user who shared the content
-        await _karmaService.AwardKarmaAsync(userId, KarmaActivityTypes.AddShare, KarmaPoints.AddSharePoints, contentType, contentId);
+        // Award karma to the user who shared the content (once per user per content)
+        if (!alreadyShared)
+        {
+            await _karmaService.AwardKarmaAsync(userId, KarmaActivityTypes.AddShare, KarmaPoints.AddSharePoints, contentType, contentId);
+        }
 
         var sharingUser = await _userRepo.GetProfileByIdAsync(userId);
         var sharingUserName = sharingUser?.FullName ?? "Someone";
@@ -715,7 +727,10 @@ public class ContentInteractionService : IContentInteractionService
         var authorId = await _repo.GetContentAuthorUserIdAsync(contentType, contentId);
         if (authorId.HasValue && authorId.Value != userId)
         {
-            await _karmaService.AwardKarmaAsync(authorId.Value, KarmaActivityTypes.ReceiveShare, KarmaPoints.ReceiveSharePoints, contentType, contentId);
+            if (!alreadyShared)
+            {
+                await _karmaService.AwardKarmaAsync(authorId.Value, KarmaActivityTypes.ReceiveShare, KarmaPoints.ReceiveSharePoints, contentType, contentId);
+            }
             // Notify the content author that their content was shared
             await _notificationService.PublishAsync(
                 authorId.Value,
@@ -760,10 +775,14 @@ public class ContentInteractionService : IContentInteractionService
             }
         }
 
-        // Real-time broadcast share count update to all active users
+        // Real-time broadcast share count update to all active users (distinct users)
         try
         {
-            var totalShares = await _db.Shares.CountAsync(s => s.ContentType == contentType && s.ContentId == contentId);
+            var totalShares = await _db.Shares
+                .Where(s => s.ContentType == contentType && s.ContentId == contentId)
+                .Select(s => s.UserId)
+                .Distinct()
+                .CountAsync();
             await _hubContext.Clients.All.SendAsync("ShareCountUpdated", new
             {
                 contentType,
@@ -856,6 +875,7 @@ public class ContentInteractionService : IContentInteractionService
         var reactionSummary = await _repo.GetReactionsSummaryAsync(contentType, contentId, currentUserId);
         var sharesCount = await _repo.GetSharesCountAsync(contentType, contentId);
         var bookmark = await _repo.GetBookmarkAsync(contentType, contentId, currentUserId);
+        var hasUserShared = currentUserId > 0 && await _repo.HasUserSharedAsync(contentType, contentId, currentUserId);
 
         // FR-HP-01 Hot Posts formula: (Views * 1) + (Reactions * 3) + (Comments * 5) + (Shares * 4)
         var views = await _repo.GetContentViewCountAsync(contentType, contentId);
@@ -870,6 +890,7 @@ public class ContentInteractionService : IContentInteractionService
             SharesCount = sharesCount,
             ViewsCount = views,
             IsBookmarkedByCurrentUser = bookmark != null,
+            IsSharedByCurrentUser = hasUserShared,
             EngagementScore = score
         };
     }
@@ -903,10 +924,12 @@ public class ContentInteractionService : IContentInteractionService
             .Where(r => r.ContentType == contentType && idList.Contains(r.ContentId) && r.UserId == currentUserId)
             .ToDictionaryAsync(r => r.ContentId, r => r.ReactionType);
 
-        // 4. Bulk shares count & bookmarks in single query
+        // 4. Bulk shares count & bookmarks in single query (distinct users for shares)
         var sharesCountDict = await _db.Shares
             .AsNoTracking()
             .Where(s => s.ContentType == contentType && idList.Contains(s.ContentId))
+            .Select(s => new { s.ContentId, s.UserId })
+            .Distinct()
             .GroupBy(s => s.ContentId)
             .Select(g => new { ContentId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(g => g.ContentId, g => g.Count);
@@ -916,6 +939,15 @@ public class ContentInteractionService : IContentInteractionService
                 .AsNoTracking()
                 .Where(b => b.ContentType == contentType && idList.Contains(b.ContentId) && b.UserId == currentUserId)
                 .Select(b => b.ContentId)
+                .ToListAsync())
+            : new HashSet<long>();
+
+        var userShares = currentUserId > 0
+            ? new HashSet<long>(await _db.Shares
+                .AsNoTracking()
+                .Where(s => s.ContentType == contentType && idList.Contains(s.ContentId) && s.UserId == currentUserId)
+                .Select(s => s.ContentId)
+                .Distinct()
                 .ToListAsync())
             : new HashSet<long>();
 
@@ -974,6 +1006,7 @@ public class ContentInteractionService : IContentInteractionService
                 SharesCount = sCount,
                 ViewsCount = viewCount,
                 IsBookmarkedByCurrentUser = isBookmarked,
+                IsSharedByCurrentUser = userShares.Contains(cid),
                 EngagementScore = score
             };
         }
@@ -1230,7 +1263,7 @@ public class ContentInteractionService : IContentInteractionService
 
                     var likesCount = await _db.Reactions.CountAsync(r => (r.ContentType == ContentTypes.Clip || r.ContentType.ToLower() == "clip") && r.ContentId == contentId && r.ReactionType == ReactionTypes.Like);
                     var commentsCount = await _db.Comments.CountAsync(c => (c.ContentType == ContentTypes.Clip || c.ContentType.ToLower() == "clip") && c.ContentId == contentId);
-                    var sharesCount = await _db.ClipShares.CountAsync(s => s.ClipId == contentId);
+                    var sharesCount = await _db.ClipShares.Where(s => s.ClipId == contentId).Select(s => s.SharedByUserId).Distinct().CountAsync();
 
                     clip.CommentsCount = commentsCount;
                     await _db.SaveChangesAsync();

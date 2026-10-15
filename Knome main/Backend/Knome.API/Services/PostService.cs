@@ -233,6 +233,7 @@ public class PostService : IPostService
 
             var otherActiveUsers = await _db.Users
                 .Where(u => u.UserId != currentUserId && u.IsActive && !u.IsPermanentlySuspended)
+                .OrderBy(u => u.UserId)
                 .Select(u => u.UserId)
                 .Take(50)
                 .ToListAsync();
@@ -361,6 +362,7 @@ public class PostService : IPostService
 
                 var otherActiveUsers = await _db.Users
                     .Where(u => u.UserId != currentUserId && u.IsActive && !u.IsPermanentlySuspended)
+                    .OrderBy(u => u.UserId)
                     .Select(u => u.UserId)
                     .Take(50)
                     .ToListAsync();

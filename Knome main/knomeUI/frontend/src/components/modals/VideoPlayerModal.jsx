@@ -502,10 +502,18 @@ export default function VideoPlayerModal({ isOpen, onClose, video, onVideoDelete
                 onClose={() => setIsShareModalOpen(false)}
                 item={video}
                 contentType="Video"
-                onShared={(type, count) => {
-                    setShareCount(prev => prev + (count || 1));
-                    if (awardRuleKarma && (video?.authorId || video?.userId)) {
-                        awardRuleKarma(video.authorId || video.userId, 'SHARE_RECEIVED');
+                onShared={(type) => {
+                    const vid = String(video?.videoId || video?.id || '');
+                    const currentUid = String(currentUser?.userId || currentUser?.id || 'guest');
+                    const userSharedKey = `knome_shared_video_${vid}_${currentUid}`;
+                    const alreadyShared = Boolean(video?.isSharedByCurrentUser || localStorage.getItem(userSharedKey) === 'true');
+
+                    if (!alreadyShared) {
+                        setShareCount(prev => prev + 1);
+                        localStorage.setItem(userSharedKey, 'true');
+                        if (awardRuleKarma && (video?.authorId || video?.userId)) {
+                            awardRuleKarma(video.authorId || video.userId, 'SHARE_RECEIVED');
+                        }
                     }
                 }}
             />

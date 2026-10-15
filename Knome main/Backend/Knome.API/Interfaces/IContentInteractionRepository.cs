@@ -27,6 +27,7 @@ public interface IContentInteractionRepository
     // Shares
     Task<Share> AddShareAsync(Share share);
     Task<long> GetSharesCountAsync(string contentType, long contentId);
+    Task<bool> HasUserSharedAsync(string contentType, long contentId, int userId);
 
     // Bookmarks
     Task<Bookmark?> GetBookmarkAsync(string contentType, long contentId, int userId);

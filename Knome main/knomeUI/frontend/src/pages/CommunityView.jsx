@@ -265,6 +265,7 @@ export default function CommunityView() {
     const [suspendReasonCategory, setSuspendReasonCategory] = useState('Violation of community guidelines');
     const [suspendReasonNote, setSuspendReasonNote] = useState('');
     const [removeModalMember, setRemoveModalMember] = useState(null);
+    const [isRemovingMember, setIsRemovingMember] = useState(false);
 
     // Rules & FAQ Management State
     const [editRules, setEditRules] = useState([]);
@@ -1262,11 +1263,10 @@ export default function CommunityView() {
                       (community?.createdBy && currentUser?.name && community.createdBy.toLowerCase().includes(currentUser.name.toLowerCase())) ||
                       (community?.adminContact && currentUser?.name && community.adminContact.toLowerCase().includes(currentUser.name.toLowerCase()));
 
-    // Treat SYSADM, CADM, HRADM, Creator, and assigned Admins/Moderators as Community Admins
+    // Treat SYSADM, CADM, HRADM, and active assigned Admins/Moderators as Community Admins
     const isAdmin = ['SYSADM', 'CADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
                     ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'Admin'].includes(currentUser?.roleName) ||
                     (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'SYSADM', 'HRADM', 'CADM', 'Admin'].includes(r))) ||
-                    isCreator ||
                     Boolean(community?.isCurrentUserAdmin) ||
                     membersList.some(m => {
                         const mUid = String(m.userId || m.id || '');
@@ -1280,6 +1280,11 @@ export default function CommunityView() {
     const isSysAdmin = ['SYSADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
                        ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin'].includes(currentUser?.roleName) ||
                        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin'].includes(r)));
+
+    const canManageApprovals = isSysAdmin || 
+                               ['CADM', 'COMMUNITY ADMIN', 'COMMUNITY ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                               ['Community Administrator', 'Community Admin'].includes(currentUser?.roleName) ||
+                               (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['CADM', 'Community Administrator', 'Community Admin', 'HRADM', 'SYSADM'].includes(String(r || '').toUpperCase())));
 
     // Load organization directory for admin member addition modal
     useEffect(() => {
@@ -1627,7 +1632,7 @@ export default function CommunityView() {
             } catch (_) {}
 
             showToast(`Community request for "${community?.name}" was rejected.`, 'info');
-            navigate('/communities');
+            navigate('/community?tab=Pending+Approvals');
         } catch (err) {
             console.error('Failed to reject community:', err);
             showToast('Failed to reject community.', 'error');
@@ -1694,15 +1699,17 @@ export default function CommunityView() {
             let rawMembers = [];
             let apiFiles = null;
             let apiPendingMembers = [];
+            let apiSuspendedMembers = [];
 
             if (isValidInt32) {
                 commData = await communitiesApi.getById(communityId, { noCache: true }).catch(() => null);
                 if (commData) {
-                    [postsData, rawMembers, apiFiles, apiPendingMembers] = await Promise.all([
+                    [postsData, rawMembers, apiFiles, apiPendingMembers, apiSuspendedMembers] = await Promise.all([
                         communitiesApi.getPosts(communityId).catch(() => []),
                         communitiesApi.getMembers(communityId, null, 1, 200, { noCache: true }).catch(() => []),
                         communitiesApi.getFiles(communityId).catch(() => null),
-                        communitiesApi.getMembers(communityId, 'Pending', 1, 100, { noCache: true }).catch(() => [])
+                        communitiesApi.getMembers(communityId, 'Pending', 1, 100, { noCache: true }).catch(() => []),
+                        communitiesApi.getMembers(communityId, 'Banned', 1, 100, { noCache: true }).catch(() => [])
                     ]);
                 }
             }
@@ -1843,8 +1850,43 @@ export default function CommunityView() {
                         savedSuspendedMap.set(key, item);
                     }
                 });
+
+                // Authoritative banned/suspended members from backend database
+                const suspendedList = Array.isArray(apiSuspendedMembers)
+                    ? apiSuspendedMembers
+                    : (Array.isArray(apiSuspendedMembers?.data) ? apiSuspendedMembers.data : (apiSuspendedMembers?.items || []));
+
+                suspendedList.forEach(sm => {
+                    const key = String(sm.userId || sm.id || sm.employeeId || sm.empId || sm.fullName || sm.name || '');
+                    if (key) {
+                        const existing = savedSuspendedMap.get(key) || {};
+                        savedSuspendedMap.set(key, {
+                            id: sm.userId || sm.id,
+                            userId: sm.userId || sm.id,
+                            name: sm.fullName || sm.name || 'Employee',
+                            fullName: sm.fullName || sm.name || 'Employee',
+                            employeeId: sm.employeeId || 'MPO100',
+                            role: sm.designation || 'Member',
+                            designation: sm.designation || 'Member',
+                            department: sm.departmentName || sm.department || 'MPOnline',
+                            avatar: sm.profilePhotoUrl || null,
+                            profilePhotoUrl: sm.profilePhotoUrl || null,
+                            status: 'Banned',
+                            suspendedAt: sm.decidedDate || sm.requestedDate || new Date().toISOString(),
+                            suspensionDuration: existing.suspensionDuration || 'Indefinite',
+                            suspensionReason: existing.suspensionReason || 'Violation of community guidelines',
+                            suspendedBy: sm.approvedByUserName || existing.suspendedBy || 'Community Admin',
+                            ...existing
+                        });
+                    }
+                });
+
                 const savedSuspended = Array.from(savedSuspendedMap.values());
                 setSuspendedMembers(savedSuspended);
+                localStorage.setItem(`knome_community_suspended_${commData.communityId}`, JSON.stringify(savedSuspended));
+                if (String(communityId) !== String(commData.communityId)) {
+                    localStorage.setItem(`knome_community_suspended_${communityId}`, JSON.stringify(savedSuspended));
+                }
 
                 // FR-CM-07: Check if current user is suspended from this community
                 const userSuspensionRecord = savedSuspended.find(s => {
@@ -1863,14 +1905,20 @@ export default function CommunityView() {
                 // Authoritative joined check:
                 // User is a member IF NOT suspended AND NOT removed locally AND:
                 // - Default/Org community, OR
-                // - Community Admin, OR
-                // - Community Creator, OR
-                // - Backend DB confirms approved/joined, OR
-                // - User joined locally or present in member list
-                const isUserJoined = !isUserSuspendedInComm && !isCurrentRemoved && (isDefaultOrg || isCommAdmin || isCreator || isApiApproved || isLocalJoined || isMemberInRawList);
+                // - Backend DB confirms user is admin (commData.isCurrentUserAdmin || isMemberAdmin), OR
+                // - Backend DB confirms approved/joined (isApiApproved), OR
+                // - User is present in rawMembers list from backend database (isMemberInRawList)
+                const hasAuthoritativeDbList = Array.isArray(rawMembers);
+                const isUserJoined = !isUserSuspendedInComm && !isCurrentRemoved && (
+                    isDefaultOrg || 
+                    isCommAdmin || 
+                    isApiApproved || 
+                    isMemberInRawList || 
+                    (!hasAuthoritativeDbList && (isLocalJoined || isCreator))
+                );
 
-                // If backend DB reports user is NOT a member and no local join exists, clean cache
-                if (!isUserJoined && !isDefaultOrg && !isCommAdmin && !isCreator && !isLocalPending) {
+                // If backend DB reports user is NOT a member, clean cache and revoke joined status
+                if (!isUserJoined && !isDefaultOrg && !isCommAdmin) {
                     // Purge current user from member list
                     rawList = rawList.filter(m => {
                         const mUid = String(m?.userId || m?.id || '');
@@ -1901,7 +1949,7 @@ export default function CommunityView() {
 
                 let resolvedMembers = deduplicateMembers(rawList, contextUsers);
 
-                if (isUserJoined && currentUser) {
+                if (isUserJoined && currentUser && !hasAuthoritativeDbList) {
                     const isMemberInList = resolvedMembers.some(m => {
                         const mUid = String(m.userId || m.id || '');
                         const mEmpId = String(m.employeeId || m.empId || m.displayEmpId || '').toUpperCase();
@@ -1916,7 +1964,7 @@ export default function CommunityView() {
                             fullName: currentUser.fullName || currentUser.name,
                             employeeId: currentUser.employeeId || 'MPO100',
                             designation: currentUser.designation || currentUser.roleName || 'Software Developer',
-                            memberType: (isCommAdmin || isCreator) ? 'Admin' : 'Member',
+                            memberType: isCommAdmin ? 'Admin' : 'Member',
                             status: 'Approved',
                             profilePhotoUrl: currentUser.avatar
                         });
@@ -2023,9 +2071,10 @@ export default function CommunityView() {
 
                 setJoinRequests(mergedRequests);
             } else {
-                // Fallback check custom created communities or seeds
+                // Fallback check custom created communities, pending approvals, or seeds
                 const customList = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
-                const found = customList.find(c => String(c.id) === String(communityId));
+                const pendingList = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
+                const found = customList.find(c => String(c.id) === String(communityId)) || pendingList.find(c => String(c.id) === String(communityId));
                 
                 const targetId = communityId || 101;
                 const savedMembersKey = `knome_community_members_${targetId}`;
@@ -2172,18 +2221,25 @@ export default function CommunityView() {
                         ? parseFaqList(localRulesFaq.faq) 
                         : (found.faq ? parseFaqList(found.faq) : parseFaqList(null));
 
+                    const isPending = found.approvalStatus === 'Pending' || found.status === 'Pending' || found.isActive === false;
+
                     setCommunity({
                         id: found.id,
                         name: found.name,
                         type: found.type || 'Public',
                         category: found.category || 'Technology',
                         membersCount: resolvedMembers.length,
-                        adminContact: creatorName,
+                        adminContact: found.creatorName || found.createdBy || creatorName,
                         banner: found.banner || found.bannerUrl || found.thumbnail || found.avatar || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=1200&h=400',
                         thumbnail: found.thumbnail || found.avatar || found.thumbnailUrl || found.banner || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=200&h=200',
                         description: found.description || 'A community for collaboration.',
                         rules: resolvedRules,
-                        faq: resolvedFaq
+                        faq: resolvedFaq,
+                        isActive: !isPending,
+                        approvalStatus: isPending ? 'Pending' : 'Approved',
+                        createdByUserId: found.creatorUserId || found.createdByUserId,
+                        createdDate: found.createdDate,
+                        invitedUserIds: found.invitedUserIds || []
                     });
                     setMembershipStatus(calcStatus);
                 } else {
@@ -2364,6 +2420,16 @@ export default function CommunityView() {
                     const finalLikes = cached && typeof cached.likeCount === 'number' ? Math.max(cached.likeCount, sLikes) : sLikes;
                     const finalComments = cached && typeof cached.commentCount === 'number' ? Math.max(cached.commentCount, sComments) : sComments;
 
+                    const sShares = Number(
+                        p.engagementSummary?.sharesCount ??
+                        p.sharesCount ??
+                        p.shares ??
+                        0
+                    );
+                    const currentUid = String(currentUser?.userId || currentUser?.id || 'guest');
+                    const userSharedKey = `knome_shared_post_${p.postId || p.id}_${currentUid}`;
+                    const isUserShared = Boolean(p.engagementSummary?.isSharedByCurrentUser || localStorage.getItem(userSharedKey) === 'true');
+
                     // Detect sharedProfile from backend post if contentText has format
                     const profileMatch = (p.contentText || p.content || '').match(/Shared Profile:\s*"([^"]+)"/i);
                     const profileUrlMatch = (p.contentText || p.content || '').match(/(?:https?:\/\/[^\s]+)?\/profile\?id=([a-zA-Z0-9_-]+)/i);
@@ -2399,6 +2465,9 @@ export default function CommunityView() {
                         likesCount: finalLikes,
                         comments: finalComments,
                         commentsCount: finalComments,
+                        shares: sShares,
+                        sharesCount: sShares,
+                        isSharedByCurrentUser: isUserShared,
                         isPinned: p.isPinned
                     };
                 });
@@ -2432,6 +2501,9 @@ export default function CommunityView() {
                         type: p.type || null,
                         likes: p.likes || 0,
                         comments: p.comments || 0,
+                        shares: p.shares || p.sharesCount || 0,
+                        sharesCount: p.shares || p.sharesCount || 0,
+                        isSharedByCurrentUser: Boolean(p.isSharedByCurrentUser || localStorage.getItem(`knome_shared_post_${p.id}_${currentUser?.userId || currentUser?.id || 'guest'}`) === 'true'),
                         isPinned: !!p.isPinned
                     };
                 });
@@ -2475,6 +2547,9 @@ export default function CommunityView() {
                                 type: p.type || null,
                                 likes: p.likesCount || p.likes || 0,
                                 comments: p.commentsCount || p.comments || 0,
+                                shares: p.sharesCount || p.shares || 0,
+                                sharesCount: p.sharesCount || p.shares || 0,
+                                isSharedByCurrentUser: Boolean(p.isSharedByCurrentUser || localStorage.getItem(`knome_shared_post_${p.id}_${currentUser?.userId || currentUser?.id || 'guest'}`) === 'true'),
                                 isPinned: false
                             };
                         });
@@ -2550,11 +2625,31 @@ export default function CommunityView() {
                 return;
             }
 
-            // Immediately check if current user was removed
-            const removedList = JSON.parse(localStorage.getItem(`knome_community_removed_${targetId}`) || '[]');
+            // If membership decision was made (e.g. suspended, approved, reinstated)
+            if (e?.detail?.action === 'MembershipDecided' || e?.detail?.status === 'Banned' || e?.detail?.status === 'Approved') {
+                loadData();
+                return;
+            }
+
             const myUid = String(currentUser?.userId || currentUser?.id || '').toLowerCase();
             const myEmpId = String(currentUser?.employeeId || '').toUpperCase();
             const myName = String(currentUser?.fullName || currentUser?.name || '').toLowerCase();
+            const removedUserId = e?.detail?.removedUserId;
+
+            // 1. Immediately check if current user was removed
+            if (removedUserId && (String(removedUserId).toLowerCase() === myUid || String(removedUserId) === String(currentUser?.id))) {
+                setMembershipStatus('none');
+                const selfUserKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
+                try {
+                    const selfJoined = JSON.parse(localStorage.getItem(selfUserKey) || '[]');
+                    localStorage.setItem(selfUserKey, JSON.stringify(selfJoined.filter(c => String(c.id) !== String(targetId))));
+                } catch (_) {}
+                showToast('You have been removed from this community.', 'warning');
+                loadData();
+                return;
+            }
+
+            const removedList = JSON.parse(localStorage.getItem(`knome_community_removed_${targetId}`) || '[]');
             const isRemoved = removedList.some(r => {
                 const s = String(r).toLowerCase();
                 return (myUid && s === myUid) || (myEmpId && s === myEmpId.toLowerCase()) || (myName && s === myName);
@@ -2563,9 +2658,30 @@ export default function CommunityView() {
                 setMembershipStatus('none');
             }
 
+            // 2. If another member was removed, update local storage, cache, and state immediately
+            if (removedUserId) {
+                const savedMembersKey = `knome_community_members_${targetId}`;
+                try {
+                    const stored = JSON.parse(localStorage.getItem(savedMembersKey) || '[]');
+                    const filteredStored = stored.filter(m => String(m.userId || m.id) !== String(removedUserId));
+                    localStorage.setItem(savedMembersKey, JSON.stringify(filteredStored));
+                } catch (_) {}
+
+                const removedKey = `knome_community_removed_${targetId}`;
+                try {
+                    const currentRemoved = JSON.parse(localStorage.getItem(removedKey) || '[]');
+                    if (!currentRemoved.includes(String(removedUserId))) {
+                        localStorage.setItem(removedKey, JSON.stringify([...currentRemoved, String(removedUserId)]));
+                    }
+                } catch (_) {}
+
+                setMembersList(prev => prev.filter(m => String(m.userId || m.id) !== String(removedUserId)));
+                setCommunity(prev => prev ? { ...prev, membersCount: Math.max(1, (prev.membersCount || 1) - 1) } : prev);
+            }
+
             const localMembers = JSON.parse(localStorage.getItem(`knome_community_members_${targetId}`) || '[]');
             if (localMembers && localMembers.length > 0) {
-                const deduped = deduplicateMembers(localMembers, contextUsers);
+                const deduped = deduplicateMembers(localMembers, contextUsers).filter(m => !removedUserId || String(m.userId || m.id) !== String(removedUserId));
                 setMembersList(deduped);
                 setCommunity(prev => prev ? { ...prev, membersCount: deduped.length } : prev);
             }
@@ -2980,49 +3096,8 @@ export default function CommunityView() {
     };
 
     const handleSharePost = (post) => {
-        const pid = String(post.id || post.postId);
-        const targetId = communityId || community?.id || 101;
-
-        let newSharesCount = 0;
-        setPosts(prev => prev.map(p => {
-            if (String(p.id) === pid || String(p.postId) === pid) {
-                const cur = Number(p.shares || p.sharesCount || 0);
-                const next = cur + 1;
-                newSharesCount = next;
-                return { ...p, shares: next, sharesCount: next };
-            }
-            return p;
-        }));
-
-        const savedKey = `knome_community_posts_${targetId}`;
-        const localPosts = JSON.parse(localStorage.getItem(savedKey) || '[]');
-        const updatedLocal = localPosts.map(p => {
-            if (String(p.id) === pid || String(p.postId) === pid) {
-                return { ...p, shares: newSharesCount, sharesCount: newSharesCount };
-            }
-            return p;
-        });
-        safeSetStorage(savedKey, updatedLocal);
-
-        const shareUrl = `${window.location.origin}/community/view?id=${targetId}&postId=${pid}`;
-        try {
-            navigator.clipboard.writeText(shareUrl);
-            showToast('🔗 Community post link copied to clipboard! Share it with your team.', 'success');
-        } catch (_) {
-            showToast('Post link: ' + shareUrl, 'info');
-        }
-
         setSharingPost(post);
         setIsPostShareModalOpen(true);
-
-        const numId = Number(pid);
-        if (!isNaN(numId) && numId > 0 && numId < 2147483647) {
-            interactionsApi.shareContent('Post', numId, 'Community', targetId).catch(() => {});
-        }
-
-        window.dispatchEvent(new CustomEvent('knome:share-updated', {
-            detail: { contentId: pid, contentType: 'Post', sharesCount: newSharesCount }
-        }));
     };
 
     const handleOpenPost = (post) => {
@@ -3093,15 +3168,23 @@ export default function CommunityView() {
             m.memberType === 'Admin' || 
             m.memberType === 'Moderator' || 
             m.memberType === 'Community Administrator' ||
-            m.memberType === 'Community Admin'
+            m.memberType === 'Community Admin' ||
+            m.roleName === 'Admin' ||
+            m.isCommAdmin === true
         ).length;
     };
 
     const handleInitiateRemoveMember = (member) => {
-        const isCommAdmin = member.memberType === 'Admin' || member.memberType === 'Moderator' || member.memberType === 'Community Administrator' || member.memberType === 'Community Admin';
+        const isCommAdmin = member.memberType === 'Admin' || 
+                            member.memberType === 'Moderator' || 
+                            member.memberType === 'Community Administrator' || 
+                            member.memberType === 'Community Admin' || 
+                            member.roleName === 'Admin' || 
+                            member.isCommAdmin === true;
         const adminsCount = getAdminCount();
 
-        if (isCommAdmin && adminsCount <= 1) {
+        // System Admin has system-wide override to remove any member or admin
+        if (!isSysAdmin && isCommAdmin && adminsCount <= 1) {
             setAdminProtectionWarning({
                 title: 'Cannot Remove Community Admin',
                 message: `"${member.fullName || member.name || 'This user'}" is currently the only Community Admin for this community. A community must always have at least one active Community Admin.\n\nPlease assign another member as Community Admin using "Make Admin" before removing this admin.`
@@ -3113,11 +3196,17 @@ export default function CommunityView() {
     };
 
     const handleConfirmRemoveMember = async () => {
-        if (!removeModalMember) return;
+        if (!removeModalMember || isRemovingMember) return;
+        setIsRemovingMember(true);
         const member = removeModalMember;
         const memberId = member.userId || member.id;
         const memberName = member.fullName || member.name || 'Member';
-        const isTargetAdmin = member.memberType === 'Admin' || member.memberType === 'Moderator' || member.memberType === 'Community Administrator' || member.memberType === 'Community Admin';
+        const isTargetAdmin = member.memberType === 'Admin' || 
+                              member.memberType === 'Moderator' || 
+                              member.memberType === 'Community Administrator' || 
+                              member.memberType === 'Community Admin' || 
+                              member.roleName === 'Admin' || 
+                              member.isCommAdmin === true;
         const targetId = communityId || community?.id || 101;
 
         // 1. Call Backend API to remove member from SQL database
@@ -3127,82 +3216,89 @@ export default function CommunityView() {
             try {
                 await communitiesApi.removeMember(numId, numMemberId);
             } catch (apiErr) {
-                console.warn('Backend remove member API warning:', apiErr);
-                if (isTargetAdmin) {
-                    try {
-                        await communitiesApi.removeAdmin(numId, numMemberId).catch(() => null);
-                    } catch (e) {}
-                }
+                console.error('Backend remove member API failed:', apiErr);
+                const errMsg = apiErr?.response?.data?.message || apiErr?.message || 'Failed to remove member from community.';
+                showToast(errMsg, 'error');
+                setIsRemovingMember(false);
+                return;
             }
         } else if (isTargetAdmin) {
             try {
-                await communitiesApi.removeAdmin(targetId, memberId).catch(() => null);
+                await communitiesApi.removeAdmin(targetId, memberId);
             } catch (err) {
-                console.warn('Remove admin API warning:', err);
+                console.error('Remove admin API failed:', err);
+                const errMsg = err?.response?.data?.message || err?.message || 'Failed to remove admin from community.';
+                showToast(errMsg, 'error');
+                setIsRemovingMember(false);
+                return;
             }
         }
 
-        // 2. Track tombstone in localStorage so refresh never restores removed member
-        const removedKey = `knome_community_removed_${targetId}`;
-        const currentRemoved = JSON.parse(localStorage.getItem(removedKey) || '[]');
-        const memberEmpId = (member.employeeId || member.empId || '').toUpperCase();
-        const memberEmail = (member.email || '').toLowerCase();
-        const memberFullName = (member.fullName || member.name || '').toLowerCase();
-        const updatedRemoved = Array.from(new Set([
-            ...currentRemoved,
-            String(memberId),
-            ...(member.userId ? [String(member.userId)] : []),
-            ...(memberEmpId ? [memberEmpId] : []),
-            ...(memberEmail ? [memberEmail] : []),
-            ...(memberFullName ? [memberFullName] : [])
-        ]));
-        localStorage.setItem(removedKey, JSON.stringify(updatedRemoved));
+        try {
+            // 2. Track tombstone in localStorage so refresh never restores removed member
+            const removedKey = `knome_community_removed_${targetId}`;
+            const currentRemoved = JSON.parse(localStorage.getItem(removedKey) || '[]');
+            const memberEmpId = (member.employeeId || member.empId || '').toUpperCase();
+            const memberEmail = (member.email || '').toLowerCase();
+            const memberFullName = (member.fullName || member.name || '').toLowerCase();
+            const updatedRemoved = Array.from(new Set([
+                ...currentRemoved,
+                String(memberId),
+                ...(member.userId ? [String(member.userId)] : []),
+                ...(memberEmpId ? [memberEmpId] : []),
+                ...(memberEmail ? [memberEmail] : []),
+                ...(memberFullName ? [memberFullName] : [])
+            ]));
+            localStorage.setItem(removedKey, JSON.stringify(updatedRemoved));
 
-        // 3. Invalidate joined communities in localStorage for the removed member
-        const keysToClean = [
-            `knome_joined_communities_${memberId}`,
-            member.userId ? `knome_joined_communities_${member.userId}` : null,
-            memberEmpId ? `knome_joined_communities_${memberEmpId}` : null
-        ].filter(Boolean);
-        keysToClean.forEach(k => {
-            try {
-                const list = JSON.parse(localStorage.getItem(k) || '[]');
-                const cleaned = list.filter(c => String(c.id) !== String(targetId));
-                localStorage.setItem(k, JSON.stringify(cleaned));
-            } catch (_) {}
-        });
-
-        // 4. Remove from community members local state & cache
-        setMembersList(prev => {
-            const updated = prev.filter(m => {
-                const mUid = String(m.userId || m.id || '');
-                const mEmp = String(m.employeeId || m.empId || '').toUpperCase();
-                const mName = String(m.fullName || m.name || '').toLowerCase();
-                return !(mUid === String(memberId) || (memberEmpId && mEmp === memberEmpId) || (memberFullName && mName === memberFullName));
+            // 3. Invalidate joined communities in localStorage for the removed member
+            const keysToClean = [
+                `knome_joined_communities_${memberId}`,
+                member.userId ? `knome_joined_communities_${member.userId}` : null,
+                memberEmpId ? `knome_joined_communities_${memberEmpId}` : null
+            ].filter(Boolean);
+            keysToClean.forEach(k => {
+                try {
+                    const list = JSON.parse(localStorage.getItem(k) || '[]');
+                    const cleaned = list.filter(c => String(c.id) !== String(targetId));
+                    localStorage.setItem(k, JSON.stringify(cleaned));
+                } catch (_) {}
             });
-            localStorage.setItem(`knome_community_members_${targetId}`, JSON.stringify(updated));
-            localStorage.setItem(`knome_community_members_updated_${targetId}`, Date.now().toString());
-            return updated;
-        });
 
-        // 5. If the removed member is the currently logged in user on this client:
-        const isCurrentRemovingSelf = (String(currentUser?.id || currentUser?.userId) === String(memberId)) ||
-                                      (memberEmpId && String(currentUser?.employeeId || '').toUpperCase() === memberEmpId);
-        if (isCurrentRemovingSelf) {
-            setMembershipStatus('none');
-            const selfUserKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
-            const selfJoined = JSON.parse(localStorage.getItem(selfUserKey) || '[]');
-            localStorage.setItem(selfUserKey, JSON.stringify(selfJoined.filter(c => String(c.id) !== String(targetId))));
+            // 4. Remove from community members local state & cache
+            setMembersList(prev => {
+                const updated = prev.filter(m => {
+                    const mUid = String(m.userId || m.id || '');
+                    const mEmp = String(m.employeeId || m.empId || '').toUpperCase();
+                    const mName = String(m.fullName || m.name || '').toLowerCase();
+                    return !(mUid === String(memberId) || (memberEmpId && mEmp === memberEmpId) || (memberFullName && mName === memberFullName));
+                });
+                localStorage.setItem(`knome_community_members_${targetId}`, JSON.stringify(updated));
+                localStorage.setItem(`knome_community_members_updated_${targetId}`, Date.now().toString());
+                return updated;
+            });
+
+            // 5. If the removed member is the currently logged in user on this client:
+            const isCurrentRemovingSelf = (String(currentUser?.id || currentUser?.userId) === String(memberId)) ||
+                                          (memberEmpId && String(currentUser?.employeeId || '').toUpperCase() === memberEmpId);
+            if (isCurrentRemovingSelf) {
+                setMembershipStatus('none');
+                const selfUserKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
+                const selfJoined = JSON.parse(localStorage.getItem(selfUserKey) || '[]');
+                localStorage.setItem(selfUserKey, JSON.stringify(selfJoined.filter(c => String(c.id) !== String(targetId))));
+            }
+
+            // 6. Update community object members count & dispatch events
+            setCommunity(prev => ({ ...prev, membersCount: Math.max(1, (prev.membersCount || 1) - 1) }));
+            window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
+            window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId, removedMemberId: memberId } }));
+            window.dispatchEvent(new Event('storage'));
+
+            showToast(`${memberName} has been removed from this community.`, 'info');
+        } finally {
+            setIsRemovingMember(false);
+            setRemoveModalMember(null);
         }
-
-        // 6. Update community object members count & dispatch events
-        setCommunity(prev => ({ ...prev, membersCount: Math.max(1, (prev.membersCount || 1) - 1) }));
-        window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
-        window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId, removedMemberId: memberId } }));
-        window.dispatchEvent(new Event('storage'));
-
-        showToast(`${memberName} has been removed from this community.`, 'info');
-        setRemoveModalMember(null);
     };
 
     const handleRemoveMemberByAdmin = async (memberId, memberName) => {
@@ -4473,7 +4569,7 @@ export default function CommunityView() {
         resetFileCount();
     }, [fileCategoryFilter, fileSearchQuery, fileSortBy, fileViewMode]);
 
-    if (isLoading || !community) {
+    if (isLoading) {
         return (
             <div className="flex-1 flex items-center justify-center p-12 min-h-[60vh]">
                 <div className="flex flex-col items-center gap-3">
@@ -4481,6 +4577,29 @@ export default function CommunityView() {
                     <p className="text-sm font-bold text-slate-500">Loading Community Details...</p>
                 </div>
             </div>
+        );
+    }
+
+    if (!community) {
+        return (
+            <main className="flex-1 min-h-[70vh] flex items-center justify-center p-6">
+                <div className="max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-xl text-center space-y-4">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+                        <span className="material-symbols-outlined text-3xl">lock</span>
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">Community Unavailable</h2>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                        This community does not exist or is currently awaiting administrator clearance and cannot be accessed publicly.
+                    </p>
+                    <button
+                        onClick={() => navigate('/community')}
+                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md inline-flex items-center gap-2 cursor-pointer"
+                    >
+                        <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+                        Back to Communities
+                    </button>
+                </div>
+            </main>
         );
     }
 
@@ -4607,6 +4726,11 @@ export default function CommunityView() {
                         <div className="flex items-center gap-3 mb-2 flex-wrap">
                             <span className="px-2.5 py-0.5 bg-indigo-500/90 backdrop-blur-md text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-md">{community.type}</span>
                             <span className="px-2.5 py-0.5 bg-white/20 backdrop-blur-md text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-md">{community.category}</span>
+                            {(community.approvalStatus === 'Pending' || community.isActive === false) && (
+                                <span className="px-2.5 py-0.5 bg-amber-500 text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md">
+                                    <span className="material-symbols-outlined text-[12px]">hourglass_top</span> Pending Review
+                                </span>
+                            )}
                             {membershipStatus === 'banned' && (
                                 <span className="px-2.5 py-0.5 bg-amber-500/90 backdrop-blur-md text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md">
                                     <span className="material-symbols-outlined text-[12px]">person_off</span> Suspended
@@ -4642,6 +4766,30 @@ export default function CommunityView() {
                     </div>
 
                     {(() => {
+                        const isPendingApproval = community?.approvalStatus === 'Pending' || community?.isActive === false;
+                        if (isPendingApproval) {
+                            return (
+                                <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                                    <div 
+                                        className="h-10 px-4 bg-amber-500/20 text-amber-300 font-bold rounded-xl flex items-center justify-center gap-2 text-xs border border-amber-500/40 backdrop-blur-md shadow-lg"
+                                        title="Community awaiting administrative approval"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px] text-amber-400">visibility</span>
+                                        <span>Preview Mode (Pending Approval)</span>
+                                    </div>
+                                    {canManageApprovals && (
+                                        <button 
+                                            onClick={() => navigate('/community?tab=Pending+Approvals')}
+                                            className="h-10 px-3.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-colors backdrop-blur-md border border-white/20 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
+                                            title="Back to Pending Approvals List"
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                                            <span className="truncate">Approvals Queue</span>
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        }
                         const isDefaultOrg = community?.type?.toLowerCase().includes('default') || community?.type?.toLowerCase().includes('org');
                         return (
                             <div className="flex items-center gap-4 shrink-0">
@@ -4747,35 +4895,47 @@ export default function CommunityView() {
             {/* Pending Approval Notice Banner */}
             {community && (community.approvalStatus === 'Pending' || community.isActive === false) && (
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
-                    {isSysAdmin ? (
+                    {canManageApprovals ? (
                         <div className="bg-amber-500/10 dark:bg-amber-950/40 border-2 border-amber-500/40 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
                             <div className="flex items-start sm:items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                                     <span className="material-symbols-outlined text-2xl">pending_actions</span>
                                 </div>
                                 <div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white">Under Administration Review</span>
-                                        <h4 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">Community Awaiting Administrator Clearance</h4>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white shadow-xs">
+                                            🔍 Preview Mode — Pending Approval
+                                        </span>
+                                        <h4 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                                            Community Awaiting Administrator Clearance
+                                        </h4>
                                     </div>
-                                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-                                        This community was created by <strong className="text-slate-800 dark:text-slate-100">{community.adminContact || 'an employee'}</strong> and is currently inactive and hidden from the public feed.
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                                        You are reviewing <strong className="text-slate-800 dark:text-slate-100">"{community.name}"</strong> submitted by <strong className="text-slate-800 dark:text-slate-100">{community.adminContact || 'an employee'}</strong>. This community is hidden from the public feed until approved.
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                <button 
+                                    onClick={() => navigate('/community?tab=Pending+Approvals')}
+                                    className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
+                                    title="Back to Pending Approvals List"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+                                    <span>Approvals Queue</span>
+                                </button>
                                 <button 
                                     onClick={handleApproveThisCommunity}
                                     disabled={isApprovingCommunity}
-                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
                                 >
-                                    <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                                    <span>{isApprovingCommunity ? 'Approving...' : 'Approve Community'}</span>
+                                    <span className="material-symbols-outlined text-[16px]">verified</span>
+                                    <span>{isApprovingCommunity ? 'Approving...' : 'Approve & Launch'}</span>
                                 </button>
                                 <button 
                                     onClick={handleRejectThisCommunity}
                                     disabled={isApprovingCommunity}
-                                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
                                 >
                                     <span className="material-symbols-outlined text-[16px]">cancel</span>
                                     <span>Reject</span>
@@ -4847,7 +5007,8 @@ export default function CommunityView() {
                                 className={`px-6 py-3 font-bold text-[14px] transition-colors relative flex items-center gap-2 shrink-0 cursor-pointer ${activeTab === 'admin' ? 'text-indigo-500' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}
                             >
                                 Admin Panel
-                                {joinRequests.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{joinRequests.length}</span>}
+                                {joinRequests.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold" title={`${joinRequests.length} Pending Join Request(s)`}>{joinRequests.length}</span>}
+                                {suspendedMembers.length > 0 && <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold" title={`${suspendedMembers.length} Suspended Member(s)`}>{suspendedMembers.length}</span>}
                                 {activeTab === 'admin' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-500 rounded-t-full"></div>}
                             </button>
                         )}
@@ -5322,7 +5483,12 @@ export default function CommunityView() {
                                                     >
                                                         <div className="flex items-center gap-3.5 min-w-0">
                                                             {post.sharedArticle?.thumbnail ? (
-                                                                <img src={resolveMediaUrl(post.sharedArticle.thumbnail)} alt="article" className="w-14 h-14 rounded-xl object-cover shrink-0 shadow-md border border-emerald-500/20 group-hover:scale-105 transition-transform" />
+                                                                <img 
+                                                                    src={resolveMediaUrl(post.sharedArticle.thumbnail)} 
+                                                                    alt="article" 
+                                                                    onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=200'; }}
+                                                                    className="w-14 h-14 rounded-xl object-cover shrink-0 shadow-md border border-emerald-500/20 group-hover:scale-105 transition-transform" 
+                                                                />
                                                             ) : (
                                                                 <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center font-bold text-xl shrink-0 shadow-md shadow-emerald-500/30 group-hover:scale-105 transition-transform">
                                                                     <span className="material-symbols-outlined text-[24px]">article</span>
@@ -5373,7 +5539,12 @@ export default function CommunityView() {
                                                     >
                                                         <div className="flex items-center gap-3.5 min-w-0">
                                                             {post.sharedPodcast?.thumbnail ? (
-                                                                <img src={resolveMediaUrl(post.sharedPodcast.thumbnail)} alt="podcast" className="w-14 h-14 rounded-xl object-cover shrink-0 shadow-md border border-pink-500/20 group-hover:scale-105 transition-transform" />
+                                                                <img 
+                                                                    src={resolveMediaUrl(post.sharedPodcast.thumbnail)} 
+                                                                    alt="podcast" 
+                                                                    onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=200&auto=format&fit=crop&q=80'; }}
+                                                                    className="w-14 h-14 rounded-xl object-cover shrink-0 shadow-md border border-pink-500/20 group-hover:scale-105 transition-transform" 
+                                                                />
                                                             ) : (
                                                                 <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-pink-600 to-rose-600 text-white flex items-center justify-center font-bold text-xl shrink-0 shadow-md shadow-pink-500/30 group-hover:scale-105 transition-transform">
                                                                     <span className="material-symbols-outlined text-[24px]">podcasts</span>
@@ -5584,7 +5755,7 @@ export default function CommunityView() {
                                             >
                                                 <div className="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm overflow-hidden">
                                                     {currentUser?.avatar ? (
-                                                        <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
+                                                        <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                                     ) : (
                                                         currentUser?.name?.charAt(0) || 'U'
                                                     )}
@@ -5618,7 +5789,7 @@ export default function CommunityView() {
                                                         <div key={c.id || cIdx} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 flex items-start gap-2.5">
                                                             <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-[11px] shrink-0 overflow-hidden">
                                                                 {c.avatar ? (
-                                                                    <img src={c.avatar} alt={c.author} className="w-full h-full object-cover" />
+                                                                    <img src={c.avatar} alt={c.author} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                                                 ) : (
                                                                     (c.author || 'M').charAt(0).toUpperCase()
                                                                 )}
@@ -7420,18 +7591,30 @@ export default function CommunityView() {
                         <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-end gap-2.5 shrink-0">
                             <button
                                 type="button"
-                                onClick={() => setRemoveModalMember(null)}
-                                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                disabled={isRemovingMember}
+                                onClick={() => !isRemovingMember && setRemoveModalMember(null)}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
+                                    isRemovingMember 
+                                        ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed' 
+                                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer'
+                                }`}
                             >
                                 Cancel
                             </button>
                             <button
                                 type="button"
+                                disabled={isRemovingMember}
                                 onClick={handleConfirmRemoveMember}
-                                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs shadow-md shadow-red-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                                className={`px-5 py-2 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-1.5 ${
+                                    isRemovingMember
+                                        ? 'bg-red-400 dark:bg-red-800/60 cursor-not-allowed'
+                                        : 'bg-red-600 hover:bg-red-700 shadow-red-600/20 cursor-pointer'
+                                }`}
                             >
-                                <span className="material-symbols-outlined text-[16px]">person_remove</span>
-                                Yes, Remove Member
+                                <span className={`material-symbols-outlined text-[16px] ${isRemovingMember ? 'animate-spin' : ''}`}>
+                                    {isRemovingMember ? 'progress_activity' : 'person_remove'}
+                                </span>
+                                {isRemovingMember ? 'Removing...' : 'Yes, Remove Member'}
                             </button>
                         </div>
                     </div>
@@ -7682,15 +7865,39 @@ export default function CommunityView() {
                         }} 
                         post={sharingPost}
                         contentType={shareTarget?.type || "Post"}
-                        onShared={(type, count) => {
+                        onShared={(type) => {
                             const pid = String(sharingPost.id || sharingPost.postId);
+                            const targetId = communityId || community?.id || 101;
+                            const currentUid = String(currentUser?.userId || currentUser?.id || 'guest');
+                            const userSharedKey = `knome_shared_post_${pid}_${currentUid}`;
+                            const alreadySharedLocally = localStorage.getItem(userSharedKey) === 'true';
+
+                            let newSharesCount = 0;
                             setPosts(prev => prev.map(p => {
                                 if (String(p.id) === pid || String(p.postId) === pid) {
-                                    const next = Number(p.shares || p.sharesCount || 0) + (count || 1);
-                                    return { ...p, shares: next, sharesCount: next };
+                                    const hasShared = Boolean(p.isSharedByCurrentUser || alreadySharedLocally);
+                                    const cur = Number(p.shares ?? p.sharesCount ?? 0);
+                                    const next = hasShared ? cur : cur + 1;
+                                    newSharesCount = next;
+                                    return { ...p, shares: next, sharesCount: next, isSharedByCurrentUser: true };
                                 }
                                 return p;
                             }));
+
+                            localStorage.setItem(userSharedKey, 'true');
+
+                            // Synchronize with local storage
+                            const savedKey = `knome_community_posts_${targetId}`;
+                            try {
+                                const localPosts = JSON.parse(localStorage.getItem(savedKey) || '[]');
+                                const updatedLocal = localPosts.map(p => {
+                                    if (String(p.id) === pid || String(p.postId) === pid) {
+                                        return { ...p, shares: newSharesCount, sharesCount: newSharesCount, isSharedByCurrentUser: true };
+                                    }
+                                    return p;
+                                });
+                                safeSetStorage(savedKey, updatedLocal);
+                            } catch (_) {}
                         }}
                     />
                 );

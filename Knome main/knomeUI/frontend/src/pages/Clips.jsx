@@ -1647,12 +1647,21 @@ export default function Clips() {
                 onClose={() => setIsShareOpen(false)}
                 clip={selectedClipForModal}
                 onClipShared={() => {
-                    setClips(prev => prev.map(c => {
-                        if (c.clipId === selectedClipForModal?.clipId) {
-                            return { ...c, sharesCount: (c.sharesCount || 0) + 1 };
-                        }
-                        return c;
-                    }));
+                    const cId = selectedClipForModal?.clipId;
+                    if (!cId) return;
+                    const currentUid = String(currentUser?.userId || currentUser?.id || 'guest');
+                    const userSharedKey = `knome_shared_clip_${cId}_${currentUid}`;
+                    const alreadyShared = Boolean(selectedClipForModal?.isSharedByCurrentUser || localStorage.getItem(userSharedKey) === 'true');
+
+                    if (!alreadyShared) {
+                        localStorage.setItem(userSharedKey, 'true');
+                        setClips(prev => prev.map(c => {
+                            if (c.clipId === cId) {
+                                return { ...c, sharesCount: (c.sharesCount || 0) + 1, isSharedByCurrentUser: true };
+                            }
+                            return c;
+                        }));
+                    }
                 }}
             />
 

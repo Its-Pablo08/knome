@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useParams } from 'react-router-dom';
 import { useUser } from '../components/contexts/UserContext';
 import { useAudio } from '../components/contexts/AudioContext';
 import { useToast } from '../components/contexts/ToastContext';
@@ -143,6 +143,8 @@ function ThreadedCommentItem({ item, ep, level = 0, onAddReply, activeReplyId, s
 
 export default function Podcasts() {
     const location = useLocation();
+    const routeParams = useParams();
+    const handledTargetIdRef = useRef(null);
     const { currentUser } = useUser();
     const { playPodcast, currentPodcast, isPlaying } = useAudio();
     const { addToast } = useToast();
@@ -254,18 +256,33 @@ export default function Podcasts() {
         return () => window.removeEventListener('knome_podcast_viewed', handlePodcastViewed);
     }, []);
 
-    // Auto-play / highlight podcast from URL query params (e.g. from notifications)
+    // Auto-play / highlight podcast from URL query params or route params (e.g. from saved content, notifications)
     useEffect(() => {
         const queryParams = new URLSearchParams(location.search);
-        const targetId = queryParams.get('id');
-        if (targetId && podcastEpisodes.length > 0) {
+        const targetId = routeParams?.id || queryParams.get('id');
+        if (targetId && podcastEpisodes.length > 0 && handledTargetIdRef.current !== String(targetId)) {
             const found = podcastEpisodes.find(p => String(p.id) === String(targetId));
             if (found) {
-                playPodcast(found);
-                toggleComments(found);
+                handledTargetIdRef.current = String(targetId);
+                setActiveTab('All Episodes');
+                setSelectedSeries(null);
+                setFilterCategory('All');
+                setFilterKeyword('');
+
+                if (String(currentPodcast?.id) !== String(found.id) || !isPlaying) {
+                    playPodcast(found);
+                }
+                setActiveCommentsPodcastId(found.id);
+
+                setTimeout(() => {
+                    const el = document.getElementById(`podcast-ep-${targetId}`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 350);
             }
         }
-    }, [location.search, podcastEpisodes]);
+    }, [location.search, routeParams?.id, podcastEpisodes, currentPodcast, isPlaying, playPodcast]);
 
     const handleToggleLike = async (ep) => {
         const epId = ep.id;
@@ -493,7 +510,12 @@ export default function Podcasts() {
             return true;
         });
 
+    const activeTargetId = routeParams?.id || new URLSearchParams(location.search).get('id');
     const displayedEpisodes = rawEpisodes.sort((a, b) => {
+        if (activeTargetId) {
+            if (String(a.id) === String(activeTargetId)) return -1;
+            if (String(b.id) === String(activeTargetId)) return 1;
+        }
         if (filterSort === 'Oldest First') return a.id - b.id;
         if (filterSort === 'Duration (Longest)') return b.durationSeconds - a.durationSeconds;
         return b.id - a.id; // Newest First
@@ -641,7 +663,15 @@ export default function Podcasts() {
                                     const episodeComments = commentsMap[ep.id] || [];
 
                                     return (
-                                        <div key={ep.id} className="group glass card-lift bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col gap-3 transition-all hover:shadow-md">
+                                        <div 
+                                            key={ep.id} 
+                                            id={`podcast-ep-${ep.id}`}
+                                            className={`group glass card-lift bg-white dark:bg-slate-900 rounded-2xl border p-4 flex flex-col gap-3 transition-all hover:shadow-md ${
+                                                String(currentPodcast?.id) === String(ep.id)
+                                                    ? 'border-pink-500/60 ring-2 ring-pink-500/20 shadow-md'
+                                                    : 'border-slate-200 dark:border-slate-800'
+                                            }`}
+                                        >
                                             <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
                                                 <div className="relative w-20 h-20 shrink-0 rounded-xl overflow-hidden shadow-sm bg-slate-100 dark:bg-slate-800">
                                                     <img src={ep.thumbnail} className="w-full h-full object-cover" alt="Cover" />
@@ -872,7 +902,14 @@ export default function Podcasts() {
                 article={sharingPodcast}
                 onShared={() => {
                     if (sharingPodcast) {
-                        setPodcastEpisodes(prev => prev.map(p => p.id === sharingPodcast.id ? { ...p, shares: (p.shares || 0) + 1 } : p));
+                        const currentUid = String(currentUser?.userId || currentUser?.id || 'guest');
+                        const userSharedKey = `knome_shared_podcast_${sharingPodcast.id}_${currentUid}`;
+                        const alreadyShared = Boolean(sharingPodcast.isSharedByCurrentUser || localStorage.getItem(userSharedKey) === 'true');
+
+                        if (!alreadyShared) {
+                            localStorage.setItem(userSharedKey, 'true');
+                            setPodcastEpisodes(prev => prev.map(p => p.id === sharingPodcast.id ? { ...p, shares: (p.shares || 0) + 1, isSharedByCurrentUser: true } : p));
+                        }
                     }
                     setSharingPodcast(null);
                 }}

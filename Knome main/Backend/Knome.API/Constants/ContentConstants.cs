@@ -48,8 +48,9 @@ public static class ReactionTypes
     public const string Celebrate = "Celebrate";
     public const string Support = "Support";
     public const string Heart = "Heart";
+    public const string Dislike = "Dislike";
 
-    public static readonly string[] All = { Like, Celebrate, Support, Heart };
+    public static readonly string[] All = { Like, Celebrate, Support, Heart, Dislike };
 
     public static bool IsValid(string? reactionType)
     {

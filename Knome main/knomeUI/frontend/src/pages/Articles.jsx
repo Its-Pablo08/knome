@@ -52,7 +52,7 @@ export default function Articles() {
         }
         try {
             const data = await getArticles(null, null, null, 1, 50, forceFresh);
-            if (Array.isArray(data) && data.length > 0) {
+            if (Array.isArray(data)) {
                 setAllArticles(data);
                 try {
                     sessionStorage.setItem('knome_cached_articles', JSON.stringify(data));

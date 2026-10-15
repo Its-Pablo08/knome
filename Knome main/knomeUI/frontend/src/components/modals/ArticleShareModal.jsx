@@ -254,7 +254,10 @@ export default function ArticleShareModal({ isOpen, onClose, article, post, item
     const handleCopyLink = () => {
         navigator.clipboard.writeText(shareUrl);
         setCopied(true);
-        if (onShared) onShared('link');
+        if (/^\d+$/.test(String(contentId))) {
+            interactionsApi.shareContent(contentTypeStr, Number(contentId), 'Direct', null).catch(() => {});
+        }
+        if (onShared) onShared('link', 1);
         setTimeout(() => setCopied(false), 2500);
     };
 
@@ -266,7 +269,7 @@ export default function ArticleShareModal({ isOpen, onClose, article, post, item
                     text: item.subtitle || item.description || item.content || itemTitle,
                     url: shareUrl
                 });
-                if (onShared) onShared('native');
+                if (onShared) onShared('native', 1);
                 onClose();
             } catch (err) {
                 console.warn('Native share cancelled or failed', err);
@@ -390,7 +393,7 @@ export default function ArticleShareModal({ isOpen, onClose, article, post, item
             window.dispatchEvent(new CustomEvent('community-post-created', { detail: { communityId: selectedCommunityId, post: newFeedItem } }));
             window.dispatchEvent(new CustomEvent('post-created'));
 
-            if (onShared) onShared('community');
+            if (onShared) onShared('community', 1);
             addToast(`🎉 ${contentTypeStr} successfully shared to "${commName}" community feed!`, 'success');
             onClose();
         } catch (err) {
@@ -483,7 +486,7 @@ export default function ArticleShareModal({ isOpen, onClose, article, post, item
                 window.dispatchEvent(new CustomEvent('knome_notification_received', { detail: n }));
             });
 
-            if (onShared) onShared('users', selectedUsers.length);
+            if (onShared) onShared('users', 1);
             addToast(`🚀 ${contentTypeStr} successfully shared with ${selectedUsers.length} team member(s)!`, 'success');
             onClose();
         } catch (err) {

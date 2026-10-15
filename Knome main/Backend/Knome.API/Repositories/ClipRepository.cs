@@ -197,7 +197,12 @@ public class ClipRepository : IClipRepository
         var clip = await _db.Clips.FirstOrDefaultAsync(c => c.ClipId == clipId);
         if (clip != null)
         {
-            clip.SharesCount += 1;
+            var distinctShares = await _db.ClipShares
+                .Where(s => s.ClipId == clipId)
+                .Select(s => s.SharedByUserId)
+                .Distinct()
+                .CountAsync();
+            clip.SharesCount = distinctShares;
             await _db.SaveChangesAsync();
         }
     }
@@ -312,6 +317,8 @@ public class ClipRepository : IClipRepository
         var totalShares = await _db.ClipShares
             .AsNoTracking()
             .Where(s => s.ClipId == clipId)
+            .Select(s => s.SharedByUserId)
+            .Distinct()
             .CountAsync();
 
         return new ClipEngagementDto

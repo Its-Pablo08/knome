@@ -47,6 +47,34 @@ const extractText = (val) => {
     return String(val);
 };
 
+const getDestinationUrl = (item) => {
+    if (!item) return '/';
+    const type = (item.contentType || '').toLowerCase().trim();
+    const id = item.contentId || item.id || item.postId;
+    if (type === 'article') {
+        return `/article-view?id=${id}`;
+    }
+    if (type === 'podcast' || type === 'audio') {
+        return `/podcasts?id=${id}`;
+    }
+    if (type === 'video') {
+        return `/videos?id=${id}&title=${encodeURIComponent(item.title || '')}`;
+    }
+    if (type === 'clip') {
+        return `/clips?id=${id}`;
+    }
+    if (type === 'job' || type === 'document') {
+        return `/jobs?id=${id}`;
+    }
+    if (type === 'post') {
+        return `/posts?id=${id}`;
+    }
+    if (item.targetUrl && !['/podcasts', '/videos', '/posts', '/article-view', '/clips', '/jobs', '/'].includes(item.targetUrl) && !item.targetUrl.startsWith('/?')) {
+        return item.targetUrl;
+    }
+    return `/posts?id=${id}`;
+};
+
 export default function SavedContent() {
     const navigate = useNavigate();
     const { isPostsEnabled, isArticlesEnabled, isVideosEnabled, isPodcastsEnabled } = useSystemConfig();
@@ -201,7 +229,7 @@ export default function SavedContent() {
                     if (tab === 'posts') return type === 'post';
                     if (tab === 'articles') return type === 'article';
                     if (tab === 'videos') return type === 'video';
-                    if (tab === 'podcasts') return type === 'podcast';
+                    if (tab === 'podcasts') return type === 'podcast' || type === 'audio';
                     return true;
                 })
                 .map(s => ({
@@ -217,16 +245,12 @@ export default function SavedContent() {
                     savedDate: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
                     userCategory: s.category,
                     categoryName: s.category,
-                    targetUrl: s.targetUrl || (
-                        (s.contentType || '').toLowerCase() === 'video' ? `/videos?id=${s.contentId || s.id}&title=${encodeURIComponent(s.title || '')}` :
-                        (s.contentType || '').toLowerCase() === 'article' ? `/article-view?id=${s.contentId || s.id}` :
-                        (s.contentType || '').toLowerCase() === 'podcast' ? `/podcasts?id=${s.contentId || s.id}` :
-                        `/?postId=${s.contentId || s.id}`
-                    )
+                    targetUrl: getDestinationUrl(s)
                 }));
 
             const formattedApiItems = items.map(i => ({
                 ...i,
+                targetUrl: getDestinationUrl(i),
                 savedDate: i.savedDate || i.SavedDate || i.savedAt || i.createdAt || i.createdDate || new Date().toISOString(),
                 savedAt: i.savedAt || i.savedDate || i.SavedDate || i.createdAt || i.createdDate || new Date().toISOString(),
             }));
@@ -267,7 +291,7 @@ export default function SavedContent() {
                     if (tab === 'posts') return type === 'post';
                     if (tab === 'articles') return type === 'article';
                     if (tab === 'videos') return type === 'video';
-                    if (tab === 'podcasts') return type === 'podcast';
+                    if (tab === 'podcasts') return type === 'podcast' || type === 'audio';
                     return true;
                 })
                 .map(s => ({
@@ -283,12 +307,7 @@ export default function SavedContent() {
                     savedDate: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
                     userCategory: s.category,
                     categoryName: s.category,
-                    targetUrl: s.targetUrl || (
-                        (s.contentType || '').toLowerCase() === 'video' ? `/videos?id=${s.contentId || s.id}&title=${encodeURIComponent(s.title || '')}` :
-                        (s.contentType || '').toLowerCase() === 'article' ? `/article-view?id=${s.contentId || s.id}` :
-                        (s.contentType || '').toLowerCase() === 'podcast' ? `/podcasts?id=${s.contentId || s.id}` :
-                        `/?postId=${s.contentId || s.id}`
-                    )
+                    targetUrl: getDestinationUrl(s)
                 }));
 
             formattedLocal.sort((a, b) => {
@@ -757,12 +776,7 @@ export default function SavedContent() {
                                 key={itemKey}
                                 onClick={() => {
                                     if (isAvailable) {
-                                        const url = item.targetUrl || (
-                                            (item.contentType || '').toLowerCase() === 'video' ? `/videos?id=${item.contentId || item.id}&title=${encodeURIComponent(item.title || '')}` :
-                                            (item.contentType || '').toLowerCase() === 'article' ? `/article-view?id=${item.contentId || item.id}` :
-                                            (item.contentType || '').toLowerCase() === 'podcast' ? `/podcasts?id=${item.contentId || item.id}` :
-                                            `/?postId=${item.contentId || item.id}`
-                                        );
+                                        const url = getDestinationUrl(item);
                                         if (url) navigate(url);
                                     }
                                 }}

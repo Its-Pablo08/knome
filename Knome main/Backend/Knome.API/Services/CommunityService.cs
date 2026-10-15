@@ -10,9 +10,11 @@ using Knome.API.Constants;
 using Knome.API.Data;
 using Knome.API.DTOs.Communities;
 using Knome.API.Exceptions;
+using Knome.API.Hubs;
 using Knome.API.Interfaces;
 using Knome.API.Models;
 using Knome.API.Repositories;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -32,6 +34,7 @@ public class CommunityService : ICommunityService
     private readonly IConfiguration _configuration;
     private readonly ILogger<CommunityService>? _logger;
     private readonly ISystemSettingService? _systemSettingService;
+    private readonly IHubContext<NotificationHub>? _hubContext;
     private static readonly object _commFilesLock = new();
 
     public CommunityService(
@@ -45,7 +48,8 @@ public class CommunityService : ICommunityService
         IKarmaService karmaService,
         IConfiguration configuration,
         ILogger<CommunityService>? logger = null,
-        ISystemSettingService? systemSettingService = null)
+        ISystemSettingService? systemSettingService = null,
+        IHubContext<NotificationHub>? hubContext = null)
     {
         _repo = repo;
         _interactionService = interactionService;
@@ -58,6 +62,17 @@ public class CommunityService : ICommunityService
         _configuration = configuration;
         _logger = logger;
         _systemSettingService = systemSettingService;
+        _hubContext = hubContext;
+    }
+
+    private static bool IsPrivilegedAdminRole(Role r)
+    {
+        if (r == null) return false;
+        var name = (r.RoleName ?? string.Empty).Trim().ToUpper();
+        var code = (r.RoleCode ?? string.Empty).Trim().ToUpper();
+        return name == "SYSTEM ADMINISTRATOR" || name == "SYSTEM ADMIN" || code == "SYSADM" ||
+               name == "HR ADMINISTRATOR" || name == "HR ADMIN" || code == "HRADM" ||
+               name == "COMMUNITY ADMINISTRATOR" || name == "COMMUNITY ADMIN" || code == "CADM";
     }
 
     private async Task CheckIsAdminOrSysAdminAsync(int communityId, int currentUserId)
@@ -82,7 +97,7 @@ public class CommunityService : ICommunityService
 
         // 4. Global platform administrators (System Admin, HR Admin, Community Admin)
         var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-        if (user != null && user.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.HRAdmin || r.RoleName == Roles.CommunityAdmin))
+        if (user != null && user.Roles.Any(IsPrivilegedAdminRole))
             return;
 
         throw new UnauthorizedException("You must be a Community Admin, HR Administrator, or System Administrator to perform this action.");
@@ -105,7 +120,7 @@ public class CommunityService : ICommunityService
         if (!community.IsActive || community.ApprovalStatus != "Approved")
         {
             var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-            var isPrivileged = user != null && user.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.HRAdmin || r.RoleName == Roles.CommunityAdmin);
+            var isPrivileged = user != null && user.Roles.Any(IsPrivilegedAdminRole);
             var isCreator = community.CreatedByUserId == currentUserId;
 
             if (!isPrivileged && !isCreator)
@@ -128,10 +143,7 @@ public class CommunityService : ICommunityService
                 {
                     // Check if Platform Administrator
                     var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-                    var isPrivileged = user != null && user.Roles.Any(r => 
-                        r.RoleName == Roles.SystemAdmin || 
-                        r.RoleName == Roles.HRAdmin || 
-                        r.RoleName == Roles.CommunityAdmin);
+                    var isPrivileged = user != null && user.Roles.Any(IsPrivilegedAdminRole);
 
                     if (!isPrivileged)
                     {
@@ -152,7 +164,7 @@ public class CommunityService : ICommunityService
         if (!community.IsActive || community.ApprovalStatus != "Approved")
         {
             var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-            var isPrivileged = user != null && user.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.HRAdmin || r.RoleName == Roles.CommunityAdmin);
+            var isPrivileged = user != null && user.Roles.Any(IsPrivilegedAdminRole);
             var isCreator = community.CreatedByUserId == currentUserId;
 
             if (!isPrivileged && !isCreator)
@@ -322,7 +334,7 @@ public class CommunityService : ICommunityService
         }
 
         var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-        var isHRorAdmin = user != null && user.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.HRAdmin || r.RoleName == Roles.CommunityAdmin);
+        var isHRorAdmin = user != null && user.Roles.Any(IsPrivilegedAdminRole);
 
         var requireApproval = _systemSettingService != null
             ? await _systemSettingService.GetRequireCommunityApprovalAsync()
@@ -409,7 +421,7 @@ public class CommunityService : ICommunityService
         {
             // Notify Community Admins, HR Administrators & System Administrators of pending community creation request
             var adminUserIds = await _db.Users
-                .Where(u => u.IsActive && u.Roles.Any(r => r.RoleName == Roles.HRAdmin || r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.CommunityAdmin))
+                .Where(u => u.IsActive && u.Roles.Any(r => r.RoleName == Roles.HRAdmin || r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.CommunityAdmin || r.RoleCode == "SYSADM" || r.RoleCode == "HRADM" || r.RoleCode == "CADM" || r.RoleName == "System Admin" || r.RoleName == "HR Admin"))
                 .Select(u => u.UserId)
                 .Distinct()
                 .ToListAsync();
@@ -518,10 +530,7 @@ public class CommunityService : ICommunityService
         if (user == null)
             throw new UnauthorizedException("User not found.");
 
-        var isPrivilegedAdmin = user.Roles.Any(r => 
-            r.RoleName == Roles.SystemAdmin || 
-            r.RoleName == Roles.HRAdmin || 
-            r.RoleName == Roles.CommunityAdmin);
+        var isPrivilegedAdmin = user.Roles.Any(IsPrivilegedAdminRole);
 
         var communities = await _repo.GetPendingCommunitiesAsync();
 
@@ -544,10 +553,7 @@ public class CommunityService : ICommunityService
     public async Task<CommunityDto> ApproveCommunityAsync(int communityId, int currentUserId)
     {
         var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-        var isPrivilegedAdmin = user != null && user.Roles.Any(r => 
-            r.RoleName == Roles.SystemAdmin || 
-            r.RoleName == Roles.HRAdmin || 
-            r.RoleName == Roles.CommunityAdmin);
+        var isPrivilegedAdmin = user != null && user.Roles.Any(IsPrivilegedAdminRole);
 
         if (!isPrivilegedAdmin)
         {
@@ -610,10 +616,7 @@ public class CommunityService : ICommunityService
     public async Task RejectCommunityAsync(int communityId, int currentUserId, RejectCommunityDto dto)
     {
         var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-        var isPrivilegedAdmin = user != null && user.Roles.Any(r => 
-            r.RoleName == Roles.SystemAdmin || 
-            r.RoleName == Roles.HRAdmin || 
-            r.RoleName == Roles.CommunityAdmin);
+        var isPrivilegedAdmin = user != null && user.Roles.Any(IsPrivilegedAdminRole);
 
         if (!isPrivilegedAdmin)
         {
@@ -764,8 +767,11 @@ public class CommunityService : ICommunityService
     {
         await CheckCanViewCommunityAsync(communityId, currentUserId);
 
-        // If asking for pending/rejected/banned queues, verify admin
-        if (status == CommunityMemberStatuses.Pending || status == CommunityMemberStatuses.Rejected || status == CommunityMemberStatuses.Banned)
+        // If asking for pending/rejected/banned/suspended queues, verify admin
+        if (string.Equals(status, CommunityMemberStatuses.Pending, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, CommunityMemberStatuses.Rejected, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, CommunityMemberStatuses.Banned, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "Suspended", StringComparison.OrdinalIgnoreCase))
         {
             await CheckIsAdminOrSysAdminAsync(communityId, currentUserId);
         }
@@ -855,6 +861,24 @@ public class CommunityService : ICommunityService
                 relatedContentId: communityId);
         }
 
+        if (_hubContext != null)
+        {
+            try
+            {
+                await _hubContext.Clients.All.SendAsync("CommunityMembersUpdated", new
+                {
+                    communityId,
+                    targetUserId,
+                    status = dto.Status,
+                    action = "MembershipDecided"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to broadcast CommunityMembersUpdated SignalR event for community {CommunityId}", communityId);
+            }
+        }
+
         return _mapper.Map<CommunityMemberDto>(member);
     }
 
@@ -869,11 +893,14 @@ public class CommunityService : ICommunityService
         if (community.CommunityType == CommunityTypes.Default || community.CommunityType == CommunityTypes.Org)
             throw new BadRequestException("Members cannot be removed from an Org/Default system community (FR-CM-04).");
 
+        var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
+        var isSysAdminCaller = user != null && user.Roles.Any(IsPrivilegedAdminRole);
+
         var isTargetAdmin = await _repo.IsCommunityAdminAsync(communityId, targetUserId);
         if (isTargetAdmin)
         {
             var adminsCount = await _repo.GetCommunityAdminsCountAsync(communityId);
-            if (adminsCount <= 1)
+            if (adminsCount <= 1 && !isSysAdminCaller)
                 throw new BadRequestException("Cannot remove the sole remaining Community Admin. Assign another admin first.");
 
             await _repo.RemoveCommunityAdminAsync(communityId, targetUserId);
@@ -897,6 +924,23 @@ public class CommunityService : ICommunityService
         catch
         {
             // Non-critical notification delivery failure
+        }
+
+        if (_hubContext != null)
+        {
+            try
+            {
+                await _hubContext.Clients.All.SendAsync("CommunityMembersUpdated", new
+                {
+                    communityId,
+                    removedUserId = targetUserId,
+                    action = "Removed"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to broadcast CommunityMembersUpdated SignalR event for community {CommunityId}", communityId);
+            }
         }
     }
 
@@ -1110,6 +1154,23 @@ public class CommunityService : ICommunityService
         }
 
         var updatedMembers = await _repo.GetMembersAsync(communityId, null, 1, 500);
+
+        if (_hubContext != null)
+        {
+            try
+            {
+                await _hubContext.Clients.All.SendAsync("CommunityMembersUpdated", new
+                {
+                    communityId,
+                    action = "Added"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to broadcast CommunityMembersUpdated SignalR event for community {CommunityId}", communityId);
+            }
+        }
+
         return _mapper.Map<List<CommunityMemberDto>>(updatedMembers);
     }
 
@@ -1134,18 +1195,38 @@ public class CommunityService : ICommunityService
             $"You have been promoted to Community Administrator for {(community?.Name ?? "the community")}.",
             relatedContentType: NotificationContentTypes.Community,
             relatedContentId: communityId);
+
+        if (_hubContext != null)
+        {
+            try
+            {
+                await _hubContext.Clients.All.SendAsync("CommunityMembersUpdated", new
+                {
+                    communityId,
+                    targetUserId,
+                    action = "RoleChanged"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to broadcast CommunityMembersUpdated SignalR event for community {CommunityId}", communityId);
+            }
+        }
     }
 
     public async Task RemoveAdminAsync(int communityId, int targetUserId, int currentUserId)
     {
         await CheckIsAdminOrSysAdminAsync(communityId, currentUserId);
 
+        var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
+        var isSysAdminCaller = user != null && user.Roles.Any(IsPrivilegedAdminRole);
+
         var community = await _repo.GetCommunityByIdAsync(communityId);
-        if (community != null && community.CreatedByUserId == targetUserId && currentUserId != targetUserId)
+        if (community != null && community.CreatedByUserId == targetUserId && currentUserId != targetUserId && !isSysAdminCaller)
             throw new BadRequestException("Cannot demote or remove the original creator of this community.");
 
         var adminsCount = await _repo.GetCommunityAdminsCountAsync(communityId);
-        if (adminsCount <= 1 && await _repo.IsCommunityAdminAsync(communityId, targetUserId))
+        if (adminsCount <= 1 && await _repo.IsCommunityAdminAsync(communityId, targetUserId) && !isSysAdminCaller)
             throw new BadRequestException("Cannot remove the sole remaining Community Admin.");
 
         await _repo.RemoveCommunityAdminAsync(communityId, targetUserId);
@@ -1153,8 +1234,25 @@ public class CommunityService : ICommunityService
         var member = await _repo.GetMemberAsync(communityId, targetUserId);
         if (member != null)
         {
-            member.MemberType = CommunityMemberTypes.Subscriber;
+            member.MemberType = CommunityMemberTypes.Member;
             await _repo.UpdateMemberAsync(member);
+        }
+
+        if (_hubContext != null)
+        {
+            try
+            {
+                await _hubContext.Clients.All.SendAsync("CommunityMembersUpdated", new
+                {
+                    communityId,
+                    targetUserId,
+                    action = "RoleChanged"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to broadcast CommunityMembersUpdated SignalR event for community {CommunityId}", communityId);
+            }
         }
     }
 

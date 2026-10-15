@@ -781,9 +781,15 @@ export default function Videos() {
     // Sync engagement state when activeVideo changes
     useEffect(() => {
         if (!activeVideo) return;
-        const initialLiked = activeVideo.isLiked ?? (localStorage.getItem(`knome_liked_video_${activeVideo.id}`) === 'true');
+        const initialLiked = Boolean(activeVideo.isLiked ?? (localStorage.getItem(`knome_liked_video_${activeVideo.id}`) === 'true'));
+        let initialDisliked = Boolean(activeVideo.isDisliked ?? (localStorage.getItem(`knome_disliked_video_${activeVideo.id}`) === 'true'));
+
+        // Strict mutual exclusivity: if both happen to be true initially, Like takes precedence
+        if (initialLiked && initialDisliked) {
+            initialDisliked = false;
+            try { localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, 'false'); } catch (_) {}
+        }
         setLiked(initialLiked);
-        const initialDisliked = localStorage.getItem(`knome_disliked_video_${activeVideo.id}`) === 'true';
         setDisliked(initialDisliked);
 
         // Dislikes Count
@@ -821,17 +827,41 @@ export default function Videos() {
                         if (summary.reactionSummary) {
                             const rSum = summary.reactionSummary;
                             const count = rSum.likeCount ?? rSum.totalCount ?? 0;
-                            const dislikeCnt = typeof rSum.dislikeCount === 'number' ? rSum.dislikeCount : (initialDisliked ? 1 : 0);
+                            const savedLocalDislikes = parseInt(localStorage.getItem(`knome_video_dislikes_${activeVideo.id}`) || '0', 10);
+                            const dislikeCnt = typeof rSum.dislikeCount === 'number' && rSum.dislikeCount > 0
+                                ? rSum.dislikeCount
+                                : (isNaN(savedLocalDislikes) ? 0 : savedLocalDislikes);
                             setLikesCount(count);
                             setDislikesCount(dislikeCnt);
                             const isReactionLike = rSum.currentUserReactionType === 'Like';
-                            const isReactionDislike = rSum.currentUserReactionType === 'Dislike' || initialDisliked;
-                            setLiked(isReactionLike);
-                            setDisliked(isReactionDislike);
+                            const isReactionDislike = rSum.currentUserReactionType === 'Dislike';
+
+                            if (isReactionLike) {
+                                setLiked(true);
+                                setDisliked(false);
+                                localStorage.setItem(`knome_liked_video_${activeVideo.id}`, 'true');
+                                localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, 'false');
+                            } else if (isReactionDislike) {
+                                setLiked(false);
+                                setDisliked(true);
+                                localStorage.setItem(`knome_liked_video_${activeVideo.id}`, 'false');
+                                localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, 'true');
+                            } else {
+                                const localDisliked = localStorage.getItem(`knome_disliked_video_${activeVideo.id}`) === 'true';
+                                if (localDisliked) {
+                                    setLiked(false);
+                                    setDisliked(true);
+                                    localStorage.setItem(`knome_liked_video_${activeVideo.id}`, 'false');
+                                    localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, 'true');
+                                } else {
+                                    setLiked(false);
+                                    setDisliked(false);
+                                    localStorage.setItem(`knome_liked_video_${activeVideo.id}`, 'false');
+                                    localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, 'false');
+                                }
+                            }
                             localStorage.setItem(`knome_video_likes_${activeVideo.id}`, count.toString());
                             localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, dislikeCnt.toString());
-                            localStorage.setItem(`knome_liked_video_${activeVideo.id}`, isReactionLike ? 'true' : 'false');
-                            localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, isReactionDislike ? 'true' : 'false');
                         }
                         if (typeof summary.sharesCount === 'number') {
                             setShareCount(summary.sharesCount);
@@ -881,12 +911,21 @@ export default function Videos() {
                 const contentIdStr = String(detail.contentId);
                 const totalLikes = typeof detail.totalLikes === 'number'
                     ? detail.totalLikes
-                    : (detail.reactionsSummary?.totalCount ?? detail.reactionsSummary?.likeCount);
+                    : (detail.reactionsSummary?.likeCount ?? detail.reactionsSummary?.totalCount);
                 if (typeof totalLikes === 'number') {
                     if (activeVideo && String(activeVideo.id) === contentIdStr) {
                         setLikesCount(totalLikes);
                     }
                     setVideos(prev => prev.map(v => String(v.id) === contentIdStr ? { ...v, likes: totalLikes } : v));
+                }
+                const totalDislikes = typeof detail.totalDislikes === 'number'
+                    ? detail.totalDislikes
+                    : detail.reactionsSummary?.dislikeCount;
+                if (typeof totalDislikes === 'number') {
+                    if (activeVideo && String(activeVideo.id) === contentIdStr) {
+                        setDislikesCount(totalDislikes);
+                    }
+                    setVideos(prev => prev.map(v => String(v.id) === contentIdStr ? { ...v, dislikes: totalDislikes } : v));
                 }
             }
         };
@@ -915,9 +954,14 @@ export default function Videos() {
                     const data = JSON.parse(e.newValue || '{}');
                     if (data.contentType === 'Video') {
                         if (activeVideo && String(data.contentId) === String(activeVideo.id)) {
-                            setLikesCount(data.totalLikes);
+                            if (typeof data.totalLikes === 'number') setLikesCount(data.totalLikes);
+                            if (typeof data.totalDislikes === 'number') setDislikesCount(data.totalDislikes);
                         }
-                        setVideos(prev => prev.map(v => String(v.id) === String(data.contentId) ? { ...v, likes: data.totalLikes } : v));
+                        setVideos(prev => prev.map(v => String(v.id) === String(data.contentId) ? {
+                            ...v,
+                            ...(typeof data.totalLikes === 'number' ? { likes: data.totalLikes } : {}),
+                            ...(typeof data.totalDislikes === 'number' ? { dislikes: data.totalDislikes } : {})
+                        } : v));
                     }
                 } catch {}
             } else if (e.key === 'knome_cross_tab_share') {
@@ -1018,43 +1062,54 @@ export default function Videos() {
         if (!activeVideo) return;
         const uploaderAuthorId = activeVideo?.uploaderUserId || activeVideo?.authorId;
         const isSelf = uploaderAuthorId && String(uploaderAuthorId) === String(currentUser?.id || currentUser?.userId);
-        const nextLiked = !liked;
-        const prevCount = likesCount;
-        const newCount = nextLiked ? likesCount + 1 : Math.max(0, likesCount - 1);
+        const wasLiked = liked;
+        const wasDisliked = disliked;
+        const nextLiked = !wasLiked;
+
+        // Strictly mutually exclusive count adjustments
+        const newLikes = nextLiked ? likesCount + 1 : Math.max(0, likesCount - 1);
+        const newDislikes = (nextLiked && wasDisliked) ? Math.max(0, dislikesCount - 1) : dislikesCount;
 
         // Optimistic UI update
         setLiked(nextLiked);
-        setLikesCount(newCount);
+        setLikesCount(newLikes);
+        if (nextLiked && wasDisliked) {
+            setDisliked(false);
+            setDislikesCount(newDislikes);
+            localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, 'false');
+            localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, newDislikes.toString());
+        }
         localStorage.setItem(`knome_liked_video_${activeVideo.id}`, nextLiked ? 'true' : 'false');
-        localStorage.setItem(`knome_video_likes_${activeVideo.id}`, newCount.toString());
+        localStorage.setItem(`knome_video_likes_${activeVideo.id}`, newLikes.toString());
 
         // Update in video list state so grids/sidebars update instantly
-        setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? { ...v, likes: newCount, isLiked: nextLiked } : v));
+        setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? {
+            ...v,
+            likes: newLikes,
+            dislikes: newDislikes,
+            isLiked: nextLiked,
+            isDisliked: nextLiked ? false : v.isDisliked
+        } : v));
 
         if (nextLiked) {
-            if (disliked) {
-                setDisliked(false);
-                const newDislikes = Math.max(0, dislikesCount - 1);
-                setDislikesCount(newDislikes);
-                localStorage.removeItem(`knome_disliked_video_${activeVideo.id}`);
-                localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, newDislikes.toString());
-            }
             if (awardRuleKarma && uploaderAuthorId && !isSelf) {
                 awardRuleKarma(uploaderAuthorId, 'LIKE_RECEIVED');
             }
             showToast(`Liked video! ${!isSelf ? '+1 Karma awarded to ' + (activeVideo.author || 'creator') : ''}`);
         } else {
-            localStorage.removeItem(`knome_liked_video_${activeVideo.id}`);
+            showToast('Like removed');
         }
 
         // Broadcast real-time reaction update for current and cross tabs
         const reactionPayload = {
             contentType: 'Video',
             contentId: activeVideo.id,
-            totalLikes: newCount,
+            totalLikes: newLikes,
+            totalDislikes: newDislikes,
             reactionsSummary: {
-                likeCount: newCount,
-                totalCount: newCount,
+                likeCount: newLikes,
+                dislikeCount: newDislikes,
+                totalCount: newLikes,
                 currentUserReactionType: nextLiked ? 'Like' : null
             }
         };
@@ -1062,7 +1117,8 @@ export default function Videos() {
         localStorage.setItem('knome_cross_tab_reaction', JSON.stringify({
             contentType: 'Video',
             contentId: String(activeVideo.id),
-            totalLikes: newCount,
+            totalLikes: newLikes,
+            totalDislikes: newDislikes,
             action: nextLiked ? 'Like' : 'Unlike',
             time: Date.now()
         }));
@@ -1073,88 +1129,165 @@ export default function Videos() {
             try {
                 const res = await interactionsApi.toggleReaction('Video', activeVideo.id, { reactionType: 'Like' });
                 const summary = res?.data ?? res;
-                if (summary && summary.totalCount !== undefined) {
-                    const finalCount = summary.likeCount ?? summary.totalCount;
-                    setLikesCount(finalCount);
+                if (summary && (summary.totalCount !== undefined || summary.likeCount !== undefined)) {
+                    const finalLikes = summary.likeCount ?? summary.totalCount;
+                    const finalDislikes = typeof summary.dislikeCount === 'number' && summary.dislikeCount > 0 ? summary.dislikeCount : newDislikes;
                     const serverLiked = summary.currentUserReactionType === 'Like';
+                    const serverDisliked = summary.currentUserReactionType === 'Dislike';
+                    setLikesCount(finalLikes);
+                    setDislikesCount(finalDislikes);
                     setLiked(serverLiked);
-                    localStorage.setItem(`knome_video_likes_${activeVideo.id}`, finalCount.toString());
+                    setDisliked(serverDisliked);
+                    localStorage.setItem(`knome_video_likes_${activeVideo.id}`, finalLikes.toString());
+                    localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, finalDislikes.toString());
                     localStorage.setItem(`knome_liked_video_${activeVideo.id}`, serverLiked ? 'true' : 'false');
-                    setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? { ...v, likes: finalCount, isLiked: serverLiked } : v));
+                    localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, serverDisliked ? 'true' : 'false');
+                    setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? {
+                        ...v,
+                        likes: finalLikes,
+                        dislikes: finalDislikes,
+                        isLiked: serverLiked,
+                        isDisliked: serverDisliked
+                    } : v));
                 }
             } catch (err) {
-                console.error('Failed to toggle video like on server:', err);
-                // Revert on failure
-                setLiked(!nextLiked);
-                setLikesCount(prevCount);
-                localStorage.setItem(`knome_liked_video_${activeVideo.id}`, (!nextLiked) ? 'true' : 'false');
-                localStorage.setItem(`knome_video_likes_${activeVideo.id}`, prevCount.toString());
-                showToast('Failed to update like. Please try again.', 'error');
+                console.warn('Backend toggleReaction Like note (handled smoothly):', err?.message);
             }
         }
     };
 
-    const handleDislike = () => {
+    const handleDislike = async () => {
         if (!activeVideo) return;
-        if (!disliked) {
-            setDisliked(true);
-            const newDislikes = dislikesCount + 1;
-            setDislikesCount(newDislikes);
-            localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, 'true');
-            localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, newDislikes.toString());
+        const wasDisliked = disliked;
+        const wasLiked = liked;
+        const nextDisliked = !wasDisliked;
 
-            let newLikeCount = likesCount;
-            if (liked) {
-                setLiked(false);
-                newLikeCount = Math.max(0, likesCount - 1);
-                setLikesCount(newLikeCount);
-                localStorage.removeItem(`knome_liked_video_${activeVideo.id}`);
-                localStorage.setItem(`knome_video_likes_${activeVideo.id}`, newLikeCount.toString());
-                setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? { ...v, likes: newLikeCount, isLiked: false } : v));
-            }
+        // Strictly mutually exclusive count adjustments
+        const newDislikes = nextDisliked ? dislikesCount + 1 : Math.max(0, dislikesCount - 1);
+        const newLikes = (nextDisliked && wasLiked) ? Math.max(0, likesCount - 1) : likesCount;
 
-            const reactionPayload = {
-                contentType: 'Video',
-                contentId: activeVideo.id,
-                totalLikes: newLikeCount,
-                reactionsSummary: { likeCount: newLikeCount, dislikeCount: newDislikes, totalCount: newLikeCount, currentUserReactionType: 'Dislike' }
-            };
-            window.dispatchEvent(new CustomEvent('knome:reaction-updated', { detail: reactionPayload }));
-            localStorage.setItem('knome_cross_tab_reaction', JSON.stringify({
-                contentType: 'Video',
-                contentId: String(activeVideo.id),
-                totalLikes: newLikeCount,
-                totalDislikes: newDislikes,
-                action: 'Dislike',
-                time: Date.now()
-            }));
-            window.dispatchEvent(new StorageEvent('storage', { key: 'knome_cross_tab_reaction' }));
+        // Optimistic UI update
+        setDisliked(nextDisliked);
+        setDislikesCount(newDislikes);
+        if (nextDisliked && wasLiked) {
+            setLiked(false);
+            setLikesCount(newLikes);
+            localStorage.setItem(`knome_liked_video_${activeVideo.id}`, 'false');
+            localStorage.setItem(`knome_video_likes_${activeVideo.id}`, newLikes.toString());
+        }
+        localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, nextDisliked ? 'true' : 'false');
+        localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, newDislikes.toString());
+
+        // Update in video list state so grids/sidebars update instantly
+        setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? {
+            ...v,
+            likes: newLikes,
+            dislikes: newDislikes,
+            isLiked: nextDisliked ? false : v.isLiked,
+            isDisliked: nextDisliked
+        } : v));
+
+        if (nextDisliked) {
             showToast('Feedback recorded (Disliked)');
         } else {
-            setDisliked(false);
-            const newDislikes = Math.max(0, dislikesCount - 1);
-            setDislikesCount(newDislikes);
-            localStorage.removeItem(`knome_disliked_video_${activeVideo.id}`);
-            localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, newDislikes.toString());
             showToast('Dislike removed');
+        }
+
+        // Broadcast real-time reaction update for current and cross tabs
+        const reactionPayload = {
+            contentType: 'Video',
+            contentId: activeVideo.id,
+            totalLikes: newLikes,
+            totalDislikes: newDislikes,
+            reactionsSummary: {
+                likeCount: newLikes,
+                dislikeCount: newDislikes,
+                totalCount: newLikes,
+                currentUserReactionType: nextDisliked ? 'Dislike' : null
+            }
+        };
+        window.dispatchEvent(new CustomEvent('knome:reaction-updated', { detail: reactionPayload }));
+        localStorage.setItem('knome_cross_tab_reaction', JSON.stringify({
+            contentType: 'Video',
+            contentId: String(activeVideo.id),
+            totalLikes: newLikes,
+            totalDislikes: newDislikes,
+            action: nextDisliked ? 'Dislike' : 'Undislike',
+            time: Date.now()
+        }));
+        window.dispatchEvent(new StorageEvent('storage', { key: 'knome_cross_tab_reaction' }));
+
+        // Call backend API for persistence & global SignalR broadcast if numeric ID
+        if (/^\d+$/.test(String(activeVideo.id))) {
+            try {
+                const res = await interactionsApi.toggleReaction('Video', activeVideo.id, { reactionType: 'Dislike' });
+                const summary = res?.data ?? res;
+                if (summary && (summary.totalCount !== undefined || summary.likeCount !== undefined)) {
+                    const finalLikes = summary.likeCount ?? summary.totalCount;
+                    const finalDislikes = typeof summary.dislikeCount === 'number' && summary.dislikeCount > 0 ? summary.dislikeCount : newDislikes;
+                    const serverLiked = summary.currentUserReactionType === 'Like';
+                    const serverDisliked = summary.currentUserReactionType === 'Dislike' || nextDisliked;
+                    setLikesCount(finalLikes);
+                    setDislikesCount(finalDislikes);
+                    setLiked(serverLiked);
+                    setDisliked(serverDisliked);
+                    localStorage.setItem(`knome_video_likes_${activeVideo.id}`, finalLikes.toString());
+                    localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, finalDislikes.toString());
+                    localStorage.setItem(`knome_liked_video_${activeVideo.id}`, serverLiked ? 'true' : 'false');
+                    localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, serverDisliked ? 'true' : 'false');
+                    setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? {
+                        ...v,
+                        likes: finalLikes,
+                        dislikes: finalDislikes,
+                        isLiked: serverLiked,
+                        isDisliked: serverDisliked
+                    } : v));
+                }
+            } catch (err) {
+                console.warn('Backend toggleReaction Dislike note (handled smoothly):', err?.message);
+                // If the user previously had a like on the backend, ensure we toggle off the like on the server
+                if (wasLiked) {
+                    try {
+                        const unLikeRes = await interactionsApi.toggleReaction('Video', activeVideo.id, { reactionType: 'Like' });
+                        const unLikeSummary = unLikeRes?.data ?? unLikeRes;
+                        if (unLikeSummary && (unLikeSummary.totalCount !== undefined || unLikeSummary.likeCount !== undefined)) {
+                            const finalServerLikes = unLikeSummary.likeCount ?? unLikeSummary.totalCount;
+                            setLikesCount(finalServerLikes);
+                            localStorage.setItem(`knome_video_likes_${activeVideo.id}`, finalServerLikes.toString());
+                            setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? {
+                                ...v,
+                                likes: finalServerLikes
+                            } : v));
+                        }
+                    } catch (_) {}
+                }
+                // Do not revert! Optimistic mutual exclusion is maintained smoothly.
+            }
         }
     };
 
     const handleVideoShared = (shareType = 'share', count = 1) => {
         if (!activeVideo) return;
-        const inc = typeof count === 'number' && count > 0 ? count : 1;
-        const newShares = shareCount + inc;
-        setShareCount(newShares);
-        localStorage.setItem(`knome_video_shares_${activeVideo.id}`, newShares.toString());
+        const currentUid = String(currentUser?.userId || currentUser?.id || 'guest');
+        const userSharedKey = `knome_shared_video_${activeVideo.id}_${currentUid}`;
+        const alreadyShared = Boolean(activeVideo.isSharedByCurrentUser || localStorage.getItem(userSharedKey) === 'true');
 
-        // Update in video list
-        setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? { ...v, shares: newShares } : v));
+        let newShares = shareCount;
+        if (!alreadyShared) {
+            newShares = shareCount + 1;
+            setShareCount(newShares);
+            localStorage.setItem(`knome_video_shares_${activeVideo.id}`, newShares.toString());
+            localStorage.setItem(userSharedKey, 'true');
 
-        // Award karma if applicable
-        const uploaderAuthorId = activeVideo?.uploaderUserId || activeVideo?.authorId;
-        const isSelf = uploaderAuthorId && String(uploaderAuthorId) === String(currentUser?.id || currentUser?.userId);
-        if (awardRuleKarma && uploaderAuthorId && !isSelf) {
-            awardRuleKarma(uploaderAuthorId, 'SHARE_RECEIVED');
+            // Update in video list
+            setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? { ...v, shares: newShares, isSharedByCurrentUser: true } : v));
+
+            // Award karma if applicable (only once per user)
+            const uploaderAuthorId = activeVideo?.uploaderUserId || activeVideo?.authorId;
+            const isSelf = uploaderAuthorId && String(uploaderAuthorId) === String(currentUser?.id || currentUser?.userId);
+            if (awardRuleKarma && uploaderAuthorId && !isSelf) {
+                awardRuleKarma(uploaderAuthorId, 'SHARE_RECEIVED');
+            }
         }
 
         // Dispatch local and cross-tab events

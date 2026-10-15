@@ -316,11 +316,39 @@ public class AuthService : IAuthService
 
         if (user != null && isMayur && (user.EmployeeId != "EMP100" || user.FullName != "Mayur Bansal" || user.Email != "mayurbansal7089@gmail.com"))
         {
-            user.EmployeeId = "EMP100";
-            user.FullName = "Mayur Bansal";
-            user.Email = "mayurbansal7089@gmail.com";
-            user.Designation = "Software Developer";
-            await _db.SaveChangesAsync();
+            try
+            {
+                await _db.Database.ExecuteSqlRawAsync(
+                    @"IF NOT EXISTS (SELECT 1 FROM [dbo].[Users] WHERE [EmployeeId] = 'EMP100' AND [UserId] <> {0})
+                      BEGIN
+                          UPDATE [dbo].[Users] 
+                          SET [EmployeeId] = 'EMP100', 
+                              [FullName] = 'Mayur Bansal', 
+                              [Email] = 'mayurbansal7089@gmail.com', 
+                              [Designation] = 'Software Developer',
+                              [IsActive] = 1
+                          WHERE [UserId] = {0};
+                      END
+                      ELSE
+                      BEGIN
+                          UPDATE [dbo].[Users] 
+                          SET [FullName] = 'Mayur Bansal', 
+                              [Email] = 'mayurbansal7089@gmail.com', 
+                              [Designation] = 'Software Developer',
+                              [IsActive] = 1
+                          WHERE [UserId] = {0};
+                      END",
+                    user.UserId);
+
+                user.EmployeeId = "EMP100";
+                user.FullName = "Mayur Bansal";
+                user.Email = "mayurbansal7089@gmail.com";
+                user.Designation = "Software Developer";
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "[AuthService] Failed to sync Mayur identity: {Message}", ex.Message);
+            }
         }
 
         if (user is null)

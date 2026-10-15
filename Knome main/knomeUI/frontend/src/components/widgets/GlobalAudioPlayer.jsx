@@ -57,9 +57,10 @@ export default function GlobalAudioPlayer() {
                 {/* Left: Podcast Info */}
                 <div className="flex items-center gap-4 w-1/3 min-w-[200px]">
                     <img 
-                        src={currentPodcast.thumbnail} 
+                        src={currentPodcast.thumbnail || 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=150&auto=format&fit=crop&q=80'} 
                         alt="Podcast Cover" 
-                        className="w-14 h-14 rounded-lg object-cover shadow-sm"
+                        onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=150&auto=format&fit=crop&q=80'; }}
+                        className="w-14 h-14 rounded-lg object-cover shadow-sm bg-slate-100 dark:bg-slate-800"
                     />
                     <div className="overflow-hidden">
                         <h4 className="text-[14px] font-bold text-slate-900 dark:text-white truncate">{currentPodcast.title}</h4>

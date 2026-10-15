@@ -593,7 +593,10 @@ const setCachedPostInteraction = (postId, updates) => {
                         likesCount: updates.likeCount !== undefined ? updates.likeCount : (lp.likesCount || 0),
                         userReaction: updates.reaction !== undefined ? updates.reaction : lp.userReaction,
                         comments: updates.commentCount !== undefined ? updates.commentCount : (lp.comments || 0),
-                        commentsCount: updates.commentCount !== undefined ? updates.commentCount : (lp.commentsCount || 0)
+                        commentsCount: updates.commentCount !== undefined ? updates.commentCount : (lp.commentsCount || 0),
+                        shares: updates.sharesCount !== undefined ? updates.sharesCount : (lp.shares || 0),
+                        sharesCount: updates.sharesCount !== undefined ? updates.sharesCount : (lp.sharesCount || 0),
+                        isSharedByCurrentUser: updates.isSharedByCurrentUser !== undefined ? updates.isSharedByCurrentUser : lp.isSharedByCurrentUser
                     };
                 }
                 return lp;
@@ -619,7 +622,10 @@ const setCachedPostInteraction = (postId, updates) => {
                                 likesCount: updates.likeCount !== undefined ? updates.likeCount : (cp.likesCount || 0),
                                 userReaction: updates.reaction !== undefined ? updates.reaction : cp.userReaction,
                                 comments: updates.commentCount !== undefined ? updates.commentCount : (cp.comments || 0),
-                                commentsCount: updates.commentCount !== undefined ? updates.commentCount : (cp.commentsCount || 0)
+                                commentsCount: updates.commentCount !== undefined ? updates.commentCount : (cp.commentsCount || 0),
+                                shares: updates.sharesCount !== undefined ? updates.sharesCount : (cp.shares || 0),
+                                sharesCount: updates.sharesCount !== undefined ? updates.sharesCount : (cp.sharesCount || 0),
+                                isSharedByCurrentUser: updates.isSharedByCurrentUser !== undefined ? updates.isSharedByCurrentUser : cp.isSharedByCurrentUser
                             };
                         }
                         return cp;
@@ -661,9 +667,24 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
         ? cachedInteraction.reaction 
         : (post.userReaction || post.engagementSummary?.reactionSummary?.currentUserReactionType?.toLowerCase() || null);
 
+    const rawServerShares = Number(post.shares || post.sharesCount || post.engagementSummary?.sharesCount || 0);
+    const initialSharesCount = cachedInteraction?.sharesCount != null 
+        ? Math.max(Number(cachedInteraction.sharesCount), rawServerShares) 
+        : rawServerShares;
+
+    const currentUid = String(currentUser?.userId || currentUser?.id || 'guest');
+    const userSharedKey = `knome_shared_post_${postIdStr}_${currentUid}`;
+    const initialIsShared = Boolean(
+        post.isSharedByCurrentUser ||
+        post.engagementSummary?.isSharedByCurrentUser ||
+        cachedInteraction?.isSharedByCurrentUser ||
+        localStorage.getItem(userSharedKey) === 'true'
+    );
+
+    const [hasUserShared, setHasUserShared] = useState(initialIsShared);
     const [reaction, setReaction] = useState(initialReaction);
     const [likeCount, setLikeCount] = useState(initialLikeCount);
-    const [shareCount, setShareCount] = useState(post.shares || post.sharesCount || 0);
+    const [shareCount, setShareCount] = useState(initialSharesCount);
     const [reactionsList, setReactionsList] = useState(post.reactions || []);
     const [isReactionsModalOpen, setIsReactionsModalOpen] = useState(false);
     const [isPublishingNow, setIsPublishingNow] = useState(false);
@@ -2671,10 +2692,20 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                         onClose={() => setIsShareOpen(false)}
                         post={post}
                         contentType={resolveSharedTarget(post)?.type || (post.type === 'video' ? 'Video' : post.type === 'podcast' ? 'Podcast' : post.type === 'article' ? 'Article' : 'Post')}
-                        onShared={(type, count) => {
-                            setShareCount(prev => prev + (count || 1));
-                            if (awardRuleKarma && (post.userId || post.authorId)) {
-                                awardRuleKarma(post.userId || post.authorId, 'SHARE_RECEIVED');
+                        onShared={(type) => {
+                            const currentUid = String(currentUser?.userId || currentUser?.id || 'guest');
+                            const userSharedKey = `knome_shared_post_${postIdStr}_${currentUid}`;
+                            const alreadyShared = Boolean(hasUserShared || post.isSharedByCurrentUser || localStorage.getItem(userSharedKey) === 'true');
+
+                            if (!alreadyShared) {
+                                const nextCount = (shareCount || 0) + 1;
+                                setShareCount(nextCount);
+                                setHasUserShared(true);
+                                localStorage.setItem(userSharedKey, 'true');
+                                setCachedPostInteraction(postIdStr, { isSharedByCurrentUser: true, sharesCount: nextCount });
+                                if (awardRuleKarma && (post.userId || post.authorId)) {
+                                    awardRuleKarma(post.userId || post.authorId, 'SHARE_RECEIVED');
+                                }
                             }
                         }}
                     />

@@ -45,6 +45,7 @@ public class ContentSummaryDto
     public long SharesCount { get; set; }
     public long ViewsCount { get; set; }
     public bool IsBookmarkedByCurrentUser { get; set; }
+    public bool IsSharedByCurrentUser { get; set; }
     public long EngagementScore { get; set; }
 }
 

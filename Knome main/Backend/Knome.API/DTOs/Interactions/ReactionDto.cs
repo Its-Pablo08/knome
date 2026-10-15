@@ -28,6 +28,7 @@ public class ReactionSummaryDto
     public long CelebrateCount { get; set; }
     public long SupportCount { get; set; }
     public long HeartCount { get; set; }
+    public long DislikeCount { get; set; }
     public string? CurrentUserReactionType { get; set; }
     public List<string> TopReactionTypes { get; set; } = new();
     public List<ReactionDto> Reactions { get; set; } = new();
