@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import AuthGuard from './components/layout/AuthGuard'
 import { ModalProvider } from './components/contexts/ModalContext'
@@ -39,6 +39,28 @@ const PageLoader = () => (
     <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin"></div>
   </div>
 );
+
+function NormalizeTrailingSlash() {
+  const location = useLocation();
+  if (location.pathname.length > 1 && location.pathname.endsWith('/')) {
+    return <Navigate to={location.pathname.slice(0, -1) + location.search + location.hash} replace />;
+  }
+  return null;
+}
+
+function RouteTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    const fullPath = location.pathname + location.search + location.hash;
+    if (fullPath && !fullPath.startsWith('/login') && !fullPath.startsWith('/sso')) {
+      try {
+        sessionStorage.setItem('knome_last_route', fullPath);
+        sessionStorage.setItem('knome_return_url', fullPath);
+      } catch (_) {}
+    }
+  }, [location]);
+  return null;
+}
 
 import { useSystemConfig } from './utils/systemConfig'
 
@@ -171,6 +193,8 @@ function App() {
             <ConfirmDialogProvider>
               <ModalProvider>
               <Router>
+                <NormalizeTrailingSlash />
+                <RouteTracker />
                 <Suspense fallback={<PageLoader />}>
                   <Routes>
                     {/* Public & SSO Routes */}

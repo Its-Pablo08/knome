@@ -6,7 +6,7 @@ import ReportModal from '../components/modals/ReportModal';
 import SaveToCategoryModal from '../components/modals/SaveToCategoryModal';
 import CommentsSection from '../components/video/CommentsSection';
 import ArticleShareModal from '../components/modals/ArticleShareModal';
-import { getVideos, getPlaylists, fetchPlaylists, savePlaylist, deletePlaylist, importYouTubePlaylist, fetchYouTubePlaylistDetails } from '../utils/videoService';
+import { getVideos, getPlaylists, fetchPlaylists, savePlaylist, deletePlaylist, importYouTubePlaylist, fetchYouTubePlaylistDetails, getCachedVideos, getCachedPlaylists, invalidateVideosCache } from '../utils/videoService';
 import sharedPlaylistsData from '../data/shared_playlists.json';
 
 import { savedContentApi, getPersonalizedRecommendations, resolveMediaUrl, videosApi, interactionsApi, getInitialsAvatar } from '../utils/apiService';
@@ -101,15 +101,34 @@ export default function Videos() {
     const navigate = useNavigate();
 
     const [isUploadOpen, setIsUploadOpen] = useState(false);
-    const [activeVideo, setActiveVideo] = useState(null);
-    const [activeFilter, setActiveFilter] = useState('All');
-    const [viewTab, setViewTab] = useState('videos'); // 'videos' | 'playlists'
+    const [activeVideo, setActiveVideo] = useState(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const qId = params.get('id') || params.get('videoId') || (typeof window !== 'undefined' ? sessionStorage.getItem('knome_active_video_id') : null);
+            const cachedData = typeof window !== 'undefined' ? sessionStorage.getItem('knome_active_video_data') : null;
+            if (cachedData) {
+                const parsed = JSON.parse(cachedData);
+                if (!qId || String(parsed.id) === String(qId)) return parsed;
+            }
+        } catch (_) {}
+        return null;
+    });
+    const [activeFilter, setActiveFilter] = useState(() => {
+        try {
+            return (typeof window !== 'undefined' && sessionStorage.getItem('knome_videos_filter')) || 'All';
+        } catch { return 'All'; }
+    });
+    const [viewTab, setViewTab] = useState(() => {
+        try {
+            return (typeof window !== 'undefined' && sessionStorage.getItem('knome_videos_view_tab')) || 'videos';
+        } catch { return 'videos'; }
+    });
     const [searchQuery, setSearchQuery] = useState('');
     const [savedMap, setSavedMap] = useState({});
     const [reportingVideo, setReportingVideo] = useState(null);
     const [savingVideoModal, setSavingVideoModal] = useState(null);
-    const [videos, setVideos] = useState([]);
-    const [playlists, setPlaylists] = useState([]);
+    const [videos, setVideos] = useState(() => getCachedVideos() || []);
+    const [playlists, setPlaylists] = useState(() => getCachedPlaylists() || []);
     const [activePlaylist, setActivePlaylist] = useState(null);
     const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
     const [newPlaylist, setNewPlaylist] = useState({
@@ -119,7 +138,7 @@ export default function Videos() {
         type: 'Series',
         selectedVideoIds: []
     });
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(() => !getCachedVideos() || getCachedVideos().length === 0);
     // Real-time views map: { [videoId]: count } read from localStorage
     const [viewsMap, setViewsMap] = useState({});
 
@@ -128,6 +147,7 @@ export default function Videos() {
     const [disliked, setDisliked] = useState(false);
     const [currentViews, setCurrentViews] = useState(0);
     const [likesCount, setLikesCount] = useState(0);
+    const [dislikesCount, setDislikesCount] = useState(0);
     const [shareCount, setShareCount] = useState(0);
     const [showSharePanel, setShowSharePanel] = useState(false);
     const [shareTab, setShareTab] = useState('menu');
@@ -192,15 +212,22 @@ export default function Videos() {
 
     const filters = ['All', 'Training & Tutorials', 'Townhalls', 'Engineering Tech Talks', 'Leadership Updates'];
 
-    const fetchVideos = async () => {
-        setIsLoading(true);
-        const [data, plData] = await Promise.all([
-            getVideos(),
-            fetchPlaylists()
-        ]);
-        setVideos(data || []);
-        setPlaylists(plData || []);
-        setIsLoading(false);
+    const fetchVideos = async (force = false) => {
+        if (!videos || videos.length === 0) {
+            setIsLoading(true);
+        }
+        try {
+            const [data, plData] = await Promise.all([
+                getVideos(force),
+                fetchPlaylists(force)
+            ]);
+            if (data && Array.isArray(data)) setVideos(data);
+            if (plData && Array.isArray(plData)) setPlaylists(plData);
+        } catch (err) {
+            console.error('Error fetching videos:', err);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const loadAllSavedVideos = useCallback(async () => {
@@ -241,34 +268,38 @@ export default function Videos() {
     }, []);
 
     useEffect(() => {
-        fetchVideos();
+        fetchVideos(false);
         loadViewsMap();
         loadAllSavedVideos();
     }, [loadAllSavedVideos]);
 
-    // Automatic cross-window & background synchronization for playlists
+    // Automatic cross-window & background synchronization for playlists and videos
     useEffect(() => {
-        const handleSync = async () => {
+        const handleSync = async (force = false) => {
             try {
-                const refreshed = await fetchPlaylists();
+                const refreshed = await fetchPlaylists(force);
                 if (refreshed && Array.isArray(refreshed)) {
                     setPlaylists(refreshed);
                 }
             } catch (_) {}
         };
 
-        const onFocus = () => handleSync();
-        const onVisibilityChange = () => {
-            if (!document.hidden) handleSync();
+        const onPlaylistUpdated = () => handleSync(true);
+        const onStorage = (e) => {
+            if (e.key === 'knome_video_playlists_v1' || e.key === 'knome_imported_yt_videos') {
+                handleSync(true);
+                fetchVideos(true);
+            }
         };
 
-        window.addEventListener('focus', onFocus);
-        document.addEventListener('visibilitychange', onVisibilityChange);
-        const intervalId = setInterval(handleSync, 5000);
+        window.addEventListener('knome_playlist_updated', onPlaylistUpdated);
+        window.addEventListener('storage', onStorage);
+        // Clean relaxed 60s background sync to avoid hammering the backend
+        const intervalId = setInterval(() => handleSync(false), 60000);
 
         return () => {
-            window.removeEventListener('focus', onFocus);
-            document.removeEventListener('visibilitychange', onVisibilityChange);
+            window.removeEventListener('knome_playlist_updated', onPlaylistUpdated);
+            window.removeEventListener('storage', onStorage);
             clearInterval(intervalId);
         };
     }, []);
@@ -544,17 +575,23 @@ export default function Videos() {
         const finalVids = playlistVids.length > 0 ? playlistVids : vList.slice(0, 5);
 
         setActivePlaylist({ ...playlist, videos: finalVids });
-        setActiveVideo(finalVids[startVideoIndex] || finalVids[0] || vList[0]);
+        const targetVid = finalVids[startVideoIndex] || finalVids[0] || vList[0];
+        setActiveVideo(targetVid);
+        try {
+            sessionStorage.setItem('knome_active_video_id', String(targetVid.id));
+            sessionStorage.setItem('knome_active_video_data', JSON.stringify(targetVid));
+            window.history.replaceState(null, '', `/videos?id=${encodeURIComponent(targetVid.id)}`);
+        } catch (_) {}
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
 
 
 
-    // Auto-open video from notification URL params
+    // Auto-open video from notification URL params or saved session
     useEffect(() => {
         const params = new URLSearchParams(location.search);
-        const tId = params.get('id') || params.get('videoId') || location.state?.videoId;
+        const tId = params.get('id') || params.get('videoId') || location.state?.videoId || (typeof window !== 'undefined' ? sessionStorage.getItem('knome_active_video_id') : null);
         const tTitle = params.get('title') || location.state?.videoTitle;
         const tUrl = params.get('url') || location.state?.videoUrl;
 
@@ -594,9 +631,14 @@ export default function Videos() {
             }
             if (found) {
                 setActiveVideo(found);
+                try {
+                    sessionStorage.setItem('knome_active_video_id', String(found.id));
+                    sessionStorage.setItem('knome_active_video_data', JSON.stringify(found));
+                    window.history.replaceState(null, '', `/videos?id=${encodeURIComponent(found.id)}`);
+                } catch (_) {}
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             } else if (tTitle || tUrl) {
-                setActiveVideo({
+                const customVid = {
                     id: tId || `notif_${Date.now()}`,
                     title: tTitle || 'Shared Video',
                     description: 'Video shared with you.',
@@ -608,11 +650,12 @@ export default function Videos() {
                     sourceUrl: tUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
                     sourceType: 'File',
                     views: '0', likes: 0, date: 'Today'
-                });
+                };
+                setActiveVideo(customVid);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
         }
-    }, [location.search, location.state, videos, isLoading]);
+    }, [location.search, location.state, videos, isLoading, playlists]);
 
     // Helper: is video saved / bookmarked
     const isVideoSaved = useCallback((videoOrId) => {
@@ -740,7 +783,13 @@ export default function Videos() {
         if (!activeVideo) return;
         const initialLiked = activeVideo.isLiked ?? (localStorage.getItem(`knome_liked_video_${activeVideo.id}`) === 'true');
         setLiked(initialLiked);
-        setDisliked(localStorage.getItem(`knome_disliked_video_${activeVideo.id}`) === 'true');
+        const initialDisliked = localStorage.getItem(`knome_disliked_video_${activeVideo.id}`) === 'true';
+        setDisliked(initialDisliked);
+
+        // Dislikes Count
+        const savedDislikes = localStorage.getItem(`knome_video_dislikes_${activeVideo.id}`);
+        const initialDislikes = savedDislikes !== null ? parseInt(savedDislikes, 10) : (typeof activeVideo.dislikes === 'number' ? activeVideo.dislikes : (initialDisliked ? 1 : 0));
+        setDislikesCount(isNaN(initialDislikes) ? (initialDisliked ? 1 : 0) : initialDislikes);
 
         // Shares
         const savedShares = localStorage.getItem(`knome_video_shares_${activeVideo.id}`);
@@ -772,11 +821,17 @@ export default function Videos() {
                         if (summary.reactionSummary) {
                             const rSum = summary.reactionSummary;
                             const count = rSum.likeCount ?? rSum.totalCount ?? 0;
+                            const dislikeCnt = typeof rSum.dislikeCount === 'number' ? rSum.dislikeCount : (initialDisliked ? 1 : 0);
                             setLikesCount(count);
+                            setDislikesCount(dislikeCnt);
                             const isReactionLike = rSum.currentUserReactionType === 'Like';
+                            const isReactionDislike = rSum.currentUserReactionType === 'Dislike' || initialDisliked;
                             setLiked(isReactionLike);
+                            setDisliked(isReactionDislike);
                             localStorage.setItem(`knome_video_likes_${activeVideo.id}`, count.toString());
+                            localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, dislikeCnt.toString());
                             localStorage.setItem(`knome_liked_video_${activeVideo.id}`, isReactionLike ? 'true' : 'false');
+                            localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, isReactionDislike ? 'true' : 'false');
                         }
                         if (typeof summary.sharesCount === 'number') {
                             setShareCount(summary.sharesCount);
@@ -805,6 +860,10 @@ export default function Videos() {
             const savedLikes = localStorage.getItem(`knome_video_likes_${activeVideo.id}`);
             const initialLikes = savedLikes !== null ? parseInt(savedLikes, 10) : (typeof activeVideo.likes === 'number' && activeVideo.likes < 10000 ? activeVideo.likes : 0);
             setLikesCount(isNaN(initialLikes) ? 0 : initialLikes);
+
+            const savedDislikes = localStorage.getItem(`knome_video_dislikes_${activeVideo.id}`);
+            const initDislikes = savedDislikes !== null ? parseInt(savedDislikes, 10) : (typeof activeVideo.dislikes === 'number' ? activeVideo.dislikes : (initialDisliked ? 1 : 0));
+            setDislikesCount(isNaN(initDislikes) ? 0 : initDislikes);
         }
 
         setDescExpanded(false);
@@ -928,8 +987,31 @@ export default function Videos() {
     }, []);
 
     const handleSelectVideo = (v) => {
+        if (!v) return;
         setActiveVideo(v);
+        try {
+            sessionStorage.setItem('knome_active_video_id', String(v.id));
+            sessionStorage.setItem('knome_active_video_data', JSON.stringify(v));
+            window.history.replaceState(null, '', `/videos?id=${encodeURIComponent(v.id)}`);
+        } catch (_) {}
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleCloseVideo = (nextTab = null, nextFilter = null) => {
+        setActiveVideo(null);
+        try {
+            sessionStorage.removeItem('knome_active_video_id');
+            sessionStorage.removeItem('knome_active_video_data');
+            window.history.replaceState(null, '', '/videos');
+        } catch (_) {}
+        if (nextTab) {
+            setViewTab(nextTab);
+            try { sessionStorage.setItem('knome_videos_view_tab', nextTab); } catch (_) {}
+        }
+        if (nextFilter) {
+            setActiveFilter(nextFilter);
+            try { sessionStorage.setItem('knome_videos_filter', nextFilter); } catch (_) {}
+        }
     };
 
     const handleLike = async () => {
@@ -952,7 +1034,10 @@ export default function Videos() {
         if (nextLiked) {
             if (disliked) {
                 setDisliked(false);
+                const newDislikes = Math.max(0, dislikesCount - 1);
+                setDislikesCount(newDislikes);
                 localStorage.removeItem(`knome_disliked_video_${activeVideo.id}`);
+                localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, newDislikes.toString());
             }
             if (awardRuleKarma && uploaderAuthorId && !isSelf) {
                 awardRuleKarma(uploaderAuthorId, 'LIKE_RECEIVED');
@@ -1013,35 +1098,45 @@ export default function Videos() {
         if (!activeVideo) return;
         if (!disliked) {
             setDisliked(true);
+            const newDislikes = dislikesCount + 1;
+            setDislikesCount(newDislikes);
             localStorage.setItem(`knome_disliked_video_${activeVideo.id}`, 'true');
+            localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, newDislikes.toString());
+
+            let newLikeCount = likesCount;
             if (liked) {
                 setLiked(false);
-                const newCount = Math.max(0, likesCount - 1);
-                setLikesCount(newCount);
+                newLikeCount = Math.max(0, likesCount - 1);
+                setLikesCount(newLikeCount);
                 localStorage.removeItem(`knome_liked_video_${activeVideo.id}`);
-                localStorage.setItem(`knome_video_likes_${activeVideo.id}`, newCount.toString());
-                setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? { ...v, likes: newCount, isLiked: false } : v));
-
-                const reactionPayload = {
-                    contentType: 'Video',
-                    contentId: activeVideo.id,
-                    totalLikes: newCount,
-                    reactionsSummary: { likeCount: newCount, totalCount: newCount, currentUserReactionType: 'Dislike' }
-                };
-                window.dispatchEvent(new CustomEvent('knome:reaction-updated', { detail: reactionPayload }));
-                localStorage.setItem('knome_cross_tab_reaction', JSON.stringify({
-                    contentType: 'Video',
-                    contentId: String(activeVideo.id),
-                    totalLikes: newCount,
-                    action: 'Dislike',
-                    time: Date.now()
-                }));
-                window.dispatchEvent(new StorageEvent('storage', { key: 'knome_cross_tab_reaction' }));
+                localStorage.setItem(`knome_video_likes_${activeVideo.id}`, newLikeCount.toString());
+                setVideos(prev => prev.map(v => String(v.id) === String(activeVideo.id) ? { ...v, likes: newLikeCount, isLiked: false } : v));
             }
+
+            const reactionPayload = {
+                contentType: 'Video',
+                contentId: activeVideo.id,
+                totalLikes: newLikeCount,
+                reactionsSummary: { likeCount: newLikeCount, dislikeCount: newDislikes, totalCount: newLikeCount, currentUserReactionType: 'Dislike' }
+            };
+            window.dispatchEvent(new CustomEvent('knome:reaction-updated', { detail: reactionPayload }));
+            localStorage.setItem('knome_cross_tab_reaction', JSON.stringify({
+                contentType: 'Video',
+                contentId: String(activeVideo.id),
+                totalLikes: newLikeCount,
+                totalDislikes: newDislikes,
+                action: 'Dislike',
+                time: Date.now()
+            }));
+            window.dispatchEvent(new StorageEvent('storage', { key: 'knome_cross_tab_reaction' }));
             showToast('Feedback recorded (Disliked)');
         } else {
             setDisliked(false);
+            const newDislikes = Math.max(0, dislikesCount - 1);
+            setDislikesCount(newDislikes);
             localStorage.removeItem(`knome_disliked_video_${activeVideo.id}`);
+            localStorage.setItem(`knome_video_dislikes_${activeVideo.id}`, newDislikes.toString());
+            showToast('Dislike removed');
         }
     };
 
@@ -1112,7 +1207,7 @@ export default function Videos() {
         return matchesFilter && matchesSearch;
     });
 
-    const { visibleCount, reset: resetScrollLoading } = useScrollLoading(filteredVideos.length, 8, 8);
+    const { visibleCount, isFetchingMore, hasMore, sentinelRef, reset: resetScrollLoading } = useScrollLoading(filteredVideos.length, 8, 8, 300);
 
     useEffect(() => {
         resetScrollLoading();
@@ -1365,11 +1460,6 @@ export default function Videos() {
                     {/* Background effects */}
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,_var(--tw-gradient-stops))] from-red-100/60 dark:from-red-950/30 via-transparent to-transparent pointer-events-none" />
                     <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[500px] h-32 bg-red-400/10 dark:bg-red-500/10 blur-[80px] pointer-events-none" />
-                    
-                    {/* Light Streaks behind text */}
-                    <div className="absolute top-[35%] left-0 w-[60%] h-[1px] bg-gradient-to-r from-red-300/40 dark:from-red-400/20 to-transparent" />
-                    <div className="absolute top-[50%] left-0 w-[40%] h-[2px] bg-gradient-to-r from-rose-300/40 dark:from-rose-400/20 to-transparent blur-[1px]" />
-                    <div className="absolute top-[65%] left-0 w-[50%] h-[1px] bg-gradient-to-r from-orange-300/40 dark:from-orange-400/20 to-transparent" />
 
                     {/* Content Left */}
                     <div className="relative z-10 flex flex-col items-start max-w-3xl">
@@ -1409,12 +1499,12 @@ export default function Videos() {
                     <div className="flex flex-wrap items-center gap-2">
                         {/* Tab Switcher: Videos vs Playlists */}
                         <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
-                            <button onClick={() => { setViewTab('videos'); setActiveVideo(null); }}
+                            <button onClick={() => handleCloseVideo('videos')}
                                 className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${viewTab === 'videos' ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
                                 <span className="material-symbols-outlined text-[16px]">video_library</span>
                                 Videos ({filteredVideos.length})
                             </button>
-                            <button onClick={() => { setViewTab('playlists'); setActiveVideo(null); }}
+                            <button onClick={() => handleCloseVideo('playlists')}
                                 className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${viewTab === 'playlists' ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
                                 <span className="material-symbols-outlined text-[16px]">playlist_play</span>
                                 Playlists & Series ({filteredPlaylists.length})
@@ -1423,7 +1513,7 @@ export default function Videos() {
 
                         <div className="flex overflow-x-auto custom-scrollbar gap-1.5 p-1 rounded-xl">
                             {filters.map(f => (
-                                <button key={f} onClick={() => { setActiveFilter(f); setActiveVideo(null); }}
+                                <button key={f} onClick={() => handleCloseVideo(null, f)}
                                     className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border cursor-pointer ${
                                         activeFilter === f 
                                             ? 'bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-400 shadow-xs' 
@@ -1472,7 +1562,7 @@ export default function Videos() {
                                         <span>•</span>
                                         <span>{activeVideo.date || 'Today'}</span>
                                         <span>•</span>
-                                        <button onClick={() => { setActiveFilter(activeVideo.category || 'All'); setActiveVideo(null); }}
+                                        <button onClick={() => handleCloseVideo(null, activeVideo.category || 'All')}
                                             className="bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-600 dark:text-cyan-400 px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all cursor-pointer"
                                             title="Filter videos by this category">
                                             {activeVideo.category || 'General'}
@@ -1490,8 +1580,9 @@ export default function Videos() {
 
                                         {/* Dislike */}
                                         <button onClick={handleDislike}
-                                            className={`flex items-center gap-1 px-4 py-2 rounded-full text-[13px] font-bold transition-all cursor-pointer ${disliked ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
+                                            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-bold transition-all cursor-pointer ${disliked ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
                                             <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: disliked ? "'FILL' 1" : "'FILL' 0" }}>thumb_down</span>
+                                            <span>{dislikesCount}</span>
                                         </button>
 
                                         {/* Share */}
@@ -1600,7 +1691,7 @@ export default function Videos() {
                                             {activePlaylist.type || 'Playlist'}
                                         </span>
                                         <div className="flex items-center gap-2">
-                                            <button onClick={() => { setActiveVideo(null); setActivePlaylist(null); setViewTab('playlists'); }}
+                                            <button onClick={() => { setActivePlaylist(null); handleCloseVideo('playlists'); }}
                                                 className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5 cursor-pointer">
                                                 <span className="material-symbols-outlined text-[14px]">arrow_back</span>
                                                 All Series
@@ -1622,7 +1713,7 @@ export default function Videos() {
                                         {(activePlaylist.videos || []).map((pv, idx) => {
                                             const isPlaying = String(pv.id) === String(activeVideo?.id);
                                             return (
-                                                <div key={pv.id} onClick={() => setActiveVideo(pv)}
+                                                <div key={pv.id} onClick={() => handleSelectVideo(pv)}
                                                     className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-all ${isPlaying ? 'bg-indigo-500/20 border border-indigo-500/40 text-white' : 'hover:bg-slate-800/80 text-slate-300'}`}>
                                                     <span className="text-[11px] font-bold text-slate-400 w-4 text-center shrink-0">{idx + 1}</span>
                                                     <img src={pv.thumbnail} alt={pv.title} onError={(e) => { e.target.onerror = null; e.target.src = VIDEO_PLACEHOLDER_THUMBNAIL; }} className="w-12 aspect-video rounded-lg object-cover shrink-0" />
@@ -1640,7 +1731,7 @@ export default function Videos() {
 
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-sm font-black text-slate-900 dark:text-white">More Videos</h2>
-                                <button onClick={() => { setActiveVideo(null); setActivePlaylist(null); }}
+                                <button onClick={() => { setActivePlaylist(null); handleCloseVideo(); }}
                                     className="flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-cyan-500 transition-colors cursor-pointer">
                                     <span className="material-symbols-outlined text-[16px]">grid_view</span> All Videos
                                 </button>
@@ -1817,7 +1908,7 @@ export default function Videos() {
                     <div>
                         {/* Featured Video */}
                         {activeFilter === 'All' && !searchQuery && videos.length > 0 && (
-                            <section onClick={() => setActiveVideo(videos[0])}
+                            <section onClick={() => handleSelectVideo(videos[0])}
                                 className="relative rounded-2xl overflow-hidden mb-8 h-[380px] shadow-2xl group cursor-pointer border border-slate-200 dark:border-slate-800">
                                 <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" src={videos[0].thumbnail} alt="Featured" onError={(e) => { e.target.onerror = null; e.target.src = VIDEO_PLACEHOLDER_THUMBNAIL; }} />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent" />
@@ -1845,7 +1936,9 @@ export default function Videos() {
                             <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
                                 {activeFilter === 'All' ? 'All Learning Videos' : activeFilter}
                             </h2>
-                            <span className="text-xs font-bold text-slate-400">{filteredVideos.length} Videos</span>
+                            <span className="text-xs font-bold text-slate-400">
+                                Showing {Math.min(visibleCount, filteredVideos.length)} of {filteredVideos.length} Videos
+                            </span>
                         </div>
 
                         {isLoading ? (
@@ -1912,7 +2005,24 @@ export default function Videos() {
                                         </div>
                                     </div>
                                 ))}
-                                <ScrollLoadingIndicator isVisible={visibleCount < filteredVideos.length} text="Loading more videos on scroll..." />
+
+                                {/* Sentinel for progressive infinite scroll auto-triggering */}
+                                {hasMore && (
+                                    <div ref={sentinelRef} className="col-span-full h-10 w-full pointer-events-none opacity-0" aria-hidden="true" />
+                                )}
+
+                                {/* Progressive Loading Indicator when actively loading more videos on scroll */}
+                                {isFetchingMore && (
+                                    <ScrollLoadingIndicator isVisible={true} text="Loading more videos on scroll..." />
+                                )}
+
+                                {/* End-of-catalog status when all available videos have been progressively revealed */}
+                                {!hasMore && filteredVideos.length > 8 && (
+                                    <div className="col-span-full py-8 text-center flex items-center justify-center gap-2 text-slate-400 dark:text-slate-500 text-xs font-semibold animate-in fade-in duration-300">
+                                        <span className="material-symbols-outlined text-[18px] text-emerald-500">check_circle</span>
+                                        <span>All {filteredVideos.length} videos loaded</span>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

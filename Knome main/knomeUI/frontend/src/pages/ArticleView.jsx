@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useUser } from '../components/contexts/UserContext';
 import { useToast } from '../components/contexts/ToastContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
@@ -22,6 +22,7 @@ const REACTION_TYPES = {
 export default function ArticleView() {
     const location = useLocation();
     const navigate = useNavigate();
+    const routeParams = useParams();
     const { currentUser } = useUser();
     const { addToast } = useToast();
     const confirm = useConfirm();
@@ -31,9 +32,9 @@ export default function ArticleView() {
     const [sharingArticleModal, setSharingArticleModal] = useState(null);
     const [activeDocViewer, setActiveDocViewer] = useState(null);
     
-    // Read ?id=X query parameter
+    // Read route param /articles/:id or ?id=X query parameter
     const searchParams = new URLSearchParams(location.search);
-    const articleId = searchParams.get('id');
+    const articleId = routeParams?.id || searchParams.get('id');
     
     // Local state for fetched articles
     const [articles, setArticles] = useState([]);
@@ -86,7 +87,7 @@ export default function ArticleView() {
     }, []);
     
     // Find current article or fallback
-    const article = articles.find(art => art.id === articleId) || articles.find(art => art.id === '1') || articles[0];
+    const article = articles.find(art => String(art.id) === String(articleId)) || articles.find(art => String(art.id) === '1') || articles[0];
 
     const isSystemAdminOrAuthor = ['SYSADM', 'HRADM', 'SYSTEM ADMIN', 'HR ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
                                   ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin'].includes(currentUser?.roleName) || 

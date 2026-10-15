@@ -175,17 +175,12 @@ export default function Wiki() {
     };
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto pb-16">
+        <div className="w-full flex-1 min-w-0 flex flex-col gap-6 pb-16">
             {/* Header Hero Banner */}
-            <div className="relative rounded-2xl overflow-hidden mb-6 shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between text-left px-6 py-8 md:px-10 md:py-8 gap-6">
+            <div className="w-full relative rounded-2xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between text-left px-6 py-8 md:px-10 md:py-8 gap-6 shrink-0">
                 {/* Background effects */}
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,_var(--tw-gradient-stops))] from-indigo-100/70 dark:from-indigo-950/40 via-transparent to-transparent pointer-events-none" />
                 <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[500px] h-32 bg-indigo-500/15 dark:bg-indigo-500/20 blur-[80px] pointer-events-none" />
-
-                {/* Light Streaks behind text */}
-                <div className="absolute top-[35%] left-0 w-[60%] h-[1px] bg-gradient-to-r from-indigo-400/40 dark:from-indigo-400/20 to-transparent" />
-                <div className="absolute top-[50%] left-0 w-[40%] h-[2px] bg-gradient-to-r from-violet-400/40 dark:from-violet-400/20 to-transparent blur-[1px]" />
-                <div className="absolute top-[65%] left-0 w-[50%] h-[1px] bg-gradient-to-r from-purple-400/40 dark:from-purple-400/20 to-transparent" />
 
                 {/* Content Left */}
                 <div className="relative z-10 flex flex-col items-start max-w-3xl">
@@ -222,7 +217,7 @@ export default function Wiki() {
             </div>
 
             {/* Filters & Search Toolbar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 shadow-xs">
+            <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 shadow-xs shrink-0">
                 {/* Search box */}
                 <div className="relative flex-1">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">
@@ -274,13 +269,11 @@ export default function Wiki() {
                             <span className="material-symbols-outlined text-[14px]">close</span>
                         </button>
                     )}
-
-                    {/* Navigation Filter Pills (Uniform Boxed Pills Shifted Below Search Bar) */}
                 </div>
             </div>
 
             {/* Navigation Filter Pills (Uniform Boxed Pills Shifted Below Search Bar) */}
-            <div className="flex flex-wrap items-center gap-2 w-full mb-2 overflow-x-auto no-scrollbar">
+            <div className="w-full flex flex-wrap items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
                 {[
                     { id: 'all', label: 'All Wikis', icon: 'public' },
                     { id: 'my', label: 'My Wikis', icon: 'person' },
@@ -306,14 +299,15 @@ export default function Wiki() {
                 ))}
             </div>
 
-            {/* Wiki Grid / List */}
-            {isLoading ? (
-                <div className="py-20 flex flex-col items-center justify-center gap-3">
-                    <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
-                    <p className="text-xs font-semibold text-slate-400">Loading Wikis...</p>
-                </div>
-            ) : wikis.length === 0 ? (
-                <div className="py-20 text-center rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-850 p-8 space-y-4">
+            {/* Wiki Grid / List Container with Stable Min-Height */}
+            <div className="w-full min-h-[460px] flex flex-col flex-1">
+                {isLoading ? (
+                    <div className="min-h-[460px] flex flex-col items-center justify-center gap-3">
+                        <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
+                        <p className="text-xs font-semibold text-slate-400">Loading Wikis...</p>
+                    </div>
+                ) : wikis.length === 0 ? (
+                    <div className="min-h-[360px] flex flex-col items-center justify-center text-center rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-850 p-8 space-y-4">
                     <div className="w-16 h-16 mx-auto rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200/60 dark:border-indigo-800/60">
                         <span className="material-symbols-outlined text-3xl">menu_book</span>
                     </div>
@@ -635,6 +629,7 @@ export default function Wiki() {
                     </div>
                 </div>
             )}
+            </div>
 
             {/* Pagination Controls (WIKI-011) */}
             {activeTab !== 'recent' && totalCount > pageSize && (

@@ -152,6 +152,11 @@ public class UserMessageRepository : IUserMessageRepository
 
     public async Task<bool> AreUsersConnectedAsync(int userId1, int userId2)
     {
+        if (userId1 <= 0 || userId2 <= 0 || userId1 == userId2)
+        {
+            return false;
+        }
+
         var hasAcceptedRequest = await _context.ConnectionRequests
             .AnyAsync(cr =>
                 ((cr.SenderId == userId1 && cr.ReceiverId == userId2) ||
@@ -163,12 +168,12 @@ public class UserMessageRepository : IUserMessageRepository
             return true;
         }
 
-        var isFollower = await _context.Followers
-            .AnyAsync(f =>
-                (f.FollowerUserId == userId1 && f.FollowingUserId == userId2) ||
-                (f.FollowerUserId == userId2 && f.FollowingUserId == userId1));
+        var user1FollowsUser2 = await _context.Followers
+            .AnyAsync(f => f.FollowerUserId == userId1 && f.FollowingUserId == userId2);
+        var user2FollowsUser1 = await _context.Followers
+            .AnyAsync(f => f.FollowerUserId == userId2 && f.FollowingUserId == userId1);
 
-        return isFollower;
+        return user1FollowsUser2 && user2FollowsUser1;
     }
 
     public async Task<UserMessageReaction?> GetReactionAsync(long messageId, int userId, string reactionType)

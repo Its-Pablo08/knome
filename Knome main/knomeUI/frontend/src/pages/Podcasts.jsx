@@ -521,11 +521,6 @@ export default function Podcasts() {
                     {/* Background effects */}
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,_var(--tw-gradient-stops))] from-fuchsia-100/50 dark:from-fuchsia-900/20 via-transparent to-transparent pointer-events-none"></div>
                     <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[500px] h-32 bg-pink-400/10 dark:bg-pink-500/10 blur-[80px] pointer-events-none"></div>
-                    
-                    {/* Light Streaks behind text */}
-                    <div className="absolute top-[35%] left-0 w-[60%] h-[1px] bg-gradient-to-r from-fuchsia-300/40 dark:from-fuchsia-400/20 to-transparent"></div>
-                    <div className="absolute top-[50%] left-0 w-[40%] h-[2px] bg-gradient-to-r from-pink-300/40 dark:from-pink-400/20 to-transparent blur-[1px]"></div>
-                    <div className="absolute top-[65%] left-0 w-[50%] h-[1px] bg-gradient-to-r from-rose-300/40 dark:from-rose-400/20 to-transparent"></div>
 
                     {/* Content Left */}
                     <div className="relative z-10 flex flex-col items-start max-w-3xl">

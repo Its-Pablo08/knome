@@ -71,6 +71,8 @@ public static class ApplicationBuilderExtensions
                             ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
                             ctx.Context.Response.Headers.Append("Access-Control-Allow-Headers", "*");
                             ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+                            ctx.Context.Response.Headers.Append("Content-Disposition", "inline");
+                            ctx.Context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
                         }
                     });
                 }
@@ -97,6 +99,8 @@ public static class ApplicationBuilderExtensions
                         ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
                         ctx.Context.Response.Headers.Append("Access-Control-Allow-Headers", "*");
                         ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+                        ctx.Context.Response.Headers.Append("Content-Disposition", "inline");
+                        ctx.Context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
                     }
                 });
             }
@@ -119,6 +123,8 @@ public static class ApplicationBuilderExtensions
                 ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
                 ctx.Context.Response.Headers.Append("Access-Control-Allow-Headers", "*");
                 ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+                ctx.Context.Response.Headers.Append("Content-Disposition", "inline");
+                ctx.Context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
             }
         });
 

@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Knome — Enterprise Platform Documentation</title>
+<meta name="description" content="End-to-end documentation for Knome, the enterprise social collaboration and knowledge portal of MPOnline Limited.">
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm;
+          @bottom-center { content: "Knome — Enterprise Platform Documentation   |   Page " counter(page); font: 9pt 'Segoe UI', Arial, sans-serif; color: #64748b; } }
+  @page :first { margin: 0; @bottom-center { content: ""; } }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 10.5pt; line-height: 1.55; color: #1e293b; margin: 0; }
+  h1, h2, h3, h4 { color: #0f2a4a; line-height: 1.25; }
+  h2 { font-size: 21pt; margin: 0 0 6mm; padding-bottom: 3mm; border-bottom: 3px solid #0891b2; page-break-before: always; }
+  h2.first { page-break-before: auto; }
+  h3 { font-size: 14pt; margin: 8mm 0 3mm; color: #1d4ed8; }
+  h4 { font-size: 11.5pt; margin: 5mm 0 2mm; color: #0f2a4a; }
+  p { margin: 0 0 3mm; }
+  ul, ol { margin: 0 0 3mm 5mm; padding-left: 4mm; }
+  li { margin-bottom: 1mm; }
+  code { font-family: Consolas, 'Courier New', monospace; font-size: 9.2pt; background: #f1f5f9; padding: 0.4mm 1.2mm; border-radius: 3px; color: #0f2a4a; }
+  pre { font-family: Consolas, 'Courier New', monospace; font-size: 8.8pt; background: #0f172a; color: #e2e8f0; padding: 4mm; border-radius: 6px; overflow: hidden; white-space: pre-wrap; page-break-inside: avoid; margin: 0 0 4mm; }
+  pre .c { color: #94a3b8; } pre .k { color: #67e8f9; } pre .s { color: #fcd34d; }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 5mm; font-size: 9.4pt; page-break-inside: auto; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; }
+  th { background: #0f2a4a; color: #fff; text-align: left; padding: 2mm 2.5mm; font-weight: 600; }
+  td { padding: 1.8mm 2.5mm; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  tbody tr:nth-child(even) td { background: #f8fafc; }
+  .ok { color: #15803d; font-weight: 700; text-align: center; } .no { color: #94a3b8; text-align: center; } .part { color: #b45309; font-weight: 700; text-align: center; }
+  .callout { border-left: 4px solid #0891b2; background: #ecfeff; padding: 3mm 4mm; border-radius: 0 6px 6px 0; margin: 0 0 4mm; page-break-inside: avoid; }
+  .callout.warn { border-color: #ea580c; background: #fff7ed; }
+  .callout.danger { border-color: #dc2626; background: #fef2f2; }
+  .callout.tip { border-color: #16a34a; background: #f0fdf4; }
+  .callout b.h { display: block; margin-bottom: 1mm; color: #0f2a4a; }
+  .two { display: table; width: 100%; table-layout: fixed; border-spacing: 3mm 0; margin: 0 -3mm 4mm; page-break-inside: avoid; }
+  .two > div { display: table-cell; vertical-align: top; border: 1px solid #cbd5e1; border-radius: 8px; padding: 3mm 4mm; }
+  .two .user { background: #f0f9ff; border-color: #bae6fd; } .two .tech { background: #f8fafc; }
+  .two h5 { margin: 0 0 1.5mm; font-size: 9.5pt; text-transform: uppercase; letter-spacing: .06em; color: #0369a1; }
+  .two .tech h5 { color: #475569; }
+  .two ul { margin-bottom: 0; }
+  figure { margin: 0 0 5mm; page-break-inside: avoid; text-align: center; }
+  figcaption { font-size: 9pt; color: #64748b; margin-top: 1.5mm; font-style: italic; }
+  .chips span { display: inline-block; background: #e0f2fe; color: #075985; border-radius: 99px; padding: 0.4mm 3mm; font-size: 8.6pt; margin: 0 1mm 1mm 0; font-weight: 600; }
+  .stats { display: table; width: 100%; table-layout: fixed; border-spacing: 3mm 0; margin: 0 -3mm 5mm; }
+  .stats div { display: table-cell; text-align: center; background: linear-gradient(160deg, #0f2a4a, #1d4ed8); color: #fff; border-radius: 8px; padding: 3.5mm 1mm; }
+  .stats b { display: block; font-size: 19pt; line-height: 1.1; } .stats span { font-size: 8.4pt; opacity: .9; }
+  /* Cover */
+  .cover { height: 297mm; width: 210mm; background: linear-gradient(155deg, #071a33 0%, #0f2a4a 45%, #0e7490 100%); color: #fff; padding: 28mm 22mm; position: relative; page-break-after: always; overflow: hidden; }
+  .cover::before { content: ""; position: absolute; right: -40mm; top: -30mm; width: 150mm; height: 150mm; border-radius: 50%; background: radial-gradient(circle, rgba(34,211,238,.35), rgba(34,211,238,0) 65%); }
+  .cover::after { content: ""; position: absolute; left: -50mm; bottom: -50mm; width: 150mm; height: 150mm; border-radius: 50%; background: radial-gradient(circle, rgba(59,130,246,.35), rgba(59,130,246,0) 65%); }
+  .cover > * { position: relative; z-index: 1; }
+  .cover .badge { display: inline-block; border: 1px solid rgba(255,255,255,.45); border-radius: 99px; padding: 1.2mm 5mm; font-size: 9pt; letter-spacing: .14em; text-transform: uppercase; }
+  .cover h1 { font-size: 50pt; color: #fff; margin: 38mm 0 2mm; letter-spacing: -.02em; }
+  .cover .sub { font-size: 17pt; color: #a5f3fc; margin-bottom: 10mm; font-weight: 300; }
+  .cover .desc { font-size: 11.5pt; max-width: 135mm; opacity: .92; }
+  .cover .meta { position: absolute; left: 22mm; bottom: 24mm; font-size: 10pt; line-height: 1.8; }
+  .cover .meta b { color: #67e8f9; display: inline-block; width: 30mm; }
+  /* TOC */
+  .toc { columns: 1; list-style: none; margin: 0; padding: 0; }
+  .toc li { display: flex; align-items: baseline; border-bottom: 1px dotted #cbd5e1; padding: 1.4mm 0; font-size: 11pt; }
+  .toc li a { color: #0f2a4a; text-decoration: none; font-weight: 600; }
+  .toc li span.n { width: 11mm; color: #0891b2; font-weight: 700; }
+  .toc li small { color: #64748b; margin-left: auto; font-size: 9pt; }
+  /* SVG */
+  svg.fig { width: 100%; height: auto; display: block; }
+  .fig text { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; fill: #0f172a; }
+  .fig .t { font-weight: 700; } .fig .s { font-size: 10.5px; fill: #475569; } .fig .m { font-family: Consolas, monospace; font-size: 10.5px; }
+  .fig .h { font-size: 10px; font-weight: 700; fill: #64748b; letter-spacing: .08em; }
+  .fig .red { fill: #b91c1c; font-weight: 600; } .fig .grn { fill: #15803d; font-weight: 600; }
+  .fig .halo { paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+  .fig rect, .fig polygon { stroke-width: 1.4; }
+  .fig rect { rx: 7px; }
+  .b1 { fill: #eff6ff; stroke: #2563eb; } .b2 { fill: #ecfeff; stroke: #0891b2; } .b3 { fill: #f0fdf4; stroke: #16a34a; }
+  .b4 { fill: #fff7ed; stroke: #ea580c; } .b5 { fill: #fef2f2; stroke: #dc2626; } .b6 { fill: #f5f3ff; stroke: #7c3aed; }
+  .b7 { fill: #0f2a4a; stroke: #0f2a4a; } .b7 + text, .tw { fill: #fff !important; }
+  .band { fill: #f8fafc; stroke: #cbd5e1; stroke-dasharray: 5 4; }
+  .dash { stroke-dasharray: 6 4; }
+  .ln { stroke: #475569; stroke-width: 1.6; fill: none; marker-end: url(#ar); }
+  .lnd { stroke: #475569; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; marker-end: url(#ar); }
+  .lnr { stroke: #dc2626; stroke-width: 1.6; fill: none; marker-end: url(#arr); }
+  .lng { stroke: #16a34a; stroke-width: 1.6; fill: none; marker-end: url(#arg); }
+  .life { stroke: #94a3b8; stroke-width: 1.2; stroke-dasharray: 4 4; }
+  .rel { stroke: #64748b; stroke-width: 1.5; fill: none; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="ar"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker>
+  <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/></marker>
+  <marker id="arg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+</defs></svg>
+
+<!-- ============================ COVER ============================ -->
+<section class="cover">
+  <span class="badge">Enterprise Platform Documentation</span>
+  <h1>Knome</h1>
+  <div class="sub">Enterprise Social Collaboration &amp; Knowledge Portal</div>
+  <p class="desc">A complete guide to the architecture, modules, security model, APIs and setup of the Knome platform — written for developers, QA engineers, product managers, HR teams and new joiners.</p>
+  <div class="meta">
+    <div><b>Organization</b> MPOnline Limited</div>
+    <div><b>Product</b> Knome (Enterprise Social Network)</div>
+    <div><b>Document version</b> 1.0</div>
+    <div><b>Date</b> 14 October 2026</div>
+    <div><b>Audience</b> Engineering · Product · HR · Onboarding</div>
+  </div>
+</section>
+
+<!-- ============================ TOC ============================ -->
+<h2 class="first" style="page-break-before:auto">Table of Contents</h2>
+<ol class="toc">
+  <li><span class="n">1</span><a href="#s1">Executive Summary &amp; Architecture Overview</a><small>Purpose · big picture</small></li>
+  <li><span class="n">2</span><a href="#s2">Technology Stack</a><small>Backend · Frontend · Real-time</small></li>
+  <li><span class="n">3</span><a href="#s3">User Personas &amp; Role Matrix</a><small>Who can do what</small></li>
+  <li><span class="n">4</span><a href="#s4">Project Architecture &amp; Folder Structure</a><small>Backend · Frontend · Pipeline</small></li>
+  <li><span class="n">5</span><a href="#s5">Module-by-Module Walkthrough</a><small>12 modules, user view + technical view</small></li>
+  <li><span class="n">6</span><a href="#s6">Data Models &amp; Database Overview</a><small>ER diagram · key tables</small></li>
+  <li><span class="n">7</span><a href="#s7">Security, Privacy &amp; Encryption</a><small>JWT · AES-256-GCM · connection gating</small></li>
+  <li><span class="n">8</span><a href="#s8">API Reference</a><small>Grouped by module</small></li>
+  <li><span class="n">9</span><a href="#s9">Local Setup &amp; Developer Onboarding</a><small>Step-by-step guide</small></li>
+  <li><span class="n">10</span><a href="#s10">FAQ &amp; Troubleshooting</a><small>Common problems and fixes</small></li>
+  <li><span class="n">A</span><a href="#sA">Appendix — Glossary &amp; Feature Status</a><small>Terms · what is / is not implemented</small></li>
+</ol>
+
+<div class="callout" style="margin-top:8mm">
+  <b class="h">How to read this document</b>
+  <b>Non-technical readers</b> (managers, HR, new hires): read Sections 1, 3 and the blue “What users see” panels in Section 5. <br>
+  <b>Developers &amp; QA:</b> read everything; the grey “How it works” panels in Section 5 and Sections 4, 6, 7, 8 and 9 are written for you.
+</div>
+<div class="callout warn">
+  <b class="h">Accuracy notes — where this document differs from the original brief</b>
+  This document was written by inspecting the actual source code. A few items in the original brief differ from what is implemented:
+  <ul>
+    <li><b>Runtime:</b> the backend targets <b>.NET 10</b> (<code>net10.0</code>), not .NET 8. The frontend uses <b>React 19</b> and <b>Vite 8</b>, not React 18.</li>
+    <li><b>Roles:</b> the four roles in code are <b>Employee, Community Admin, HR Administrator, System Administrator</b>. There is no separate “Lead” role.</li>
+    <li><b>Database approach:</b> the EF Core models are <b>Database-First</b> (scaffolded from SQL Server), not Code-First. Some tables are created with SQL/PowerShell setup scripts.</li>
+    <li><b>Calling &amp; polls:</b> no <b>WebRTC audio/video calling</b> code and no <b>poll</b> feature were found in the repository. They are documented as <i>not implemented</i> (see Appendix) rather than described as if they existed.</li>
+    <li><b>Post reactions</b> are Like, Celebrate, Support and Heart. The six emoji reactions (👍 ❤️ 😂 😮 😢 🎉) belong to <b>direct messages</b>.</li>
+  </ul>
+</div>
+
+<!-- ============================ 1 ============================ -->
+<h2 id="s1">1. Executive Summary &amp; Architecture Overview</h2>
+
+<h3>1.1 What is Knome?</h3>
+<p><b>Knome</b> is MPOnline Limited’s internal <b>enterprise social network and knowledge portal</b>. It combines professional networking (similar to LinkedIn), long-form knowledge sharing (similar to Medium), short and long video (similar to YouTube) and peer recognition into one secure internal website.</p>
+
+<h3>1.2 Goals</h3>
+<ul>
+  <li><b>Connect people</b> across departments through profiles, follows and mutual connections.</li>
+  <li><b>Share knowledge</b> through posts, articles, wikis, videos, podcasts and short clips.</li>
+  <li><b>Communicate privately</b> with end-to-end-style encrypted one-to-one chat — restricted to connected colleagues only.</li>
+  <li><b>Organise teams</b> in public and private communities with admin-approved membership.</li>
+  <li><b>Recognise contribution</b> with Karma points, tiers and a leaderboard.</li>
+  <li><b>Broadcast</b> corporate announcements and govern the platform through an Admin Console, audit trail and feature switches.</li>
+</ul>
+
+<div class="stats">
+  <div><b>21</b><span>API controllers</span></div>
+  <div><b>50+</b><span>database entities</span></div>
+  <div><b>21</b><span>UI page modules</span></div>
+  <div><b>4</b><span>user roles</span></div>
+  <div><b>1</b><span>SignalR hub</span></div>
+  <div><b>3</b><span>background workers</span></div>
+</div>
+
+<h3>1.3 High-level architecture</h3>
+<p>Browsers talk to the ASP.NET Core API over REST (JSON + JWT bearer token) and keep a WebSocket open to the SignalR hub for live notifications, chat and presence. All business rules live in the API; data is stored in SQL Server and uploaded files in the API’s <code>wwwroot</code> folder.</p>
+
+<figure>
+<svg class="fig" viewBox="0 0 780 592" role="img" aria-label="Knome high-level architecture">
+  <rect class="b6" x="140" y="6" width="500" height="46"/>
+  <text class="t" x="390" y="27" text-anchor="middle">Employees · Community Admins · HR Administrators · System Administrators</text>
+  <text class="s" x="390" y="44" text-anchor="middle">Web browser on the corporate network</text>
+  <path class="ln" d="M390 52 V78"/>
+
+  <rect class="band" x="8" y="78" width="764" height="124"/>
+  <text class="h" x="20" y="94">PRESENTATION LAYER</text>
+  <rect class="b1" x="26" y="102" width="334" height="84"/>
+  <text class="t" x="193" y="124" text-anchor="middle">Knome Web App — React 19 + Vite 8</text>
+  <text class="s" x="193" y="144" text-anchor="middle">Pages · Contexts (User, Toast, Confirm) · Widgets</text>
+  <text class="s" x="193" y="160" text-anchor="middle">apiClient (REST) · realtimeMessenger (SignalR)</text>
+  <text class="s" x="193" y="176" text-anchor="middle">Tailwind CSS 4 · Lucide / Material icons</text>
+  <rect class="b1" x="378" y="102" width="196" height="84"/>
+  <text class="t" x="476" y="124" text-anchor="middle">EmployeeHub (:8081)</text>
+  <text class="s" x="476" y="146" text-anchor="middle">Companion employee portal</text>
+  <text class="s" x="476" y="162" text-anchor="middle">Role-approval status page</text>
+  <rect class="b1" x="592" y="102" width="162" height="84"/>
+  <text class="t" x="673" y="124" text-anchor="middle">Hosting</text>
+  <text class="s" x="673" y="146" text-anchor="middle">Dev server  :5173</text>
+  <text class="s" x="673" y="162" text-anchor="middle">IIS portal  :8080</text>
+
+  <path class="ln" d="M110 186 V304"/>
+  <text class="s halo" x="118" y="232">REST  /api  (JWT Bearer)</text>
+  <path class="ln" d="M290 186 V304"/>
+  <text class="s halo" x="298" y="256">WebSocket  /hubs</text>
+  <rect class="b4 dash" x="470" y="212" width="284" height="50" style="fill:#fffbeb"/>
+  <text class="t" x="612" y="232" text-anchor="middle">Optional edge layer</text>
+  <text class="s" x="612" y="249" text-anchor="middle">YARP API Gateway (100 req/min) · BFF</text>
+
+  <rect class="band" x="8" y="276" width="764" height="190"/>
+  <text class="h" x="20" y="292">APPLICATION LAYER — Knome.API (ASP.NET Core, net10.0, ports 5096 / 5095)</text>
+  <rect class="b2" x="26" y="304" width="170" height="58"/>
+  <text class="t" x="111" y="328" text-anchor="middle">Middleware &amp; Filters</text><text class="s" x="111" y="346" text-anchor="middle">errors · headers · limits</text>
+  <rect class="b2" x="212" y="304" width="150" height="58"/>
+  <text class="t" x="287" y="328" text-anchor="middle">Controllers ×21</text><text class="s" x="287" y="346" text-anchor="middle">thin HTTP endpoints</text>
+  <rect class="b2" x="378" y="304" width="184" height="58"/>
+  <text class="t" x="470" y="328" text-anchor="middle">Services</text><text class="s" x="470" y="346" text-anchor="middle">all business rules</text>
+  <rect class="b2" x="578" y="304" width="176" height="58"/>
+  <text class="t" x="666" y="328" text-anchor="middle">Repositories + EF Core</text><text class="s" x="666" y="346" text-anchor="middle">data access only</text>
+  <path class="ln" d="M196 333 H212"/><path class="ln" d="M362 333 H378"/><path class="ln" d="M562 333 H578"/>
+
+  <rect class="b3" x="26" y="382" width="262" height="70"/>
+  <text class="t" x="157" y="404" text-anchor="middle">NotificationHub (SignalR)</text>
+  <text class="s" x="157" y="422" text-anchor="middle">/hubs/notifications</text><text class="s" x="157" y="438" text-anchor="middle">alerts · presence · typing · live chat</text>
+  <rect class="b3" x="304" y="382" width="230" height="70"/>
+  <text class="t" x="419" y="404" text-anchor="middle">Background workers</text>
+  <text class="s" x="419" y="422" text-anchor="middle">JobExpiry · ScheduledPost</text><text class="s" x="419" y="438" text-anchor="middle">DataArchival</text>
+  <rect class="b3" x="550" y="382" width="204" height="70"/>
+  <text class="t" x="652" y="404" text-anchor="middle">Security services</text>
+  <text class="s" x="652" y="422" text-anchor="middle">JWT · BCrypt · RBAC</text><text class="s" x="652" y="438" text-anchor="middle">AES-256-GCM message crypto</text>
+
+  <rect class="band" x="8" y="480" width="764" height="104"/>
+  <text class="h" x="20" y="496">DATA &amp; INTEGRATION</text>
+  <path class="ln" d="M133 466 V506"/><path class="ln" d="M349 466 V506"/><path class="ln" d="M535 466 V506"/><path class="ln" d="M690 466 V506"/>
+  <rect class="b7" x="26" y="506" width="214" height="66"/>
+  <text class="t tw" x="133" y="530" text-anchor="middle">SQL Server — “Knome” DB</text><text class="s tw" x="133" y="548" text-anchor="middle" style="fill:#cbd5e1">50+ entities · EF Core (DB-first)</text>
+  <rect class="b1" x="256" y="506" width="186" height="66"/>
+  <text class="t" x="349" y="530" text-anchor="middle">File storage</text><text class="s" x="349" y="548" text-anchor="middle">wwwroot uploads</text>
+  <rect class="b6" x="458" y="506" width="154" height="66"/>
+  <text class="t" x="535" y="530" text-anchor="middle">MPO OIDC</text><text class="s" x="535" y="548" text-anchor="middle">identity token endpoint</text>
+  <rect class="b6" x="628" y="506" width="126" height="66"/>
+  <text class="t" x="691" y="530" text-anchor="middle">SMTP / E-mail</text><text class="s" x="691" y="548" text-anchor="middle">welcome &amp; alerts</text>
+</svg>
+<figcaption>Figure 1 — Knome system architecture (dashed orange box = optional layer, not required for local development).</figcaption>
+</figure>
+
+<!-- ============================ 2 ============================ -->
+<h2 id="s2">2. Technology Stack</h2>
+<table>
+<thead><tr><th style="width:24%">Layer</th><th style="width:30%">Technology</th><th>Why it is used / notes</th></tr></thead>
+<tbody>
+<tr><td><b>Backend runtime</b></td><td>ASP.NET Core Web API, <b>.NET 10</b> (<code>net10.0</code>), C#</td><td>Controllers → Services → Repositories pattern; nullable reference types; file-scoped namespaces.</td></tr>
+<tr><td><b>Database</b></td><td>Microsoft SQL Server 2022+</td><td>Single database named <code>Knome</code>. Core tables are scaffolded Database-First; messaging, wiki and clips tables are created by SQL/PowerShell scripts.</td></tr>
+<tr><td><b>ORM</b></td><td>Entity Framework Core (<code>KnomeDbContext</code>)</td><td>Generated models in <code>Models/</code> — avoid hand-editing; re-scaffold when the schema changes.</td></tr>
+<tr><td><b>Real-time</b></td><td>ASP.NET Core <b>SignalR</b> (WebSockets)</td><td>One hub (<code>/hubs/notifications</code>) carries notifications, online presence, typing indicators and live chat delivery.</td></tr>
+<tr><td><b>Authentication</b></td><td>JWT Bearer (HS256) + optional MPO OIDC token</td><td>Default token lifetime 480 minutes; passwords hashed with BCrypt; login endpoint rate limited.</td></tr>
+<tr><td><b>Message privacy</b></td><td>AES-256-GCM</td><td>Each message gets a random 12-byte nonce and a 16-byte authentication tag; key versioning supports key rotation.</td></tr>
+<tr><td><b>Validation &amp; mapping</b></td><td>FluentValidation, AutoMapper</td><td>DTOs are validated by a global filter before reaching controllers.</td></tr>
+<tr><td><b>Logging</b></td><td>Serilog (console + rolling file)</td><td>Custom <code>PiiScrubbingEnricher</code> redacts passwords, tokens and secrets.</td></tr>
+<tr><td><b>API docs</b></td><td>Swagger / OpenAPI (Swashbuckle)</td><td>Interactive documentation with JWT “Authorize” support.</td></tr>
+<tr><td><b>Frontend</b></td><td><b>React 19</b>, React Router 7, <b>Vite 8</b></td><td>Single-page application; dev server on port 5173 proxies <code>/api</code> to the backend.</td></tr>
+<tr><td><b>Styling &amp; UI</b></td><td>Tailwind CSS 4 + custom CSS, Framer Motion, Lucide React, Material Symbols, Three.js (3D widgets)</td><td>Dark/light themes, glass-style cards, micro-animations.</td></tr>
+<tr><td><b>Frontend real-time</b></td><td><code>@microsoft/signalr</code> 10</td><td>Wrapped by <code>realtimeMessenger.js</code> and the Navbar notification listener.</td></tr>
+<tr><td><b>Edge (optional)</b></td><td>YARP reverse proxy (<code>Gateway/</code>) and Node BFF (<code>Bff/</code>)</td><td>Rate limiting (100 req/min) and CORS for non-local deployments.</td></tr>
+<tr><td><b>Hosting</b></td><td>IIS (ports 8080 / 8081) and local dev servers</td><td>Deployment helpers: <code>SETUP_IIS.ps1</code>, <code>UPDATE_IIS.ps1</code>, <code>IIS_DEPLOYMENT_GUIDE.md</code>.</td></tr>
+</tbody></table>
+
+<!-- ============================ 3 ============================ -->
+<h2 id="s3">3. User Personas &amp; Role Matrix</h2>
+<h3>3.1 Personas</h3>
+<table>
+<thead><tr><th style="width:22%">Role</th><th style="width:30%">Who they are</th><th>Typical goals on Knome</th></tr></thead>
+<tbody>
+<tr><td><b>Employee</b></td><td>Every MPOnline staff member. Everyone starts here.</td><td>Build a profile, follow and connect with colleagues, publish content, join communities, chat, earn Karma.</td></tr>
+<tr><td><b>Community Admin</b></td><td>An employee entrusted with running one or more communities.</td><td>Approve join requests, curate members, pin posts, maintain rules/FAQ and community files.</td></tr>
+<tr><td><b>HR Administrator</b></td><td>HR operations staff.</td><td>Post and manage job openings, broadcast company-wide announcements, approve new-community proposals, manage any community, view HR Analytics. Has no Admin Console link.</td></tr>
+<tr><td><b>System Administrator</b></td><td>Platform owner / IT governance. Governs the platform rather than creating content.</td><td>Admin Console: user and role management, global suspensions, moderation queue, audit trail, feature switches and restricted keywords. Also sees HR Analytics. Cannot create feed posts and is exempt from Karma.</td></tr>
+</tbody></table>
+
+<h3>3.2 Role matrix (as seen on the website)</h3>
+<table>
+<thead><tr><th style="width:44%">Capability</th><th>Employee</th><th>Community Admin</th><th>HR Admin</th><th>System Admin</th></tr></thead>
+<tbody>
+<tr><td>Sign in, edit own profile (bio, skills, photo, privacy toggles)</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Create feed posts (Create Post box / button)</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td><td class="no">— (hidden)</td></tr>
+<tr><td>Publish articles, wikis, videos, podcasts, clips</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Earn Karma points and tiers</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td><td class="no">— (exempt)</td></tr>
+<tr><td>Employee-level tools: Home, Communities, People, Saved, Openings (view/apply)</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Sidebar: Admin Console link</td><td class="no">—</td><td class="no">—</td><td class="no">— (hidden)</td><td class="ok">✔</td></tr>
+<tr><td>Sidebar: HR Analytics link</td><td class="no">—</td><td class="no">—</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Admin Console: user and role management, global suspend / reinstate</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="ok">✔</td></tr>
+<tr><td>Admin Console: moderation queue (review flagged reports)</td><td class="no">—</td><td class="part">own community</td><td class="no">—</td><td class="ok">✔</td></tr>
+<tr><td>Admin Console: audit trail, feature switches, restricted keywords</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="ok">✔</td></tr>
+<tr><td>Edit role scope text and FAQs in the in-app FAQ Handbook</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="ok">✔</td></tr>
+<tr><td>React, comment, share, bookmark, report content</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Follow, send/accept connection requests, chat with connections</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Propose / create a community</td><td class="part">✔ (needs approval)</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Approve new-community proposals (review queue)</td><td class="no">—</td><td class="no">—</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Manage a community: approve members, pin posts (max 3), rules / FAQ / files, add members</td><td class="no">—</td><td class="ok">✔ (assigned communities)</td><td class="ok">✔ (any)</td><td class="ok">✔ (any)</td></tr>
+<tr><td>Suspend a member inside a community</td><td class="no">—</td><td class="ok">✔ (own)</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Post / edit / close job openings</td><td class="no">—</td><td class="no">—</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Send company-wide HR broadcast banners</td><td class="no">—</td><td class="no">—</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Manage videos / podcasts of others (admin tools)</td><td class="no">—</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+<tr><td>Follow, send/accept connection requests, chat with connections (the website blocks chat until connected)</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td><td class="ok">✔</td></tr>
+</tbody></table>
+<p style="font-size:9pt;color:#64748b">This matrix follows what each role actually sees and can do in the web UI (sidebar, Admin Console, buttons and the in-app role manuals), not just what the API allows. Some API endpoints are broader than the UI: user suspension, audit log and moderation endpoints also accept HR Administrator, but HR has no Admin Console link in the website. Roles are stored as Employee, Community Admin, HR Administrator and System Administrator (codes CADM, HRADM, SYSADM in the UI).</p>
+
+<!-- ============================ 4 ============================ -->
+<h2 id="s4">4. Project Architecture &amp; Folder Structure</h2>
+<h3>4.1 Repository layout</h3>
+<pre>Knome main/
+├── Backend/Knome.API/        <span class="c"># ASP.NET Core API (the heart of the system)</span>
+├── knomeUI/frontend/         <span class="c"># React + Vite single-page application</span>
+├── Gateway/Knome.Gateway/    <span class="c"># Optional YARP reverse proxy / API gateway</span>
+├── Bff/knome-bff/            <span class="c"># Optional Backend-for-Frontend</span>
+├── Documentation/            <span class="c"># FRDs, architecture, audits, this document</span>
+├── START_KNOME.bat / .ps1    <span class="c"># One-click local launcher</span>
+├── SETUP_*_DB.ps1 / *.sql    <span class="c"># Database helper scripts (wiki, clips, messages …)</span>
+├── SETUP_IIS.ps1 / UPDATE_IIS.ps1   <span class="c"># IIS deployment</span>
+└── README.md, AGENTS.md, CLAUDE.md  <span class="c"># Engineering rules &amp; onboarding</span></pre>
+
+<h3>4.2 Backend structure (<code>Backend/Knome.API</code>)</h3>
+<table>
+<thead><tr><th style="width:24%">Folder</th><th>Responsibility</th></tr></thead>
+<tbody>
+<tr><td><code>Controllers/</code></td><td>21 thin controllers (Auth, User, Post, Article, Video, Podcast, Clips, Wiki, Community, Interaction, Feed, Karma, Search, Messages, Notifications, Jobs, Analytics, AuditLog, SystemSettings, Media, Abbreviations). They route HTTP, call a service and return an <code>ApiResponse&lt;T&gt;</code>.</td></tr>
+<tr><td><code>Services/</code></td><td>Business rules: authorization checks, ranking, notifications, encryption, connection gating, Karma awarding. Nothing else contains business logic.</td></tr>
+<tr><td><code>Repositories/</code> + <code>Interfaces/</code></td><td>Database access only (EF Core queries). Every service depends on an interface.</td></tr>
+<tr><td><code>Models/</code> + <code>Data/</code></td><td>Scaffolded entities (51 files) and <code>KnomeDbContext</code>.</td></tr>
+<tr><td><code>DTOs/</code> + <code>Mapping/</code> + <code>Validators/</code></td><td>Request/response shapes, AutoMapper profiles, FluentValidation rules.</td></tr>
+<tr><td><code>Hubs/</code></td><td><code>NotificationHub</code> — SignalR for alerts, presence, typing and live chat.</td></tr>
+<tr><td><code>Background/</code></td><td><code>JobExpiryHostedService</code>, <code>ScheduledPostHostedService</code>, <code>DataArchivalHostedService</code>.</td></tr>
+<tr><td><code>Middleware/</code>, <code>Filters/</code>, <code>Extensions/</code></td><td>Exception handling, security headers, validation filter, DI and pipeline wiring (<code>AddInfrastructure</code> / <code>UseInfrastructure</code>).</td></tr>
+<tr><td><code>Constants/</code>, <code>Configuration/</code>, <code>Exceptions/</code>, <code>Logging/</code>, <code>Responses/</code></td><td>Roles, notification types, Karma constants, strongly-typed settings, domain exceptions, PII-scrubbing logger, response envelopes.</td></tr>
+</tbody></table>
+
+<h3>4.3 Request pipeline</h3>
+<figure>
+<svg class="fig" viewBox="0 0 780 300" role="img" aria-label="Request pipeline">
+  <rect class="b6" x="15" y="20" width="130" height="50"/><text class="t" x="80" y="49" text-anchor="middle">HTTP request</text>
+  <rect class="b2" x="170" y="20" width="130" height="50"/><text class="t" x="235" y="42" text-anchor="middle">Exception</text><text class="s" x="235" y="58" text-anchor="middle">middleware</text>
+  <rect class="b2" x="325" y="20" width="130" height="50"/><text class="t" x="390" y="42" text-anchor="middle">Security</text><text class="s" x="390" y="58" text-anchor="middle">headers · HTTPS</text>
+  <rect class="b2" x="480" y="20" width="130" height="50"/><text class="t" x="545" y="49" text-anchor="middle">CORS</text>
+  <rect class="b2" x="635" y="20" width="130" height="50"/><text class="t" x="700" y="42" text-anchor="middle">Rate limiter</text><text class="s" x="700" y="58" text-anchor="middle">login: 30 / min / IP</text>
+  <path class="ln" d="M145 45 H170"/><path class="ln" d="M300 45 H325"/><path class="ln" d="M455 45 H480"/><path class="ln" d="M610 45 H635"/>
+  <path class="ln" d="M700 70 V95 H80 V120"/>
+  <rect class="b1" x="15" y="120" width="130" height="50"/><text class="t" x="80" y="142" text-anchor="middle">JWT</text><text class="s" x="80" y="158" text-anchor="middle">authentication</text>
+  <rect class="b1" x="170" y="120" width="130" height="50"/><text class="t" x="235" y="142" text-anchor="middle">RBAC</text><text class="s" x="235" y="158" text-anchor="middle">authorization</text>
+  <rect class="b1" x="325" y="120" width="130" height="50"/><text class="t" x="390" y="142" text-anchor="middle">Validation filter</text><text class="s" x="390" y="158" text-anchor="middle">FluentValidation</text>
+  <rect class="b3" x="480" y="120" width="130" height="50"/><text class="t" x="545" y="142" text-anchor="middle">Controller</text><text class="s" x="545" y="158" text-anchor="middle">routes the request</text>
+  <rect class="b3" x="635" y="120" width="130" height="50"/><text class="t" x="700" y="142" text-anchor="middle">Service</text><text class="s" x="700" y="158" text-anchor="middle">business rules</text>
+  <path class="ln" d="M145 145 H170"/><path class="ln" d="M300 145 H325"/><path class="ln" d="M455 145 H480"/><path class="ln" d="M610 145 H635"/>
+  <path class="ln" d="M700 170 V195 H80 V220"/>
+  <rect class="b3" x="15" y="220" width="130" height="50"/><text class="t" x="80" y="242" text-anchor="middle">Repository</text><text class="s" x="80" y="258" text-anchor="middle">data access</text>
+  <rect class="b7" x="170" y="220" width="130" height="50"/><text class="t tw" x="235" y="242" text-anchor="middle">EF Core</text><text class="s tw" x="235" y="258" text-anchor="middle" style="fill:#cbd5e1">KnomeDbContext</text>
+  <rect class="b7" x="325" y="220" width="130" height="50"/><text class="t tw" x="390" y="249" text-anchor="middle">SQL Server</text>
+  <rect class="b6" x="480" y="220" width="285" height="50"/><text class="t" x="622" y="242" text-anchor="middle">ApiResponse&lt;T&gt; envelope</text><text class="s" x="622" y="258" text-anchor="middle">{ success, message, data } returned to the client</text>
+  <path class="ln" d="M145 245 H170"/><path class="ln" d="M300 245 H325"/><path class="lnd" d="M455 245 H480"/>
+</svg>
+<figcaption>Figure 2 — Every API call passes through the same ordered pipeline.</figcaption>
+</figure>
+
+<h3>4.4 Frontend structure (<code>knomeUI/frontend/src</code>)</h3>
+<table>
+<thead><tr><th style="width:24%">Folder / file</th><th>Contents</th></tr></thead>
+<tbody>
+<tr><td><code>pages/</code></td><td>Route-level screens: Dashboard, Posts, Articles/ArticleView, Videos, Podcasts, Clips, Wiki/WikiView, Communities/CommunityView, Network, Profile, Messages, Search, SavedContent, Jobs, KarmaHistory, HRAnalytics, AdminConsole, Login (+ <code>auth/</code>).</td></tr>
+<tr><td><code>components/layout/</code></td><td>Navbar (notification bell, search, SignalR listener), Sidebar, Layout shell.</td></tr>
+<tr><td><code>components/contexts/</code></td><td>React Contexts: <b>UserContext</b> (current user, roster, Karma), <b>ToastContext</b>, <b>ConfirmDialogContext</b>.</td></tr>
+<tr><td><code>components/widgets/</code>, <code>modals/</code>, <code>ui/</code>, <code>video/</code>, <code>3d/</code></td><td>PostCard, share cards, upload modals, notification toast and settings modal, video player, 3D visuals.</td></tr>
+<tr><td><code>utils/apiClient.js</code> / <code>apiService.js</code></td><td>HTTP client (token injection, caching, base-URL discovery for ports 5096/5095) and one API object per module (<code>userApi</code>, <code>messagesApi</code>, <code>notificationsApi</code>, <code>communitiesApi</code> …).</td></tr>
+<tr><td><code>utils/realtimeMessenger.js</code></td><td>SignalR connection management for chat, presence and typing.</td></tr>
+<tr><td><code>utils/systemConfig.js</code></td><td>Reads platform feature switches so pages can hide disabled modules.</td></tr>
+<tr><td><code>utils/karmaEngine.js</code>, <code>notificationHelpers.js</code>, <code>restrictedWords.js</code>, <code>sanitizeHtml.js</code></td><td>Karma tier maths, notification mapping/preferences, client-side keyword screening, HTML sanitising.</td></tr>
+</tbody></table>
+
+<!-- ============================ 5 ============================ -->
+<h2 id="s5">5. Module-by-Module Walkthrough</h2>
+<p>Each module has a <b>blue panel</b> (what a user experiences) and a <b>grey panel</b> (how it is built).</p>
+
+<h3>5.1 Authentication, Roles &amp; Account Status</h3>
+<div class="two">
+<div class="user"><h5>What users see</h5><ul>
+<li>Sign in with Employee ID (or e-mail) and password.</li>
+<li>First sign-in creates a pending role request and sends a welcome e-mail.</li>
+<li>Suspended or inactive accounts are refused with a clear message.</li>
+<li>Admins see an Admin Console tab for role requests.</li></ul></div>
+<div class="tech"><h5>How it works</h5><ul>
+<li><code>AuthService.LoginAsync</code> looks the user up, auto-syncing from EmployeeHub if unknown.</li>
+<li>Password checked against the local BCrypt hash, falling back to the MPO OIDC token endpoint.</li>
+<li>A JWT carrying the role claims is issued (default 480 min). <code>/api/auth/me</code> returns the current user.</li>
+<li><code>[Authorize(Roles = …)]</code> attributes enforce RBAC.</li></ul></div>
+</div>
+<figure>
+<svg class="fig" viewBox="0 0 780 600" role="img" aria-label="Login and role approval flow">
+  <rect class="b6" x="270" y="8" width="240" height="40"/><text class="t" x="390" y="32" text-anchor="middle">Employee enters ID + password</text>
+  <path class="ln" d="M390 48 V68"/>
+  <rect class="b1" x="270" y="68" width="240" height="44"/><text class="t" x="390" y="88" text-anchor="middle">Look up user</text><text class="s" x="390" y="103" text-anchor="middle">by Employee ID or e-mail</text>
+  <path class="ln" d="M390 112 V132"/>
+  <polygon class="b4" points="390,132 500,167 390,202 280,167"/><text class="t" x="390" y="171" text-anchor="middle">User found?</text>
+  <path class="ln" d="M500 167 H590"/><text class="s halo" x="520" y="160">No</text>
+  <rect class="b2" x="590" y="143" width="170" height="48"/><text class="t" x="675" y="163" text-anchor="middle">Sync profile from</text><text class="t" x="675" y="179" text-anchor="middle">EmployeeHub DB, retry</text>
+  <path class="ln" d="M675 143 V90 H510"/>
+  <path class="ln" d="M390 202 V228"/><text class="s halo" x="398" y="219">Yes</text>
+  <polygon class="b4" points="390,228 510,265 390,302 270,265"/><text class="t" x="390" y="262" text-anchor="middle">Active and not</text><text class="t" x="390" y="278" text-anchor="middle">suspended?</text>
+  <path class="lnr" d="M510 265 H590"/><text class="s halo" x="525" y="258">No</text>
+  <rect class="b5" x="590" y="241" width="170" height="48"/><text class="t" x="675" y="261" text-anchor="middle">Rejected: account</text><text class="t" x="675" y="277" text-anchor="middle">suspended (400)</text>
+  <path class="ln" d="M390 302 V330"/><text class="s halo" x="398" y="320">Yes</text>
+  <rect class="b1" x="250" y="330" width="280" height="50"/><text class="t" x="390" y="351" text-anchor="middle">Verify password</text><text class="s" x="390" y="368" text-anchor="middle">local BCrypt hash → else MPO OIDC token</text>
+  <path class="ln" d="M390 380 V408"/>
+  <rect class="b1" x="250" y="408" width="280" height="56"/><text class="t" x="390" y="430" text-anchor="middle">Default “Employee” role if none</text><text class="s" x="390" y="446" text-anchor="middle">first login: RoleRequest (Pending),</text><text class="s" x="390" y="458" text-anchor="middle">notify admins, welcome e-mail</text>
+  <rect class="b6" x="590" y="414" width="170" height="44"/><text class="t" x="675" y="433" text-anchor="middle">Admin Console</text><text class="s" x="675" y="448" text-anchor="middle">approve / reject role</text>
+  <path class="lnd" d="M590 436 H530"/>
+  <path class="ln" d="M390 464 V492"/>
+  <rect class="b3" x="250" y="492" width="280" height="44"/><text class="t" x="390" y="512" text-anchor="middle">Issue JWT (roles claim, 480 min)</text><text class="s" x="390" y="527" text-anchor="middle">returned as LoginResponse</text>
+  <path class="ln" d="M390 536 V560"/>
+  <rect class="b3" x="230" y="560" width="320" height="34"/><text class="t" x="390" y="582" text-anchor="middle">SPA stores token · Bearer on every call · joins SignalR</text>
+</svg>
+<figcaption>Figure 3 — Sign-in, first-login role request and token issue.</figcaption>
+</figure>
+
+<h3>5.2 Newsfeed &amp; Posts</h3>
+<div class="two">
+<div class="user"><h5>What users see</h5><ul>
+<li>A dashboard feed mixing posts, articles, videos and podcasts, with a “hot” ranking view.</li>
+<li>Quick posts (up to 400 characters) with images, documents and @mentions; images appear as a grid.</li>
+<li>Schedule a post to publish later; saved drafts.</li>
+<li>Text is screened against the restricted-keyword list before publishing.</li></ul></div>
+<div class="tech"><h5>How it works</h5><ul>
+<li><code>/api/posts</code> (CRUD, “my”, per-user) and <code>/api/feed</code> (<code>home</code>, <code>hot</code>, <code>dashboard</code>).</li>
+<li>Post fields include <code>AudienceType</code>, <code>Status</code>, <code>ScheduledDate</code>, <code>PublishedDate</code>; attachments in <code>PostAttachments</code>.</li>
+<li><code>ScheduledPostHostedService</code> publishes due posts and notifies followers.</li>
+<li>Hot score ≈ (Reactions + Comments×2 + Shares×3) ÷ time-decay, cached in <code>HotPostsScoreCache</code>.</li>
+<li>Mentions create <code>Mention</code> notifications.</li></ul></div>
+</div>
+
+<h3>5.3 Social Engagement</h3>
+<div class="two">
+<div class="user"><h5>What users see</h5><ul>
+<li>React to posts with <b>Like, Celebrate, Support or Heart</b>.</li>
+<li>Comment, reply to comments (nested), edit and delete own comments.</li>
+<li>Bookmark content to a “Saved” page; share inside Knome; report inappropriate content.</li></ul></div>
+<div class="tech"><h5>How it works</h5><ul>
+<li><code>/api/interactions/{contentType}/{contentId}/…</code> — one generic API for posts, articles, videos, podcasts, wikis and clips: <code>comments</code>, <code>react</code>, <code>reactions</code>, <code>share</code>, <code>bookmark</code>, <code>report</code>, <code>summary</code>.</li>
+<li>Reports land in a moderation queue (<code>reports</code>, <code>reports/pending</code>, <code>reports/{id}/resolve</code>).</li>
+<li>Every action publishes a notification and may award Karma.</li></ul></div>
+</div>
+
+<h3>5.4 Enterprise Communities</h3>
+<div class="two">
+<div class="user"><h5>What users see</h5><ul>
+<li>Browse public and private communities by category; request to join private ones.</li>
+<li>Community feed, member list, rules and FAQ, and a shared files library.</li>
+<li>Admins approve or reject join requests, add/remove members, promote admins and pin posts.</li></ul></div>
+<div class="tech"><h5>How it works</h5><ul>
+<li><code>Community</code> (type, <code>ApprovalStatus</code>, rules, FAQ) and <code>CommunityMember</code> (<code>MemberType</code>, <code>Status</code>, decision audit fields).</li>
+<li>Endpoints: <code>join</code>, <code>leave</code>, <code>members</code>, <code>members/{id}/decide</code>, <code>admins/{id}</code>, <code>posts</code>, <code>posts/{id}/pin</code>, <code>files</code>.</li>
+<li>Safeguards: a community cannot lose its last admin; at most three pinned posts.</li>
+<li>Each decision notifies the user (<code>CommunityJoin</code>, <code>CommunityInvite</code>).</li></ul></div>
+</div>
+
+<h3>5.5 Direct Messaging (connection-gated &amp; encrypted)</h3>
+<div class="two">
+<div class="user"><h5>What users see</h5><ul>
+<li>One-to-one chat with live delivery, typing indicators, online status and read receipts.</li>
+<li>Attachments, emoji picker, replies, edit, delete-for-me / delete-for-everyone, and six emoji reactions (👍 ❤️ 😂 😮 😢 🎉).</li>
+<li><b>Only connected colleagues can chat.</b> For anyone else the message box is replaced by a lock banner with a <b>Connect</b> button (or “Request Pending”).</li>
+<li>The “Message” button on profiles and community members appears only for connected people.</li></ul></div>
+<div class="tech"><h5>How it works</h5><ul>
+<li><code>/api/messages</code>: <code>users</code>, <code>conversations</code>, <code>history/{id}</code>, <code>send</code>, <code>{id}</code> (edit/delete), <code>{id}/reactions</code>, <code>read/{id}</code>, <code>online-users</code>.</li>
+<li><code>SendMessageAsync</code> enforces the rule server-side via <code>AreUsersConnectedAsync</code> (accepted request <i>or</i> mutual follow).</li>
+<li>Message text is encrypted with AES-256-GCM before it is stored in <code>UserMessages</code>.</li>
+<li>Delivery uses SignalR groups named <code>User_{id}</code>; an administrator can disable messaging globally.</li></ul></div>
+</div>
+<figure>
+<svg class="fig" viewBox="0 0 780 700" role="img" aria-label="Messaging connection gate flow">
+  <rect class="b6" x="240" y="6" width="300" height="38"/><text class="t" x="390" y="29" text-anchor="middle">User types a message and presses Send</text>
+  <path class="ln" d="M390 44 V66"/>
+  <polygon class="b4" points="390,66 540,106 390,146 240,106"/><text class="t" x="390" y="103" text-anchor="middle">Frontend check:</text><text class="t" x="390" y="119" text-anchor="middle">isTargetConnected?</text>
+  <path class="lnr" d="M540 106 H590"/><text class="s halo" x="548" y="99">No</text>
+  <rect class="b5" x="590" y="68" width="180" height="76"/><text class="t" x="680" y="88" text-anchor="middle">STOP — input locked</text><text class="s" x="680" y="105" text-anchor="middle">Lock banner shown with a</text><text class="s" x="680" y="119" text-anchor="middle">“Connect” / “Pending” button</text><text class="s" x="680" y="133" text-anchor="middle">and a warning toast</text>
+  <path class="ln" d="M390 146 V172"/><text class="s halo" x="398" y="164">Yes</text>
+  <rect class="b1" x="240" y="172" width="300" height="38"/><text class="t" x="390" y="196" text-anchor="middle">POST /api/messages/send  (JWT)</text>
+  <path class="ln" d="M390 210 V232"/>
+  <polygon class="b4" points="390,232 520,262 390,292 260,262"/><text class="t" x="390" y="259" text-anchor="middle">Messaging enabled</text><text class="t" x="390" y="274" text-anchor="middle">by administrator?</text>
+  <path class="lnr" d="M520 262 H590"/><text class="s halo" x="528" y="255">No</text>
+  <rect class="b5" x="590" y="244" width="180" height="36"/><text class="t" x="680" y="260" text-anchor="middle">400 Bad Request</text><text class="s" x="680" y="273" text-anchor="middle">messaging disabled</text>
+  <path class="ln" d="M390 292 V316"/><text class="s halo" x="398" y="309">Yes</text>
+  <polygon class="b4" points="390,316 535,352 390,388 245,352"/><text class="t" x="390" y="343" text-anchor="middle">Receiver exists, active,</text><text class="t" x="390" y="359" text-anchor="middle">not suspended?</text>
+  <path class="lnr" d="M535 352 H590"/><text class="s halo" x="545" y="345">No</text>
+  <rect class="b5" x="590" y="334" width="180" height="36"/><text class="t" x="680" y="350" text-anchor="middle">400 Bad Request</text><text class="s" x="680" y="363" text-anchor="middle">recipient unavailable</text>
+  <path class="ln" d="M390 388 V412"/><text class="s halo" x="398" y="405">Yes</text>
+  <polygon class="b4" points="390,412 550,456 390,500 230,456"/><text class="t" x="390" y="446" text-anchor="middle">AreUsersConnected?</text><text class="s" x="390" y="462" text-anchor="middle">accepted request</text><text class="s" x="390" y="476" text-anchor="middle">OR mutual follow</text>
+  <path class="lnr" d="M550 456 H590"/><text class="s halo" x="552" y="449">No</text>
+  <rect class="b5" x="590" y="420" width="180" height="72"/><text class="t" x="680" y="438" text-anchor="middle">400 Bad Request</text><text class="s" x="680" y="455" text-anchor="middle">“You can only message</text><text class="s" x="680" y="469" text-anchor="middle">colleagues you are</text><text class="s" x="680" y="483" text-anchor="middle">connected with.”</text>
+  <path class="lng" d="M390 500 V528"/><text class="s halo grn" x="398" y="520">Yes</text>
+  <rect class="b3" x="200" y="528" width="380" height="42"/><text class="t" x="390" y="546" text-anchor="middle">Validate content / reply parent</text><text class="s" x="390" y="562" text-anchor="middle">Encrypt with AES-256-GCM (nonce + auth tag + key version)</text>
+  <path class="ln" d="M390 570 V594"/>
+  <rect class="b3" x="200" y="594" width="380" height="42"/><text class="t" x="390" y="612" text-anchor="middle">INSERT into UserMessages → notification</text><text class="s" x="390" y="628" text-anchor="middle">SignalR push to recipient's User_{id} group</text>
+  <path class="ln" d="M390 636 V656"/>
+  <rect class="b6" x="240" y="656" width="300" height="34"/><text class="t" x="390" y="678" text-anchor="middle">201 Created → both clients render the message</text>
+</svg>
+<figcaption>Figure 4 — Messaging is protected twice: in the UI and again on the server.</figcaption>
+</figure>
+
+<h3>5.6 Network &amp; Connections</h3>
+<div class="two">
+<div class="user"><h5>What users see</h5><ul>
+<li>Discover colleagues with mutual-connection counts and common communities.</li>
+<li><b>Follow</b> (one-way, to see someone’s content) or <b>Connect</b> (two-way relationship that unlocks chat).</li>
+<li>Send, accept, reject, cancel and remove connections; see pending requests.</li></ul></div>
+<div class="tech"><h5>How it works</h5><ul>
+<li><code>ConnectionRequests</code> (<code>Pending</code> → <code>Connected</code>) plus two <code>Followers</code> rows are created on accept.</li>
+<li>Endpoints: <code>POST /users/{id}/connect</code>, <code>DELETE …/connect/cancel</code>, <code>POST /users/connect/accept|reject/{requestId}</code>, <code>DELETE …/connect</code>, <code>GET /users/connections/requests</code>, <code>GET /users/{id}/connections</code>.</li>
+<li>If both sides invite each other, the requests auto-merge into a connection.</li></ul></div>
+</div>
+<figure>
+<svg class="fig" viewBox="0 0 780 310" role="img" aria-label="Connection lifecycle">
+  <rect class="b6" x="20" y="105" width="170" height="64"/><text class="t" x="105" y="133" text-anchor="middle">Not connected</text><text class="s" x="105" y="150" text-anchor="middle">chat locked</text>
+  <rect class="b4" x="305" y="105" width="170" height="64"/><text class="t" x="390" y="133" text-anchor="middle">Pending</text><text class="s" x="390" y="150" text-anchor="middle">sent / received</text>
+  <rect class="b3" x="590" y="105" width="170" height="64"/><text class="t" x="675" y="133" text-anchor="middle">Connected</text><text class="s grn" x="675" y="150" text-anchor="middle">chat unlocked ✔</text>
+  <path class="ln" d="M190 137 H305"/><text class="s halo" x="198" y="127">Send request</text>
+  <path class="ln" d="M475 137 H590"/><text class="s halo" x="488" y="127">Accept</text>
+  <text class="s" x="488" y="158">→ mutual follows</text>
+  <path class="lnd" d="M390 105 V50 H105 V105"/><text class="s halo" x="150" y="42">Reject / Cancel → request removed</text>
+  <path class="lnd" d="M675 169 V240 H105 V169"/><text class="s halo" x="300" y="258">Remove connection (follows deleted)</text>
+  <rect class="b2 dash" x="215" y="268" width="350" height="34" style="fill:#f0fdfa"/><text class="s" x="390" y="289" text-anchor="middle">Cross-request: if B already invited A and A invites B → Connected instantly</text>
+</svg>
+<figcaption>Figure 5 — Connection lifecycle. Messaging is allowed only in the “Connected” state.</figcaption>
+</figure>
+
+<h3>5.7 Knowledge: Wikis &amp; Articles</h3>
+<div class="two">
+<div class="user"><h5>What users see</h5><ul>
+<li><b>Articles:</b> rich-text blog posts with tags, attachments, read-time and view counts.</li>
+<li><b>Wikis:</b> structured knowledge pages made of reorderable sections, with collaborators and sharing.</li>
+<li>Version history with the option to restore an older version; archive and restore wikis.</li></ul></div>
+<div class="tech"><h5>How it works</h5><ul>
+<li><code>/api/articles</code> with <code>ArticleVersions</code> snapshots; <code>/api/wikis</code> with <code>WikiSections</code>, <code>WikiCollaborators</code>, <code>WikiShares</code>, <code>WikiTags</code>, <code>WikiVersions</code>.</li>
+<li>Wiki endpoints include <code>sections</code>, <code>sections/reorder</code>, <code>collaborators</code>, <code>shares</code>, <code>versions/{id}/restore</code>, <code>activities</code>, <code>archive</code>, <code>restore</code>.</li>
+<li>Sharing and collaboration produce <code>Share</code> / <code>Community</code> (wiki) notifications.</li></ul></div>
+</div>
+
+<h3>5.8 Media Hub: Clips, Videos &amp; Podcasts</h3>
+<div class="two">
+<div class="user"><h5>What users see</h5><ul>
+<li><b>Clips:</b> short vertical videos with reactions, bookmarks, shares and viewer analytics.</li>
+<li><b>Videos:</b> upload (up to 500 MB) or embed; tags; playlists support.</li>
+<li><b>Podcasts:</b> audio series and episodes (up to 100 MB) with an audio player.</li></ul></div>
+<div class="tech"><h5>How it works</h5><ul>
+<li><code>/api/clips</code>, <code>/api/videos</code>, <code>/api/podcasts</code>, plus <code>/api/media</code> for uploads (magic-byte file validation).</li>
+<li>Clips expose <code>viewers</code>, <code>engagement</code>, and admin moderation (<code>admin/all</code>, <code>admin/{id}/status</code>).</li>
+<li>Limits come from <code>MediaConstants</code>; feature switches can disable each module.</li></ul></div>
+</div>
+
+<h3>5.9 Karma &amp; Gamification</h3>
+<div class="two">
+<div class="user"><h5>What users see</h5><ul>
+<li>Points for contributing and engaging; a tier badge and progress bar on the profile.</li>
+<li>Karma history page and a company leaderboard.</li></ul></div>
+<div class="tech"><h5>How it works</h5><ul>
+<li><code>KarmaService</code> writes <code>KarmaTransaction</code> rows and updates <code>KarmaBalance</code> (<code>TotalPoints</code>, <code>BadgeLevel</code>); balances never go below zero.</li>
+<li>Daily caps prevent farming; <code>/api/karma</code>: <code>my</code>, <code>user/{id}</code>, <code>leaderboard</code>, <code>award</code>.</li></ul></div>
+</div>
+<table style="width:62%">
+<thead><tr><th>Activity</th><th>Points</th><th>Daily cap</th></tr></thead>
+<tbody>
+<tr><td>Create a post</td><td>2</td><td>50</td></tr><tr><td>Publish an article</td><td>10</td><td>30</td></tr>
+<tr><td>Upload a video / podcast</td><td>8 each</td><td>24 each</td></tr><tr><td>Receive a like / reaction</td><td>1</td><td>—</td></tr>
+<tr><td>Receive a comment / share</td><td>2 / 3</td><td>—</td></tr><tr><td>Community participation</td><td>5</td><td>5</td></tr>
+<tr><td>Add a comment / like / share</td><td>2 / 1 / 2</td><td>—</td></tr>
+</tbody></table>
+<div class="chips"><b>Tiers:</b> <span>Level 1 · 0–99</span><span>Bronze · 100–499</span><span>Silver · 500–999</span><span>Gold · 1,000–4,999</span><span>Platinum · 5,000+</span></div>
+
+<h3>5.10 Notification Center</h3>
+<div class="two">
+<div class="user"><h5>What users see</h5><ul>
+<li>A bell with an unread count; a list with All / Unread filters, mark-all-read and delete.</li>
+<li>A pop-up toast and a soft chime when something happens in real time.</li>
+<li>Clicking an alert opens the exact item (post, profile, community, wiki, connection requests …).</li>
+<li>A settings dialog to turn categories on or off (comments, reactions, followers, invites, mentions, community posts, jobs).</li></ul></div>
+<div class="tech"><h5>How it works</h5><ul>
+<li>Any service calls <code>INotificationService.PublishAsync(...)</code>; <code>PublishBroadcastAsync</code> handles HR announcements.</li>
+<li>Preferences are checked first, the row is saved in <code>Notifications</code>, the DTO is enriched (title, sender, <code>TargetUrl</code>) and pushed with <code>ReceiveNotification</code> to group <code>User_{id}</code>.</li>
+<li>Event types: Comment, Reaction, Mention, Follower, ConnectionRequest, Community, CommunityJoin, CommunityInvite, Share, Job, Badge, Wiki, HRAnnouncement.</li></ul></div>
+</div>
+<figure>
+<svg class="fig" viewBox="0 0 780 470" role="img" aria-label="Notification sequence">
+  <rect class="b6" x="15" y="8" width="110" height="40"/><text class="t" x="70" y="32" text-anchor="middle">Domain service</text>
+  <rect class="b2" x="175" y="8" width="110" height="40"/><text class="t" x="230" y="26" text-anchor="middle">Notification</text><text class="t" x="230" y="40" text-anchor="middle">Service</text>
+  <rect class="b7" x="335" y="8" width="110" height="40"/><text class="t tw" x="390" y="32" text-anchor="middle">SQL Server</text>
+  <rect class="b3" x="495" y="8" width="110" height="40"/><text class="t" x="550" y="26" text-anchor="middle">SignalR</text><text class="t" x="550" y="40" text-anchor="middle">NotificationHub</text>
+  <rect class="b1" x="655" y="8" width="110" height="40"/><text class="t" x="710" y="26" text-anchor="middle">Browser</text><text class="t" x="710" y="40" text-anchor="middle">(Navbar)</text>
+  <path class="life" d="M70 48 V460"/><path class="life" d="M230 48 V460"/><path class="life" d="M390 48 V460"/><path class="life" d="M550 48 V460"/><path class="life" d="M710 48 V460"/>
+  <path class="ln" d="M70 88 H230"/><text class="s halo" x="150" y="80" text-anchor="middle">1 PublishAsync(recipient, type, message)</text>
+  <path class="ln" d="M230 128 H390"/><text class="s halo" x="310" y="120" text-anchor="middle">2 Is bell enabled? (preferences)</text>
+  <path class="lnd" d="M390 162 H230"/><text class="s halo" x="310" y="154" text-anchor="middle">eligible</text>
+  <path class="ln" d="M230 200 H390"/><text class="s halo" x="310" y="192" text-anchor="middle">3 INSERT Notifications row</text>
+  <path class="ln" d="M230 240 H290 V262 H232"/><text class="s halo" x="298" y="256">4 Enrich: title · sender · TargetUrl</text>
+  <path class="ln" d="M230 304 H550"/><text class="s halo" x="390" y="296" text-anchor="middle">5 Clients.Group("User_{id}").SendAsync("ReceiveNotification")</text>
+  <path class="ln" d="M550 344 H710"/><text class="s halo" x="630" y="336" text-anchor="middle">6 WebSocket push</text>
+  <path class="ln" d="M710 372 H650 V394 H708"/><text class="s halo" x="640" y="388" text-anchor="end">7 Chime · toast · bell +1</text>
+  <path class="ln" d="M710 432 H230"/><text class="s halo" x="470" y="424" text-anchor="middle">8 PUT /api/notifications/{id}/read → navigate to TargetUrl</text>
+</svg>
+<figcaption>Figure 6 — Life of a notification, from the triggering event to the user’s screen.</figcaption>
+</figure>
+
+<h3>5.11 Admin Console &amp; Governance</h3>
+<div class="two">
+<div class="user"><h5>What users see (admins)</h5><ul>
+<li>Switches to turn modules on or off: messaging, e-mail, posts, articles, clips, wiki, videos, podcasts.</li>
+<li>Restricted-keyword list, moderation report queue, user suspension, role-request approvals, HR broadcast composer and analytics.</li></ul></div>
+<div class="tech"><h5>How it works</h5><ul>
+<li><code>/api/settings</code> + <code>SystemSetting</code> entity, read by the frontend through <code>systemConfig.js</code>; controllers also check flags (e.g. messaging).</li>
+<li><code>/api/interactions/restricted-keywords</code>, <code>/api/audit</code> (immutable <code>AuditLog</code>, System Admin only), <code>/api/analytics</code>.</li>
+<li>Suspensions use <code>IsPermanentlySuspended</code> / <code>SuspendedUntil</code> and are enforced at login and by a suspension guard.</li></ul></div>
+</div>
+
+<h3>5.12 Search, Jobs &amp; Abbreviations</h3>
+<ul>
+<li><b>Global search</b> (<code>/api/search</code>) spans people, communities, posts, articles, videos, podcasts and jobs, with search history.</li>
+<li><b>Jobs board</b> (<code>/api/jobs</code>) — HR/System Admin publish internal vacancies; <code>JobExpiryHostedService</code> closes expired postings automatically.</li>
+<li><b>Abbreviations</b> (<code>/api/abbreviations</code>) — a shared company glossary.</li>
+<li><b>Data archival</b> — <code>DataArchivalHostedService</code> plus <code>ARCHIVE_*.ps1</code> scripts keep logs and uploads from growing without limit.</li>
+</ul>
+
+<!-- ============================ 6 ============================ -->
+<h2 id="s6">6. Data Models &amp; Database Overview</h2>
+<p>The <code>Knome</code> database holds 50+ entities. The diagram shows the tables most relevant to networking, messaging, communities and notifications. <b>PK</b> = primary key, <b>FK</b> = foreign key.</p>
+<figure>
+<svg class="fig" viewBox="0 0 780 610" role="img" aria-label="Entity relationship diagram">
+  <!-- Communities -->
+  <rect class="b2" x="20" y="20" width="200" height="140"/><rect class="b7" x="20" y="20" width="200" height="24"/><text class="t tw" x="120" y="37" text-anchor="middle">Communities</text>
+  <text class="m" x="30" y="62">CommunityId <tspan fill="#0891b2" font-weight="700">PK</tspan></text><text class="m" x="30" y="78">Name</text><text class="m" x="30" y="94">CommunityType</text><text class="m" x="30" y="110">CategoryId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text><text class="m" x="30" y="126">CreatedByUserId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text><text class="m" x="30" y="142">ApprovalStatus · IsActive</text>
+  <!-- CommunityMembers -->
+  <rect class="b2" x="290" y="20" width="200" height="140"/><rect class="b7" x="290" y="20" width="200" height="24"/><text class="t tw" x="390" y="37" text-anchor="middle">CommunityMembers</text>
+  <text class="m" x="300" y="62">CommunityId <tspan fill="#0891b2" font-weight="700">PK,FK</tspan></text><text class="m" x="300" y="78">UserId <tspan fill="#0891b2" font-weight="700">PK,FK</tspan></text><text class="m" x="300" y="94">MemberType</text><text class="m" x="300" y="110">Status</text><text class="m" x="300" y="126">RequestedDate · DecidedDate</text><text class="m" x="300" y="142">ApprovedByUserId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text>
+  <!-- ConnectionRequests -->
+  <rect class="b4" x="560" y="20" width="200" height="124"/><rect class="b7" x="560" y="20" width="200" height="24"/><text class="t tw" x="660" y="37" text-anchor="middle">ConnectionRequests</text>
+  <text class="m" x="570" y="62">RequestId <tspan fill="#0891b2" font-weight="700">PK</tspan></text><text class="m" x="570" y="78">SenderId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text><text class="m" x="570" y="94">ReceiverId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text><text class="m" x="570" y="110">Status (Pending/Connected)</text><text class="m" x="570" y="126">CreatedDate · UpdatedDate</text>
+  <!-- Followers -->
+  <rect class="b4" x="560" y="166" width="200" height="60"/><rect class="b7" x="560" y="166" width="200" height="24"/><text class="t tw" x="660" y="183" text-anchor="middle">Followers</text>
+  <text class="m" x="570" y="206">FollowerUserId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text><text class="m" x="570" y="220">FollowingUserId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text>
+  <!-- UserMessages -->
+  <rect class="b4" x="560" y="250" width="200" height="206"/><rect class="b7" x="560" y="250" width="200" height="24"/><text class="t tw" x="660" y="267" text-anchor="middle">UserMessages</text>
+  <text class="m" x="570" y="292">MessageId <tspan fill="#0891b2" font-weight="700">PK</tspan></text><text class="m" x="570" y="308">SenderId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text><text class="m" x="570" y="324">ReceiverId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text><text class="m" x="570" y="340">CipherText (AES-GCM)</text><text class="m" x="570" y="356">Nonce · AuthTag</text><text class="m" x="570" y="372">KeyVersion</text><text class="m" x="570" y="388">AttachmentsJson</text><text class="m" x="570" y="404">IsRead · ReadDate</text><text class="m" x="570" y="420">IsDeletedBySender/Receiver</text><text class="m" x="570" y="436">CreatedDate · UpdatedDate</text>
+  <!-- Users -->
+  <rect class="b1" x="290" y="222" width="200" height="196" style="stroke-width:2.4"/><rect class="b7" x="290" y="222" width="200" height="26" style="fill:#1d4ed8;stroke:#1d4ed8"/><text class="t tw" x="390" y="240" text-anchor="middle">Users</text>
+  <text class="m" x="300" y="266">UserId <tspan fill="#0891b2" font-weight="700">PK</tspan></text><text class="m" x="300" y="282">EmployeeId · Email</text><text class="m" x="300" y="298">FullName · Designation</text><text class="m" x="300" y="314">DepartmentId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text><text class="m" x="300" y="330">ProfilePhotoUrl</text><text class="m" x="300" y="346">IsActive</text><text class="m" x="300" y="362">IsPermanentlySuspended</text><text class="m" x="300" y="378">SuspendedUntil</text><text class="m" x="300" y="394" fill="#64748b">+ Roles (M:N), UserCredentials</text>
+  <!-- Posts -->
+  <rect class="b3" x="20" y="222" width="200" height="164"/><rect class="b7" x="20" y="222" width="200" height="24"/><text class="t tw" x="120" y="239" text-anchor="middle">Posts</text>
+  <text class="m" x="30" y="264">PostId <tspan fill="#0891b2" font-weight="700">PK</tspan></text><text class="m" x="30" y="280">AuthorUserId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text><text class="m" x="30" y="296">ContentText</text><text class="m" x="30" y="312">AudienceType · Status</text><text class="m" x="30" y="328">ScheduledDate</text><text class="m" x="30" y="344">PublishedDate</text><text class="m" x="30" y="360">ViewCount</text><text class="m" x="30" y="376" fill="#64748b">+ PostAttachments</text>
+  <!-- Karma -->
+  <rect class="b3" x="20" y="418" width="200" height="86"/><rect class="b7" x="20" y="418" width="200" height="24"/><text class="t tw" x="120" y="435" text-anchor="middle">KarmaBalance</text>
+  <text class="m" x="30" y="460">UserId <tspan fill="#0891b2" font-weight="700">PK,FK</tspan></text><text class="m" x="30" y="476">TotalPoints · BadgeLevel</text><text class="m" x="30" y="492">LastUpdated</text>
+  <!-- Notifications -->
+  <rect class="b6" x="290" y="448" width="200" height="154"/><rect class="b7" x="290" y="448" width="200" height="24"/><text class="t tw" x="390" y="465" text-anchor="middle">Notifications</text>
+  <text class="m" x="300" y="490">NotificationId <tspan fill="#0891b2" font-weight="700">PK</tspan></text><text class="m" x="300" y="506">UserId <tspan fill="#7c3aed" font-weight="700">FK</tspan></text><text class="m" x="300" y="522">EventType</text><text class="m" x="300" y="538">Message</text><text class="m" x="300" y="554">RelatedContentType / Id</text><text class="m" x="300" y="570">IsRead</text><text class="m" x="300" y="586">CreatedDate</text>
+  <!-- relations -->
+  <path class="rel" d="M220 90 H290"/><text class="s halo" x="228" y="82">1 : N</text>
+  <path class="rel" d="M390 160 V222"/><text class="s halo" x="398" y="196">member of</text>
+  <path class="rel" d="M220 300 H290"/><text class="s halo" x="226" y="292">author</text>
+  <path class="rel" d="M220 460 H255 V390 H290"/><text class="s halo" x="150" y="410" text-anchor="middle">1 : 1</text>
+  <path class="rel" d="M390 418 V448"/><text class="s halo" x="398" y="437">recipient</text>
+  <path class="rel" d="M560 82 H525 V250 H490"/><path class="rel" d="M560 196 H508 V274 H490"/>
+  <path class="rel" d="M560 350 H490"/><text class="s halo" x="498" y="342">sender / receiver</text>
+</svg>
+<figcaption>Figure 7 — Simplified entity-relationship diagram (key tables only).</figcaption>
+</figure>
+
+<h3>6.1 Other important tables</h3>
+<table>
+<thead><tr><th style="width:30%">Group</th><th>Tables</th></tr></thead>
+<tbody>
+<tr><td><b>Identity &amp; org</b></td><td><code>Users</code>, <code>UserCredentials</code>, <code>Roles</code>, <code>RoleRequests</code>, <code>Departments</code>, <code>UserSkills</code>, <code>UserInterests</code></td></tr>
+<tr><td><b>Content</b></td><td><code>Posts</code>, <code>PostAttachments</code>, <code>Articles</code> (+ <code>ArticleTags</code>, <code>ArticleVersions</code>, <code>ArticleAttachments</code>), <code>Videos</code> (+ <code>VideoTags</code>), <code>Podcasts</code>, <code>PodcastSeries</code>, <code>Clips</code>, <code>ClipShares</code>, <code>Wikis</code> (+ sections, collaborators, shares, tags, versions)</td></tr>
+<tr><td><b>Engagement</b></td><td><code>Comments</code>, <code>Reactions</code>, <code>Shares</code>, <code>Bookmarks</code>, <code>ContentViews</code>, <code>HotPostsScoreCache</code>, <code>ModerationReports</code>, <code>BlockedUrls</code>, <code>RestrictedKeywords</code></td></tr>
+<tr><td><b>Communities</b></td><td><code>Communities</code>, <code>CommunityMembers</code>, <code>CommunityPosts</code>, <code>Categories</code></td></tr>
+<tr><td><b>Social &amp; chat</b></td><td><code>Followers</code>, <code>ConnectionRequests</code>, <code>UserMessages</code>, <code>UserMessageReactions</code></td></tr>
+<tr><td><b>Gamification &amp; alerts</b></td><td><code>KarmaBalance</code>, <code>KarmaTransaction</code>, <code>Notifications</code>, <code>NotificationPreferences</code></td></tr>
+<tr><td><b>Governance &amp; misc</b></td><td><code>AuditLog</code>, <code>SystemSettings</code>, <code>SearchHistory</code>, <code>Jobs</code>, <code>Abbreviations</code></td></tr>
+</tbody></table>
+
+<!-- ============================ 7 ============================ -->
+<h2 id="s7">7. Security, Privacy &amp; Encryption</h2>
+
+<h3>7.1 Authentication &amp; authorization</h3>
+<ul>
+<li><b>JWT Bearer (HS256).</b> The signing secret comes from configuration or the <code>KNOME_JWT_SECRET</code> environment variable and must be at least 32 characters. Default lifetime is 480 minutes (<code>JwtSettings.ExpiryMinutes</code>). The API also accepts MPO-issued tokens through a second authentication scheme.</li>
+<li><b>Passwords</b> are stored as BCrypt hashes (<code>UserCredentials.PasswordHash</code>).</li>
+<li><b>RBAC.</b> Four roles are defined in <code>Constants/Roles.cs</code>; endpoints use <code>[Authorize(Roles = …)]</code> and named policies.</li>
+<li><b>Brute-force protection.</b> <code>LoginRateLimiter</code> allows 30 login requests per minute per client IP, then returns HTTP 429.</li>
+<li><b>Suspension.</b> Suspended or inactive users cannot sign in; suspension guards protect write operations.</li>
+</ul>
+
+<h3>7.2 Direct-message encryption (AES-256-GCM)</h3>
+<p>Message bodies are never stored as plain text. <code>MessageEncryptionService</code> encrypts each message with AES-256 in Galois/Counter Mode, which provides both <b>confidentiality</b> and <b>tamper detection</b>.</p>
+<figure>
+<svg class="fig" viewBox="0 0 780 190" role="img" aria-label="Encryption process">
+  <rect class="b6" x="14" y="62" width="130" height="64"/><text class="t" x="79" y="90" text-anchor="middle">Plain text</text><text class="s" x="79" y="108" text-anchor="middle">“Hello team”</text>
+  <rect class="b2" x="190" y="30" width="190" height="128"/><text class="t" x="285" y="52" text-anchor="middle">AES-256-GCM</text>
+  <text class="s" x="285" y="74" text-anchor="middle">Key: base64, by KeyVersion</text><text class="s" x="285" y="92" text-anchor="middle">(env KNOME_MESSAGE_KEY_V1</text><text class="s" x="285" y="106" text-anchor="middle">or MessageEncryption config)</text><text class="s" x="285" y="128" text-anchor="middle">Nonce: random 12 bytes</text><text class="s" x="285" y="144" text-anchor="middle">per message</text>
+  <path class="ln" d="M144 94 H190"/><path class="ln" d="M380 94 H426"/>
+  <rect class="b7" x="426" y="22" width="340" height="146"/><text class="t tw" x="596" y="44" text-anchor="middle">Stored in UserMessages</text>
+  <text class="m tw" x="444" y="70" style="fill:#e2e8f0">CipherText   VARBINARY(MAX)</text><text class="m tw" x="444" y="90" style="fill:#e2e8f0">Nonce        VARBINARY(12)</text><text class="m tw" x="444" y="110" style="fill:#e2e8f0">AuthTag      VARBINARY(16)</text><text class="m tw" x="444" y="130" style="fill:#e2e8f0">KeyVersion   INT  (rotation)</text><text class="s tw" x="596" y="156" text-anchor="middle" style="fill:#67e8f9">Decrypted only by the API when returning history</text>
+</svg>
+<figcaption>Figure 8 — Encryption at rest for direct messages.</figcaption>
+</figure>
+<div class="callout"><b class="h">Important to understand</b>Encryption is applied <b>by the server</b> (encryption at rest). It protects the database contents, but it is not client-side end-to-end encryption — the API can decrypt messages. Keep the message keys in environment variables or a secrets manager, never in source control.</div>
+
+<h3>7.3 Connection-gating logic</h3>
+<p>Two users may exchange direct messages only when <code>AreUsersConnectedAsync(a, b)</code> returns true:</p>
+<pre><span class="k">public async Task&lt;bool&gt; AreUsersConnectedAsync(int userId1, int userId2)</span>
+{
+    <span class="c">// 1) An accepted / connected ConnectionRequest in either direction</span>
+    <span class="c">// 2) OR a MUTUAL follow: user1 follows user2 AND user2 follows user1</span>
+    <span class="c">// A one-way follow is NOT enough.</span>
+}</pre>
+<ul>
+<li><b>Server enforcement:</b> <code>SendMessageAsync</code> throws <code>BadRequestException("You can only message colleagues you are connected with.")</code> when the check fails — a custom client cannot bypass the UI.</li>
+<li><b>UI enforcement:</b> <code>Messages.jsx</code> locks the composer, shows a banner and offers <b>Connect</b>; Profile and Community pages show the Message button only to connected users.</li>
+<li><b>Conversation list &amp; search</b> expose an <code>IsConnected</code> flag so badges (“Connected” / “Not Connected”) are accurate.</li>
+</ul>
+
+<h3>7.4 Other safeguards</h3>
+<table>
+<thead><tr><th style="width:30%">Control</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td>Security headers</td><td><code>SecurityHeadersMiddleware</code>: HSTS, Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy.</td></tr>
+<tr><td>File upload safety</td><td>Magic-byte (file signature) validation, size caps (video 500 MB, podcast 100 MB, request limit 500 MB).</td></tr>
+<tr><td>Input validation</td><td>FluentValidation on DTOs; HTML sanitised in the frontend (<code>sanitizeHtml.js</code>); restricted-keyword and blocked-URL screening.</td></tr>
+<tr><td>Log privacy</td><td><code>PiiScrubbingEnricher</code> removes sensitive values from Serilog events.</td></tr>
+<tr><td>Auditability</td><td>Immutable <code>AuditLog</code> of administrative actions, readable only by System Administrators.</td></tr>
+<tr><td>Error hygiene</td><td><code>ExceptionHandlingMiddleware</code> maps exceptions to 400/403/404/500 without leaking stack traces.</td></tr>
+</tbody></table>
+
+<h3>7.5 Known risks to review before production</h3>
+<div class="callout danger">
+<b class="h">Findings from the code review — recommended hardening</b>
+<ul>
+<li><b>Development login shortcuts.</b> <code>AuthService.LoginAsync</code> accepts the literal passwords <code>Password@123</code> and <code>SSO_BYPASS</code> for any account, creates a default credential if one is missing, and contains hard-coded employee-ID special cases. <b>Remove these before any production or shared deployment.</b></li>
+<li><b>Credentials in scripts.</b> <code>START_KNOME.ps1</code> embeds a SQL login and server names. Move them to environment variables or user secrets.</li>
+<li><b>SignalR hub trust.</b> <code>NotificationHub.JoinUserGroup</code> only rejects a mismatch when the connection carries a user id, and <code>SendDirectMessage</code> relays a client-supplied payload to the recipient group without the connection check. Verify the hub requires authentication and consider applying the same connectivity rule there.</li>
+<li><b>Server-side encryption keys.</b> Ensure production keys are supplied through environment variables and rotated via <code>KeyVersion</code>.</li>
+</ul>
+</div>
+
+<!-- ============================ 8 ============================ -->
+<h2 id="s8">8. API Reference</h2>
+<p>All endpoints are under <code>/api</code> and return <code>{ "success": bool, "message": string, "data": … }</code>. Send <code>Authorization: Bearer &lt;token&gt;</code> on every call except login. Swagger UI lists every route interactively when the API runs in Development.</p>
+
+<h4>Authentication — <code>/api/auth</code></h4>
+<table><thead><tr><th style="width:12%">Method</th><th style="width:34%">Path</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>POST</td><td><code>/auth/login</code></td><td>Sign in (rate limited) → token + user</td></tr>
+<tr><td>POST</td><td><code>/auth/logout</code></td><td>Sign out</td></tr>
+<tr><td>GET</td><td><code>/auth/me</code></td><td>Current user profile and roles</td></tr></tbody></table>
+
+<h4>Users, Network &amp; Roles — <code>/api/users</code></h4>
+<table><thead><tr><th style="width:12%">Method</th><th style="width:34%">Path</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>GET / PUT</td><td><code>/users/profile</code></td><td>Read / update own profile (also <code>profile/bio</code>, <code>profile/skills</code>, POST <code>profile/image</code>)</td></tr>
+<tr><td>GET</td><td><code>/users</code>, <code>/users/{id}</code>, <code>/users/suggestions</code></td><td>Directory, a profile, suggested colleagues</td></tr>
+<tr><td>POST / DELETE</td><td><code>/users/{id}/follow</code></td><td>Follow / unfollow</td></tr>
+<tr><td>GET</td><td><code>/users/{id}/followers</code>, <code>/following</code>, <code>/connections</code></td><td>Network lists</td></tr>
+<tr><td>POST</td><td><code>/users/{id}/connect</code></td><td>Send connection request</td></tr>
+<tr><td>DELETE</td><td><code>/users/{id}/connect/cancel</code>, <code>/users/{id}/connect</code></td><td>Cancel request / remove connection</td></tr>
+<tr><td>POST</td><td><code>/users/connect/accept/{requestId}</code>, <code>/connect/reject/{requestId}</code></td><td>Respond to a request</td></tr>
+<tr><td>GET</td><td><code>/users/connections/requests</code></td><td>Pending received &amp; sent requests</td></tr>
+<tr><td>PUT</td><td><code>/users/{id}/department</code>, <code>/roles</code>, <code>/activate</code>, <code>/suspend</code></td><td>Admin user management</td></tr>
+<tr><td>GET / POST</td><td><code>/users/role-requests</code>, <code>/{id}/approve</code>, <code>/{id}/reject</code></td><td>Role-request workflow (HR / System Admin)</td></tr></tbody></table>
+
+<h4>Posts &amp; Feed — <code>/api/posts</code>, <code>/api/feed</code></h4>
+<table><thead><tr><th style="width:12%">Method</th><th style="width:34%">Path</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>GET / POST</td><td><code>/posts</code></td><td>List / create posts</td></tr>
+<tr><td>GET</td><td><code>/posts/my</code>, <code>/posts/user/{userId}</code>, <code>/posts/{postId}</code></td><td>Own, by author, single post</td></tr>
+<tr><td>PUT / DELETE</td><td><code>/posts/{postId}</code></td><td>Edit / delete</td></tr>
+<tr><td>POST</td><td><code>/posts/{postId}/view</code></td><td>Record a view</td></tr>
+<tr><td>GET</td><td><code>/feed/home</code>, <code>/feed/hot</code>, <code>/feed/dashboard</code></td><td>Personalised, ranked and dashboard feeds</td></tr></tbody></table>
+
+<h4>Interactions — <code>/api/interactions</code></h4>
+<table><thead><tr><th style="width:12%">Method</th><th style="width:44%">Path</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>GET / POST</td><td><code>/interactions/{contentType}/{contentId}/comments</code></td><td>List / add comments</td></tr>
+<tr><td>PUT / DELETE</td><td><code>/interactions/comments/{commentId}</code></td><td>Edit / delete a comment</td></tr>
+<tr><td>POST / GET</td><td><code>…/{contentId}/react</code>, <code>/reactions</code>, <code>/reactions/list</code></td><td>React and read reactions</td></tr>
+<tr><td>POST</td><td><code>…/{contentId}/share</code>, <code>/bookmark</code>, <code>/report</code></td><td>Share, bookmark, report</td></tr>
+<tr><td>GET</td><td><code>/interactions/bookmarks/my</code>, <code>/saved-content</code>, <code>/saved-content/count</code></td><td>Saved items</td></tr>
+<tr><td>GET / PUT</td><td><code>/interactions/reports</code>, <code>/reports/pending</code>, <code>/reports/{id}/resolve</code></td><td>Moderation queue</td></tr>
+<tr><td>GET / POST</td><td><code>/interactions/restricted-keywords</code>, <code>/validate-security</code></td><td>Keyword list and content screening</td></tr></tbody></table>
+
+<h4>Communities — <code>/api/communities</code></h4>
+<table><thead><tr><th style="width:12%">Method</th><th style="width:44%">Path</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/communities</code>, <code>/my</code>, <code>/user/{id}</code>, <code>/categories</code>, <code>/check-name</code>, <code>/pending</code></td><td>Browse and lookups</td></tr>
+<tr><td>POST / PUT / DELETE</td><td><code>/communities</code>, <code>/{id}</code></td><td>Create, edit, delete</td></tr>
+<tr><td>POST</td><td><code>/communities/{id}/approve</code>, <code>/reject</code></td><td>Approve / reject a new community</td></tr>
+<tr><td>POST</td><td><code>/communities/{id}/join</code>, <code>/leave</code></td><td>Membership</td></tr>
+<tr><td>GET / POST / PUT / DELETE</td><td><code>/communities/{id}/members</code>, <code>/members/{userId}/decide</code>, <code>/members/{userId}</code></td><td>Member administration</td></tr>
+<tr><td>POST / DELETE</td><td><code>/communities/{id}/admins/{userId}</code></td><td>Grant / revoke admin</td></tr>
+<tr><td>GET / POST / PUT</td><td><code>/communities/{id}/posts</code>, <code>/posts/{postId}/pin</code></td><td>Community feed and pinning</td></tr>
+<tr><td>GET / POST / DELETE</td><td><code>/communities/{id}/files</code></td><td>Shared file library</td></tr></tbody></table>
+
+<h4>Messaging — <code>/api/messages</code></h4>
+<table><thead><tr><th style="width:12%">Method</th><th style="width:34%">Path</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/messages/users?query=</code></td><td>Search colleagues (includes <code>isConnected</code>)</td></tr>
+<tr><td>GET</td><td><code>/messages/conversations</code></td><td>Conversation list with previews &amp; unread counts</td></tr>
+<tr><td>GET</td><td><code>/messages/history/{otherUserId}</code></td><td>Paged, decrypted history</td></tr>
+<tr><td>POST</td><td><code>/messages/send</code></td><td>Send (connection-gated, encrypted)</td></tr>
+<tr><td>PUT / DELETE</td><td><code>/messages/{messageId}</code></td><td>Edit / delete (<code>?deleteForEveryone=true</code>)</td></tr>
+<tr><td>POST</td><td><code>/messages/{messageId}/reactions</code></td><td>Toggle an emoji reaction</td></tr>
+<tr><td>POST</td><td><code>/messages/read/{otherUserId}</code></td><td>Mark conversation as read</td></tr>
+<tr><td>GET</td><td><code>/messages/online-users</code></td><td>Currently online user ids</td></tr></tbody></table>
+
+<h4>Notifications — <code>/api/notifications</code></h4>
+<table><thead><tr><th style="width:12%">Method</th><th style="width:34%">Path</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/notifications</code>, <code>/unread-count</code></td><td>List (paged, <code>unreadOnly</code>) and badge count</td></tr>
+<tr><td>PUT / POST</td><td><code>/notifications/{id}/read</code>, <code>/read-all</code></td><td>Mark read</td></tr>
+<tr><td>DELETE</td><td><code>/notifications/{id}</code></td><td>Delete</td></tr>
+<tr><td>GET / PUT</td><td><code>/notifications/preferences</code></td><td>Per-event bell / e-mail preferences</td></tr>
+<tr><td>GET / POST / PUT / DELETE</td><td><code>/notifications/broadcasts</code>, <code>/broadcast</code>, <code>/broadcast/{id}</code></td><td>HR announcements (HR / System Admin)</td></tr></tbody></table>
+
+<h4>Knowledge, Media, Karma &amp; Admin</h4>
+<table><thead><tr><th style="width:26%">Base route</th><th>Highlights</th></tr></thead><tbody>
+<tr><td><code>/api/wikis</code></td><td>CRUD, <code>my</code>, <code>shared</code>, <code>recent</code>, <code>tags</code>, <code>{id}/sections</code>, <code>/collaborators</code>, <code>/shares</code>, <code>/versions</code>, <code>/restore</code>, <code>/archive</code>, <code>/activities</code></td></tr>
+<tr><td><code>/api/articles</code></td><td>CRUD, version history</td></tr>
+<tr><td><code>/api/videos</code>, <code>/api/podcasts</code></td><td>CRUD, series / episodes, “my” lists</td></tr>
+<tr><td><code>/api/clips</code></td><td>CRUD, <code>{id}/view</code>, <code>/react</code>, <code>/bookmark</code>, <code>/share</code>, <code>/viewers</code>, <code>/engagement</code>, <code>me</code>, <code>admin/all</code>, <code>admin/{id}/status</code></td></tr>
+<tr><td><code>/api/media</code></td><td>File and image uploads</td></tr>
+<tr><td><code>/api/karma</code></td><td><code>my</code>, <code>user/{id}</code>, <code>leaderboard</code>, <code>award</code></td></tr>
+<tr><td><code>/api/search</code></td><td>Unified search and history</td></tr>
+<tr><td><code>/api/jobs</code></td><td>Filtered job listings, CRUD for HR / System Admin</td></tr>
+<tr><td><code>/api/settings</code></td><td>Platform feature switches and approval settings</td></tr>
+<tr><td><code>/api/audit</code>, <code>/api/analytics</code></td><td>Audit log (System Admin), HR analytics</td></tr>
+<tr><td><code>/api/abbreviations</code></td><td>Company glossary</td></tr>
+<tr><td><b>SignalR</b> <code>/hubs/notifications</code></td><td>Server → client events: <code>ReceiveNotification</code>, <code>ReceiveDirectMessage</code>, <code>UserTyping</code>, <code>UserPresenceChanged</code>. Client → server: <code>JoinUserGroup</code>, <code>LeaveUserGroup</code>, <code>SendTyping</code>, <code>GetOnlineUsers</code>.</td></tr>
+</tbody></table>
+
+<!-- ============================ 9 ============================ -->
+<h2 id="s9">9. Local Setup &amp; Developer Onboarding</h2>
+
+<h3>9.1 Prerequisites</h3>
+<table><thead><tr><th style="width:28%">Tool</th><th>Version / notes</th></tr></thead><tbody>
+<tr><td>.NET SDK</td><td><b>.NET 10</b> (project targets <code>net10.0</code>)</td></tr>
+<tr><td>Node.js + npm</td><td>A current LTS release (Vite 8 needs a modern Node; 22 LTS recommended)</td></tr>
+<tr><td>SQL Server</td><td>2022+ (Express or Developer edition is enough), with a database named <code>Knome</code></td></tr>
+<tr><td>Windows + PowerShell</td><td>Required by the one-click launcher and the <code>SETUP_*.ps1</code> scripts</td></tr>
+<tr><td>Optional</td><td>IIS with the ASP.NET Core Hosting Bundle (for ports 8080/8081), Git, SSMS</td></tr></tbody></table>
+
+<h3>9.2 Step-by-step</h3>
+<h4>Step 1 — Get the code</h4>
+<pre>git clone &lt;your-repository-url&gt; "Knome main"
+cd "Knome main"</pre>
+
+<h4>Step 2 — Create and prepare the database</h4>
+<ol>
+<li>Create an empty SQL Server database called <code>Knome</code> and restore/provision the core schema (see <code>Documentation/Database</code> and <code>Documentation/Architecture</code>).</li>
+<li>Run the helper scripts for feature tables (the launcher also runs them automatically): <code>SETUP_WIKI_DB.ps1</code>, <code>SETUP_CLIPS_DB.ps1</code>, <code>SETUP_MESSAGES_DB.ps1</code> (or <code>CreateUserMessages.sql</code> in SSMS).</li>
+<li>Optionally load sample users with the seed script referenced in <code>README.md</code> (<code>Documentation/Architecture/Seed_Test_Credentials.sql</code>).</li>
+</ol>
+
+<h4>Step 3 — Configure the backend</h4>
+<p>Edit <code>Backend/Knome.API/appsettings.Development.json</code> (never commit real secrets) or use environment variables / user-secrets.</p>
+<pre>{
+  <span class="s">"ConnectionStrings"</span>: { <span class="s">"DefaultConnection"</span>: <span class="s">"Server=YOUR_SERVER;Database=Knome;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True"</span> },
+  <span class="s">"Jwt"</span>: { <span class="s">"ExpiryMinutes"</span>: 480 },
+  <span class="s">"MessageEncryption"</span>: { <span class="s">"DefaultKeyVersion"</span>: 1 }
+}
+<span class="c"># Environment variables (recommended for secrets)</span>
+KNOME_JWT_SECRET        = &lt;random string, 32+ characters&gt;
+KNOME_MESSAGE_KEY_V1    = &lt;base64 of 32 random bytes&gt;</pre>
+<div class="callout tip"><b class="h">Tip</b>Generate a message key in PowerShell: <code>[Convert]::ToBase64String((1..32 | % { Get-Random -Max 256 }) -as [byte[]])</code>. Check the exact configuration key names in <code>appsettings.json</code> for your branch.</div>
+
+<h4>Step 4 — Run the backend</h4>
+<pre>cd Backend/Knome.API
+dotnet restore
+dotnet run --launch-profile http        <span class="c"># API on http://localhost:5096  (Swagger at /swagger)</span></pre>
+
+<h4>Step 5 — Run the frontend</h4>
+<pre>cd knomeUI/frontend
+npm install
+npm run dev                             <span class="c"># UI on http://localhost:5173 (proxies /api → :5096)</span></pre>
+
+<h4>Step 6 — One-click alternative</h4>
+<p>From the repository root run <code>.\START_KNOME.bat</code>. The launcher frees ports 5095/5096/5173, runs <code>npm install</code> on first use, verifies the database, ensures wiki/clips/messages tables exist, starts the API and the UI, and (if IIS is configured) starts the <code>Knome</code> and <code>EmployeeHub</code> sites on 8080/8081. Press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop everything.</p>
+<table><thead><tr><th style="width:36%">URL</th><th>What it is</th></tr></thead><tbody>
+<tr><td><code>http://localhost:5173</code></td><td>Knome development UI</td></tr>
+<tr><td><code>http://localhost:5096</code> (or 5095)</td><td>Knome REST API &amp; SignalR hub</td></tr>
+<tr><td><code>http://localhost:8080</code> / <code>:8081</code></td><td>IIS-hosted Knome portal / EmployeeHub (optional)</td></tr></tbody></table>
+
+<h3>9.3 Typical developer workflow</h3>
+<ol>
+<li>Create a feature branch; keep controllers thin and put rules in services.</li>
+<li>Add or change DTOs and FluentValidation rules together.</li>
+<li>If the schema changes, update the SQL and re-scaffold the models — do not hand-edit <code>Models/</code> or <code>Data/KnomeDbContext.cs</code>.</li>
+<li>Run <code>dotnet build</code> and <code>npm run build</code> (and <code>npm run lint</code>) before opening a pull request.</li>
+<li>Follow the team rules in <code>AGENTS.md</code> / <code>CLAUDE.md</code>.</li>
+</ol>
+
+<!-- ============================ 10 ============================ -->
+<h2 id="s10">10. FAQ &amp; Troubleshooting</h2>
+<table>
+<thead><tr><th style="width:30%">Symptom</th><th style="width:30%">Likely cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td>Chat says <i>“You can only message colleagues you are connected with.”</i></td><td>Users are not connected (or only one follows the other).</td><td>Send and accept a connection request, or ensure both users follow each other. Check <code>ConnectionRequests.Status</code> is <code>Connected</code>.</td></tr>
+<tr><td>Message box is replaced by a lock banner</td><td>Intended behaviour for non-connected users.</td><td>Click <b>Connect</b>; once accepted the composer unlocks automatically.</td></tr>
+<tr><td>“Direct messaging is currently disabled by system administrator.”</td><td>The messaging feature switch is off.</td><td>A System Administrator enables it in the Admin Console (<code>EnableMessaging</code>).</td></tr>
+<tr><td>Live updates stop; “Reconnecting to Knome messenger…”</td><td>SignalR WebSocket dropped (network, sleep, API restart, wrong host).</td><td>Check the API is running; the client auto-reconnects. Verify the hub URL <code>http://&lt;host&gt;:5096/hubs/notifications</code> and that CORS allows your UI origin.</td></tr>
+<tr><td>401 Unauthorized on every call</td><td>Missing/expired token, or JWT secret changed.</td><td>Sign in again; ensure <code>KNOME_JWT_SECRET</code> is set and identical across restarts.</td></tr>
+<tr><td>App fails at start: JWT secret error</td><td>Secret missing or under 32 characters.</td><td>Provide a longer <code>KNOME_JWT_SECRET</code>.</td></tr>
+<tr><td>“Cryptographic key for version N is not configured.”</td><td>No message-encryption key found.</td><td>Set <code>KNOME_MESSAGE_KEY_V1</code> (base64, 32 bytes) or the <code>MessageEncryption</code> config section.</td></tr>
+<tr><td>Cannot connect to database</td><td>Wrong server/credentials, SQL Server stopped, or TCP/IP disabled.</td><td>Test the connection string in SSMS; enable TCP/IP; use <code>TrustServerCertificate=True</code> for local certificates; check the launcher’s server-name list.</td></tr>
+<tr><td>Invalid object name ‘UserMessages’ / wiki / clips table</td><td>Setup scripts not run.</td><td>Run <code>SETUP_MESSAGES_DB.ps1</code>, <code>SETUP_WIKI_DB.ps1</code>, <code>SETUP_CLIPS_DB.ps1</code>.</td></tr>
+<tr><td>Port already in use (5096 / 5173)</td><td>An old process is still running.</td><td>Re-run <code>START_KNOME.bat</code> (it frees the ports) or stop the process manually.</td></tr>
+<tr><td>No notification appears</td><td>User disabled that category, or the event was triggered by themselves.</td><td>Open notification settings and re-enable the category; self-triggered events are ignored by design.</td></tr>
+<tr><td>HTTP 429 on login</td><td>More than 30 attempts per minute from one IP.</td><td>Wait one minute.</td></tr>
+<tr><td>Upload rejected</td><td>File too large or type/signature mismatch.</td><td>Respect limits (video 500 MB, podcast 100 MB) and use genuine file types.</td></tr>
+<tr><td>“Your account is suspended by system admin.”</td><td>Account inactive or suspended.</td><td>Ask an HR/System Administrator to activate the account.</td></tr>
+</tbody></table>
+
+<h4>Frequently asked questions</h4>
+<p><b>What is the difference between Follow and Connect?</b> Follow is one-way (you see their content). Connect needs the other person’s acceptance and creates a two-way relationship — only that unlocks private chat.</p>
+<p><b>Can administrators read private messages?</b> Messages are encrypted at rest in the database, but the API decrypts them for participants. Treat access to the server and keys as sensitive.</p>
+<p><b>Where do new roles come from?</b> Everyone starts as Employee. A role request is created at first sign-in; HR or System Administrators approve elevated roles in the Admin Console.</p>
+<p><b>How do I add a new notification type?</b> Add a constant in <code>NotificationTypes</code>, call <code>PublishAsync</code> from the relevant service, and (optionally) add a title/target mapping in <code>NotificationService.EnrichNotificationDtoAsync</code>.</p>
+
+<!-- ============================ APPENDIX ============================ -->
+<h2 id="sA">Appendix — Glossary &amp; Feature Status</h2>
+<h3>A.1 Glossary</h3>
+<table><thead><tr><th style="width:24%">Term</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>BFF</td><td>Backend-for-Frontend: a small server that adapts the API for one UI.</td></tr>
+<tr><td>Connection</td><td>An accepted, two-way relationship between two employees (not the same as Follow).</td></tr>
+<tr><td>DTO</td><td>Data Transfer Object: the JSON shape sent to / from the API.</td></tr>
+<tr><td>EF Core</td><td>Entity Framework Core, the .NET object-relational mapper.</td></tr>
+<tr><td>JWT</td><td>JSON Web Token: signed proof of identity and roles sent on each request.</td></tr>
+<tr><td>Karma</td><td>Points earned through participation; maps to tiers (Bronze … Platinum).</td></tr>
+<tr><td>RBAC</td><td>Role-Based Access Control: permissions depend on the user’s role.</td></tr>
+<tr><td>SignalR</td><td>ASP.NET real-time library using WebSockets.</td></tr>
+<tr><td>YARP</td><td>“Yet Another Reverse Proxy” from Microsoft, used by the optional gateway.</td></tr>
+</tbody></table>
+
+<h3>A.2 Feature status</h3>
+<table><thead><tr><th style="width:44%">Capability</th><th style="width:16%">Status</th><th>Evidence / notes</th></tr></thead><tbody>
+<tr><td>JWT auth, RBAC, role-request workflow</td><td class="ok">Implemented</td><td><code>AuthService</code>, <code>UserController</code></td></tr>
+<tr><td>Posts, scheduling, @mentions, restricted words</td><td class="ok">Implemented</td><td><code>PostService</code>, <code>ScheduledPostHostedService</code></td></tr>
+<tr><td>Reactions, nested comments, bookmarks, shares, reports</td><td class="ok">Implemented</td><td><code>InteractionController</code></td></tr>
+<tr><td>Communities with approvals and file library</td><td class="ok">Implemented</td><td><code>CommunityController</code></td></tr>
+<tr><td>Encrypted 1-to-1 chat, connection-gated</td><td class="ok">Implemented</td><td><code>MessagesController</code>, <code>MessageEncryptionService</code></td></tr>
+<tr><td>Connections &amp; follows</td><td class="ok">Implemented</td><td><code>UserService</code>, <code>Network.jsx</code></td></tr>
+<tr><td>Wikis (sections, versions, collaborators), Articles</td><td class="ok">Implemented</td><td><code>WikiController</code>, <code>ArticleController</code></td></tr>
+<tr><td>Clips, videos, podcasts</td><td class="ok">Implemented</td><td><code>ClipsController</code>, <code>VideoController</code>, <code>PodcastController</code></td></tr>
+<tr><td>Karma, leaderboard, tiers</td><td class="ok">Implemented</td><td><code>KarmaService</code>, <code>karmaEngine.js</code></td></tr>
+<tr><td>Notification center with preferences and toasts</td><td class="ok">Implemented</td><td><code>NotificationService</code>, <code>Navbar.jsx</code></td></tr>
+<tr><td>Admin Console, feature switches, audit log</td><td class="ok">Implemented</td><td><code>AdminConsole.jsx</code>, <code>SystemSettingsController</code>, <code>AuditLogController</code></td></tr>
+<tr><td><b>WebRTC audio / video calling</b></td><td class="no">Not found</td><td>No WebRTC / signalling code in backend or frontend. Treat as roadmap.</td></tr>
+<tr><td><b>Polls in posts</b></td><td class="no">Not found</td><td>No poll entity, endpoint or UI found. Treat as roadmap.</td></tr>
+<tr><td>Hashtag discovery</td><td class="part">Unverified</td><td>Tags exist for articles, videos and wikis; dedicated hashtag search was not confirmed.</td></tr>
+</tbody></table>
+
+<div class="callout tip"><b class="h">Keeping this document current</b>Update the matrix, API tables and feature status whenever a controller, role or module changes. Regenerate the PDF from this HTML file after each update.</div>
+
+</body>
+</html>

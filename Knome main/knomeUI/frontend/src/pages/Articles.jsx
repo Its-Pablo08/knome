@@ -687,10 +687,6 @@ export default function Articles() {
                         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,_var(--tw-gradient-stops))] from-sky-100/60 dark:from-sky-950/30 via-transparent to-transparent pointer-events-none"></div>
                         <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[500px] h-32 bg-sky-400/10 dark:bg-sky-500/10 blur-[80px] pointer-events-none"></div>
                         
-                        {/* Light Streaks behind text */}
-                        <div className="absolute top-[35%] left-0 w-[60%] h-[1px] bg-gradient-to-r from-sky-300/40 dark:from-sky-400/20 to-transparent"></div>
-                        <div className="absolute top-[50%] left-0 w-[40%] h-[2px] bg-gradient-to-r from-cyan-300/40 dark:from-cyan-400/20 to-transparent blur-[1px]"></div>
-                        <div className="absolute top-[65%] left-0 w-[50%] h-[1px] bg-gradient-to-r from-blue-300/40 dark:from-blue-400/20 to-transparent"></div>
 
                         {/* Content Left */}
                         <div className="relative z-10 flex flex-col items-start max-w-3xl">

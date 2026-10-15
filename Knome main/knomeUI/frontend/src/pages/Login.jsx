@@ -48,7 +48,7 @@ export default function Login() {
         } catch {}
 
         if (isAuthenticated && currentUser) {
-            const returnTarget = sessionStorage.getItem('knome_return_url') || '/';
+            const returnTarget = sessionStorage.getItem('knome_return_url') || sessionStorage.getItem('knome_last_route') || '/';
             sessionStorage.removeItem('knome_return_url');
             navigate(returnTarget, { replace: true });
             return;

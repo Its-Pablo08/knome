@@ -330,6 +330,10 @@ export const UserProvider = ({ children }) => {
         String(u.id) === String(savedEmpId)
     )) || defaultAdminUser;
 
+    if (typeof window !== 'undefined' && !savedEmpId && initialUser?.employeeId) {
+        try { localStorage.setItem('knome_employeeId', initialUser.employeeId); } catch (_) {}
+    }
+
     const [currentUser, setCurrentUser] = useState(initialUser);
     const [isAuthLoading, setIsAuthLoading] = useState(hasSavedSession);
     const [isAuthenticated, setIsAuthenticated] = useState(true);
@@ -664,8 +668,9 @@ export const UserProvider = ({ children }) => {
                 if (ssoEmpId) localStorage.setItem('knome_employeeId', ssoEmpId);
                 
                 // Restore the page user was trying to visit before SSO redirect (or default to '/')
-                const ssoReturnUrl = sessionStorage.getItem('knome_sso_return_url') || '/';
+                const ssoReturnUrl = sessionStorage.getItem('knome_return_url') || sessionStorage.getItem('knome_sso_return_url') || sessionStorage.getItem('knome_last_route') || '/';
                 sessionStorage.removeItem('knome_sso_return_url');
+                sessionStorage.removeItem('knome_return_url');
 
                 // Clean URL query parameters cleanly from address bar
                 window.history.replaceState({}, document.title, ssoReturnUrl);
@@ -925,9 +930,14 @@ export const UserProvider = ({ children }) => {
                 }
             }
 
-            // If no active session, require user to log in via MPO Employee Hub
-            setCurrentUser(null);
-            setIsAuthenticated(false);
+            // If no active session, fallback safely to initialUser so active page is preserved
+            if (!initialUser) {
+                setCurrentUser(null);
+                setIsAuthenticated(false);
+            } else {
+                setCurrentUser(initialUser);
+                setIsAuthenticated(true);
+            }
             setIsAuthLoading(false);
         };
 

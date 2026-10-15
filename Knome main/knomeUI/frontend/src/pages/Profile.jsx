@@ -794,6 +794,12 @@ export default function Profile() {
         const targetId = Number(targetColleague.id || targetColleague.userId);
         const targetName = targetColleague.name || targetColleague.fullName || 'Colleague';
 
+        if (!isOwnProfile && targetColleague.connectionStatus !== 'Connected') {
+            addToast('You can only message colleagues you are connected with.', 'warning');
+            setIsSendingQuickMessage(false);
+            return;
+        }
+
         try {
             await messagesApi.send(targetId, text);
             playMessageChime();
@@ -1121,8 +1127,8 @@ export default function Profile() {
                                     {isFollowing ? 'Following ✔' : 'Follow'}
                                 </button>
 
-                                {/* Direct Message Button */}
-                                {isMessagingEnabled && (
+                                {/* Direct Message Button - Only if Connected */}
+                                {isMessagingEnabled && displayUser.connectionStatus === 'Connected' && (
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -2739,8 +2745,8 @@ export default function Profile() {
                                                     </div>
                                                 </div>
 
-                                                {/* Right: Message & Quick Message Actions */}
-                                                {isMessagingEnabled && (
+                                                {/* Right: Message & Quick Message Actions - Only if Connected */}
+                                                {isMessagingEnabled && (isOwnProfile || conn.connectionStatus === 'Connected') && (
                                                     <div className="flex items-center gap-1.5 shrink-0">
                                                         <button
                                                             type="button"

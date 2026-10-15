@@ -126,72 +126,145 @@ function resolveVideoAuthor(rawAuthor = '', title = '', category = '', rawUserId
     };
 }
 
-export async function getVideos() {
-    try {
-        const [videosRes, postsRes, articlesRes] = await Promise.all([
-            apiClient.get('/videos').catch(() => []),
-            apiClient.get('/posts').catch(() => []),
-            apiClient.get('/articles').catch(() => [])
-        ]);
+// ── In-Memory Caching & Deduplication Layer ───────────────────────────────
+let cachedVideos = null;
+let cachedVideosTimestamp = 0;
+let inFlightVideosPromise = null;
+const VIDEOS_CACHE_TTL = 30000; // 30 seconds fresh cache TTL
 
-        const videoList = [];
-        const seenUrls = new Set();
+let cachedPlaylists = null;
+let cachedPlaylistsTimestamp = 0;
+let inFlightPlaylistsPromise = null;
+const PLAYLISTS_CACHE_TTL = 30000; // 30 seconds fresh cache TTL
 
-        // 1. Direct Video Uploads
-        if (Array.isArray(videosRes)) {
-            videosRes.forEach(v => {
-                const srcUrl = v.sourceUrl ? resolveMediaUrl(v.sourceUrl) : null;
-                if (srcUrl) seenUrls.add(srcUrl);
+export function getCachedVideos() {
+    return cachedVideos;
+}
 
-                const title = v.title || 'Untitled Video';
-                const category = v.categoryName || 'General';
-                const date = new Date(v.uploadedDate || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+export function invalidateVideosCache() {
+    cachedVideos = null;
+    cachedVideosTimestamp = 0;
+}
 
-                const resolvedAuthor = resolveVideoAuthor(
-                    v.uploaderFullName,
-                    title,
-                    category,
-                    v.uploaderUserId,
-                    v.uploaderProfilePhotoUrl,
-                    v.uploaderDesignation
-                );
+export function getCachedPlaylists() {
+    return cachedPlaylists;
+}
 
-                videoList.push({
-                    id: v.videoId ? v.videoId.toString() : `video_${Date.now()}_${Math.random()}`,
-                    title,
-                    description: generateVideoDescription(title, category, resolvedAuthor.author, date, v.description),
-                    thumbnail: (v.thumbnailUrl || v.thumbnail) ? resolveMediaUrl(v.thumbnailUrl || v.thumbnail) : 'https://images.unsplash.com/photo-1540317580384-e5d43616b9aa?auto=format&fit=crop&q=90&w=1600&h=900',
-                    duration: v.fileSizeMb ? `${v.fileSizeMb} MB` : 'Video Session',
-                    views: v.viewCount > 1000 ? (v.viewCount / 1000).toFixed(1) + 'k' : (v.viewCount || 0).toString(),
-                    likes: v.engagementSummary?.reactionSummary?.likeCount ?? v.engagementSummary?.reactionSummary?.totalCount ?? v.engagementSummary?.totalReactions ?? 0,
-                    isLiked: v.engagementSummary?.reactionSummary?.currentUserReactionType === 'Like',
-                    category,
-                    date: new Date(v.uploadedDate || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                    author: resolvedAuthor.author,
-                    authorId: resolvedAuthor.authorId,
-                    uploaderUserId: v.uploaderUserId,
-                    authorAvatar: resolvedAuthor.authorAvatar,
-                    authorDesignation: resolvedAuthor.authorDesignation,
-                    tags: v.tags || ['Video'],
-                    sourceUrl: srcUrl,
-                    sourceType: v.sourceType || 'LocalUpload',
-                    engagementSummary: v.engagementSummary
+export function invalidatePlaylistsCache() {
+    cachedPlaylists = null;
+    cachedPlaylistsTimestamp = 0;
+}
+
+export async function getVideos(forceFresh = false) {
+    if (!forceFresh && cachedVideos && (Date.now() - cachedVideosTimestamp < VIDEOS_CACHE_TTL)) {
+        return cachedVideos;
+    }
+    if (inFlightVideosPromise) {
+        return inFlightVideosPromise;
+    }
+
+    inFlightVideosPromise = (async () => {
+        try {
+            const [videosRes, postsRes, articlesRes] = await Promise.all([
+                apiClient.get('/videos').catch(() => []),
+                apiClient.get('/posts').catch(() => []),
+                apiClient.get('/articles').catch(() => [])
+            ]);
+
+            const videoList = [];
+            const seenYtIds = new Set();
+            const seenNormUrls = new Set();
+            const seenIds = new Set();
+
+            const extractYtId = (url, fallback) => {
+                if (fallback && typeof fallback === 'string' && fallback.length === 11 && !fallback.includes('/') && !fallback.includes('.')) {
+                    return fallback;
+                }
+                if (!url || typeof url !== 'string') return null;
+                const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+                return m ? m[1] : null;
+            };
+
+            const normalizeUrl = (u) => {
+                if (!u || typeof u !== 'string') return '';
+                try {
+                    const parsed = new URL(u, 'http://placeholder.internal');
+                    return (parsed.pathname + parsed.search).toLowerCase().replace(/\/+$/, '');
+                } catch {
+                    return u.trim().toLowerCase().split('?')[0].replace(/\/+$/, '');
+                }
+            };
+
+            const addIfUnique = (vid) => {
+                if (!vid) return false;
+                const ytId = extractYtId(vid.sourceUrl || vid.url, vid.videoId);
+                const normUrl = normalizeUrl(vid.sourceUrl || vid.url);
+                const idStr = vid.id ? String(vid.id).trim() : '';
+
+                if (ytId && seenYtIds.has(ytId)) return false;
+                if (normUrl && seenNormUrls.has(normUrl)) return false;
+                if (idStr && seenIds.has(idStr)) return false;
+
+                if (ytId) seenYtIds.add(ytId);
+                if (normUrl) seenNormUrls.add(normUrl);
+                if (idStr) seenIds.add(idStr);
+
+                videoList.push(vid);
+                return true;
+            };
+
+            // 1. Direct Video Uploads
+            if (Array.isArray(videosRes)) {
+                videosRes.forEach(v => {
+                    const srcUrl = v.sourceUrl ? resolveMediaUrl(v.sourceUrl) : null;
+                    const title = v.title || 'Untitled Video';
+                    const category = v.categoryName || 'General';
+                    const date = new Date(v.uploadedDate || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+                    const resolvedAuthor = resolveVideoAuthor(
+                        v.uploaderFullName,
+                        title,
+                        category,
+                        v.uploaderUserId,
+                        v.uploaderProfilePhotoUrl,
+                        v.uploaderDesignation
+                    );
+
+                    addIfUnique({
+                        id: v.videoId ? v.videoId.toString() : `video_${Date.now()}_${Math.random()}`,
+                        videoId: v.videoId,
+                        title,
+                        description: generateVideoDescription(title, category, resolvedAuthor.author, date, v.description),
+                        thumbnail: (v.thumbnailUrl || v.thumbnail) ? resolveMediaUrl(v.thumbnailUrl || v.thumbnail) : 'https://images.unsplash.com/photo-1540317580384-e5d43616b9aa?auto=format&fit=crop&q=90&w=1600&h=900',
+                        duration: v.fileSizeMb ? `${v.fileSizeMb} MB` : 'Video Session',
+                        views: v.viewCount > 1000 ? (v.viewCount / 1000).toFixed(1) + 'k' : (v.viewCount || 0).toString(),
+                        likes: v.engagementSummary?.reactionSummary?.likeCount ?? v.engagementSummary?.reactionSummary?.totalCount ?? v.engagementSummary?.totalReactions ?? 0,
+                        isLiked: v.engagementSummary?.reactionSummary?.currentUserReactionType === 'Like',
+                        category,
+                        date: new Date(v.uploadedDate || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        author: resolvedAuthor.author,
+                        authorId: resolvedAuthor.authorId,
+                        uploaderUserId: v.uploaderUserId,
+                        authorAvatar: resolvedAuthor.authorAvatar,
+                        authorDesignation: resolvedAuthor.authorDesignation,
+                        tags: v.tags || ['Video'],
+                        sourceUrl: srcUrl,
+                        sourceType: v.sourceType || 'LocalUpload',
+                        engagementSummary: v.engagementSummary
+                    });
                 });
-            });
-        }
+            }
 
-        // 2. Videos uploaded inside Posts
-        if (Array.isArray(postsRes)) {
-            postsRes.forEach(p => {
-                const attachments = p.attachments || [];
-                attachments.forEach(att => {
-                    const rawUrl = att.url || att.mediaUrl || att.path;
-                    if (!rawUrl) return;
-                    const isVideo = att.type === 'video' || !!rawUrl.match(/\.(mp4|webm|ogg|mov|m4v|mkv)(\?.*)?$/i) || rawUrl.includes('/uploads/videos');
-                    if (isVideo) {
-                        const fullUrl = resolveMediaUrl(rawUrl);
-                        if (!seenUrls.has(fullUrl)) {
-                            seenUrls.add(fullUrl);
+            // 2. Videos uploaded inside Posts
+            if (Array.isArray(postsRes)) {
+                postsRes.forEach((p, pIdx) => {
+                    const attachments = p.attachments || [];
+                    attachments.forEach((att, attIdx) => {
+                        const rawUrl = att.url || att.mediaUrl || att.path;
+                        if (!rawUrl) return;
+                        const isVideo = att.type === 'video' || !!rawUrl.match(/\.(mp4|webm|ogg|mov|m4v|mkv)(\?.*)?$/i) || rawUrl.includes('/uploads/videos');
+                        if (isVideo) {
+                            const fullUrl = resolveMediaUrl(rawUrl);
                             const title = p.title || (p.content ? p.content.slice(0, 60) + '...' : 'Post Video Attachment');
                             const date = new Date(p.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
                             const resolvedAuthor = resolveVideoAuthor(
@@ -202,8 +275,8 @@ export async function getVideos() {
                                 p.authorProfilePhotoUrl || p.author?.avatar,
                                 p.authorDesignation || p.author?.roleName
                             );
-                            videoList.push({
-                                id: `post_vid_${p.postId || p.id}_${att.id || Math.random()}`,
+                            addIfUnique({
+                                id: `post_vid_${p.postId || p.id || pIdx}_${att.id || attIdx}`,
                                 title,
                                 description: generateVideoDescription(title, 'Training & Tutorials', resolvedAuthor.author, date, p.content),
                                 thumbnail: att.thumbnail ? resolveMediaUrl(att.thumbnail) : 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&q=90&w=1600&h=900',
@@ -221,23 +294,20 @@ export async function getVideos() {
                                 sourceType: 'LocalUpload'
                             });
                         }
-                    }
+                    });
                 });
-            });
-        }
+            }
 
-        // 3. Videos uploaded inside Articles
-        if (Array.isArray(articlesRes)) {
-            articlesRes.forEach(a => {
-                const attachments = a.attachments || [];
-                attachments.forEach(att => {
-                    const rawUrl = att.url || att.mediaUrl || att.rawUrl;
-                    if (!rawUrl) return;
-                    const isVideo = att.isVideo || att.fileType === 'Video' || (att.name && att.name.toLowerCase().includes('media_')) || !!rawUrl.match(/\.(mp4|webm|ogg|mov|m4v|mkv)(\?.*)?$/i);
-                    if (isVideo) {
-                        const fullUrl = resolveMediaUrl(rawUrl);
-                        if (!seenUrls.has(fullUrl)) {
-                            seenUrls.add(fullUrl);
+            // 3. Videos uploaded inside Articles
+            if (Array.isArray(articlesRes)) {
+                articlesRes.forEach((a, aIdx) => {
+                    const attachments = a.attachments || [];
+                    attachments.forEach((att, attIdx) => {
+                        const rawUrl = att.url || att.mediaUrl || att.rawUrl;
+                        if (!rawUrl) return;
+                        const isVideo = att.isVideo || att.fileType === 'Video' || (att.name && att.name.toLowerCase().includes('media_')) || !!rawUrl.match(/\.(mp4|webm|ogg|mov|m4v|mkv)(\?.*)?$/i);
+                        if (isVideo) {
+                            const fullUrl = resolveMediaUrl(rawUrl);
                             const title = a.title || att.name || 'Article Video Media';
                             const date = new Date(a.publishedDate || a.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
                             const resolvedAuthor = resolveVideoAuthor(
@@ -248,8 +318,8 @@ export async function getVideos() {
                                 a.authorProfilePhotoUrl,
                                 a.authorDesignation
                             );
-                            videoList.push({
-                                id: `art_vid_${a.articleId || a.id}_${att.id || Math.random()}`,
+                            addIfUnique({
+                                id: `art_vid_${a.articleId || a.id || aIdx}_${att.id || attIdx}`,
                                 title,
                                 description: generateVideoDescription(title, 'Engineering Tech Talks', resolvedAuthor.author, date, a.summary || a.description),
                                 thumbnail: a.coverImageUrl ? resolveMediaUrl(a.coverImageUrl) : 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=90&w=1600&h=900',
@@ -267,57 +337,49 @@ export async function getVideos() {
                                 sourceType: 'LocalUpload'
                             });
                         }
-                    }
+                    });
                 });
-            });
-        }
-
-
-        // 4. Include default series episodes & custom imported YouTube playlist videos
-        APNA_JS_EPISODES.forEach(v => {
-            if (v && v.id && !seenUrls.has(v.id)) {
-                seenUrls.add(v.id);
-                videoList.push(v);
             }
-        });
-        CWH_JS_EPISODES.forEach(v => {
-            if (v && v.id && !seenUrls.has(v.id)) {
-                seenUrls.add(v.id);
-                videoList.push(v);
-            }
-        });
 
-        // Sync shared imported videos across all users
-        try {
-            await syncSharedImportedVideos();
-        } catch (_) {}
+            // 4. Default series episodes (Apna College & CodeWithHarry)
+            APNA_JS_EPISODES.forEach(v => addIfUnique(v));
+            CWH_JS_EPISODES.forEach(v => addIfUnique(v));
 
-        try {
-            const imported = JSON.parse(localStorage.getItem('knome_imported_yt_videos') || '[]');
-            if (Array.isArray(imported)) {
-                imported.forEach(v => {
-                    if (v && v.id && !seenUrls.has(v.id)) {
-                        seenUrls.add(v.id);
-                        videoList.push({
+            // 5. Custom imported YouTube playlist videos
+            try {
+                const imported = JSON.parse(localStorage.getItem('knome_imported_yt_videos') || '[]');
+                if (Array.isArray(imported)) {
+                    imported.forEach(v => {
+                        addIfUnique({
                             ...v,
-                            views: '0',
-                            likes: 0
+                            views: v.views || '0',
+                            likes: v.likes || 0
                         });
-                    }
-                });
-            }
-        } catch (e) {}
+                    });
+                }
+            } catch (e) {}
 
-        return videoList;
-    } catch (error) {
-        console.error('Failed to fetch aggregated videos:', error);
-        return [];
-    }
+            // Background sync for shared imported videos without blocking UI
+            syncSharedImportedVideos().catch(() => {});
+
+            cachedVideos = videoList;
+            cachedVideosTimestamp = Date.now();
+            return videoList;
+        } catch (error) {
+            console.error('Failed to fetch aggregated videos:', error);
+            return cachedVideos || [];
+        } finally {
+            inFlightVideosPromise = null;
+        }
+    })();
+
+    return inFlightVideosPromise;
 }
 
 export async function deleteVideo(videoId) {
     try {
         await apiClient.delete(`/videos/${videoId}`);
+        invalidateVideosCache();
         return true;
     } catch (error) {
         console.error('Failed to delete video:', error);
@@ -793,42 +855,60 @@ export async function syncSharedImportedVideos() {
     return localImported;
 }
 
-export async function fetchPlaylists() {
-    let localPlaylists = [];
-    try {
-        const stored = localStorage.getItem(PLAYLISTS_STORAGE_KEY);
-        if (stored) {
-            localPlaylists = JSON.parse(stored);
-        }
-    } catch (_) {}
-
-    try {
-        const res = await fetch('/api/shared-playlists/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ playlists: localPlaylists })
-        });
-        if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data.playlists) && data.playlists.length > 0) {
-                const normalized = data.playlists.map(pl => {
-                    if (pl.id === 'pl_series_apna_js' && (!pl.episodes || pl.episodes.length === 0)) {
-                        return { ...pl, episodes: APNA_JS_EPISODES };
-                    }
-                    if (pl.id === 'pl_series_cwh_js' && (!pl.episodes || pl.episodes.length === 0)) {
-                        return { ...pl, episodes: CWH_JS_EPISODES };
-                    }
-                    return pl;
-                });
-                localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(normalized));
-                return normalized;
-            }
-        }
-    } catch (err) {
-        console.warn('Playlists server sync fallback to localStorage:', err);
+export async function fetchPlaylists(forceFresh = false) {
+    if (!forceFresh && cachedPlaylists && (Date.now() - cachedPlaylistsTimestamp < PLAYLISTS_CACHE_TTL)) {
+        return cachedPlaylists;
+    }
+    if (inFlightPlaylistsPromise) {
+        return inFlightPlaylistsPromise;
     }
 
-    return getPlaylists();
+    inFlightPlaylistsPromise = (async () => {
+        let localPlaylists = [];
+        try {
+            const stored = localStorage.getItem(PLAYLISTS_STORAGE_KEY);
+            if (stored) {
+                localPlaylists = JSON.parse(stored);
+            }
+        } catch (_) {}
+
+        try {
+            const res = await fetch('/api/shared-playlists/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playlists: localPlaylists })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data.playlists) && data.playlists.length > 0) {
+                    const normalized = data.playlists.map(pl => {
+                        if (pl.id === 'pl_series_apna_js' && (!pl.episodes || pl.episodes.length === 0)) {
+                            return { ...pl, episodes: APNA_JS_EPISODES };
+                        }
+                        if (pl.id === 'pl_series_cwh_js' && (!pl.episodes || pl.episodes.length === 0)) {
+                            return { ...pl, episodes: CWH_JS_EPISODES };
+                        }
+                        return pl;
+                    });
+                    localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(normalized));
+                    cachedPlaylists = normalized;
+                    cachedPlaylistsTimestamp = Date.now();
+                    return normalized;
+                }
+            }
+        } catch (err) {
+            console.warn('Playlists server sync fallback to localStorage:', err);
+        }
+
+        const fallback = getPlaylists();
+        cachedPlaylists = fallback;
+        cachedPlaylistsTimestamp = Date.now();
+        return fallback;
+    })().finally(() => {
+        inFlightPlaylistsPromise = null;
+    });
+
+    return inFlightPlaylistsPromise;
 }
 
 export async function savePlaylist(playlistData) {
@@ -850,6 +930,12 @@ export async function savePlaylist(playlistData) {
     };
     const updated = [newPl, ...existing.filter(p => p.id !== newPl.id)];
     localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(updated));
+
+    invalidateVideosCache();
+    invalidatePlaylistsCache();
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('knome_playlist_updated'));
+    }
 
     // Persist to server store asynchronously
     try {
@@ -877,6 +963,12 @@ export async function deletePlaylist(playlistId) {
             const cleaned = imported.filter(v => v.playlistId !== playlistId);
             localStorage.setItem('knome_imported_yt_videos', JSON.stringify(cleaned));
         } catch (_) {}
+
+        invalidateVideosCache();
+        invalidatePlaylistsCache();
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('knome_playlist_updated'));
+        }
 
         // Persist deletion to server store asynchronously
         try {

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useUser, resolveEmployeeName, deduplicateMembers, KNOWN_ROSTER_NAMES, INITIAL_USERS } from '../components/contexts/UserContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
 import { apiClient } from '../utils/apiClient';
-import { communitiesApi, mediaApi, postsApi, notificationsApi, interactionsApi, adminApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, formatRelativeTime, resolveSharedTarget } from '../utils/apiService';
+import { communitiesApi, userApi, mediaApi, postsApi, notificationsApi, interactionsApi, adminApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, formatRelativeTime, resolveSharedTarget } from '../utils/apiService';
 import { checkRestrictedContent } from '../utils/restrictedWords';
 import ArticleShareModal from '../components/modals/ArticleShareModal';
 import SuspendUserModal from '../components/modals/SuspendUserModal';
@@ -199,6 +199,24 @@ export default function CommunityView() {
             awardRuleKarma(userId, 'COMMUNITY_PARTICIPATION', { communityId: communityId });
         }
     }, [communityId, currentUser, awardRuleKarma]);
+
+    // Connected user IDs for messaging permission gating
+    const [connectedUserIds, setConnectedUserIds] = useState(new Set());
+    useEffect(() => {
+        const loadConnections = async () => {
+            const uId = currentUser?.userId || currentUser?.id;
+            if (!uId) return;
+            try {
+                const res = await userApi.getConnections(uId);
+                const list = Array.isArray(res) ? res : (res?.data || []);
+                const ids = new Set(list.map(u => Number(u.id || u.userId)).filter(Boolean));
+                setConnectedUserIds(ids);
+            } catch (err) {
+                console.warn('Failed to load user connections in community view', err);
+            }
+        };
+        loadConnections();
+    }, [currentUser?.userId, currentUser?.id]);
 
     const [community, setCommunity] = useState(null);
     const [activeTab, setActiveTab] = useState('feed'); // 'feed', 'members', 'admin'
@@ -5194,9 +5212,9 @@ export default function CommunityView() {
                                                                         <span className="material-symbols-outlined text-indigo-500 text-[24px]">description</span>
                                                                         <div className="min-w-0 flex-1">
                                                                             <p className="text-xs font-bold truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{att.name || 'Document Attachment'}</p>
-                                                                            <span className="text-[11px] text-slate-400">Click to view / download</span>
+                                                                            <span className="text-[11px] text-slate-400">Click to view</span>
                                                                         </div>
-                                                                        <span className="material-symbols-outlined text-slate-400 text-[18px]">download</span>
+                                                                        <span className="material-symbols-outlined text-slate-400 text-[18px]">visibility</span>
                                                                     </a>
                                                                 );
                                                             })}
@@ -5768,7 +5786,7 @@ export default function CommunityView() {
                                                                  </button>
                                                              </>
                                                          )}
-                                                         {isMessagingEnabled && String(m.userId || m.id) !== String(currentUser?.userId || currentUser?.id) && (
+                                                         {isMessagingEnabled && String(m.userId || m.id) !== String(currentUser?.userId || currentUser?.id) && connectedUserIds.has(Number(m.userId || m.id)) && (
                                                              <button 
                                                                  onClick={() => navigate(`/messages?userId=${m.userId || m.id}&name=${encodeURIComponent(m.displayName || '')}`)}
                                                                  className="px-2.5 py-1 rounded-lg border border-cyan-200 dark:border-cyan-800/60 bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 text-[11px] font-semibold transition-all shrink-0 flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
@@ -6001,15 +6019,6 @@ export default function CommunityView() {
                                                                 >
                                                                     <span className="material-symbols-outlined text-[18px]">visibility</span>
                                                                 </button>
-                                                                {(file.url || file.Url || file.fileUrl || file.id) && (
-                                                                    <button
-                                                                        onClick={(e) => handleDownloadFile(e, file)}
-                                                                        className="p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition-colors cursor-pointer"
-                                                                        title="Download File"
-                                                                    >
-                                                                        <span className="material-symbols-outlined text-[18px]">download</span>
-                                                                    </button>
-                                                                )}
                                                                 {canDeleteFile(file) && (
                                                                     <button
                                                                         onClick={(e) => {
@@ -6086,15 +6095,6 @@ export default function CommunityView() {
                                                         >
                                                             <span className="material-symbols-outlined text-[18px]">visibility</span>
                                                         </button>
-                                                        {(file.url || file.Url || file.fileUrl || file.id) && (
-                                                            <button
-                                                                onClick={(e) => handleDownloadFile(e, file)}
-                                                                className="p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition-colors cursor-pointer"
-                                                                title="Download File"
-                                                            >
-                                                                <span className="material-symbols-outlined text-[18px]">download</span>
-                                                            </button>
-                                                        )}
                                                         {canDeleteFile(file) && (
                                                             <button
                                                                 onClick={(e) => {
@@ -6954,8 +6954,14 @@ export default function CommunityView() {
                     : 'description';
 
                 return (
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5 md:p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-                        <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[90vh] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden">
+                    <div 
+                        className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5 md:p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200"
+                        onContextMenu={(e) => e.preventDefault()}
+                    >
+                        <div 
+                            className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[90vh] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden select-none"
+                            onContextMenu={(e) => e.preventDefault()}
+                        >
                             {/* Modal Header */}
                             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/90 dark:bg-slate-800/90 shrink-0 gap-3">
                                 <div className="flex items-center gap-3 min-w-0">
@@ -7032,31 +7038,11 @@ export default function CommunityView() {
                                         </div>
                                     )}
 
-                                    {/* Open Full View (Direct in new window) */}
-                                    {displayUrl && (
-                                        <a
-                                            href={displayUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer text-decoration-none shadow-sm"
-                                            title="Open Full Document in New Window"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                                            <span className="hidden sm:inline">Open Full View</span>
-                                        </a>
-                                    )}
-
-                                    {/* Download Document Button */}
-                                    {displayUrl && (
-                                        <button
-                                            onClick={(e) => handleDownloadFile(e, previewModalFile)}
-                                            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/20"
-                                            title="Download File"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">download</span>
-                                            <span className="hidden sm:inline">Download</span>
-                                        </button>
-                                    )}
+                                    {/* Embedded View Only Indicator */}
+                                    <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold border border-slate-200 dark:border-slate-700">
+                                        <span className="material-symbols-outlined text-[16px] text-emerald-500">verified_user</span>
+                                        <span>Embedded View Only</span>
+                                    </div>
 
                                     {/* Close Button */}
                                     <button
@@ -7085,6 +7071,7 @@ export default function CommunityView() {
                                         <video
                                             src={displayUrl}
                                             controls
+                                            controlsList="nodownload"
                                             autoPlay
                                             playsInline
                                             className="w-full max-h-[65vh] rounded-2xl object-contain"
@@ -7096,7 +7083,7 @@ export default function CommunityView() {
                                     previewTab === 'viewer' ? (
                                         <div className="w-full h-full relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-inner bg-white">
                                             <iframe
-                                                src={`${displayUrl}#toolbar=1&navpanes=0&view=Fit`}
+                                                src={`${displayUrl}#toolbar=0&navpanes=0&view=Fit`}
                                                 title={previewModalFile.name}
                                                 className="w-full h-full border-0 bg-white"
                                             />
@@ -7149,13 +7136,6 @@ export default function CommunityView() {
 
                                                 <div className="flex items-center gap-3 pt-3">
                                                     <button
-                                                        onClick={(e) => handleDownloadFile(e, previewModalFile)}
-                                                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[16px]">download</span>
-                                                        Download PDF ({previewModalFile.size})
-                                                    </button>
-                                                    <button
                                                         onClick={() => setPreviewTab('viewer')}
                                                         className="px-5 py-2.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs transition-all flex items-center gap-2 cursor-pointer"
                                                     >
@@ -7183,6 +7163,7 @@ export default function CommunityView() {
                                                 <audio
                                                     src={displayUrl}
                                                     controls
+                                                    controlsList="nodownload"
                                                     autoPlay
                                                     className="w-full outline-none"
                                                 >
@@ -7193,15 +7174,6 @@ export default function CommunityView() {
                                                     Audio URL is not available. Please verify the uploaded file.
                                                 </div>
                                             )}
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <button
-                                                onClick={(e) => handleDownloadFile(e, previewModalFile)}
-                                                className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
-                                            >
-                                                <span className="material-symbols-outlined text-[16px]">download</span>
-                                                Download Audio Track ({previewModalFile.size})
-                                            </button>
                                         </div>
                                     </div>
                                 ) : isOfficeDoc ? (
@@ -7252,15 +7224,6 @@ export default function CommunityView() {
                                             </div>
 
                                             <div className="flex flex-wrap items-center gap-3 pt-3">
-                                                {displayUrl && (
-                                                    <button
-                                                        onClick={(e) => handleDownloadFile(e, previewModalFile)}
-                                                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[16px]">download</span>
-                                                        Download Document ({previewModalFile.size})
-                                                    </button>
-                                                )}
                                                 {displayUrl && (displayUrl.startsWith('http://') || displayUrl.startsWith('https://')) && (
                                                     <a
                                                         href={`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(displayUrl)}`}
@@ -7308,18 +7271,6 @@ export default function CommunityView() {
                                                     </div>
                                                 ))}
                                             </div>
-
-                                            {displayUrl && (
-                                                <div className="pt-3">
-                                                    <button
-                                                        onClick={(e) => handleDownloadFile(e, previewModalFile)}
-                                                        className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-md transition-all inline-flex items-center gap-2 cursor-pointer"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[16px]">download</span>
-                                                        Download Archive ({previewModalFile.size})
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
                                 ) : (
@@ -7338,27 +7289,11 @@ export default function CommunityView() {
                                         </div>
 
                                         <div className="space-y-4 text-xs text-slate-600 dark:text-slate-300">
-                                            <p>This file is stored in the community repository. You can download or view it externally:</p>
-                                            {displayUrl && (
-                                                <div className="flex items-center gap-3 pt-2">
-                                                    <button
-                                                        onClick={(e) => handleDownloadFile(e, previewModalFile)}
-                                                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[16px]">download</span>
-                                                        Download File ({previewModalFile.size})
-                                                    </button>
-                                                    <a
-                                                        href={displayUrl}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="px-5 py-2.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs transition-all flex items-center gap-2"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                                                        Open in New Tab
-                                                    </a>
-                                                </div>
-                                            )}
+                                            <p>This file is stored in the community repository. Direct downloads and external raw saving are restricted by organization policy.</p>
+                                            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 font-medium w-fit">
+                                                <span className="material-symbols-outlined text-[16px] text-emerald-500">lock</span>
+                                                <span>Protected Asset • View Only Mode</span>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -7371,15 +7306,6 @@ export default function CommunityView() {
                                     MPOnline Enterprise Document Viewer
                                 </span>
                                 <div className="flex items-center gap-4">
-                                    {displayUrl && (
-                                        <button
-                                            onClick={(e) => handleDownloadFile(e, previewModalFile)}
-                                            className="font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-500 transition-colors flex items-center gap-1 cursor-pointer bg-transparent border-0 p-0"
-                                        >
-                                            <span className="material-symbols-outlined text-[14px]">download</span>
-                                            Download
-                                        </button>
-                                    )}
                                     <button
                                         onClick={() => setPreviewModalFile(null)}
                                         className="font-bold text-indigo-500 hover:text-indigo-600 cursor-pointer"

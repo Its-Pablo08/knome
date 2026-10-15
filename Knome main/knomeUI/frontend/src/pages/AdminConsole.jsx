@@ -333,6 +333,7 @@ export default function AdminConsole() {
 
     // Active Navigation Tab & Hierarchical Functional Domain
     const [activeTab, setActiveTab] = useState('moderation');
+    const [approvalSubTab, setApprovalSubTab] = useState('governance'); // 'governance' | 'modules'
     const [lastUpdatedTime, setLastUpdatedTime] = useState(new Date().toLocaleTimeString());
     const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -3413,6 +3414,7 @@ export default function AdminConsole() {
                         <span className="text-indigo-600 dark:text-indigo-400 font-bold">
                             {activeTab === 'moderation' ? 'Content Reports' :
                              activeTab === 'media_approvals' ? 'Media Approvals' :
+                             activeTab === 'approval_policy' ? (approvalSubTab === 'modules' ? 'Platform Feature Access Control' : 'Governance & Platform Approvals') :
                              activeTab === 'community_approvals' ? 'Community Creation Approvals' :
                              activeTab === 'ai_moderation' ? 'AI Moderation Rules' :
                              activeTab === 'communities' ? 'Community Moderation' :
@@ -6948,7 +6950,90 @@ export default function AdminConsole() {
 
             {/* ─── TAB: CONTENT & COMMUNITY APPROVAL POLICY & CONFIG ─── */}
             {activeTab === 'approval_policy' && (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 space-y-6">
+                <div className="space-y-4">
+                    {/* ── SUB-TAB NAVIGATION: GOVERNANCE VS MODULE TOGGLES ── */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-2.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 p-1 bg-slate-100/80 dark:bg-slate-800/80 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
+                            <button
+                                type="button"
+                                onClick={() => setApprovalSubTab('governance')}
+                                className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                                    approvalSubTab === 'governance'
+                                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700 ring-1 ring-slate-900/5'
+                                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/60 dark:hover:bg-slate-800'
+                                }`}
+                            >
+                                <span className={`material-symbols-outlined text-[18px] ${approvalSubTab === 'governance' ? 'text-rose-500' : 'text-slate-400'}`}>
+                                    admin_panel_settings
+                                </span>
+                                <span>Governance & Platform Approvals</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                    approvalSubTab === 'governance'
+                                        ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                        : 'bg-slate-200/80 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                                }`}>
+                                    {[
+                                        configState.requireCommunityApproval !== false,
+                                        configState.requireVideoApproval !== false,
+                                        configState.requirePodcastApproval !== false,
+                                        configState.enableMessaging !== false,
+                                        configState.enableEmail !== false
+                                    ].filter(Boolean).length} / 5
+                                </span>
+                                {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) && (
+                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Pending Governance changes"></span>
+                                )}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setApprovalSubTab('modules')}
+                                className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                                    approvalSubTab === 'modules'
+                                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700 ring-1 ring-slate-900/5'
+                                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/60 dark:hover:bg-slate-800'
+                                }`}
+                            >
+                                <span className={`material-symbols-outlined text-[18px] ${approvalSubTab === 'modules' ? 'text-indigo-500' : 'text-slate-400'}`}>
+                                    tune
+                                </span>
+                                <span>Platform Feature Access Control</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                    approvalSubTab === 'modules'
+                                        ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
+                                        : 'bg-slate-200/80 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                                }`}>
+                                    {[
+                                        configState.enablePosts !== false,
+                                        configState.enableArticles !== false,
+                                        configState.enableClips !== false,
+                                        configState.enableWiki !== false,
+                                        configState.enableVideos !== false,
+                                        configState.enablePodcasts !== false
+                                    ].filter(Boolean).length} / 6
+                                </span>
+                                {getPendingGovernanceChanges().some(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)) && (
+                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Pending Module changes"></span>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Right: Tab Description / Info */}
+                        <div className="flex items-center gap-2 px-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            <span className="material-symbols-outlined text-[18px] text-indigo-500">
+                                {approvalSubTab === 'governance' ? 'policy' : 'apps'}
+                            </span>
+                            <span className="text-[11px] hidden sm:inline">
+                                {approvalSubTab === 'governance'
+                                    ? 'Governance policies, approval workflows & email services'
+                                    : 'Core content modules, feature routing & navigation access'}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* ─── TAB 1: GOVERNANCE & PLATFORM APPROVALS CONTROL CENTER ─── */}
+                    {approvalSubTab === 'governance' && (
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 space-y-6">
                     {/* Header Bar */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
                         <div className="flex items-center gap-3">
@@ -6976,17 +7061,10 @@ export default function AdminConsole() {
                                     configState.enableEmail !== false
                                 ].filter(Boolean).length} / 5 Governance Policies
                             </span>
-                            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                                {[
-                                    configState.enablePosts !== false,
-                                    configState.enableArticles !== false,
-                                    configState.enableClips !== false,
-                                    configState.enableWiki !== false,
-                                    configState.enableVideos !== false,
-                                    configState.enablePodcasts !== false
-                                ].filter(Boolean).length} / 6 Features Active
-                            </span>
+
+
+
+
                             <button
                                 type="button"
                                 onClick={handleSaveConfigClick}
@@ -7363,8 +7441,127 @@ export default function AdminConsole() {
 
                     </div>
 
-                    {/* ── SECTION: PLATFORM FEATURE ACCESS CONTROL (MODULE TOGGLES) ── */}
-                    <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                    {/* Bottom Status & Persistence Bar (Governance) */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2 text-xs">
+                            {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) ? (
+                                <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                    <span>
+                                        {getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length} pending governance change{getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length > 1 ? 's' : ''} ready to review & commit
+                                    </span>
+                                </span>
+                            ) : (
+                                <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span>All platform governance settings are synchronized</span>
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setConfigState(prev => ({
+                                            ...prev,
+                                            requireContentAndCommunityApproval: committedConfig.requireContentAndCommunityApproval,
+                                            requireCommunityApproval: committedConfig.requireCommunityApproval,
+                                            requireVideoApproval: committedConfig.requireVideoApproval,
+                                            requirePodcastApproval: committedConfig.requirePodcastApproval,
+                                            enableMessaging: committedConfig.enableMessaging,
+                                            enableEmail: committedConfig.enableEmail
+                                        }));
+                                        showToast('Pending governance changes have been discarded.');
+                                    }}
+                                    className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
+                                >
+                                    Discard Draft
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={handleSaveConfigClick}
+                                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
+                                <span>Save & Commit Governance Changes {getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length > 0 ? `(${getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length})` : ''}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ─── TAB 2: PLATFORM FEATURE ACCESS CONTROL (MODULE TOGGLES) ─── */}
+            {approvalSubTab === 'modules' && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 space-y-6">
+                    {/* Header Bar */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
+                                <span className="material-symbols-outlined text-[26px]">tune</span>
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                                    Platform Feature Access Control (Module Toggles)
+                                </h2>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Configure individual module availability across Knome. When a feature is toggled OFF, navigation links are hidden, direct routes are blocked, and backend APIs are protected.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                                {[
+                                    configState.enablePosts !== false,
+                                    configState.enableArticles !== false,
+                                    configState.enableClips !== false,
+                                    configState.enableWiki !== false,
+                                    configState.enableVideos !== false,
+                                    configState.enablePodcasts !== false
+                                ].filter(Boolean).length} / 6 Features Active
+                            </span>
+                            <button
+                                type="button"
+                                onClick={handleSaveConfigClick}
+                                className={`px-4 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${
+                                    getPendingGovernanceChanges().some(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key))
+                                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30 animate-pulse'
+                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
+                                <span>Save Changes {getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length > 0 ? `(${getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length})` : ''}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Quick Presets Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs font-semibold">
+                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[16px] text-indigo-500">tune</span>
+                            <span>Quick Presets:</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => handleSetAllFeatures(true)}
+                                className="px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 text-[11px] font-bold cursor-pointer transition-all"
+                            >
+                                Enable All 6 Features
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleSetAllFeatures(false)}
+                                className="px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 text-[11px] font-bold cursor-pointer transition-all"
+                            >
+                                Disable All Features
+                            </button>
+                        </div>
+                    </div>
+                    {false && (
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-sm shrink-0">
@@ -7396,7 +7593,7 @@ export default function AdminConsole() {
                                     Disable All Features
                                 </button>
                             </div>
-                        </div>
+                        </div>)}
 
                         {/* ── 6 INDEPENDENT FEATURE CARDS GRID ── */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -7780,32 +7977,40 @@ export default function AdminConsole() {
                             </div>
 
                         </div>
-                    </div>
+
 
                     {/* Bottom Status & Persistence Bar */}
                     <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center gap-2 text-xs">
-                            {getPendingGovernanceChanges().length > 0 ? (
+                            {getPendingGovernanceChanges().some(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)) ? (
                                 <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold">
                                     <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
                                     <span>
-                                        {getPendingGovernanceChanges().length} pending change{getPendingGovernanceChanges().length > 1 ? 's' : ''} ready to review & commit
+                                        {getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length} pending module change{getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length > 1 ? 's' : ''} ready to review & commit
                                     </span>
                                 </span>
                             ) : (
                                 <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
                                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    <span>All platform governance settings are synchronized</span>
+                                    <span>All platform feature module toggles are synchronized</span>
                                 </span>
                             )}
                         </div>
                         <div className="flex items-center gap-2">
-                            {getPendingGovernanceChanges().length > 0 && (
+                            {getPendingGovernanceChanges().some(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)) && (
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setConfigState({ ...committedConfig });
-                                        showToast('All pending changes have been discarded.');
+                                        setConfigState(prev => ({
+                                            ...prev,
+                                            enablePosts: committedConfig.enablePosts,
+                                            enableArticles: committedConfig.enableArticles,
+                                            enableClips: committedConfig.enableClips,
+                                            enableWiki: committedConfig.enableWiki,
+                                            enableVideos: committedConfig.enableVideos,
+                                            enablePodcasts: committedConfig.enablePodcasts
+                                        }));
+                                        showToast('Pending module changes have been discarded.');
                                     }}
                                     className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
                                 >
@@ -7818,12 +8023,14 @@ export default function AdminConsole() {
                                 className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                             >
                                 <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
-                                <span>Save & Commit All Changes {getPendingGovernanceChanges().length > 0 ? `(${getPendingGovernanceChanges().length})` : ''}</span>
+                                <span>Save & Commit Feature Changes {getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length > 0 ? `(${getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length})` : ''}</span>
                             </button>
                         </div>
                     </div>
                 </div>
             )}
+        </div>
+    )}
 
             {/* ─── TAB: MEDIA APPROVALS (VIDEOS & PODCASTS) ─── */}
             {activeTab === 'media_approvals' && (

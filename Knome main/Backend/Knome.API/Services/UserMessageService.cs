@@ -222,6 +222,12 @@ public class UserMessageService : IUserMessageService
             throw new UnauthorizedException("Sender user not found.");
         }
 
+        var isConnected = await _messageRepo.AreUsersConnectedAsync(currentUserId, dto.ReceiverId);
+        if (!isConnected)
+        {
+            throw new BadRequestException("You can only message colleagues you are connected with.");
+        }
+
         var trimmedText = (dto.Content ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(trimmedText) && string.IsNullOrEmpty(dto.AttachmentsJson))
         {

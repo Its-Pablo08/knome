@@ -41,10 +41,21 @@ export function ImageLightbox({ images, startIndex, onClose }) {
         return () => document.removeEventListener('keydown', onKey);
     }, [prev, next, onClose]);
 
-    // Prevent body scroll while open
+    // Prevent body scroll while open without causing horizontal layout shift
     useEffect(() => {
+        const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+        const originalOverflow = document.body.style.overflow;
+        const originalPaddingRight = document.body.style.paddingRight;
+
         document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = ''; };
+        if (scrollbarWidth > 0) {
+            document.body.style.paddingRight = `${scrollbarWidth}px`;
+        }
+
+        return () => {
+            document.body.style.overflow = originalOverflow;
+            document.body.style.paddingRight = originalPaddingRight;
+        };
     }, []);
 
     const FALLBACK_MEDIA_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%231e293b"/><stop offset="100%" stop-color="%230f172a"/></linearGradient></defs><rect width="800" height="500" fill="url(%23g)"/><circle cx="400" cy="210" r="52" fill="%236366f1" fill-opacity="0.15"/><path d="M380 195l16-20 14 18 12-14 18 24H360z" fill="%23818cf8"/><circle cx="375" cy="180" r="6" fill="%23a5b4fc"/><text x="400" y="295" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="%23f1f5f9" text-anchor="middle">Knome Enterprise Media</text><text x="400" y="322" font-family="system-ui,-apple-system,sans-serif" font-size="13" font-weight="500" fill="%2394a3b8" text-anchor="middle">Attachment Preview</text></svg>`;
@@ -93,6 +104,8 @@ export function ImageLightbox({ images, startIndex, onClose }) {
                 className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
                 style={{ userSelect: 'none' }}
                 onClick={e => e.stopPropagation()}
+                draggable={false}
+                onContextMenu={(e) => e.preventDefault()}
             />
 
             {/* Next Arrow */}
@@ -139,10 +152,20 @@ export function LargeVideoModal({ video, onClose }) {
     const videoRef = useRef(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
+    // Prevent body scroll while open without causing horizontal layout shift
     useEffect(() => {
+        const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+        const originalOverflow = document.body.style.overflow;
+        const originalPaddingRight = document.body.style.paddingRight;
+
         document.body.style.overflow = 'hidden';
+        if (scrollbarWidth > 0) {
+            document.body.style.paddingRight = `${scrollbarWidth}px`;
+        }
+
         return () => {
-            document.body.style.overflow = '';
+            document.body.style.overflow = originalOverflow;
+            document.body.style.paddingRight = originalPaddingRight;
         };
     }, []);
 
@@ -2306,7 +2329,7 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
 
             {/* ── Image Attachments — Full-Width Cover Grid ── */}
             {imageAttachments.length > 0 && (
-                <div className="mt-2 w-full">
+                <div className="mt-2 w-full select-none" onContextMenu={(e) => e.preventDefault()}>
                     <ImageGrid
                         images={imageAttachments}
                         onImageClick={(idx, workingImages) => {
@@ -2389,6 +2412,7 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                                 <div 
                                     key={att.id || rawUrl} 
                                     onClick={() => setActiveDocViewer({ ...att, name: displayName, url: resolvedUrl })}
+                                    onContextMenu={(e) => e.preventDefault()}
                                     className="mx-5 mb-3 p-3.5 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl flex items-center justify-between gap-4 shadow-sm hover:shadow-md transition-all group cursor-pointer"
                                 >
                                     <div className="flex items-center gap-3.5 overflow-hidden">
@@ -2407,21 +2431,20 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
                                                 }`}>
                                                     {isPdf ? 'PDF' : isTxt ? 'TXT' : 'DOC'}
                                                 </span>
-                                                <span>Click to open in large screen</span>
+                                                <span>Click to view</span>
                                             </div>
                                         </div>
                                     </div>
                                     {resolvedUrl && (
                                         <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                            <a
-                                                href={resolvedUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-700/60 rounded-xl transition-all"
-                                                title="Open in new tab"
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDocViewer({ ...att, name: displayName, url: resolvedUrl })}
+                                                className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-700/60 rounded-xl transition-all cursor-pointer"
+                                                title="View document in embedded viewer"
                                             >
-                                                <span className="material-symbols-outlined text-[18px]">open_in_new</span>
-                                            </a>
+                                                <span className="material-symbols-outlined text-[18px]">visibility</span>
+                                            </button>
                                         </div>
                                     )}
                                 </div>

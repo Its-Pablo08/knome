@@ -991,11 +991,12 @@ export default function Messages() {
 
     const isTargetConnected = useMemo(() => {
         if (!activePartner) return false;
-        if (typeof activePartner.isConnected === 'boolean') {
-            return activePartner.isConnected;
-        }
-        return connectedUserIds.has(Number(activePartner.userId || activePartner.id));
-    }, [activePartner, connectedUserIds]);
+        const targetId = Number(activePartner.userId || activePartner.id);
+        if (!targetId || targetId === currentUserId) return false;
+        if (connectedUserIds.has(targetId)) return true;
+        if (activePartner.isConnected === true) return true;
+        return false;
+    }, [activePartner, connectedUserIds, currentUserId]);
 
     // ── Search Candidates in "New Message" Modal ──
     useEffect(() => {
@@ -1317,6 +1318,11 @@ export default function Messages() {
 
         const text = inputMessage.trim();
         if ((!text && attachedFiles.length === 0) || !activePartner) return;
+
+        if (!isTargetConnected) {
+            addToast('You can only message colleagues you are connected with.', 'warning');
+            return;
+        }
 
         isSendingRef.current = true;
         setIsSending(true);
@@ -1750,6 +1756,9 @@ export default function Messages() {
                                                     <h2 className="text-xs font-black text-slate-900 dark:text-white truncate">
                                                         {conv.partnerName}
                                                     </h2>
+                                                    {conv.isConnected === false && !connectedUserIds.has(Number(conv.partnerId)) && (
+                                                        <span className="material-symbols-outlined text-[13px] text-amber-500 shrink-0" title="Not connected">lock</span>
+                                                    )}
                                                 </div>
                                                 <span className="text-[10px] font-semibold text-slate-400 shrink-0">
                                                     {conv.lastMessageTime}
@@ -1847,6 +1856,12 @@ export default function Messages() {
                                         <h2 className="text-sm font-black text-slate-900 dark:text-white truncate">
                                             {activePartner.fullName}
                                         </h2>
+                                        {!isTargetConnected && (
+                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1 shrink-0">
+                                                <span className="material-symbols-outlined text-[12px]">lock</span>
+                                                <span>Not Connected</span>
+                                            </span>
+                                        )}
                                         {activePartner.department && (
                                             <span className="hidden sm:inline px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                                                 {activePartner.department}
@@ -2535,79 +2550,122 @@ export default function Messages() {
                                 </div>
                             )}
 
-                            {/* Chat Input Bar */}
-                            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-1.5 focus-within:border-cyan-500 transition-colors">
-                                <textarea
-                                    ref={chatInputRef}
-                                    rows={1}
-                                    value={inputMessage}
-                                    onChange={handleInputChange}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            handleSendMessage(e);
-                                        }
-                                    }}
-                                    onPaste={handlePaste}
-                                    placeholder={`Message ${activePartner.fullName}... (Enter to send, Shift+Enter for new line)`}
-                                    className="flex-1 bg-transparent px-3 py-1.5 text-xs text-slate-900 dark:text-white outline-none emoji-font resize-none max-h-28 overflow-y-auto leading-relaxed custom-scrollbar"
-                                    disabled={isSending}
-                                />
+                            {/* Chat Input Bar or Connection Restriction Lock */}
+                            {!isTargetConnected ? (
+                                <div className="p-4 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 border border-amber-500/25 dark:border-amber-500/20 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in duration-200">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 shadow-xs">
+                                            <span className="material-symbols-outlined text-[22px]">lock_person</span>
+                                        </div>
+                                        <div className="min-w-0 text-left">
+                                            <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                                <span>Messaging Restricted</span>
+                                                <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
+                                                    Not Connected
+                                                </span>
+                                            </p>
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">
+                                                You and {activePartner.fullName} are not connected. Only connected colleagues can exchange direct messages.
+                                            </p>
+                                        </div>
+                                    </div>
 
-                                <div className="flex items-center gap-1 shrink-0">
-                                    {/* File Attachment Button */}
-                                    <input 
-                                        type="file" 
-                                        ref={fileAttachmentInputRef} 
-                                        onChange={handleFileSelect} 
-                                        multiple 
-                                        className="hidden" 
-                                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => fileAttachmentInputRef.current?.click()}
-                                        className={`p-1.5 rounded-lg transition-colors cursor-pointer relative ${
-                                            attachedFiles.length > 0
-                                                ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400'
-                                                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700'
-                                        }`}
-                                        title="Attach files"
-                                    >
-                                        <span className="material-symbols-outlined text-[20px]">attach_file</span>
-                                        {attachedFiles.length > 0 && (
-                                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-cyan-600 text-white text-[9px] font-black rounded-full flex items-center justify-center">
-                                                {attachedFiles.length}
-                                            </span>
+                                    <div className="shrink-0 w-full sm:w-auto flex items-center justify-end">
+                                        {pendingConnectIds.has(Number(activePartner.userId || activePartner.id)) ? (
+                                            <button
+                                                type="button"
+                                                disabled
+                                                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold flex items-center justify-center gap-1.5 cursor-not-allowed border border-slate-200 dark:border-slate-700"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">schedule</span>
+                                                <span>Request Pending</span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSendConnectRequest(Number(activePartner.userId || activePartner.id), activePartner.fullName)}
+                                                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95 transition-all cursor-pointer"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">person_add</span>
+                                                <span>Connect with {activePartner.fullName.split(' ')[0]}</span>
+                                            </button>
                                         )}
-                                    </button>
-
-                                    {/* Emoji Picker Button */}
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsEmojiPickerOpen(prev => !prev)}
-                                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                                            isEmojiPickerOpen
-                                                ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400'
-                                                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700'
-                                        }`}
-                                        title="Pick an Emoji"
-                                    >
-                                        <span className="material-symbols-outlined text-[20px]">mood</span>
-                                    </button>
-
-                                    {/* Send Button */}
-                                    <button
-                                        type="submit"
-                                        disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isSending}
-                                        className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all disabled:opacity-40 cursor-pointer shadow-xs active:scale-95"
-                                    >
-                                        <span>Send</span>
-                                        <span className="material-symbols-outlined text-[15px]">send</span>
-                                    </button>
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-1.5 focus-within:border-cyan-500 transition-colors">
+                                    <textarea
+                                        ref={chatInputRef}
+                                        rows={1}
+                                        value={inputMessage}
+                                        onChange={handleInputChange}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                handleSendMessage(e);
+                                            }
+                                        }}
+                                        onPaste={handlePaste}
+                                        placeholder={`Message ${activePartner.fullName}... (Enter to send, Shift+Enter for new line)`}
+                                        className="flex-1 bg-transparent px-3 py-1.5 text-xs text-slate-900 dark:text-white outline-none emoji-font resize-none max-h-28 overflow-y-auto leading-relaxed custom-scrollbar"
+                                        disabled={isSending}
+                                    />
+
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        {/* File Attachment Button */}
+                                        <input 
+                                            type="file" 
+                                            ref={fileAttachmentInputRef} 
+                                            onChange={handleFileSelect} 
+                                            multiple 
+                                            className="hidden" 
+                                            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => fileAttachmentInputRef.current?.click()}
+                                            className={`p-1.5 rounded-lg transition-colors cursor-pointer relative ${
+                                                attachedFiles.length > 0
+                                                    ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400'
+                                                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700'
+                                            }`}
+                                            title="Attach files"
+                                        >
+                                            <span className="material-symbols-outlined text-[20px]">attach_file</span>
+                                            {attachedFiles.length > 0 && (
+                                                <span className="absolute -top-1 -right-1 w-4 h-4 bg-cyan-600 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                                                    {attachedFiles.length}
+                                                </span>
+                                            )}
+                                        </button>
+
+                                        {/* Emoji Picker Button */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsEmojiPickerOpen(prev => !prev)}
+                                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                                isEmojiPickerOpen
+                                                    ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400'
+                                                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700'
+                                            }`}
+                                            title="Pick an Emoji"
+                                        >
+                                            <span className="material-symbols-outlined text-[20px]">mood</span>
+                                        </button>
+
+                                        {/* Send Button */}
+                                        <button
+                                            type="submit"
+                                            disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isSending}
+                                            className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all disabled:opacity-40 cursor-pointer shadow-xs active:scale-95"
+                                        >
+                                            <span>Send</span>
+                                            <span className="material-symbols-outlined text-[15px]">send</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </form>
                     </div>
                 ) : (
@@ -2726,6 +2784,17 @@ export default function Messages() {
                                                     {colleague.employeeId && (
                                                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono">
                                                             {colleague.employeeId}
+                                                        </span>
+                                                    )}
+                                                    {colleague.isConnected || connectedUserIds.has(cId) ? (
+                                                        <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center gap-0.5 shrink-0">
+                                                            <span className="material-symbols-outlined text-[11px]">how_to_reg</span>
+                                                            Connected
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center gap-0.5 shrink-0">
+                                                            <span className="material-symbols-outlined text-[11px]">lock</span>
+                                                            Not Connected
                                                         </span>
                                                     )}
                                                 </div>

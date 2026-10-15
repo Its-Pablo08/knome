@@ -68,7 +68,7 @@ export default function Network() {
     const location = useLocation();
     
     const [activeTab, setActiveTab] = useState('Suggestions'); // Suggestions | Requests | Connections
-    const [requestSubTab, setRequestSubTab] = useState('all'); // all | received | sent
+    const [requestTab, setRequestTab] = useState('received'); // 'received' | 'sent'
     const [suggestions, setSuggestions] = useState([]);
     const [receivedRequests, setReceivedRequests] = useState([]);
     const [sentRequests, setSentRequests] = useState([]);
@@ -89,6 +89,10 @@ export default function Network() {
             const lowerTab = tab.toLowerCase();
             if (lowerTab === 'requests' || lowerTab === 'received' || lowerTab === 'invitations') {
                 setActiveTab('Requests');
+                if (lowerTab === 'received') setRequestTab('received');
+            } else if (lowerTab === 'sent') {
+                setActiveTab('Requests');
+                setRequestTab('sent');
             } else if (lowerTab === 'connections') {
                 setActiveTab('Connections');
             } else if (lowerTab === 'suggestions') {
@@ -720,55 +724,78 @@ export default function Network() {
 
                     {/* TAB 2: CONNECTION REQUESTS */}
                     {activeTab === 'Requests' && (
-                        <div className="space-y-8">
-                            {/* Filter Pills for Requests */}
-                            <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
-                                <button
-                                    onClick={() => setRequestSubTab('all')}
-                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                        requestSubTab === 'all' 
-                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
-                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                    }`}
-                                >
-                                    All Requests ({receivedRequests.length + sentRequests.length})
-                                </button>
-                                <button
-                                    onClick={() => setRequestSubTab('received')}
-                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                                        requestSubTab === 'received' 
-                                            ? 'bg-pink-600 text-white shadow-md shadow-pink-500/20' 
-                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                    }`}
-                                >
-                                    <span>Received</span>
-                                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${requestSubTab === 'received' ? 'bg-white/20 text-white' : 'bg-pink-100 text-pink-600 dark:bg-pink-950/60 dark:text-pink-400'}`}>
-                                        {receivedRequests.length}
-                                    </span>
-                                </button>
-                                <button
-                                    onClick={() => setRequestSubTab('sent')}
-                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                                        requestSubTab === 'sent' 
-                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
-                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                    }`}
-                                >
-                                    <span>Sent Requests</span>
-                                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${requestSubTab === 'sent' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400'}`}>
-                                        {sentRequests.length}
-                                    </span>
-                                </button>
+                        <div className="space-y-6">
+                            {/* Sub-tab Navigation Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+                                <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 w-fit">
+                                    <button
+                                        type="button"
+                                        onClick={() => setRequestTab('received')}
+                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                                            requestTab === 'received'
+                                                ? 'bg-white dark:bg-slate-900 text-pink-600 dark:text-pink-400 shadow-sm border border-slate-200/80 dark:border-slate-700 font-black'
+                                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[19px]">inbox</span>
+                                        <span>Received Requests</span>
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-black transition-colors ${
+                                            requestTab === 'received'
+                                                ? 'bg-pink-500 text-white shadow-xs'
+                                                : 'bg-pink-100 text-pink-700 dark:bg-pink-950/80 dark:text-pink-300'
+                                        }`}>
+                                            {receivedRequests.length}
+                                        </span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setRequestTab('sent')}
+                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                                            requestTab === 'sent'
+                                                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700 font-black'
+                                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[19px]">outbox</span>
+                                        <span>Sent Requests</span>
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-black transition-colors ${
+                                            requestTab === 'sent'
+                                                ? 'bg-blue-600 text-white shadow-xs'
+                                                : 'bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300'
+                                        }`}>
+                                            {sentRequests.length}
+                                        </span>
+                                    </button>
+                                </div>
+
+                                {/* Request Status Indicator */}
+                                <div className="flex items-center gap-2">
+                                    {requestTab === 'received' ? (
+                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-pink-50 dark:bg-pink-950/40 border border-pink-200/60 dark:border-pink-800/60 text-xs font-bold text-pink-700 dark:text-pink-300">
+                                            <span className="w-2 h-2 rounded-full bg-pink-500 animate-pulse"></span>
+                                            <span>
+                                                {receivedRequests.length > 0
+                                                    ? `${receivedRequests.length} incoming invitation${receivedRequests.length === 1 ? '' : 's'}`
+                                                    : 'No incoming invitations'}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/60 text-xs font-bold text-blue-700 dark:text-blue-300">
+                                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                            <span>
+                                                {sentRequests.length > 0
+                                                    ? `${sentRequests.length} pending sent request${sentRequests.length === 1 ? '' : 's'}`
+                                                    : 'No pending sent requests'}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
-                            {/* Received Requests Section */}
-                            {(requestSubTab === 'all' || requestSubTab === 'received') && (
-                                <section>
-                                    <h2 className="text-lg font-black text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-pink-500">inbox</span>
-                                        Received Connection Requests ({receivedRequests.length})
-                                    </h2>
-                                    
+                            {/* TAB 1: RECEIVED REQUESTS */}
+                            {requestTab === 'received' && (
+                                <section className="animate-in fade-in duration-150">
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {receivedRequests.map(person => (
                                             <PersonCard 
@@ -780,22 +807,23 @@ export default function Network() {
                                             />
                                         ))}
                                         {receivedRequests.length === 0 && (
-                                            <div className="col-span-full p-8 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-center text-slate-500 font-medium">
-                                                No pending received connection requests.
+                                            <div className="col-span-full py-16 px-6 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900/60 text-center flex flex-col items-center justify-center gap-3">
+                                                <div className="w-14 h-14 rounded-2xl bg-pink-50 dark:bg-pink-950/50 text-pink-500 flex items-center justify-center border border-pink-200/50 dark:border-pink-800/50">
+                                                    <span className="material-symbols-outlined text-3xl">inbox</span>
+                                                </div>
+                                                <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">No Pending Received Requests</h3>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+                                                    When colleagues send you connection requests, they'll appear here for you to accept or ignore.
+                                                </p>
                                             </div>
                                         )}
                                     </div>
                                 </section>
                             )}
 
-                            {/* Sent Requests Section */}
-                            {(requestSubTab === 'all' || requestSubTab === 'sent') && (
-                                <section className={requestSubTab === 'all' ? "pt-6 border-t border-slate-200 dark:border-slate-800" : ""}>
-                                    <h2 className="text-lg font-black text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-blue-500">outbox</span>
-                                        Sent Connection Requests Pending ({sentRequests.length})
-                                    </h2>
-                                    
+                            {/* TAB 2: SENT REQUESTS */}
+                            {requestTab === 'sent' && (
+                                <section className="animate-in fade-in duration-150">
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {sentRequests.map(person => (
                                             <PersonCard 
@@ -806,8 +834,14 @@ export default function Network() {
                                             />
                                         ))}
                                         {sentRequests.length === 0 && (
-                                            <div className="col-span-full p-8 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-center text-slate-500 font-medium">
-                                                No pending sent requests.
+                                            <div className="col-span-full py-16 px-6 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900/60 text-center flex flex-col items-center justify-center gap-3">
+                                                <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-500 flex items-center justify-center border border-blue-200/50 dark:border-blue-800/50">
+                                                    <span className="material-symbols-outlined text-3xl">outbox</span>
+                                                </div>
+                                                <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">No Pending Sent Requests</h3>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+                                                    You don't have any outstanding outgoing connection requests.
+                                                </p>
                                             </div>
                                         )}
                                     </div>

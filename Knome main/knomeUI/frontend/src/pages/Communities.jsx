@@ -26,7 +26,24 @@ export default function Communities() {
     const confirm = useConfirm();
     const navigate = useNavigate();
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState('Discover');
+    const [activeTab, setActiveTab] = useState(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('tab') || sessionStorage.getItem('knome_communities_tab') || 'Discover';
+        } catch {
+            return 'Discover';
+        }
+    });
+
+    const handleTabChange = (tab) => {
+        setActiveTab(tab);
+        try {
+            sessionStorage.setItem('knome_communities_tab', tab);
+            const params = new URLSearchParams(window.location.search);
+            params.set('tab', tab);
+            window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+        } catch (_) {}
+    };
 
     const [communities, setCommunities] = useState(() => getInitialCommunities(currentUser?.id));
     const [pendingApprovals, setPendingApprovals] = useState([]);
@@ -1071,7 +1088,7 @@ export default function Communities() {
                     {['Discover', 'My Communities'].map(tab => (
                         <button 
                             key={tab}
-                            onClick={() => setActiveTab(tab)}
+                            onClick={() => handleTabChange(tab)}
                             className={`px-6 py-4 font-bold text-[14px] transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === tab ? 'text-indigo-500' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}
                         >
                             <span>{tab}</span>
@@ -1087,7 +1104,7 @@ export default function Communities() {
                     {/* HR Administrator Approval Tab */}
                     {isHRorAdmin && (
                         <button 
-                            onClick={() => setActiveTab('Pending Approvals')}
+                            onClick={() => handleTabChange('Pending Approvals')}
                             className={`px-6 py-4 font-bold text-[14px] transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'Pending Approvals' ? 'text-amber-500' : 'text-slate-500 hover:text-amber-600 dark:hover:text-amber-400'}`}
                         >
                             <span className="material-symbols-outlined text-[18px]">approval</span>

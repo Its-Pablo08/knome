@@ -125,7 +125,7 @@ function renderCommentText(text) {
     });
 }
 
-function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComment, onAddReply, onLikeComment, onEditComment, depth = 0 }) {
+function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComment, onAddReply, onLikeComment, onDislikeComment, onEditComment, depth = 0 }) {
     const [showReplies, setShowReplies] = useState(false);
     const [showReplyInput, setShowReplyInput] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -147,8 +147,8 @@ function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComme
             const wasLiked = comment.likedByMe;
             const wasDisliked = comment.dislikedByMe;
             onUpdateComment(comment.id, {
-                likes: wasLiked ? comment.likes - 1 : comment.likes + 1,
-                dislikes: wasDisliked ? comment.dislikes - 1 : comment.dislikes,
+                likes: wasLiked ? Math.max(0, (comment.likes || 0) - 1) : (comment.likes || 0) + 1,
+                dislikes: wasDisliked ? Math.max(0, (comment.dislikes || 0) - 1) : (comment.dislikes || 0),
                 likedByMe: !wasLiked,
                 dislikedByMe: false,
             });
@@ -156,14 +156,18 @@ function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComme
     };
 
     const handleDislike = () => {
-        const wasDisliked = comment.dislikedByMe;
-        const wasLiked = comment.likedByMe;
-        onUpdateComment(comment.id, {
-            dislikes: wasDisliked ? comment.dislikes - 1 : comment.dislikes + 1,
-            likes: wasLiked ? comment.likes - 1 : comment.likes,
-            dislikedByMe: !wasDisliked,
-            likedByMe: false,
-        });
+        if (onDislikeComment) {
+            onDislikeComment(comment.id);
+        } else {
+            const wasDisliked = comment.dislikedByMe;
+            const wasLiked = comment.likedByMe;
+            onUpdateComment(comment.id, {
+                dislikes: wasDisliked ? Math.max(0, (comment.dislikes || 0) - 1) : (comment.dislikes || 0) + 1,
+                likes: wasLiked ? Math.max(0, (comment.likes || 0) - 1) : (comment.likes || 0),
+                dislikedByMe: !wasDisliked,
+                likedByMe: false,
+            });
+        }
     };
 
     const handleReplySubmit = (text) => {
@@ -243,6 +247,7 @@ function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComme
                             className={`flex items-center gap-1 px-2 py-1 rounded-full text-[12px] font-semibold transition-all cursor-pointer ${comment.dislikedByMe ? 'text-rose-500 bg-rose-50 dark:bg-rose-900/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
                         >
                             <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: comment.dislikedByMe ? "'FILL' 1" : "'FILL' 0" }}>thumb_down</span>
+                            {(comment.dislikes > 0 || comment.dislikedByMe) && <span>{comment.dislikes || 1}</span>}
                         </button>
 
                         {/* Reply button — available on all comments and replies */}
@@ -320,6 +325,7 @@ function Comment({ comment, currentUser, videoId, onUpdateComment, onDeleteComme
                                         onDeleteComment={onDeleteComment}
                                         onAddReply={onAddReply}
                                         onLikeComment={onLikeComment}
+                                        onDislikeComment={onDislikeComment}
                                         onEditComment={onEditComment}
                                         depth={depth + 1}
                                     />
@@ -344,10 +350,10 @@ const normalizeComment = (c) => ({
     avatar: c.authorProfilePhotoUrl || c.avatar,
     designation: c.authorDesignation || c.designation,
     createdAt: c.createdDate || c.createdAt || new Date().toISOString(),
-    likes: c.likesCount ?? c.likes ?? 0,
-    dislikes: c.dislikes ?? 0,
-    likedByMe: c.isLiked ?? c.likedByMe ?? false,
-    dislikedByMe: c.dislikedByMe ?? false,
+    likes: c.likesCount ?? c.likeCount ?? c.likes ?? 0,
+    dislikes: c.dislikesCount ?? c.dislikeCount ?? c.dislikes ?? 0,
+    likedByMe: c.isLiked ?? c.likedByMe ?? (c.currentUserReactionType === 'Like') ?? false,
+    dislikedByMe: c.isDisliked ?? c.dislikedByMe ?? (c.currentUserReactionType === 'Dislike') ?? false,
     edited: c.edited ?? false,
     replies: Array.isArray(c.replies) ? c.replies.map(normalizeComment) : []
 });
@@ -596,11 +602,13 @@ export default function CommentsSection({ videoId, currentUser, authorId, awardR
             return list.map(item => {
                 if (String(item.id) === String(commentId)) {
                     const wasLiked = item.likedByMe;
+                    const wasDisliked = item.dislikedByMe;
                     return {
                         ...item,
                         likedByMe: !wasLiked,
                         dislikedByMe: false,
-                        likes: wasLiked ? Math.max(0, item.likes - 1) : item.likes + 1,
+                        likes: wasLiked ? Math.max(0, (item.likes || 0) - 1) : (item.likes || 0) + 1,
+                        dislikes: wasDisliked ? Math.max(0, (item.dislikes || 0) - 1) : (item.dislikes || 0),
                     };
                 }
                 if (item.replies?.length > 0) {
@@ -621,6 +629,43 @@ export default function CommentsSection({ videoId, currentUser, authorId, awardR
                 await interactionsApi.toggleReaction('Comment', commentId, 'Like');
             } catch (err) {
                 console.error('Failed to toggle comment reaction on backend:', err);
+            }
+        }
+    };
+
+    // ── Dislike comment ───────────────────────────────────────────────────────
+    const handleDislikeComment = async (commentId) => {
+        const updateDislikeRecursive = (list) => {
+            return list.map(item => {
+                if (String(item.id) === String(commentId)) {
+                    const wasDisliked = item.dislikedByMe;
+                    const wasLiked = item.likedByMe;
+                    return {
+                        ...item,
+                        dislikedByMe: !wasDisliked,
+                        likedByMe: false,
+                        dislikes: wasDisliked ? Math.max(0, (item.dislikes || 0) - 1) : (item.dislikes || 0) + 1,
+                        likes: wasLiked ? Math.max(0, (item.likes || 0) - 1) : (item.likes || 0),
+                    };
+                }
+                if (item.replies?.length > 0) {
+                    return { ...item, replies: updateDislikeRecursive(item.replies) };
+                }
+                return item;
+            });
+        };
+
+        setComments(prev => {
+            const next = updateDislikeRecursive(prev);
+            saveComments(next);
+            return next;
+        });
+
+        if (/^\d+$/.test(String(commentId))) {
+            try {
+                await interactionsApi.toggleReaction('Comment', commentId, 'Dislike');
+            } catch (err) {
+                console.error('Failed to toggle comment dislike on backend:', err);
             }
         }
     };
@@ -718,6 +763,7 @@ export default function CommentsSection({ videoId, currentUser, authorId, awardR
                             onDeleteComment={handleDeleteComment}
                             onAddReply={handleAddReply}
                             onLikeComment={handleLikeComment}
+                            onDislikeComment={handleDislikeComment}
                             onEditComment={handleEditComment}
                         />
                     ))}
