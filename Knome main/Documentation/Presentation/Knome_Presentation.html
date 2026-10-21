@@ -1,991 +1,1290 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Knome Enterprise Platform — Presentation Deck (MPOnline Limited)</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
-    <style>
-        :root {
-            --bg-dark: #090d16;
-            --card-dark: #111827;
-            --accent-blue: #2563eb;
-            --accent-cyan: #06b6d4;
-            --accent-purple: #8b5cf6;
-            --accent-amber: #f59e0b;
-            --accent-emerald: #10b981;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: rgba(255, 255, 255, 0.1);
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Knome – Platform Functionalities | MPOnline Limited</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy: #0f172a; --blue: #1a56db; --sky: #2563eb;
+      --teal: #0891b2; --green: #16a34a; --amber: #d97706; --red: #dc2626;
+      --purple: #9333ea; --rose: #ef4444; --fuchsia: #c026d3;
+      --slate-50: #f8fafc; --slate-100: #f1f5f9; --slate-200: #e2e8f0;
+      --slate-300: #cbd5e1; --slate-500: #64748b; --slate-700: #334155;
+      --slate-900: #0f172a;
+    }
+    html, body { width: 100%; height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f8fafc; color: #1e293b; }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-        }
+    /* ── NAV ── */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 28px;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(14px);
+      border-bottom: 1px solid #e2e8f0;
+      box-shadow: 0 1px 6px rgba(15,23,42,0.04);
+    }
+    .nav-brand { color: #0f172a; font-weight: 800; font-size: 1rem; display:flex;align-items:center;gap:10px; }
+    .nav-logo { width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--blue),#0ea5e9);display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:900;color:#fff;box-shadow:0 2px 6px rgba(26,86,219,0.25); }
+    .nav-subtitle { font-size:.72rem;font-weight:500;color:#64748b; }
+    .nav-dots { display:flex;gap:7px; }
+    .nav-dot { width:8px;height:8px;border-radius:50%;background:#cbd5e1;cursor:pointer;transition:all .3s; }
+    .nav-dot.active { background:var(--blue);transform:scale(1.4); }
+    .nav-right { display:flex;align-items:center;gap:10px; }
+    .slide-counter { color:#64748b;font-size:.75rem;min-width:44px;text-align:center;font-weight:600; }
+    .nav-btn { background:#ffffff;border:1px solid #cbd5e1;color:#1e293b;padding:5px 15px;border-radius:6px;cursor:pointer;font-size:.78rem;font-weight:600;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+    .nav-btn:hover { background:#f1f5f9;border-color:#94a3b8; }
 
-        body {
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
+    /* ── SLIDES ── */
+    .slides-wrapper { position:fixed;top:0;left:0;width:100%;height:100%;overflow:hidden; }
+    .slide {
+      position:absolute;top:0;left:0;width:100%;height:100%;
+      display:flex;flex-direction:column;justify-content:center;align-items:center;
+      padding:70px 56px 44px;
+      opacity:0;transform:translateX(55px);
+      transition:opacity .48s ease,transform .48s ease;
+      pointer-events:none;
+    }
+    .slide.active { opacity:1;transform:translateX(0);pointer-events:all; }
+    .slide.exit   { opacity:0;transform:translateX(-55px); }
 
-        /* Top Bar */
-        .topbar {
-            height: 60px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 32px;
-            background: rgba(17, 24, 39, 0.7);
-            backdrop-filter: blur(12px);
-            z-index: 100;
-        }
+    /* ── LIGHT BACKGROUNDS ── */
+    .bg1 { background: radial-gradient(circle at 50% 30%, #eef6ff 0%, #f8fafc 70%); }
+    .bg2 { background: #f8fafc; }
+    .bg3 { background: linear-gradient(145deg, #f0fdf4 0%, #f8fafc 100%); }
+    .bg4 { background: linear-gradient(145deg, #eff6ff 0%, #f8fafc 100%); }
+    .bg5 { background: linear-gradient(145deg, #f0fdfa 0%, #f8fafc 100%); }
+    .bg6 { background: #f8fafc; }
+    .bg7 { background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%); }
+    .bg8 { background: linear-gradient(145deg, #fffbeb 0%, #f8fafc 100%); }
+    .bg9 { background: #f8fafc; }
+    .bg10 { background: linear-gradient(145deg, #f5f3ff 0%, #f8fafc 100%); }
+    .bg11 { background: radial-gradient(circle at 50% 30%, #eff6ff 0%, #f8fafc 70%); }
 
-        .logo-area {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: 900;
-            font-size: 20px;
-            letter-spacing: -0.5px;
-        }
+    /* ── TEXT ── */
+    .tag { display:inline-block;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:.68rem;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;padding:4px 14px;border-radius:20px;margin-bottom:14px; }
+    .h1 { font-size:clamp(1.9rem,3.8vw,2.9rem);font-weight:900;color:#0f172a;line-height:1.15;text-align:center;margin-bottom:10px;letter-spacing:-0.5px; }
+    .h1 .accent { color:var(--blue); }
+    .sub { font-size:clamp(.85rem,1.2vw,1.02rem);color:#475569;text-align:center;max-width:650px;line-height:1.65;margin-bottom:26px; }
+    .h2 { font-size:clamp(1.35rem,2.2vw,1.95rem);font-weight:800;color:#0f172a;margin-bottom:6px;text-align:center;letter-spacing:-0.3px; }
+    .h2-sub { font-size:.85rem;color:#64748b;text-align:center;margin-bottom:20px; }
 
-        .logo-badge {
-            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
-            color: white;
-            padding: 4px 10px;
-            border-radius: 8px;
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
+    /* ── HERO ── */
+    .hero-k { width:72px;height:72px;border-radius:18px;background:linear-gradient(135deg,var(--blue),#0ea5e9);display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:900;color:#fff;margin-bottom:20px;box-shadow:0 8px 30px rgba(26,86,219,.3); }
+    .hero-badges { display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-bottom:26px; }
+    .hero-badge { background:#ffffff;border:1px solid #e2e8f0;color:#334155;padding:6px 15px;border-radius:50px;font-size:.76rem;font-weight:600;box-shadow:0 2px 6px rgba(15,23,42,0.04); }
+    .hero-footer { position:absolute;bottom:18px;left:0;right:0;display:flex;justify-content:space-between;padding:0 56px;font-size:.67rem;color:#94a3b8; }
+    .conf-label { color:#dc2626;font-weight:700; }
 
-        .controls {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+    /* ── MODULE GRID ── */
+    .mod-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:920px;width:100%; }
+    .mod-card { background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;padding:16px 14px;transition:all .22s;box-shadow:0 2px 8px rgba(15,23,42,0.04); }
+    .mod-card:hover { transform:translateY(-3px);box-shadow:0 8px 20px rgba(15,23,42,0.08);border-color:#cbd5e1; }
+    .mod-icon { font-size:1.6rem;margin-bottom:9px; }
+    .mod-name { font-size:.84rem;font-weight:700;color:#0f172a;margin-bottom:5px; }
+    .mod-desc { font-size:.72rem;color:#64748b;line-height:1.55; }
+    .mod-blue  { border-color:#bfdbfe;background:#f0f7ff; }
+    .mod-teal  { border-color:#99f6e4;background:#f0fdfa; }
+    .mod-green { border-color:#bbf7d0;background:#f0fdf4; }
+    .mod-amber { border-color:#fde68a;background:#fffbeb; }
+    .mod-purple{ border-color:#e9d5ff;background:#faf5ff; }
 
-        .btn {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-            padding: 8px 16px;
-            border-radius: 10px;
-            font-weight: 700;
-            font-size: 13px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s ease;
-        }
+    /* ── FEATURE PANEL ── */
+    .feat-split { display:grid;grid-template-columns:1fr 1fr;gap:20px;width:100%;max-width:920px; }
+    .feat-panel { background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px;box-shadow:0 4px 16px rgba(15,23,42,0.05); }
+    .feat-hdr { display:flex;align-items:center;gap:11px;margin-bottom:14px; }
+    .feat-ico { width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff; }
+    .fi-b { background:linear-gradient(135deg,#1a56db,#3b82f6); }
+    .fi-t { background:linear-gradient(135deg,#0284c7,#0ea5e9); }
+    .fi-g { background:linear-gradient(135deg,#16a34a,#22c55e); }
+    .fi-a { background:linear-gradient(135deg,#d97706,#f59e0b); }
+    .feat-title { font-size:.98rem;font-weight:800;color:#0f172a; }
+    .feat-subtitle { font-size:.68rem;color:#64748b; }
+    .items { display:flex;flex-direction:column;gap:7px; }
+    .item { display:flex;align-items:flex-start;gap:9px;padding:7px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px; }
+    .item-dot { width:6px;height:6px;border-radius:50%;margin-top:5px;flex-shrink:0; }
+    .db { background:#2563eb; } .dt { background:#0891b2; }
+    .dg { background:#16a34a; } .da { background:#d97706; }
+    .item-text { font-size:.75rem;color:#334155;line-height:1.5; }
 
-        .btn:hover {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: var(--accent-cyan);
-            transform: translateY(-1px);
-        }
+    /* ── FLOW SLIDE STYLES ── */
+    .flow-btn {
+      background: #ffffff; border: 1px solid #cbd5e1; color: #475569;
+      padding: 6px 14px; border-radius: 8px; font-size: 0.76rem; font-weight: 700;
+      cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+    .flow-btn:hover { background: #f1f5f9; border-color: #94a3b8; color: #0f172a; }
+    .flow-btn.active {
+      background: #1a56db; color: #ffffff; border-color: #1a56db;
+      box-shadow: 0 3px 10px rgba(26,86,219,0.3);
+    }
+    .flow-matrix-grid {
+      display: flex; flex-direction: column; gap: 9px; width: 100%; max-width: 980px; margin: 0 auto;
+    }
+    .flow-lane {
+      display: grid; grid-template-columns: 140px repeat(4, 1fr); align-items: center; gap: 8px;
+      background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 7px 12px;
+      box-shadow: 0 1px 4px rgba(15,23,42,0.03); transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .flow-lane:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15,23,42,0.06); border-color: #cbd5e1; }
+    .flow-type-pill {
+      display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 0.74rem;
+      padding: 5px 10px; border-radius: 6px; border: 1px solid transparent; white-space: nowrap;
+    }
+    .flow-stage {
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 8px;
+      font-size: 0.68rem; line-height: 1.35; color: #334155; position: relative;
+    }
+    .flow-stage-title { font-weight: 700; color: #0f172a; margin-bottom: 2px; font-size: 0.71rem; display: flex; align-items: center; gap: 4px; }
+    .flow-stage-desc { color: #64748b; font-size: 0.65rem; }
+    .gate-badge {
+      display: inline-block; padding: 1.5px 5px; border-radius: 4px; font-size: 0.61rem; font-weight: 800; text-transform: uppercase;
+    }
+    .gate-instant { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .gate-review { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .gate-approval { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-blue), #1d4ed8);
-            border: none;
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
-        }
+    /* ── VISUAL FLOW DIAGRAM STYLES ── */
+    .flow-diagram-strip {
+      display: flex; align-items: stretch; justify-content: space-between; gap: 6px; margin: 12px 0 14px;
+    }
+    .flow-diagram-step {
+      flex: 1; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;
+      padding: 12px 10px; text-align: left; position: relative;
+      box-shadow: 0 2px 6px rgba(15,23,42,0.03); transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .flow-diagram-step:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(15,23,42,0.07); }
+    .flow-arrow-node {
+      display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 1.15rem;
+      font-weight: 900; flex-shrink: 0; padding: 0 2px;
+    }
+    .diag-num {
+      display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+      border-radius: 50%; font-size: 0.68rem; font-weight: 800; margin-bottom: 6px;
+    }
+    .diag-step-head { font-size: 0.78rem; font-weight: 800; color: #0f172a; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .diag-step-desc { font-size: 0.69rem; color: #475569; line-height: 1.45; }
+    .example-box {
+      background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 9px 12px;
+      font-size: 0.71rem; color: #334155; margin-top: 10px; display: flex; align-items: flex-start; gap: 8px;
+    }
+    .quick-fact-strip {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+    }
+    .quick-fact-pill {
+      background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 20px; padding: 3px 10px;
+      font-size: 0.68rem; font-weight: 700; color: #334155; display: inline-flex; align-items: center; gap: 5px;
+    }
 
-        .btn-primary:hover {
-            background: linear-gradient(135deg, #3b82f6, var(--accent-blue));
-            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6);
-        }
+    /* ── ARCH STACK ── */
+    .arch { width:100%;max-width:760px;display:flex;flex-direction:column;gap:9px; }
+    .arch-row { display:flex;align-items:center;gap:12px;background:#ffffff;border:1px solid #e2e8f0;border-radius:11px;padding:11px 18px;box-shadow:0 2px 6px rgba(15,23,42,0.04); }
+    .arch-lbl { font-size:.64rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;min-width:82px;color:#64748b; }
+    .chips { display:flex;flex-wrap:wrap;gap:7px; }
+    .chip { padding:3px 10px;border-radius:5px;font-size:.72rem;font-weight:600; }
+    .c-b { background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe; }
+    .c-t { background:#f0fdfa;color:#0e7490;border:1px solid #99f6e4; }
+    .c-g { background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0; }
+    .c-p { background:#faf5ff;color:#6b21a8;border:1px solid #e9d5ff; }
+    .c-a { background:#fffbeb;color:#b45309;border:1px solid #fde68a; }
+    .c-r { background:#fef2f2;color:#b91c1c;border:1px solid #fecaca; }
 
-        /* Slide Container */
-        .presentation-container {
-            flex: 1;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px 40px;
-        }
+    /* ── TIMELINE ── */
+    .tl { width:100%;max-width:820px;display:flex;flex-direction:column; }
+    .tl-row { display:flex;align-items:stretch; }
+    .tl-phase { width:106px;flex-shrink:0;text-align:right;padding:9px 14px 9px 0;border-right:2px solid #cbd5e1; }
+    .tl-pname { font-size:.7rem;font-weight:700;color:#1d4ed8; }
+    .tl-pwk   { font-size:.61rem;color:#94a3b8; }
+    .tl-dot-col { width:22px;flex-shrink:0;display:flex;flex-direction:column;align-items:center; }
+    .tl-dot { width:11px;height:11px;border-radius:50%;border:2px solid #3b82f6;background:#ffffff;margin-top:11px;box-shadow:0 0 0 3px #eff6ff; }
+    .tl-line { flex:1;width:2px;background:#e2e8f0; }
+    .tl-cnt { flex:1;padding:7px 0 7px 14px; }
+    .tl-t { font-size:.8rem;font-weight:700;color:#0f172a;margin-bottom:4px; }
+    .tl-pills { display:flex;flex-wrap:wrap;gap:5px; }
+    .tl-pill { font-size:.65rem;padding:2px 9px;border-radius:20px;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;font-weight:500; }
 
-        .slide {
-            position: absolute;
-            width: 92%;
-            max-width: 1280px;
-            height: 85%;
-            background: radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent 50%),
-                        radial-gradient(circle at bottom left, rgba(6, 182, 212, 0.05), transparent 50%),
-                        var(--card-dark);
-            border: 1px solid var(--border-color);
-            border-radius: 28px;
-            padding: 48px 56px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            opacity: 0;
-            pointer-events: none;
-            transform: scale(0.96) translateY(20px);
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            overflow-y: auto;
-        }
+    /* ── THANK YOU / CONTACT ── */
+    .ty-orb { width:96px;height:96px;border-radius:50%;background:linear-gradient(135deg,var(--blue),#0ea5e9);display:flex;align-items:center;justify-content:center;font-size:2.4rem;margin-bottom:20px;box-shadow:0 8px 32px rgba(26,86,219,.28); }
+    .contact-row { display:flex;gap:11px;margin-top:18px;flex-wrap:wrap;justify-content:center; }
+    .cpill { background:#ffffff;border:1px solid #e2e8f0;border-radius:50px;padding:7px 18px;color:#334155;font-size:.76rem;font-weight:600;box-shadow:0 2px 6px rgba(15,23,42,0.04); }
 
-        .slide.active {
-            opacity: 1;
-            pointer-events: auto;
-            transform: scale(1) translateY(0);
-        }
+    /* ── SLIDE FOOTER ── */
+    .sfooter { position:absolute;bottom:14px;left:56px;right:56px;display:flex;justify-content:space-between;font-size:.63rem;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px; }
+    .sfooter .cr { color:#dc2626;font-weight:700; }
 
-        /* Slide Typography */
-        .slide-header {
-            margin-bottom: 24px;
-        }
-
-        .slide-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            color: var(--accent-cyan);
-            font-size: 12px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin-bottom: 8px;
-        }
-
-        .slide-title {
-            font-size: 38px;
-            font-weight: 900;
-            line-height: 1.15;
-            letter-spacing: -1px;
-            background: linear-gradient(135deg, #ffffff 40%, #94a3b8);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .slide-subtitle {
-            font-size: 16px;
-            color: var(--text-muted);
-            margin-top: 8px;
-            font-weight: 500;
-        }
-
-        .slide-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        /* Grid Layouts */
-        .grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 24px;
-        }
-
-        .grid-3 {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-        }
-
-        .grid-4 {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-        }
-
-        .card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 24px;
-            transition: all 0.3s ease;
-        }
-
-        .card:hover {
-            border-color: rgba(255, 255, 255, 0.2);
-            background: rgba(255, 255, 255, 0.05);
-            transform: translateY(-3px);
-        }
-
-        .card-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 16px;
-            font-size: 24px;
-        }
-
-        .card-title {
-            font-size: 18px;
-            font-weight: 800;
-            margin-bottom: 8px;
-            color: #ffffff;
-        }
-
-        .card-desc {
-            font-size: 14px;
-            color: var(--text-muted);
-            line-height: 1.6;
-        }
-
-        /* Sequence / Diagram Box */
-        .diagram-box {
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 20px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-            color: #38bdf8;
-            line-height: 1.7;
-            overflow-x: auto;
-        }
-
-        /* Slide Footer */
-        .slide-footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-top: 24px;
-            padding-top: 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
-            font-size: 12px;
-            color: var(--text-muted);
-            font-weight: 600;
-        }
-
-        /* Navigation Bottom Bar */
-        .bottom-nav {
-            height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
-            padding: 0 32px;
-            z-index: 100;
-        }
-
-        .slide-dots {
-            display: flex;
-            gap: 8px;
-        }
-
-        .dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.2);
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .dot.active {
-            width: 28px;
-            border-radius: 6px;
-            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
-        }
-
-        /* Slide Specific Accents */
-        .title-hero {
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-        }
-
-        .hero-title {
-            font-size: 56px;
-            font-weight: 900;
-            letter-spacing: -1.5px;
-            line-height: 1.1;
-            margin-bottom: 20px;
-            background: linear-gradient(135deg, #ffffff 30%, var(--accent-cyan) 70%, var(--accent-blue) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .hero-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(6, 182, 212, 0.1);
-            border: 1px solid rgba(6, 182, 212, 0.3);
-            color: var(--accent-cyan);
-            padding: 6px 16px;
-            border-radius: 100px;
-            font-size: 13px;
-            font-weight: 800;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            margin-bottom: 24px;
-        }
-
-        .pill {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 800;
-            text-transform: uppercase;
-        }
-        .pill-blue { background: rgba(37, 99, 235, 0.15); color: #60a5fa; }
-        .pill-purple { background: rgba(139, 92, 246, 0.15); color: #c084fc; }
-        .pill-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
-        .pill-emerald { background: rgba(16, 185, 129, 0.15); color: #34d399; }
-    </style>
+    /* ── PROGRESS & KBD ── */
+    .prog-bar { position:fixed;bottom:0;left:0;right:0;height:3px;background:#e2e8f0;z-index:200; }
+    .prog-fill { height:100%;background:linear-gradient(90deg,var(--blue),#0ea5e9);transition:width .4s ease; }
+    .kbd { position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:.62rem;color:#94a3b8;background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;padding:3px 13px;z-index:200;pointer-events:none;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+  </style>
 </head>
 <body>
 
-    <!-- Top Action Bar -->
-    <header class="topbar">
-        <div class="logo-area">
-            <span class="material-symbols-outlined" style="color: var(--accent-cyan); font-size: 28px;">hub</span>
-            <span>KNOME</span>
-            <span class="logo-badge">MPOnline Limited</span>
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">
+    <div class="nav-logo">K</div>
+    <div>
+      <div>Knome</div>
+      <div class="nav-subtitle">MPOnline Limited</div>
+    </div>
+  </div>
+  <div class="nav-dots" id="navDots"></div>
+  <div class="nav-right">
+    <span class="slide-counter" id="counter">1 / 11</span>
+    <button class="nav-btn" id="prevBtn">← Prev</button>
+    <button class="nav-btn" id="nextBtn">Next →</button>
+  </div>
+</nav>
+
+<div class="prog-bar"><div class="prog-fill" id="progFill" style="width:9%"></div></div>
+<div class="slides-wrapper">
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 1 · COVER
+═══════════════════════════════════════════════════ -->
+<div class="slide bg1 active" data-index="0">
+  <div class="hero-k">K</div>
+  <div class="tag">MPOnline Limited · Platform Overview</div>
+  <h1 class="h1">Knome<br><span class="accent">Enterprise Excellence Portal</span></h1>
+  <p class="sub">A unified knowledge-sharing and collaboration platform — connecting every employee through Communities, Wiki, Clips, Posts, Videos, Podcasts, and real-time Messaging.</p>
+  <div class="hero-badges">
+    <span class="hero-badge">🏘️ Communities</span>
+    <span class="hero-badge">📖 Wiki</span>
+    <span class="hero-badge">🎬 Clips</span>
+    <span class="hero-badge">📰 Posts &amp; Articles</span>
+    <span class="hero-badge">📹 Videos &amp; Podcasts</span>
+    <span class="hero-badge">💬 Direct Messaging</span>
+    <span class="hero-badge">🏆 Karma &amp; Leaderboard</span>
+    <span class="hero-badge">📊 Admin Console</span>
+  </div>
+  <div class="hero-footer">
+    <span>Knome v1.0 · Enterprise Platform</span>
+    <span class="conf-label">CONFIDENTIAL</span>
+    <span>Slide 1 / 11</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 2 · ALL FUNCTIONALITIES
+═══════════════════════════════════════════════════ -->
+<div class="slide bg2" data-index="1">
+  <div class="tag">Core Functionalities</div>
+  <h2 class="h2">What Knome Can Do</h2>
+  <p class="h2-sub">8 powerful modules — one unified enterprise platform</p>
+  <div class="mod-grid">
+    <div class="mod-card mod-blue">
+      <div class="mod-icon">🏘️</div>
+      <div class="mod-name">Communities</div>
+      <div class="mod-desc">Department-based groups, public/private visibility, member management, pinned content</div>
+    </div>
+    <div class="mod-card mod-blue">
+      <div class="mod-icon">📖</div>
+      <div class="mod-name">Wiki</div>
+      <div class="mod-desc">Structured knowledge articles, rich editor, version history, collaborative publishing</div>
+    </div>
+    <div class="mod-card mod-teal">
+      <div class="mod-icon">🎬</div>
+      <div class="mod-name">Clips</div>
+      <div class="mod-desc">Short-form video channel, upload/record, personalised feed, comments &amp; likes</div>
+    </div>
+    <div class="mod-card mod-amber">
+      <div class="mod-icon">📰</div>
+      <div class="mod-name">Posts &amp; Articles</div>
+      <div class="mod-desc">Rich text posts, image/video embeds, reactions, announcements banner</div>
+    </div>
+    <div class="mod-card mod-purple">
+      <div class="mod-icon">💬</div>
+      <div class="mod-name">Direct Messaging</div>
+      <div class="mod-desc">Real-time 1-to-1 &amp; group chat, file sharing, read receipts via SignalR</div>
+    </div>
+    <div class="mod-card mod-amber">
+      <div class="mod-icon">🏆</div>
+      <div class="mod-name">Karma &amp; Leaderboard</div>
+      <div class="mod-desc">Points for contributions, badges, rank board, monthly reset cycles</div>
+    </div>
+    <div class="mod-card mod-green">
+      <div class="mod-icon">💼</div>
+      <div class="mod-name">Job Board</div>
+      <div class="mod-desc">Internal vacancy listings, apply flow, HR-managed postings</div>
+    </div>
+    <div class="mod-card mod-blue">
+      <div class="mod-icon">📊</div>
+      <div class="mod-name">Admin Console</div>
+      <div class="mod-desc">Analytics dashboard, user management, role assignment, system configuration</div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 2 / 11</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 3 · ROLE-BASED ACCESS CONTROL (RBAC)
+═══════════════════════════════════════════════════ -->
+<div class="slide bg6" data-index="2" style="padding:46px 36px 20px;overflow-y:auto;justify-content:flex-start;position:relative;">
+  <div style="position:absolute;top:0;left:0;right:0;height:4px;background:#e65100;"></div>
+  
+  <div style="width:100%;max-width:960px;margin:0 auto;position:relative;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px;">
+      <div>
+        <h2 style="font-size:1.45rem;font-weight:800;color:#16365c;letter-spacing:-0.5px;margin:0;font-family:'Segoe UI',Inter,sans-serif;">Role-Based Access Control (RBAC) — Capability Model</h2>
+        <p style="font-size:0.75rem;font-weight:700;color:#475569;margin:3px 0 8px;font-family:'Segoe UI',Inter,sans-serif;">FRD capability boundaries — <span style="color:#276a3c;font-weight:800;">✓</span> permitted | <span style="color:#64748b;font-weight:700;">—</span> not assigned in the FRD</p>
+      </div>
+      <div style="font-size:1.15rem;font-weight:700;color:#16365c;font-family:'Segoe UI',sans-serif;padding-top:2px;">03</div>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #b8cce4;border-radius:4px;overflow:hidden;box-shadow:0 3px 12px rgba(15,23,42,0.06);">
+      <table style="width:100%;border-collapse:collapse;font-family:'Segoe UI',Inter,Arial,sans-serif;font-size:0.71rem;line-height:1.25;">
+        <thead>
+          <tr style="background:#16365c;color:#ffffff;">
+            <th style="text-align:left;padding:6px 14px;font-weight:700;border:1px solid #102844;width:34%;">Capability</th>
+            <th style="text-align:center;padding:6px 8px;font-weight:700;border:1px solid #102844;width:16.5%;">EMP</th>
+            <th style="text-align:center;padding:6px 8px;font-weight:700;border:1px solid #102844;width:16.5%;">CADM</th>
+            <th style="text-align:center;padding:6px 8px;font-weight:700;border:1px solid #102844;width:16.5%;">HRADM</th>
+            <th style="text-align:center;padding:6px 8px;font-weight:700;border:1px solid #102844;width:16.5%;">SYSADM</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Create / edit personal profile</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Create text / image / video posts</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+          </tr>
+          <tr>
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Publish articles / blogs</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Upload video / podcast</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+          </tr>
+          <tr>
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Create community</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Approve community join requests</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+          </tr>
+          <tr>
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Moderate community content</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Manage banners / announcements</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+          </tr>
+          <tr>
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Post internal job vacancies</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">View analytics dashboard</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+          </tr>
+          <tr>
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Manage user access &amp; roles</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Configure system settings</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+          </tr>
+          <tr>
+            <td style="padding:3px 14px;font-weight:600;color:#1e293b;border:1px solid #e2e8f0;white-space:nowrap;">Earn / view Karma Points</td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#276a3c;font-weight:800;font-size:0.95rem;">✓</span></td>
+            <td style="text-align:center;padding:2px 8px;border:1px solid #e2e8f0;"><span style="color:#94a3b8;font-weight:700;font-size:0.95rem;">—</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Key Principle Box -->
+    <div style="background:#e9f2fa;border:1px solid #b8d5ed;border-radius:6px;padding:6px 14px;text-align:center;font-size:0.71rem;font-weight:700;color:#16365c;box-shadow:0 1px 4px rgba(22,54,92,0.04);margin-top:8px;">
+      Key principle: authorization is role-scoped; SYSADM owns access/configuration, while CADM governs community-level operations and HRADM governs HR/platform functions.
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top:10px;padding-top:6px;display:flex;justify-content:space-between;font-size:0.65rem;color:#64748b;border-top:1px solid #cbd5e1;">
+      <span style="font-weight:600;">Knome FRD v1.0 — User Roles &amp; Responsibilities</span>
+      <span style="font-weight:700;color:#16365c;">MPOnline Limited | CONFIDENTIAL</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 4 · COMMUNITIES FUNCTIONALITY
+═══════════════════════════════════════════════════ -->
+<div class="slide bg3" data-index="3">
+  <div class="tag">Functionality</div>
+  <h2 class="h2">🏘️ Communities</h2>
+  <p class="h2-sub">Structured group spaces for departments and interest areas</p>
+  <div class="feat-split">
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-b">🏘️</div>
+        <div><div class="feat-title">Group Management</div><div class="feat-subtitle">Create &amp; organize communities</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Create public or private communities</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Join request approval workflow</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Community admin role assignment</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Department-scoped or company-wide visibility</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Member list management &amp; removal</div></div>
+      </div>
+    </div>
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-g">📌</div>
+        <div><div class="feat-title">Content &amp; Engagement</div><div class="feat-subtitle">Share &amp; interact within groups</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Pin Wiki articles &amp; Clips to communities</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Community-level posts and announcements</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Content moderation by Community Admin</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Share profiles &amp; articles with members</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Community analytics: members, engagement</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 4 / 11</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 5 · WIKI FUNCTIONALITY
+═══════════════════════════════════════════════════ -->
+<div class="slide bg4" data-index="4">
+  <div class="tag">Functionality</div>
+  <h2 class="h2">📖 Wiki — Knowledge Base</h2>
+  <p class="h2-sub">Structured, searchable knowledge articles with collaborative publishing</p>
+  <div class="feat-split">
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-b">📝</div>
+        <div><div class="feat-title">Create &amp; Publish</div><div class="feat-subtitle">Rich authoring tools for all roles</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Rich text editor — headings, images, tables, code</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Draft → Review → Publish workflow</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Full version history &amp; rollback</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Tag-based categorisation &amp; search indexing</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">✅ Available to: Employee, Community Admin, HR Admin, <strong style="color:var(--sky)">Sys Admin</strong></div></div>
+      </div>
+    </div>
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-g">🔗</div>
+        <div><div class="feat-title">Share &amp; Discover</div><div class="feat-subtitle">Controlled visibility across the org</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Share with specific employees via name/ID search</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Department-scoped or company-wide access</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Read-only link sharing with optional expiry</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Pin articles to Community pages</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Views, read-time &amp; engagement analytics</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 5 / 11</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 6 · CLIPS FUNCTIONALITY
+═══════════════════════════════════════════════════ -->
+<div class="slide bg5" data-index="5">
+  <div class="tag">Functionality</div>
+  <h2 class="h2">🎬 Clips — Video Channel</h2>
+  <p class="h2-sub">Internal short-form video knowledge sharing — powered by all roles</p>
+  <div class="feat-split">
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-t">🎥</div>
+        <div><div class="feat-title">Upload &amp; Create</div><div class="feat-subtitle">Easy video content production</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Upload MP4 / WebM pre-recorded videos</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">In-browser screen recording capability</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Custom thumbnail, title &amp; description</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Department / category tagging</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">✅ Available to: Employee, Community Admin, HR Admin, <strong style="color:var(--teal)">Sys Admin</strong></div></div>
+      </div>
+    </div>
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-a">📡</div>
+        <div><div class="feat-title">Watch &amp; Engage</div><div class="feat-subtitle">Social-style video experience</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Personalised video feed based on interests</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Likes, comments &amp; Karma point rewards</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Share Clips to Communities or DMs</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">View count &amp; completion rate analytics</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Playlist &amp; learning-path collections</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 6 / 11</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 7 · CONTENT LIFECYCLE & PUBLISHING FLOWS
+═══════════════════════════════════════════════════ -->
+<div class="slide bg7" data-index="6" style="padding:54px 24px 28px;overflow-y:auto;justify-content:flex-start;">
+  <div class="tag">Step-by-Step Guide · Plain Language</div>
+  <h2 class="h2">How It Works: Posts, Articles, Wiki, Videos, Podcasts &amp; Clips</h2>
+  <p class="h2-sub">Visual step-by-step diagrams in plain language — see how each content type is created, approved, and shared</p>
+
+  <!-- Flow Selector Tabs -->
+  <div class="flow-nav" style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;justify-content:center;max-width:980px;width:100%;">
+    <button class="flow-btn active" onclick="switchFlow('all', this)">🌐 All 6 Comparison Diagram</button>
+    <button class="flow-btn" onclick="switchFlow('post', this)">📰 Posts (Quick Updates)</button>
+    <button class="flow-btn" onclick="switchFlow('article', this)">📄 Articles (Guides)</button>
+    <button class="flow-btn" onclick="switchFlow('clip', this)">🎬 Clips (90s Videos)</button>
+    <button class="flow-btn" onclick="switchFlow('wiki', this)">📖 Wiki (SOPs)</button>
+    <button class="flow-btn" onclick="switchFlow('video', this)">📹 Videos (Tutorials) <span class="gate-badge gate-approval" style="margin-left:2px;">Admin Approval</span></button>
+    <button class="flow-btn" onclick="switchFlow('podcast', this)">🎙️ Podcasts (Audio) <span class="gate-badge gate-approval" style="margin-left:2px;">Admin Approval</span></button>
+  </div>
+
+  <!-- VIEW 1: ALL 6 FLOWS MATRIX -->
+  <div id="flow-all" class="flow-view" style="display:block;width:100%;max-width:980px;margin:0 auto;">
+    <div class="flow-matrix-grid">
+
+      <!-- 1. Posts Flow Lane -->
+      <div class="flow-lane">
+        <div class="flow-type-pill" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;">
+          <span style="font-size:1.1rem;">📰</span>
+          <div><div>Posts</div><div style="font-size:0.6rem;color:#60a5fa;font-weight:700;">Quick Updates</div></div>
         </div>
-        <div class="controls">
-            <span id="slideCounter" style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-right: 12px;">Slide 1 / 14</span>
-            <button class="btn" onclick="prevSlide()"><span class="material-symbols-outlined">chevron_left</span> Prev</button>
-            <button class="btn btn-primary" onclick="nextSlide()">Next <span class="material-symbols-outlined">chevron_right</span></button>
-            <button class="btn" onclick="toggleFullScreen()"><span class="material-symbols-outlined">fullscreen</span> Fullscreen</button>
+        <div class="flow-stage">
+          <div class="flow-stage-title">1. Write &amp; Attach</div>
+          <div class="flow-stage-desc">Type message, add photo/link, tag teammates</div>
         </div>
-    </header>
+        <div class="flow-stage">
+          <div class="flow-stage-title">2. Safety Check <span class="gate-badge gate-instant">⚡ 1s Pass</span></div>
+          <div class="flow-stage-desc">Automatic workplace language scan</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">3. Live on Feed</div>
+          <div class="flow-stage-desc">Shows instantly on company timeline</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">4. Team Likes &amp; Karma</div>
+          <div class="flow-stage-desc">Reactions, replies &amp; earn <strong style="color:#2563eb;">+2 Karma</strong></div>
+        </div>
+      </div>
 
-    <!-- Presentation Deck Area -->
-    <main class="presentation-container">
+      <!-- 2. Articles Flow Lane -->
+      <div class="flow-lane">
+        <div class="flow-type-pill" style="background:#f0f9ff;color:#0369a1;border-color:#bae6fd;">
+          <span style="font-size:1.1rem;">📄</span>
+          <div><div>Articles</div><div style="font-size:0.6rem;color:#38bdf8;font-weight:700;">Guides &amp; Docs</div></div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">1. Rich Formatting</div>
+          <div class="flow-stage-desc">Full editor with headings, tables &amp; PDF files</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">2. Draft &amp; Tag <span class="gate-badge gate-review">Auto-Save</span></div>
+          <div class="flow-stage-desc">Auto-saves draft &amp; choose department topic</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">3. Knowledge Hub</div>
+          <div class="flow-stage-desc">Added to Knowledge Hub &amp; community page</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">4. Learn &amp; Reward</div>
+          <div class="flow-stage-desc">Protected reader (no leak) &amp; <strong style="color:#0284c7;">+10 Karma</strong></div>
+        </div>
+      </div>
 
-        <!-- SLIDE 1: Title Slide -->
-        <section class="slide active">
-            <div class="title-hero">
-                <div class="hero-badge">
-                    <span class="material-symbols-outlined" style="font-size: 18px;">verified</span> Enterprise Platform Pitch
-                </div>
-                <h1 class="hero-title">KNOME</h1>
-                <p style="font-size: 22px; color: #cbd5e1; max-width: 780px; margin-bottom: 24px; font-weight: 600; line-height: 1.4;">
-                    Enterprise Knowledge Management, Collaborative Media Studio & Real-Time Workforce Hub
-                </p>
-                <p style="font-size: 15px; color: var(--text-muted); max-width: 650px; line-height: 1.6; margin-bottom: 36px;">
-                    Custom built for <strong>MPOnline Limited</strong> with full Single Sign-On (SSO) integration via <strong>EmployeeHub</strong> Identity Server.
-                </p>
-                <div style="display: flex; gap: 16px; justify-content: center;">
-                    <span class="pill pill-blue">ASP.NET Core 10</span>
-                    <span class="pill pill-purple">React 19 & Vite</span>
-                    <span class="pill pill-emerald">SQL Server 2022</span>
-                    <span class="pill pill-amber">SignalR WebSockets</span>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>MPOnline Limited Enterprise Solution</span>
-                <span>CONFIDENTIAL • V1.0 RELEASE</span>
-            </div>
-        </section>
+      <!-- 3. Clips Flow Lane -->
+      <div class="flow-lane">
+        <div class="flow-type-pill" style="background:#faf5ff;color:#7e22ce;border-color:#e9d5ff;">
+          <span style="font-size:1.1rem;">🎬</span>
+          <div><div>Clips</div><div style="font-size:0.6rem;color:#c084fc;font-weight:700;">90s Videos</div></div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">1. Record or Upload</div>
+          <div class="flow-stage-desc">Record screen in browser or upload short MP4</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">2. Auto-Format <span class="gate-badge gate-instant">⚡ Auto</span></div>
+          <div class="flow-stage-desc">Formats into mobile 9:16 vertical view</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">3. Vertical Reels Feed</div>
+          <div class="flow-stage-desc">Swipable video player with sound toggle</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">4. Quick Learn &amp; Karma</div>
+          <div class="flow-stage-desc">Double-tap likes, shares &amp; <strong style="color:#9333ea;">+8 Karma</strong></div>
+        </div>
+      </div>
 
-        <!-- SLIDE 2: Executive Vision -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">auto_awesome</span> Vision & Concept</div>
-                <h2 class="slide-title">4 Industry Giants in One Enterprise Ecosystem</h2>
-                <p class="slide-subtitle">Combining high-impact social, publishing, streaming, and gamified collaboration inside MPOnline.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-4">
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(10, 102, 194, 0.2); color: #0a66c2;">
-                            <span class="material-symbols-outlined">badge</span>
-                        </div>
-                        <h3 class="card-title">LinkedIn Model</h3>
-                        <p class="card-desc">Professional profiles, department networking, feed updates, connections, and live peer recognition.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">
-                            <span class="material-symbols-outlined">menu_book</span>
-                        </div>
-                        <h3 class="card-title">Medium Model</h3>
-                        <p class="card-desc">Long-form technical documentation, article publishing, multi-versioning, and protected attachments.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">
-                            <span class="material-symbols-outlined">smart_display</span>
-                        </div>
-                        <h3 class="card-title">YouTube Model</h3>
-                        <p class="card-desc">High-performance video tutorials, technical playlist series, podcasts, and video module tracking.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">
-                            <span class="material-symbols-outlined">military_tech</span>
-                        </div>
-                        <h3 class="card-title">StackOverflow Model</h3>
-                        <p class="card-desc">Gamified Karma engine, contribution tiers, live leaderboard, and autonomous point rewards.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Enterprise Architecture Overview</span>
-                <span>Slide 2</span>
-            </div>
-        </section>
+      <!-- 4. Wiki Flow Lane -->
+      <div class="flow-lane">
+        <div class="flow-type-pill" style="background:#eef2ff;color:#3730a3;border-color:#c7d2fe;">
+          <span style="font-size:1.1rem;">📖</span>
+          <div><div>Wiki</div><div style="font-size:0.6rem;color:#818cf8;font-weight:700;">Company SOPs</div></div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">1. Write Procedures</div>
+          <div class="flow-stage-desc">Step-by-step company guidelines &amp; rules</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">2. Version History <span class="gate-badge gate-review">1-Click Undo</span></div>
+          <div class="flow-stage-desc">Track every change; restore past version anytime</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">3. Company Library</div>
+          <div class="flow-stage-desc">Instant search for all teams &amp; departments</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">4. Zero Knowledge Loss</div>
+          <div class="flow-stage-desc">Preserves organizational memory &amp; <strong style="color:#4f46e5;">+10 Karma</strong></div>
+        </div>
+      </div>
 
-        <!-- SLIDE 3: EmployeeHub SSO Login Flow -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">lock_open</span> Single Sign-On (SSO)</div>
-                <h2 class="slide-title">EmployeeHub & Knome Shared JWT Architecture</h2>
-                <p class="slide-subtitle">Seamless zero-click authentication between EmployeeHub Identity Server and Knome Portal.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-2" style="align-items: center;">
-                    <div class="diagram-box">
-<span style="color:#60a5fa;">[1. EmployeeHub Login (:5001)]</span>
-  Employee inputs credentials -> Validates against identity DB.
-  Issues HMAC-SHA256 Signed JWT (Claims: sub, employeeId, role).
-        │
-        ▼
-<span style="color:#34d399;">[2. Seamless SSO Redirect]</span>
-  Redirects to: <span style="color:#fcd34d;">http://localhost:5173/?sso_token={JWT}&employeeId={MPO103}</span>
-        │
-        ▼
-<span style="color:#c084fc;">[3. Knome Frontend Token Catch]</span>
-  UserContext stores token in localStorage, sanitizes URL bar.
-        │
-        ▼
-<span style="color:#f472b6;">[4. Knome API Dual-Issuer Validation (:5095)]</span>
-  TokenValidationParameters trusts: ["Knome.API", "EmployeeHub.Identity"]
-  Validates Signature with shared SecretKey -> User Logged In!
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 16px;">
-                        <div class="card">
-                            <h4 style="font-weight: 800; color: #38bdf8; margin-bottom: 6px;">Dual-Issuer Trust</h4>
-                            <p class="card-desc">Both systems share cryptographic verification keys so no extra round-trip or redundant token exchange is required.</p>
-                        </div>
-                        <div class="card">
-                            <h4 style="font-weight: 800; color: #4ade80; margin-bottom: 6px;">URL Query Sanitization</h4>
-                            <p class="card-desc">Immediately on load, <code>window.history.replaceState</code> purges token query params from the browser address bar for security.</p>
-                        </div>
-                        <div class="card">
-                            <h4 style="font-weight: 800; color: #f472b6; margin-bottom: 6px;">Multi-Role Claim Synchronization</h4>
-                            <p class="card-desc">Employee, Community Admin, HR Admin, or SysAdmin roles are extracted directly from token claims.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Identity & Access Management</span>
-                <span>Slide 3</span>
-            </div>
-        </section>
+      <!-- 5. Videos Flow Lane (Admin Approval) -->
+      <div class="flow-lane">
+        <div class="flow-type-pill" style="background:#fff1f2;color:#be123c;border-color:#fecdd3;">
+          <span style="font-size:1.1rem;">📹</span>
+          <div><div>Videos</div><div style="font-size:0.6rem;color:#fb7185;font-weight:700;">Tutorials</div></div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">1. Upload Tutorial</div>
+          <div class="flow-stage-desc">Upload MP4 video or sync YouTube playlist</div>
+        </div>
+        <div class="flow-stage" style="border-color:#fecaca;background:#fff5f5;">
+          <div class="flow-stage-title">2. Admin Approval <span class="gate-badge gate-approval">🛡️ Admin Check</span></div>
+          <div class="flow-stage-desc">Admin reviews video for company compliance</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">3. Video Hub</div>
+          <div class="flow-stage-desc">Published to Video Hub with chapter navigation</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">4. Training &amp; Karma</div>
+          <div class="flow-stage-desc">Timestamp comments, study &amp; <strong style="color:#ef4444;">+8 Karma</strong></div>
+        </div>
+      </div>
 
-        <!-- SLIDE 4: Full-Stack Architecture -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">schema</span> Technical Architecture</div>
-                <h2 class="slide-title">Modern ASP.NET Core 10 + React 19 Monorepo</h2>
-                <p class="slide-subtitle">Engineered for low latency, live SQL Server persistence, and seamless scalability.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-3">
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(37, 99, 235, 0.2); color: #60a5fa;">
-                            <span class="material-symbols-outlined">dns</span>
-                        </div>
-                        <h3 class="card-title">Backend (Knome.API)</h3>
-                        <ul style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-left: 18px;">
-                            <li>ASP.NET Core 10 & Clean Architecture</li>
-                            <li>Entity Framework Core (SQL Server)</li>
-                            <li>SignalR WebSocket Notification Hub</li>
-                            <li>FluentValidation & AutoMapper</li>
-                            <li>YARP Gateway Routing</li>
-                        </ul>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(6, 182, 212, 0.2); color: #06b6d4;">
-                            <span class="material-symbols-outlined">terminal</span>
-                        </div>
-                        <h3 class="card-title">Frontend (knome-web)</h3>
-                        <ul style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-left: 18px;">
-                            <li>React 19 + Vite HMR Dev Engine</li>
-                            <li>Modern Glassmorphism & Dark Mode</li>
-                            <li>Protected In-App Document Viewer</li>
-                            <li>Reactive State & Global UserContext</li>
-                            <li>Axios Interceptor Token Pipeline</li>
-                        </ul>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">
-                            <span class="material-symbols-outlined">database</span>
-                        </div>
-                        <h3 class="card-title">Data & Security</h3>
-                        <ul style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-left: 18px;">
-                            <li>Live SQL Server Normalized Schema</li>
-                            <li>BCrypt Work Factor 11 Credential Hash</li>
-                            <li>Immutable Audit Log Trail</li>
-                            <li>No External Cloud Dependencies</li>
-                            <li>Anti-Tamper Context Protections</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Infrastructure & Engineering Stack</span>
-                <span>Slide 4</span>
-            </div>
-        </section>
+      <!-- 6. Podcasts Flow Lane (Admin Approval) -->
+      <div class="flow-lane">
+        <div class="flow-type-pill" style="background:#fdf4ff;color:#86198f;border-color:#f5d0fe;">
+          <span style="font-size:1.1rem;">🎙️</span>
+          <div><div>Podcasts</div><div style="font-size:0.6rem;color:#e879f9;font-weight:700;">Audio Series</div></div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">1. Upload Audio</div>
+          <div class="flow-stage-desc">Upload MP3 talk, cover image &amp; speaker names</div>
+        </div>
+        <div class="flow-stage" style="border-color:#fecaca;background:#fff5f5;">
+          <div class="flow-stage-title">2. Admin Approval <span class="gate-badge gate-approval">🛡️ Admin Check</span></div>
+          <div class="flow-stage-desc">Admin verifies talk topic &amp; broadcast approval</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">3. Background Player</div>
+          <div class="flow-stage-desc">Keeps playing in mini-player while you work</div>
+        </div>
+        <div class="flow-stage">
+          <div class="flow-stage-title">4. Listen &amp; Reward</div>
+          <div class="flow-stage-desc">Episode ratings, bookmarks &amp; <strong style="color:#c026d3;">+8 Karma</strong></div>
+        </div>
+      </div>
 
-        <!-- SLIDE 5: Knowledge Hub & Articles -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">menu_book</span> Knowledge Hub</div>
-                <h2 class="slide-title">Enterprise Articles & Structured Publications</h2>
-                <p class="slide-subtitle">Capturing institutional knowledge, departmental standard operating procedures, and technical briefs.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-3">
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(99, 102, 241, 0.2); color: #818cf8;"><span class="material-symbols-outlined">edit_note</span></div>
-                        <h3 class="card-title">Rich Content Authoring</h3>
-                        <p class="card-desc">Structured WYSIWYG editor with code blocks, checklists, table formatting, and embedded rich imagery.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8;"><span class="material-symbols-outlined">history</span></div>
-                        <h3 class="card-title">Version History Tracking</h3>
-                        <p class="card-desc">Maintains historical snapshots of every article revision with author attribution and rollback capabilities.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;"><span class="material-symbols-outlined">attachment</span></div>
-                        <h3 class="card-title">Protected Document Attachments</h3>
-                        <p class="card-desc">PDFs and manuals open exclusively in the sandboxed modal with external download toolbars disabled.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Knowledge Management Module</span>
-                <span>Slide 5</span>
-            </div>
-        </section>
+    </div>
+  </div>
 
-        <!-- SLIDE 6: Media Studio - Video & Podcasts -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">video_library</span> Media Studio</div>
-                <h2 class="slide-title">Video Modules & Technical Podcasts</h2>
-                <p class="slide-subtitle">Enterprise streaming suite for employee upskilling, leadership broadcasts, and architectural walkthroughs.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-2">
-                    <div class="card" style="border-left: 4px solid #ef4444;">
-                        <h3 class="card-title" style="color: #f87171; display: flex; align-items: center; gap: 8px;">
-                            <span class="material-symbols-outlined">smart_display</span> Video Learning Platform
-                        </h3>
-                        <ul style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-left: 18px; margin-top: 12px;">
-                            <li>Self-hosted video streaming & YouTube Playlist synchronization</li>
-                            <li>Automatic metadata extraction & duration parsing</li>
-                            <li>Video playlist series grouping & learning tracks</li>
-                            <li>View counting, engagement reactions, and timestamped discussions</li>
-                        </ul>
-                    </div>
-                    <div class="card" style="border-left: 4px solid #8b5cf6;">
-                        <h3 class="card-title" style="color: #c084fc; display: flex; align-items: center; gap: 8px;">
-                            <span class="material-symbols-outlined">podcasts</span> Audio & Podcast Channels
-                        </h3>
-                        <ul style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-left: 18px; margin-top: 12px;">
-                            <li>Dedicated episode series and audio stream management</li>
-                            <li>Continuous background audio playback bar</li>
-                            <li>Speaker host tagging and episode transcripts</li>
-                            <li>Clean playlist series dropdown with unified upload experience</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Media Learning & Streaming</span>
-                <span>Slide 6</span>
-            </div>
-        </section>
+  <!-- DEEP DIVE: POSTS FLOW -->
+  <div id="flow-post" class="flow-view" style="display:none;width:100%;max-width:960px;margin:0 auto;">
+    <div style="background:#ffffff;border:1px solid #bfdbfe;border-radius:14px;padding:18px 20px;box-shadow:0 4px 16px rgba(37,99,235,0.06);">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <span style="font-size:1.9rem;">📰</span>
+        <div>
+          <h3 style="font-size:1.05rem;font-weight:800;color:#1e40af;margin:0;">Posts: Quick Updates &amp; Team Announcements</h3>
+          <p style="font-size:0.73rem;color:#64748b;margin:2px 0 0;">Fast, informal updates to celebrate wins, ask questions, or broadcast team news across the company.</p>
+        </div>
+      </div>
 
-        <!-- SLIDE 7: Communities & Governance Flow -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">diversity_3</span> Communities</div>
-                <h2 class="slide-title">Collaborative Spaces & Approval Lifecycle</h2>
-                <p class="slide-subtitle">Structured workgroups with automated moderation and administrator approval workflows.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-3">
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(6, 182, 212, 0.2); color: #06b6d4;"><span class="material-symbols-outlined">add_circle</span></div>
-                        <h3 class="card-title">1. Employee Creation</h3>
-                        <p class="card-desc">Employees fill the creation wizard with rules, FAQs, and category tags. The request is submitted as <strong>Pending Approval</strong>.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;"><span class="material-symbols-outlined">notifications_active</span></div>
-                        <h3 class="card-title">2. Admin Live Alert</h3>
-                        <p class="card-desc">HR/System Admins receive instant notification with one-click navigation to the <strong>Communities Approvals</strong> dashboard.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(16, 185, 129, 0.2); color: #10b981;"><span class="material-symbols-outlined">verified</span></div>
-                        <h3 class="card-title">3. Instant Publication</h3>
-                        <p class="card-desc">On approval, the community is published live, creator is designated Community Admin, and celebration alerts are broadcast.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Governance & Community Operations</span>
-                <span>Slide 7</span>
-            </div>
-        </section>
+      <!-- Quick Facts -->
+      <div class="quick-fact-strip">
+        <span class="quick-fact-pill">👤 <strong>Who:</strong> Any Employee</span>
+        <span class="quick-fact-pill">⏱️ <strong>Time:</strong> ~30 Seconds</span>
+        <span class="quick-fact-pill" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46;">⚡ <strong>Approval:</strong> Instant Pass (Auto-filtered)</span>
+        <span class="quick-fact-pill" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8;">🏆 <strong>Reward:</strong> +2 Karma Points</span>
+      </div>
 
-        <!-- SLIDE 8: Gamification & Karma Engine -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">military_tech</span> Gamification</div>
-                <h2 class="slide-title">SQL Server-Driven Live Karma Engine</h2>
-                <p class="slide-subtitle">Encouraging active participation, mentorship, and quality knowledge sharing across departments.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-4" style="margin-bottom: 24px;">
-                    <div class="card" style="text-align: center; border-color: rgba(148, 163, 184, 0.3);">
-                        <span class="pill" style="background: rgba(148, 163, 184, 0.2); color: #cbd5e1;">0 – 250 PTS</span>
-                        <h3 class="card-title" style="margin-top: 12px;">Bronze Tier</h3>
-                        <p class="card-desc">Newbie Contributor</p>
-                    </div>
-                    <div class="card" style="text-align: center; border-color: rgba(59, 130, 246, 0.3);">
-                        <span class="pill pill-blue">251 – 1,000 PTS</span>
-                        <h3 class="card-title" style="margin-top: 12px;">Silver Tier</h3>
-                        <p class="card-desc">Active Contributor</p>
-                    </div>
-                    <div class="card" style="text-align: center; border-color: rgba(20, 184, 166, 0.3);">
-                        <span class="pill" style="background: rgba(20, 184, 166, 0.2); color: #2dd4bf;">1,001 – 5,000 PTS</span>
-                        <h3 class="card-title" style="margin-top: 12px;">Gold Tier</h3>
-                        <p class="card-desc">Domain Expert</p>
-                    </div>
-                    <div class="card" style="text-align: center; border-color: rgba(245, 158, 11, 0.3);">
-                        <span class="pill pill-amber">5,000+ PTS</span>
-                        <h3 class="card-title" style="margin-top: 12px;">Platinum Tier</h3>
-                        <p class="card-desc">Platform Champion</p>
-                    </div>
-                </div>
-                <div class="diagram-box">
-<span style="color:#fcd34d;">Automatic Point Ledger:</span>
-  • +10 Points: Publish Knowledge Article  • +8 Points: Upload Video/Podcast
-  • +2 Points: Post Updates                • +1/+2/+3 Points: Content Reactions/Comments/Shares
-  • All transactions logged into SQL Server table: <code>dbo.KarmaTransactions</code>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Workforce Engagement & Recognition</span>
-                <span>Slide 8</span>
-            </div>
-        </section>
+      <!-- Visual Flow Diagram -->
+      <div class="flow-diagram-strip">
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#eff6ff;color:#1d4ed8;">1</div>
+          <div class="diag-step-head">✏️ Write &amp; Tag</div>
+          <div class="diag-step-desc">Click "Create Post", type your update, attach photos or links, and @mention teammates or add hashtags.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#fef3c7;color:#b45309;">2</div>
+          <div class="diag-step-head">⚡ Instant Auto-Check</div>
+          <div class="diag-step-desc">The system checks for safe workplace words in under 1 second. Clean posts are published immediately without delay.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#e0f2fe;color:#0284c7;">3</div>
+          <div class="diag-step-head">📡 Live on Feed</div>
+          <div class="diag-step-desc">Your update appears instantly on the company-wide feed and department stream without anyone needing to refresh!</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#dcfce7;color:#15803d;">4</div>
+          <div class="diag-step-head">🎉 React &amp; +2 Karma</div>
+          <div class="diag-step-desc">Colleagues like, clap, and reply with comments. You receive <strong>+2 Karma points</strong> on your profile badge.</div>
+        </div>
+      </div>
 
-        <!-- SLIDE 9: Standardized Sharing & Document Security -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">security</span> Corporate Security</div>
-                <h2 class="slide-title">Standardized Sharing & In-App Document Protection</h2>
-                <p class="slide-subtitle">Strict compliance-ready data protections eliminating unauthorized external exports.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-2">
-                    <div class="card">
-                        <h3 class="card-title" style="color: var(--accent-cyan); display: flex; align-items: center; gap: 8px;">
-                            <span class="material-symbols-outlined">share</span> Standardized 2-Option Share Modal
-                        </h3>
-                        <p class="card-desc" style="margin-bottom: 16px;">All share triggers across articles, posts, videos, podcasts, and profiles provide exactly two clean choices:</p>
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <div style="padding: 12px; border-radius: 12px; background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.2); display: flex; align-items: center; gap: 12px;">
-                                <span class="material-symbols-outlined" style="color: #06b6d4;">groups</span>
-                                <strong>Share to Community</strong> (Post into team feed)
-                            </div>
-                            <div style="padding: 12px; border-radius: 12px; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.2); display: flex; align-items: center; gap: 12px;">
-                                <span class="material-symbols-outlined" style="color: #a855f7;">person_add</span>
-                                <strong>Share with Users</strong> (Direct colleague notification)
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3 class="card-title" style="color: #f43f5e; display: flex; align-items: center; gap: 8px;">
-                            <span class="material-symbols-outlined">shield</span> Protected Document Viewer
-                        </h3>
-                        <ul style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-left: 18px;">
-                            <li>Zero external downloads (<code>target="_blank"</code> anchor tags eliminated)</li>
-                            <li>PDF ribbons, print toolbars, and save shortcuts disabled</li>
-                            <li>Right-click context menu and text scraping prevented</li>
-                            <li>Sandboxed in-app modal with full zoom and multi-page preview</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Enterprise Data Governance</span>
-                <span>Slide 9</span>
-            </div>
-        </section>
+      <!-- Real Example -->
+      <div class="example-box">
+        <span style="font-size:1.1rem;flex-shrink:0;">💡</span>
+        <div><strong>Real Workplace Example:</strong> A project lead posts: <em>"Great job team! MPOnline Portal Phase 1 migration completed ahead of schedule 🚀"</em> — team members instantly comment, celebrate with claps, and stay aligned.</div>
+      </div>
+    </div>
+  </div>
 
-        <!-- SLIDE 10: Real-Time SignalR WebSockets -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">bolt</span> Real-Time Engine</div>
-                <h2 class="slide-title">SignalR WebSockets & Chronological Notifications</h2>
-                <p class="slide-subtitle">Zero polling overhead with instant push alerts delivered in sub-second latency.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-3">
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(37, 99, 235, 0.2); color: #60a5fa;"><span class="material-symbols-outlined">notifications_active</span></div>
-                        <h3 class="card-title">Live Bell & Audio Chime</h3>
-                        <p class="card-desc">Navbar bell badge updates in real-time with pleasant audio feedback on incoming interactions.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;"><span class="material-symbols-outlined">vertical_align_top</span></div>
-                        <h3 class="card-title">Newest-First Priority</h3>
-                        <p class="card-desc">Incoming notifications are placed directly at Index 0 (top of list) with live "Just now" timestamps.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(16, 185, 129, 0.2); color: #34d399;"><span class="material-symbols-outlined">manage_accounts</span></div>
-                        <h3 class="card-title">Instant Role Unlocks</h3>
-                        <p class="card-desc">When an administrator updates a user role, the employee's pending screen clears immediately.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Real-Time Event Architecture</span>
-                <span>Slide 10</span>
-            </div>
-        </section>
+  <!-- DEEP DIVE: ARTICLES FLOW -->
+  <div id="flow-article" class="flow-view" style="display:none;width:100%;max-width:960px;margin:0 auto;">
+    <div style="background:#ffffff;border:1px solid #bae6fd;border-radius:14px;padding:18px 20px;box-shadow:0 4px 16px rgba(2,132,199,0.06);">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <span style="font-size:1.9rem;">📄</span>
+        <div>
+          <h3 style="font-size:1.05rem;font-weight:800;color:#0369a1;margin:0;">Articles: In-Depth Guides, Best Practices &amp; Manuals</h3>
+          <p style="font-size:0.73rem;color:#64748b;margin:2px 0 0;">Long-form structured guides with headings, diagrams, bullet points, and downloadable PDF attachments.</p>
+        </div>
+      </div>
 
-        <!-- SLIDE 11: HR Analytics & Intelligence -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">monitoring</span> HR Intelligence</div>
-                <h2 class="slide-title">100% Live SQL Server Analytics Portal</h2>
-                <p class="slide-subtitle">Executive workforce insights directly synchronized with database controllers and zero mock data.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-3" style="margin-bottom: 20px;">
-                    <div class="card">
-                        <span class="pill pill-blue">RPT-01</span>
-                        <h4 class="card-title" style="margin-top: 10px; font-size: 15px;">User Engagement</h4>
-                        <p class="card-desc">Registered employees, active users, suspension status, and karma tier distribution.</p>
-                    </div>
-                    <div class="card">
-                        <span class="pill pill-emerald">RPT-02</span>
-                        <h4 class="card-title" style="margin-top: 10px; font-size: 15px;">Community Health</h4>
-                        <p class="card-desc">Active community memberships, join ratios, and post frequency benchmarks.</p>
-                    </div>
-                    <div class="card">
-                        <span class="pill pill-purple">RPT-03</span>
-                        <h4 class="card-title" style="margin-top: 10px; font-size: 15px;">Content Performance</h4>
-                        <p class="card-desc">Total published posts, articles, video modules, podcast streams, and reactions.</p>
-                    </div>
-                </div>
-                <div class="grid-2">
-                    <div class="card">
-                        <span class="pill pill-amber">RPT-04</span>
-                        <h4 class="card-title" style="margin-top: 10px; font-size: 15px;">Trending Contributors</h4>
-                        <p class="card-desc">Real-time karma ranking of top departmental champions.</p>
-                    </div>
-                    <div class="card">
-                        <span class="pill" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">RPT-05</span>
-                        <h4 class="card-title" style="margin-top: 10px; font-size: 15px;">Moderation & Audit Trail</h4>
-                        <p class="card-desc">Immutable audit logs, reported content flags, and moderation actions.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Workforce Intelligence & Reporting</span>
-                <span>Slide 11</span>
-            </div>
-        </section>
+      <!-- Quick Facts -->
+      <div class="quick-fact-strip">
+        <span class="quick-fact-pill">👤 <strong>Who:</strong> Any Employee / Team Lead</span>
+        <span class="quick-fact-pill">⏱️ <strong>Time:</strong> 5–15 Minutes</span>
+        <span class="quick-fact-pill" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46;">⚡ <strong>Approval:</strong> Instant Pass to Knowledge Hub</span>
+        <span class="quick-fact-pill" style="background:#eff6ff;border-color:#bfdbfe;color:#0284c7;">🏆 <strong>Reward:</strong> +10 Karma Points</span>
+      </div>
 
-        <!-- SLIDE 12: Role-Based Access Control -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">admin_panel_settings</span> Access Control</div>
-                <h2 class="slide-title">4-Tier Role-Based Governance Matrix</h2>
-                <p class="slide-subtitle">Granular enterprise access policies enforced at JWT, API Controller, and UI levels.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-4">
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;"><span class="material-symbols-outlined">person</span></div>
-                        <h3 class="card-title">Employee</h3>
-                        <p class="card-desc">Self-service posting, article writing, video/podcast uploads, community membership, and karma earning.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(20, 184, 166, 0.2); color: #2dd4bf;"><span class="material-symbols-outlined">groups</span></div>
-                        <h3 class="card-title">Community Admin</h3>
-                        <p class="card-desc">Community-level governance, membership request approvals, group settings, and discussion moderation.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;"><span class="material-symbols-outlined">campaign</span></div>
-                        <h3 class="card-title">HR Administrator</h3>
-                        <p class="card-desc">Organization-wide broadcasts, community creation approval, user role management, and HR analytics.</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon" style="background: rgba(239, 68, 68, 0.2); color: #f87171;"><span class="material-symbols-outlined">security</span></div>
-                        <h3 class="card-title">System Admin</h3>
-                        <p class="card-desc">Full platform sovereignty, immutable security audit logs, account suspensions, and server configuration.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Security & Role Matrix</span>
-                <span>Slide 12</span>
-            </div>
-        </section>
+      <!-- Visual Flow Diagram -->
+      <div class="flow-diagram-strip">
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#e0f2fe;color:#0369a1;">1</div>
+          <div class="diag-step-head">📝 Rich Editor Draft</div>
+          <div class="diag-step-desc">Write your guide with formatted text, headers, images, code blocks, and cover banners. Auto-saves as you type.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#fef3c7;color:#b45309;">2</div>
+          <div class="diag-step-head">🏷️ Topic &amp; Read-Time</div>
+          <div class="diag-step-desc">Select your department category (e.g. IT, Finance, HR). The system automatically calculates read-time (e.g. 4 min).</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#ecfdf5;color:#047857;">3</div>
+          <div class="diag-step-head">📚 Permanent Library</div>
+          <div class="diag-step-desc">Published directly to the company Knowledge Hub. Fully searchable so coworkers find answers when searching.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#dcfce7;color:#15803d;">4</div>
+          <div class="diag-step-head">🛡️ Read In-App (+10)</div>
+          <div class="diag-step-desc">Staff read directly inside Knome without messy file downloads. Contributor earns <strong>+10 Karma points</strong>.</div>
+        </div>
+      </div>
 
-        <!-- SLIDE 13: Strategic Business Impact -->
-        <section class="slide">
-            <div class="slide-header">
-                <div class="slide-tag"><span class="material-symbols-outlined">trending_up</span> Value Proposition</div>
-                <h2 class="slide-title">Strategic Value for MPOnline Limited</h2>
-                <p class="slide-subtitle">Measurable organizational transformation across productivity, retention, and security.</p>
-            </div>
-            <div class="slide-content">
-                <div class="grid-3">
-                    <div class="card">
-                        <h1 style="font-size: 38px; font-weight: 900; color: var(--accent-cyan); margin-bottom: 8px;">40%+</h1>
-                        <h4 class="card-title">Faster Onboarding</h4>
-                        <p class="card-desc">Standardized video and article repositories streamline domain knowledge transfer for new joiners.</p>
-                    </div>
-                    <div class="card">
-                        <h1 style="font-size: 38px; font-weight: 900; color: #4ade80; margin-bottom: 8px;">100%</h1>
-                        <h4 class="card-title">Knowledge Retention</h4>
-                        <p class="card-desc">Preserves technical problem solutions, architecture decisions, and operational guides permanently.</p>
-                    </div>
-                    <div class="card">
-                        <h1 style="font-size: 38px; font-weight: 900; color: #f472b6; margin-bottom: 8px;">Zero</h1>
-                        <h4 class="card-title">Data Leakage Risk</h4>
-                        <p class="card-desc">On-premise SQL Server storage and sandboxed in-app viewers guarantee complete compliance.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <span>Business ROI & Operational Impact</span>
-                <span>Slide 13</span>
-            </div>
-        </section>
+      <!-- Real Example -->
+      <div class="example-box">
+        <span style="font-size:1.1rem;flex-shrink:0;">💡</span>
+        <div><strong>Real Workplace Example:</strong> An IT senior writes: <em>"Complete Guide: Connecting to MPOnline VPN from Home on Windows &amp; Mac"</em> — new joiners find it in 5 seconds instead of calling the helpdesk.</div>
+      </div>
+    </div>
+  </div>
 
-        <!-- SLIDE 14: Conclusion & Demo -->
-        <section class="slide">
-            <div class="title-hero">
-                <div class="hero-badge" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #34d399;">
-                    <span class="material-symbols-outlined" style="font-size: 18px;">check_circle</span> Live & Production Ready
-                </div>
-                <h1 class="hero-title" style="font-size: 46px;">Thank You!</h1>
-                <p style="font-size: 18px; color: #cbd5e1; max-width: 700px; margin-bottom: 30px; font-weight: 600;">
-                    Knome is fully operational, integrated with EmployeeHub SSO, and backed by live SQL Server persistence.
-                </p>
-                <div class="card" style="max-width: 600px; width: 100%; text-align: left; margin-bottom: 24px;">
-                    <p style="font-size: 13px; font-weight: 800; color: var(--accent-cyan); margin-bottom: 8px; text-transform: uppercase;">
-                        Quick Access Endpoints:
-                    </p>
-                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #cbd5e1; line-height: 2;">
-                        • <strong>EmployeeHub SSO:</strong> http://localhost:5001<br>
-                        • <strong>Knome Web Portal:</strong> http://localhost:5173<br>
-                        • <strong>Knome API & Swagger:</strong> http://localhost:5095/swagger
-                    </div>
-                </div>
-                <p style="font-size: 14px; color: var(--text-muted);">
-                    Open for Questions & Interactive Demonstration
-                </p>
-            </div>
-            <div class="slide-footer">
-                <span>MPOnline Limited • Knome Portal v1.0</span>
-                <span>Slide 14</span>
-            </div>
-        </section>
+  <!-- DEEP DIVE: CLIPS FLOW -->
+  <div id="flow-clip" class="flow-view" style="display:none;width:100%;max-width:960px;margin:0 auto;">
+    <div style="background:#ffffff;border:1px solid #e9d5ff;border-radius:14px;padding:18px 20px;box-shadow:0 4px 16px rgba(147,51,234,0.06);">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <span style="font-size:1.9rem;">🎬</span>
+        <div>
+          <h3 style="font-size:1.05rem;font-weight:800;color:#6b21a8;margin:0;">Clips: Quick 90-Second Vertical How-To Videos</h3>
+          <p style="font-size:0.73rem;color:#64748b;margin:2px 0 0;">Bite-sized mobile &amp; desktop vertical video reels for screen recordings, feature demos, and fast productivity hacks.</p>
+        </div>
+      </div>
 
-    </main>
+      <!-- Quick Facts -->
+      <div class="quick-fact-strip">
+        <span class="quick-fact-pill">👤 <strong>Who:</strong> Any Employee</span>
+        <span class="quick-fact-pill">⏱️ <strong>Time:</strong> Under 2 Minutes</span>
+        <span class="quick-fact-pill" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46;">⚡ <strong>Approval:</strong> Instant Pass to Reels Feed</span>
+        <span class="quick-fact-pill" style="background:#faf5ff;border-color:#e9d5ff;color:#7e22ce;">🏆 <strong>Reward:</strong> +8 Karma Points</span>
+      </div>
 
-    <!-- Bottom Dots Navigation -->
-    <footer class="bottom-nav">
-        <div class="slide-dots" id="dotsContainer"></div>
-    </footer>
+      <!-- Visual Flow Diagram -->
+      <div class="flow-diagram-strip">
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#f3e8ff;color:#7e22ce;">1</div>
+          <div class="diag-step-head">🎥 Record or Upload</div>
+          <div class="diag-step-desc">Record your screen with 1 click in Knome, or upload a vertical video clip (up to 90 seconds).</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#fef3c7;color:#b45309;">2</div>
+          <div class="diag-step-head">📱 Auto 9:16 Format</div>
+          <div class="diag-step-desc">Knome automatically formats the video for smooth mobile &amp; desktop reel playback and creates a video thumbnail.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#e0f2fe;color:#0284c7;">3</div>
+          <div class="diag-step-head">🍿 Swipeable Reels</div>
+          <div class="diag-step-desc">Published immediately to the Clips feed. Employees swipe up or use keyboard arrows to learn quickly on the go.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#dcfce7;color:#15803d;">4</div>
+          <div class="diag-step-head">❤️ Double-Tap &amp; +8</div>
+          <div class="diag-step-desc">Colleagues double-tap to like, leave quick comments, and save tips. Creator is rewarded with <strong>+8 Karma points</strong>.</div>
+        </div>
+      </div>
 
-    <script>
-        const slides = document.querySelectorAll('.slide');
-        const dotsContainer = document.getElementById('dotsContainer');
-        const counter = document.getElementById('slideCounter');
-        let currentSlide = 0;
+      <!-- Real Example -->
+      <div class="example-box">
+        <span style="font-size:1.1rem;flex-shrink:0;">💡</span>
+        <div><strong>Real Workplace Example:</strong> A finance officer records a 45-second screen capture: <em>"How to download approved invoice vouchers in 3 clicks"</em> — saves teammates 20 minutes of searching every day.</div>
+      </div>
+    </div>
+  </div>
 
-        // Initialize dots
-        slides.forEach((_, idx) => {
-            const dot = document.createElement('div');
-            dot.className = `dot ${idx === 0 ? 'active' : ''}`;
-            dot.onclick = () => goToSlide(idx);
-            dotsContainer.appendChild(dot);
-        });
+  <!-- DEEP DIVE: WIKI FLOW -->
+  <div id="flow-wiki" class="flow-view" style="display:none;width:100%;max-width:960px;margin:0 auto;">
+    <div style="background:#ffffff;border:1px solid #c7d2fe;border-radius:14px;padding:18px 20px;box-shadow:0 4px 16px rgba(79,70,229,0.06);">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <span style="font-size:1.9rem;">📖</span>
+        <div>
+          <h3 style="font-size:1.05rem;font-weight:800;color:#3730a3;margin:0;">Wiki: Company Handbook, Policies &amp; Official SOPs</h3>
+          <p style="font-size:0.73rem;color:#64748b;margin:2px 0 0;">The single source of truth for company rules, standard procedures, and technical documentation with full edit history.</p>
+        </div>
+      </div>
 
-        const dots = document.querySelectorAll('.dot');
+      <!-- Quick Facts -->
+      <div class="quick-fact-strip">
+        <span class="quick-fact-pill">👤 <strong>Who:</strong> Any Employee / Team Admin</span>
+        <span class="quick-fact-pill">⏱️ <strong>Time:</strong> 5–10 Minutes</span>
+        <span class="quick-fact-pill" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46;">⚡ <strong>Approval:</strong> Instant Pass + Complete Version Tracking</span>
+        <span class="quick-fact-pill" style="background:#eef2ff;border-color:#c7d2fe;color:#4338ca;">🏆 <strong>Reward:</strong> +10 Karma Points</span>
+      </div>
 
-        function updateSlide() {
-            slides.forEach((s, idx) => {
-                s.classList.toggle('active', idx === currentSlide);
-            });
-            dots.forEach((d, idx) => {
-                d.classList.toggle('active', idx === currentSlide);
-            });
-            counter.textContent = `Slide ${currentSlide + 1} / ${slides.length}`;
-        }
+      <!-- Visual Flow Diagram -->
+      <div class="flow-diagram-strip">
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#e0e7ff;color:#4338ca;">1</div>
+          <div class="diag-step-head">✍️ Write Procedure</div>
+          <div class="diag-step-desc">Create or update an official SOP, policy, or onboarding checklist with step-by-step instructions.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#fef3c7;color:#b45309;">2</div>
+          <div class="diag-step-head">🕒 1-Click Version Undo</div>
+          <div class="diag-step-desc">Every change is saved with who made it and when. Admins can see differences (diff) and restore old versions in 1 click!</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#e0f2fe;color:#0284c7;">3</div>
+          <div class="diag-step-head">🗂️ Clean Folder Tree</div>
+          <div class="diag-step-desc">Organized neatly into department directories so anyone can easily browse topics like chapters in a book.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#dcfce7;color:#15803d;">4</div>
+          <div class="diag-step-head">🔒 Never Lost (+10)</div>
+          <div class="diag-step-desc">Institutional knowledge stays safely stored forever even when people change jobs. Author earns <strong>+10 Karma</strong>.</div>
+        </div>
+      </div>
 
-        function nextSlide() {
-            if (currentSlide < slides.length - 1) {
-                currentSlide++;
-                updateSlide();
-            }
-        }
+      <!-- Real Example -->
+      <div class="example-box">
+        <span style="font-size:1.1rem;flex-shrink:0;">💡</span>
+        <div><strong>Real Workplace Example:</strong> Operations creates the <em>"Hardware Replacement &amp; Laptop Request SOP"</em>. When policy changes 6 months later, the team updates it with a clear version audit trail.</div>
+      </div>
+    </div>
+  </div>
 
-        function prevSlide() {
-            if (currentSlide > 0) {
-                currentSlide--;
-                updateSlide();
-            }
-        }
+  <!-- DEEP DIVE: VIDEOS FLOW -->
+  <div id="flow-video" class="flow-view" style="display:none;width:100%;max-width:960px;margin:0 auto;">
+    <div style="background:#ffffff;border:1px solid #fecdd3;border-radius:14px;padding:18px 20px;box-shadow:0 4px 16px rgba(239,68,68,0.06);">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <span style="font-size:1.9rem;">📹</span>
+        <div>
+          <h3 style="font-size:1.05rem;font-weight:800;color:#9f1239;margin:0;">Videos: Official Training Courses &amp; Masterclasses</h3>
+          <p style="font-size:0.73rem;color:#64748b;margin:2px 0 0;">Long-form horizontal training sessions with admin quality check, chapter timestamps, and employee note-taking.</p>
+        </div>
+      </div>
 
-        function goToSlide(index) {
-            currentSlide = index;
-            updateSlide();
-        }
+      <!-- Quick Facts -->
+      <div class="quick-fact-strip">
+        <span class="quick-fact-pill">👤 <strong>Who:</strong> Trainers, Leads &amp; Approved Staff</span>
+        <span class="quick-fact-pill">⏱️ <strong>Time:</strong> 10–60 Min Course</span>
+        <span class="quick-fact-pill" style="background:#fef2f2;border-color:#fecaca;color:#991b1b;">🛡️ <strong>Approval:</strong> Mandatory Admin Clearance</span>
+        <span class="quick-fact-pill" style="background:#fff1f2;border-color:#fecdd3;color:#e11d48;">🏆 <strong>Reward:</strong> +8 Karma (Post-Approval)</span>
+      </div>
 
-        function toggleFullScreen() {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(() => {});
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                }
-            }
-        }
+      <!-- Visual Flow Diagram -->
+      <div class="flow-diagram-strip">
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#ffe4e6;color:#e11d48;">1</div>
+          <div class="diag-step-head">📤 Upload Video / Playlist</div>
+          <div class="diag-step-desc">Upload MP4 video tutorial or add YouTube training playlist with title, category, and chapter descriptions.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step" style="border:1.5px solid #fca5a5;background:#fff5f5;">
+          <div class="diag-num" style="background:#fee2e2;color:#b91c1c;">2</div>
+          <div class="diag-step-head" style="color:#b91c1c;">🛡️ Admin Review Gate</div>
+          <div class="diag-step-desc"><strong>Admin clearance required!</strong> Pauses in Admin Console Media Approvals queue. Admin verifies quality before release.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#e0f2fe;color:#0284c7;">3</div>
+          <div class="diag-step-head">📺 Live on Video Hub</div>
+          <div class="diag-step-desc">Once approved, video publishes to the Video Hub. Staff receive an alert and stream without buffering.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#dcfce7;color:#15803d;">4</div>
+          <div class="diag-step-head">⏱️ Chapters &amp; +8 Karma</div>
+          <div class="diag-step-desc">Employees skip directly to relevant chapters, ask questions, and uploader receives <strong>+8 Karma points</strong>.</div>
+        </div>
+      </div>
 
-        // Keyboard navigation
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
-                nextSlide();
-            } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
-                prevSlide();
-            } else if (e.key === 'f' || e.key === 'F') {
-                toggleFullScreen();
-            }
-        });
-    </script>
+      <!-- Real Example -->
+      <div class="example-box">
+        <span style="font-size:1.1rem;flex-shrink:0;">💡</span>
+        <div><strong>Real Workplace Example:</strong> Cybersecurity team uploads a 25-minute <em>"Data Privacy &amp; Phishing Defense 2026"</em> course. The Admin reviews and approves it, making it mandatory training for 1,200 staff.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEEP DIVE: PODCASTS FLOW -->
+  <div id="flow-podcast" class="flow-view" style="display:none;width:100%;max-width:960px;margin:0 auto;">
+    <div style="background:#ffffff;border:1px solid #f5d0fe;border-radius:14px;padding:18px 20px;box-shadow:0 4px 16px rgba(192,38,211,0.06);">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <span style="font-size:1.9rem;">🎙️</span>
+        <div>
+          <h3 style="font-size:1.05rem;font-weight:800;color:#86198f;margin:0;">Podcasts: Audio Broadcasts &amp; Leadership Talks</h3>
+          <p style="font-size:0.73rem;color:#64748b;margin:2px 0 0;">Audio episodes and interview series employees can listen to in the background while working or commuting.</p>
+        </div>
+      </div>
+
+      <!-- Quick Facts -->
+      <div class="quick-fact-strip">
+        <span class="quick-fact-pill">👤 <strong>Who:</strong> Leadership, HR &amp; Voice Leads</span>
+        <span class="quick-fact-pill">⏱️ <strong>Time:</strong> 10–45 Min Audio</span>
+        <span class="quick-fact-pill" style="background:#fef2f2;border-color:#fecaca;color:#991b1b;">🛡️ <strong>Approval:</strong> Mandatory Admin Clearance</span>
+        <span class="quick-fact-pill" style="background:#fdf4ff;border-color:#f5d0fe;color:#a21caf;">🏆 <strong>Reward:</strong> +8 Karma (Post-Approval)</span>
+      </div>
+
+      <!-- Visual Flow Diagram -->
+      <div class="flow-diagram-strip">
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#fae8ff;color:#a21caf;">1</div>
+          <div class="diag-step-head">🎙️ Upload Audio Episode</div>
+          <div class="diag-step-desc">Host uploads MP3 audio file with episode number, cover artwork, speaker tags, and summary show-notes.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step" style="border:1.5px solid #fca5a5;background:#fff5f5;">
+          <div class="diag-num" style="background:#fee2e2;color:#b91c1c;">2</div>
+          <div class="diag-step-head" style="color:#b91c1c;">🛡️ Admin Review Gate</div>
+          <div class="diag-step-desc"><strong>Admin clearance required!</strong> Routed to Media Approvals queue for check of sound quality and corporate guidelines.</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#e0f2fe;color:#0284c7;">3</div>
+          <div class="diag-step-head">🎧 Continuous Audio Player</div>
+          <div class="diag-step-desc">Approved episode mounts in Knome's global bottom player. Plays smoothly without stopping while you browse other pages!</div>
+        </div>
+        <div class="flow-arrow-node">➔</div>
+        <div class="flow-diagram-step">
+          <div class="diag-num" style="background:#dcfce7;color:#15803d;">4</div>
+          <div class="diag-step-head">⭐ Rate &amp; +8 Karma</div>
+          <div class="diag-step-desc">Employees rate episodes, bookmark series, and award the creator <strong>+8 Karma points</strong>.</div>
+        </div>
+      </div>
+
+      <!-- Real Example -->
+      <div class="example-box">
+        <span style="font-size:1.1rem;flex-shrink:0;">💡</span>
+        <div><strong>Real Workplace Example:</strong> Managing Director records <em>"Monthly Leadership Address: 2026 Goals &amp; Tech Roadmap"</em>. Employees listen with headphones while completing their morning tasks.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 7 / 11</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 8 · POSTS, DM & KARMA FUNCTIONALITY
+═══════════════════════════════════════════════════ -->
+<div class="slide bg8" data-index="7">
+  <div class="tag">Functionality</div>
+  <h2 class="h2">Posts · Messaging · Karma</h2>
+  <p class="h2-sub">Communication, engagement and recognition features</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;max-width:920px;width:100%">
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-b">📰</div>
+        <div><div class="feat-title">Posts &amp; Articles</div><div class="feat-subtitle">Content publishing</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Text, image &amp; video posts</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Reactions: like, clap, celebrate</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Threaded comments &amp; replies</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Pinned announcements banner</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Share to communities / DM</div></div>
+      </div>
+    </div>
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-t">💬</div>
+        <div><div class="feat-title">Direct Messaging</div><div class="feat-subtitle">Real-time communication</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">1-to-1 &amp; group conversations</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Real-time via SignalR WebSockets</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">File &amp; image attachments</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Read receipts &amp; typing indicators</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Message search &amp; history</div></div>
+      </div>
+    </div>
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-a">🏆</div>
+        <div><div class="feat-title">Karma System</div><div class="feat-subtitle">Gamified engagement</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Points for posts, Wiki, Clips</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Badges for milestones &amp; streaks</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Org-wide leaderboard ranking</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Monthly reset &amp; recognition</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Profile karma score display</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 8 / 11</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 9 · TECH ARCHITECTURE
+═══════════════════════════════════════════════════ -->
+<div class="slide bg9" data-index="8">
+  <div class="tag">Technology Stack</div>
+  <h2 class="h2">Technical Architecture</h2>
+  <p class="h2-sub">Enterprise-grade, scalable stack powering every Knome functionality</p>
+  <div class="arch">
+    <div class="arch-row">
+      <div class="arch-lbl">Frontend</div>
+      <div class="chips">
+        <span class="chip c-b">React 18 + Vite</span>
+        <span class="chip c-t">React Router v6</span>
+        <span class="chip c-b">Axios</span>
+        <span class="chip c-p">Vanilla CSS</span>
+        <span class="chip c-t">SignalR Client</span>
+      </div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-lbl">Backend API</div>
+      <div class="chips">
+        <span class="chip c-b">.NET 8 Web API</span>
+        <span class="chip c-g">JWT Auth + RBAC</span>
+        <span class="chip c-a">Entity Framework Core</span>
+        <span class="chip c-t">SignalR Hubs</span>
+      </div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-lbl">Database</div>
+      <div class="chips">
+        <span class="chip c-b">SQL Server 2022</span>
+        <span class="chip c-r">Redis Cache</span>
+        <span class="chip c-g">Azure Blob Storage</span>
+      </div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-lbl">DevOps</div>
+      <div class="chips">
+        <span class="chip c-t">Docker + Compose</span>
+        <span class="chip c-p">GitHub Actions CI/CD</span>
+        <span class="chip c-a">Azure App Service</span>
+        <span class="chip c-g">Nginx Reverse Proxy</span>
+      </div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-lbl">Security</div>
+      <div class="chips">
+        <span class="chip c-r">HTTPS / TLS 1.3</span>
+        <span class="chip c-a">CORS Policies</span>
+        <span class="chip c-g">Role-Based Auth</span>
+        <span class="chip c-b">Audit Logging</span>
+      </div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 9 / 11</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 10 · IMPLEMENTATION TIMELINE
+═══════════════════════════════════════════════════ -->
+<div class="slide bg10" data-index="9">
+  <div class="tag">Project Roadmap</div>
+  <h2 class="h2">Implementation Timeline</h2>
+  <p class="h2-sub">16-week phased delivery — Q3 2026 go-live target</p>
+  <div class="tl">
+    <div class="tl-row">
+      <div class="tl-phase"><div class="tl-pname">Phase 1</div><div class="tl-pwk">Wk 1–3</div></div>
+      <div class="tl-dot-col"><div class="tl-dot" style="background:#2563eb;border-color:#2563eb"></div><div class="tl-line"></div></div>
+      <div class="tl-cnt"><div class="tl-t">Foundation &amp; Architecture</div><div class="tl-pills"><span class="tl-pill">DB Schema</span><span class="tl-pill">Auth &amp; JWT</span><span class="tl-pill">API Scaffold</span><span class="tl-pill">React Setup</span></div></div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-phase"><div class="tl-pname">Phase 2</div><div class="tl-pwk">Wk 4–7</div></div>
+      <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
+      <div class="tl-cnt"><div class="tl-t">Core Modules — Communities, Wiki, Posts, Profiles</div><div class="tl-pills"><span class="tl-pill">Communities</span><span class="tl-pill">Wiki Module</span><span class="tl-pill">Posts &amp; Articles</span><span class="tl-pill">User Profiles</span></div></div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-phase"><div class="tl-pname">Phase 3</div><div class="tl-pwk">Wk 8–11</div></div>
+      <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
+      <div class="tl-cnt"><div class="tl-t">Advanced Features — Clips, Chat, Karma, Jobs</div><div class="tl-pills"><span class="tl-pill">Clips Video Channel</span><span class="tl-pill">Real-time DM</span><span class="tl-pill">Karma System</span><span class="tl-pill">Job Board</span></div></div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-phase"><div class="tl-pname">Phase 4</div><div class="tl-pwk">Wk 12–14</div></div>
+      <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
+      <div class="tl-cnt"><div class="tl-t">Admin Console, Analytics &amp; RBAC</div><div class="tl-pills"><span class="tl-pill">Admin Dashboard</span><span class="tl-pill">Analytics</span><span class="tl-pill">RBAC Finalization</span><span class="tl-pill">System Settings</span></div></div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-phase"><div class="tl-pname">Phase 5</div><div class="tl-pwk">Wk 15–16</div></div>
+      <div class="tl-dot-col"><div class="tl-dot" style="background:#16a34a;border-color:#16a34a"></div></div>
+      <div class="tl-cnt"><div class="tl-t">Testing, UAT &amp; Go-Live</div><div class="tl-pills"><span class="tl-pill" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d">QA Testing</span><span class="tl-pill" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d">UAT Sign-off</span><span class="tl-pill" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d">Production Deploy</span></div></div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 10 / 11</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 11 · THANK YOU
+═══════════════════════════════════════════════════ -->
+<div class="slide bg11" data-index="10">
+  <div class="ty-orb">🚀</div>
+  <div class="tag">Thank You</div>
+  <h1 class="h1">One Platform.<br><span class="accent">Every Functionality. Every Employee.</span></h1>
+  <p class="sub">Knome brings Communities, Wiki, Clips, Posts, Videos, Podcasts, Messaging, Karma and the Job Board under one roof — with role-based access control for every action.</p>
+  <div class="contact-row">
+    <span class="cpill">📧 knome@mponline.gov.in</span>
+    <span class="cpill">🌐 knome.mponline.gov.in</span>
+    <span class="cpill">📅 Q3 2026 Go-Live</span>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 11 / 11</span></div>
+</div>
+
+</div><!-- /slides-wrapper -->
+
+<div class="kbd">Use ← → arrow keys or swipe to navigate</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const dotsEl = document.getElementById('navDots');
+  const counter = document.getElementById('counter');
+  const prog = document.getElementById('progFill');
+  const total = slides.length;
+  let cur = 0, busy = false;
+
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'nav-dot' + (i===0?' active':'');
+    d.onclick = () => go(i);
+    dotsEl.appendChild(d);
+  });
+
+  function ui() {
+    document.querySelectorAll('.nav-dot').forEach((d,i) => d.classList.toggle('active', i===cur));
+    counter.textContent = `${cur+1} / ${total}`;
+    prog.style.width = `${((cur+1)/total)*100}%`;
+  }
+
+  function go(idx) {
+    if (busy || idx===cur || idx<0 || idx>=total) return;
+    busy = true;
+    const prev = cur; cur = idx;
+    slides[prev].classList.add('exit');
+    slides[cur].classList.add('active');
+    setTimeout(() => { slides[prev].classList.remove('active','exit'); busy=false; }, 500);
+    ui();
+  }
+
+  document.getElementById('nextBtn').onclick = () => go(cur+1);
+  document.getElementById('prevBtn').onclick = () => go(cur-1);
+  document.addEventListener('keydown', e => {
+    if (e.key==='ArrowRight'||e.key==='ArrowDown') go(cur+1);
+    if (e.key==='ArrowLeft' ||e.key==='ArrowUp')   go(cur-1);
+  });
+  let tx=0;
+  document.addEventListener('touchstart', e => tx=e.touches[0].clientX);
+  document.addEventListener('touchend',   e => {
+    const d = tx - e.changedTouches[0].clientX;
+    if (Math.abs(d)>50) d>0 ? go(cur+1) : go(cur-1);
+  });
+
+  // Interactive Flow Switcher
+  window.switchFlow = function(type, btn) {
+    document.querySelectorAll('.flow-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.flow-view').forEach(v => v.style.display = 'none');
+    const target = document.getElementById('flow-' + type);
+    if (target) target.style.display = 'block';
+  };
+
+  ui();
+</script>
 </body>
 </html>

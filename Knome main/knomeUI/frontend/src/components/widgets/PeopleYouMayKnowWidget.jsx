@@ -129,10 +129,18 @@ export default function PeopleYouMayKnowWidget() {
         const storedRelations = JSON.parse(localStorage.getItem('knome_user_relations') || '{}');
         const userRelations = storedRelations[currentUser?.employeeId] || {};
         
-        setPeople(prev => prev.map(p => ({
-            ...p,
-            status: userRelations[p.id] || (p.userId && userRelations[String(p.userId)]) || p.status || 'none'
-        })));
+        setPeople(prev => {
+            let hasChanged = false;
+            const updated = prev.map(p => {
+                const nextStatus = userRelations[p.id] || (p.userId && userRelations[String(p.userId)]) || p.status || 'none';
+                if (nextStatus !== p.status) {
+                    hasChanged = true;
+                    return { ...p, status: nextStatus };
+                }
+                return p;
+            });
+            return hasChanged ? updated : prev;
+        });
     };
 
     useEffect(() => {
@@ -233,11 +241,16 @@ export default function PeopleYouMayKnowWidget() {
             }
         };
 
+        const handleStorage = (e) => {
+            if (e && e.key && e.key !== 'knome_user_relations') return;
+            loadStatus();
+        };
+
         window.addEventListener('follow-request-approved', handleFollowApproved);
-        window.addEventListener('storage', loadStatus);
+        window.addEventListener('storage', handleStorage);
         return () => {
             window.removeEventListener('follow-request-approved', handleFollowApproved);
-            window.removeEventListener('storage', loadStatus);
+            window.removeEventListener('storage', handleStorage);
         };
     }, [currentUser]);
 

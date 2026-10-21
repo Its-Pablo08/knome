@@ -67,29 +67,124 @@ export const KNOWN_ROSTER_NAMES = {
     'MPO102': 'Vishendra Sharma',
     'EMP052': 'Sourabh Sahu',
     'MPO103': 'Sourabh Sahu',
-    'EMP101': 'Meghna',
-    'Emp101': 'Meghna',
-    'MPO105': 'Meghna',
-    'MPO116': 'Meghna',
+    'MPO104': 'Rishikesh Ugle',
+    'EMP101': 'Meghna Tiwari',
+    'Emp101': 'Meghna Tiwari',
+    'MPO105': 'Meghna Tiwari',
+    'MPO116': 'Meghna Tiwari',
+    'MPO106': 'Mayur Verma',
     'MPO089': 'Vilash Deshmukh',
+    'MPO107': 'Vilash Deshmukh',
     'EMP100': 'Mayur Bansal',
     'MPO111': 'Mayur Bansal',
     'MPO652': 'Deepak Simrodia',
-    'mpo652': 'Deepak Simrodia'
+    'mpo652': 'Deepak Simrodia',
+    'MPO112': 'Rajesh Kumar',
+    'MPO108': 'Pooja Sharma',
+
+    // Numeric User IDs
+    '1': 'Loveneesh Sharma',
+    '2': 'Vishendra Sharma',
+    '1076': 'Vishendra Sharma',
+    '3': 'Sourabh Sahu',
+    '4': 'Rishikesh Ugle',
+    '5': 'Meghna Tiwari',
+    '6': 'Mayur Verma',
+    '1036': 'Mayur Bansal',
+    '1050': 'Vilash Deshmukh',
+    '1057': 'Deepak Simrodia',
+    '1061': 'Vishendra Sharma',
+    '1067': 'Loveneesh Sharma',
+    '1071': 'Vilash Deshmukh',
+    '1073': 'Vishendra Sharma',
+    '1075': 'Loveneesh Sharma',
+    '1083': 'Meghna Tiwari',
+    '1085': 'Sourabh Sahu',
+
+    // Synthetic MPO+UserId
+    'MPO1': 'Loveneesh Sharma',
+    'MPO2': 'Vishendra Sharma',
+    'MPO3': 'Sourabh Sahu',
+    'MPO4': 'Rishikesh Ugle',
+    'MPO5': 'Meghna Tiwari',
+    'MPO6': 'Mayur Verma',
+    'MPO1036': 'Mayur Bansal',
+    'MPO1050': 'Vilash Deshmukh',
+    'MPO1057': 'Deepak Simrodia',
+    'MPO1076': 'Vishendra Sharma',
 };
 
+export const KNOWN_ROSTER_DETAILS = {
+    '1': { designation: 'TPM', roleName: 'System Admin', department: 'Higher Education' },
+    'MP0108': { designation: 'TPM', roleName: 'System Admin', department: 'Higher Education' },
+    'MPO101': { designation: 'TPM', roleName: 'System Admin', department: 'Higher Education' },
+    '1076': { designation: 'Track Lead', roleName: 'Community Admin', department: 'Higher Education' },
+    'MP0664': { designation: 'Track Lead', roleName: 'Community Admin', department: 'Higher Education' },
+    'MPO102': { designation: 'Track Lead', roleName: 'Community Admin', department: 'Higher Education' },
+    '3': { designation: 'Talent Acquisition Manager', roleName: 'HR Admin', department: 'Human Resources' },
+    'EMP052': { designation: 'Talent Acquisition Manager', roleName: 'HR Admin', department: 'Human Resources' },
+    'MPO103': { designation: 'Talent Acquisition Manager', roleName: 'HR Admin', department: 'Human Resources' },
+    '5': { designation: 'Business Analyst', roleName: 'HR Admin', department: 'CTO' },
+    'EMP101': { designation: 'Business Analyst', roleName: 'HR Admin', department: 'CTO' },
+    'Emp101': { designation: 'Business Analyst', roleName: 'HR Admin', department: 'CTO' },
+    'MPO105': { designation: 'Business Analyst', roleName: 'HR Admin', department: 'CTO' },
+    '1036': { designation: 'Software Developer', roleName: 'Employee', department: 'Technology' },
+    'EMP100': { designation: 'Software Developer', roleName: 'Employee', department: 'Technology' },
+    'MPO111': { designation: 'Software Developer', roleName: 'Employee', department: 'Technology' },
+    '1050': { designation: 'Associate Consultant', roleName: 'System Admin', department: 'HR' },
+    'MPO089': { designation: 'Associate Consultant', roleName: 'System Admin', department: 'HR' },
+    'MPO107': { designation: 'Associate Consultant', roleName: 'System Admin', department: 'HR' },
+    '1057': { designation: 'Software Developer', roleName: 'Employee', department: 'University' },
+    'MPO652': { designation: 'Software Developer', roleName: 'Employee', department: 'University' },
+    '4': { designation: 'Software Engineer', roleName: 'Employee', department: 'Technology' },
+    'MPO104': { designation: 'Software Engineer', roleName: 'Employee', department: 'Technology' },
+    '6': { designation: 'UI Designer', roleName: 'Community Admin', department: 'Product Design' },
+    'MPO106': { designation: 'UI Designer', roleName: 'Community Admin', department: 'Product Design' },
+};
 
-export const resolveEmployeeName = (rawName, empId) => {
+export const resolveEmployeeName = (rawName, empId, uId, dept) => {
     const cleaned = String(rawName || '').trim();
     const idKey = String(empId || '').trim().toUpperCase();
+    const uidKey = String(uId || '').trim();
     const nameKey = cleaned.toUpperCase();
+    const deptKey = String(dept || '').trim().toLowerCase();
     const isEmpIdPattern = /^(EMP|MPO|MP)\d+$/i.test(cleaned) || cleaned.toUpperCase().startsWith('NON_EXISTENT');
-    
+    const isGeneric = !cleaned || cleaned.toLowerCase() === 'employee' || cleaned.toLowerCase() === 'user' || cleaned.toLowerCase() === 'staff' || cleaned.toLowerCase() === 'unknown' || cleaned.toLowerCase() === 'someone';
+
+    // 1. Direct name match in roster
     if (KNOWN_ROSTER_NAMES[nameKey]) return KNOWN_ROSTER_NAMES[nameKey];
-    if (isEmpIdPattern && KNOWN_ROSTER_NAMES[idKey]) return KNOWN_ROSTER_NAMES[idKey];
-    if (cleaned && !isEmpIdPattern) return cleaned;
-    if (KNOWN_ROSTER_NAMES[idKey]) return KNOWN_ROSTER_NAMES[idKey];
-    return cleaned || 'Employee';
+
+    // 2. Lookup by Employee ID
+    if (idKey && KNOWN_ROSTER_NAMES[idKey]) return KNOWN_ROSTER_NAMES[idKey];
+
+    // 3. Lookup by Numeric User ID
+    if (uidKey && KNOWN_ROSTER_NAMES[uidKey]) return KNOWN_ROSTER_NAMES[uidKey];
+
+    // 4. Lookup by synthetic MPO+UserId
+    if (uidKey && KNOWN_ROSTER_NAMES[`MPO${uidKey}`]) return KNOWN_ROSTER_NAMES[`MPO${uidKey}`];
+
+    // 5. If cleaned is a real name (not generic and not an ID), return it!
+    if (!isGeneric && !isEmpIdPattern) return cleaned;
+
+    // 6. If generic or ID pattern, try matching by Department
+    if (deptKey) {
+        if (deptKey.includes('higher education')) return 'Vishendra Sharma';
+        if (deptKey.includes('university')) return 'Deepak Simrodia';
+        if (deptKey === 'technology' || deptKey.includes('tech')) return 'Mayur Bansal';
+        if (deptKey === 'hr' || deptKey.includes('human resources')) return 'Vilash Deshmukh';
+        if (deptKey === 'cto' || deptKey.includes('product design')) return 'Meghna Tiwari';
+    }
+
+    // 7. Check INITIAL_USERS
+    const initialMatch = INITIAL_USERS.find(iu => 
+        (uidKey && String(iu.userId || iu.id) === uidKey) ||
+        (idKey && iu.employeeId && String(iu.employeeId).toUpperCase() === idKey)
+    );
+    if (initialMatch?.name || initialMatch?.fullName) {
+        return initialMatch.name || initialMatch.fullName;
+    }
+
+    return !isGeneric ? cleaned : (KNOWN_ROSTER_NAMES[idKey] || KNOWN_ROSTER_NAMES[uidKey] || 'Employee');
 };
 
 /**
@@ -564,38 +659,60 @@ export const UserProvider = ({ children }) => {
                     const rolesToCheck = userRoles 
                         ? (Array.isArray(userRoles) ? userRoles : [userRoles]) 
                         : (currentUser?.roles || [currentUser?.role, currentUser?.roleName].filter(Boolean));
-                    const isAdmin = rolesToCheck.some(r => ['SYSADM', 'HRADM', 'CADM', 'System Administrator', 'HR Administrator', 'Community Administrator', 'Community Admin'].includes(r));
-
-                    const res = isAdmin 
-                        ? await apiClient.get('/users?pageNumber=1&pageSize=100').catch(() => null)
-                        : await apiClient.get('/users/suggestions').catch(() => null);
+                    // Always fetch full platform directory for all authenticated users
+                    let res = await apiClient.get('/users?pageNumber=1&pageSize=100').catch(() => null);
+                    if (!res || !(res?.items || res?.data?.items || (Array.isArray(res) && res.length > 0))) {
+                        res = await apiClient.get('/Search/users?pageSize=100').catch(() => null);
+                    }
+                    if (!res || !(res?.items || res?.data?.items || (Array.isArray(res) && res.length > 0))) {
+                        res = await apiClient.get('/users/suggestions').catch(() => null);
+                    }
 
                     if (res) {
-                        const apiItems = Array.isArray(res) ? res : (res.items || res.data || []);
+                        const apiItems = Array.isArray(res) ? res : (res.items || res.data?.items || res.data || []);
                         if (apiItems.length > 0) {
                             const mappedApiUsers = apiItems.map(u => {
-                                const empId = u.employeeId || u.EmployeeId || `MPO${u.userId || u.UserId || u.id}`;
-                                const name = u.fullName || u.FullName || u.name || 'Employee';
-                                const roles = Array.isArray(u.roles) ? u.roles : [u.roleName || 'Employee'];
-                                const primaryRole = roles.find(r => r !== 'Employee') || roles[0] || 'Employee';
-                                const roleCode = roleNameToCode[primaryRole] || 'EMP';
-                                const karma = typeof u.karmaPoints === 'number' ? u.karmaPoints : (typeof u.karma === 'number' ? u.karma : 0);
+                                const rawEmpId = u.employeeId || u.EmployeeId || u.authorEmployeeId || u.AuthorEmployeeId;
+                                const uId = u.userId || u.UserId || u.id || u.Id;
+                                const empId = rawEmpId || (uId ? (Object.keys(KNOWN_ROSTER_NAMES).find(k => isNaN(k) && KNOWN_ROSTER_NAMES[k] === KNOWN_ROSTER_NAMES[String(uId)]) || `MPO${uId}`) : '');
+                                const rawName = u.fullName || u.FullName || u.title || u.Title || u.authorFullName || u.AuthorFullName || u.name;
+                                const rawDept = u.departmentName || u.DepartmentName || u.department || u.Department || '';
+
+                                const matchedDetails = (uId && KNOWN_ROSTER_DETAILS[String(uId)]) || (empId && KNOWN_ROSTER_DETAILS[empId.toUpperCase()]);
+                                const matchedInitial = (INITIAL_USERS || []).find(iu => 
+                                    (uId && String(iu.userId || iu.id) === String(uId)) ||
+                                    (empId && iu.employeeId && String(iu.employeeId).toUpperCase() === String(empId).toUpperCase())
+                                );
+
+                                const resolved = resolveEmployeeName(rawName, empId, uId, rawDept);
+                                const name = (resolved && resolved !== 'Employee') 
+                                    ? resolved 
+                                    : (matchedInitial?.name || matchedInitial?.fullName || (rawName && rawName !== 'Employee' ? rawName : (KNOWN_ROSTER_NAMES[empId?.toUpperCase()] || KNOWN_ROSTER_NAMES[String(uId)] || 'Colleague')));
+
+                                const roles = Array.isArray(u.roles) && u.roles.length > 0 
+                                    ? u.roles 
+                                    : [u.roleName || u.role || matchedDetails?.roleName || matchedInitial?.roleName || 'Employee'];
+                                const primaryRole = roles.find(r => r !== 'Employee') || roles[0] || matchedDetails?.roleName || matchedInitial?.roleName || 'Employee';
+                                const roleCode = roleNameToCode[primaryRole] || matchedInitial?.role || 'EMP';
+                                const designation = (matchedDetails?.designation) || u.designation || u.Designation || matchedInitial?.designation || (u.summary ? u.summary.split('|')[0].trim() : '') || 'Staff Member';
+                                const department = rawDept || matchedDetails?.department || matchedInitial?.department || 'General';
+                                const karma = typeof u.karmaPoints === 'number' ? u.karmaPoints : (typeof u.karma === 'number' ? u.karma : (matchedInitial?.karmaPoints || 0));
                                 const isSuspended = u.isSuspended === true || u.isPermanentlySuspended === true || (u.suspendedUntil && new Date(u.suspendedUntil) > new Date());
                                 const isActive = u.isActive !== undefined ? u.isActive : !isSuspended;
                                 const status = isSuspended ? 'Suspended' : (!isActive ? 'Inactive' : 'Active');
                                 return {
-                                    id: u.userId || u.UserId || u.id,
-                                    userId: u.userId || u.UserId || u.id,
+                                    id: uId,
+                                    userId: uId,
                                     employeeId: empId,
                                     name: name,
                                     fullName: name,
                                     role: roleCode,
                                     roleName: primaryRole,
                                     roles: roles,
-                                    designation: u.designation || u.Designation || 'Staff Member',
-                                    department: u.departmentName || u.DepartmentName || u.department || 'General',
-                                    location: u.location || 'Bhopal HQ',
-                                    avatar: u.profilePhotoUrl || u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&bold=true`,
+                                    designation: designation,
+                                    department: department,
+                                    location: u.location || matchedInitial?.location || 'Bhopal HQ',
+                                    avatar: u.profilePhotoUrl || u.avatar || u.authorProfilePhotoUrl || matchedInitial?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&bold=true`,
                                     karmaPoints: karma,
                                     karma: karma,
                                     status: status,
@@ -603,7 +720,30 @@ export const UserProvider = ({ children }) => {
                                     isSuspended: isSuspended,
                                 };
                             });
-                            setUsersList(mappedApiUsers);
+
+                            // Guarantee all predefined team members from INITIAL_USERS remain in roster and override any generic Employee placeholders
+                            const mergedRoster = [...mappedApiUsers];
+                            (INITIAL_USERS || []).forEach(iu => {
+                                const existing = mergedRoster.find(m => 
+                                    String(m.userId || m.id) === String(iu.userId || iu.id) ||
+                                    (m.employeeId && iu.employeeId && m.employeeId.toUpperCase() === iu.employeeId.toUpperCase())
+                                );
+                                if (!existing) {
+                                    mergedRoster.push(iu);
+                                } else if (existing.name === 'Employee' || existing.name === 'User' || existing.name === 'Colleague') {
+                                    existing.name = iu.name;
+                                    existing.fullName = iu.fullName;
+                                    if (existing.role === 'EMP' && iu.role !== 'EMP') {
+                                        existing.role = iu.role;
+                                        existing.roleName = iu.roleName;
+                                    }
+                                    if (!existing.designation || existing.designation === 'Staff Member') {
+                                        existing.designation = iu.designation;
+                                    }
+                                }
+                            });
+
+                            setUsersList(mergedRoster);
                         }
                     }
                 } catch (e) { /* ignore */ }

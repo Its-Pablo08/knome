@@ -55,7 +55,7 @@ const DEFAULT_ROLES_META = {
         accentBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
         activeTabClass: 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20',
         scopeDescription: 'Post internal job openings, approve new community requests, send company announcements, and view team engagement numbers.',
-        keyAreas: ['Job Openings', 'Company Announcements', 'Community Requests', 'HR Analytics']
+        keyAreas: ['Job Openings', 'Company Announcements', 'Community Requests', 'Analytics']
     },
     systemAdmin: {
         id: 'systemAdmin',
@@ -248,9 +248,9 @@ const DEFAULT_FAQ_DATA = {
         },
         {
             id: 204,
-            category: 'HR Analytics',
-            question: 'What information is shown on the HR Analytics page?',
-            answer: `The HR Analytics page gives you a clear snapshot of team engagement:
+            category: 'Analytics',
+            question: 'What information is shown on the Analytics page?',
+            answer: `The Analytics page gives you a clear snapshot of team engagement:
 - Employee Counts: Total registered, active, and paused employee accounts.
 - Department Activity: Which teams are most active in sharing and learning.
 - Karma Overview: Total karma earned and top contributors across the company.

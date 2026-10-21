@@ -84,10 +84,10 @@ public class UserController : KnomeControllerBase
     }
 
     /// <summary>
-    /// Retrieves a paginated, filtered list of platform users. Restricted to HR Admins, System Admins, and Community Admins.
+    /// Retrieves a paginated, filtered list of platform users.
+    /// Accessible to all authenticated platform users.
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin + "," + Roles.CommunityAdmin)]
     [ProducesResponseType(typeof(ApiResponse<PagedResultDto<UserSummaryDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPagedUsers([FromQuery] UserFilterDto filter)
     {
@@ -112,7 +112,7 @@ public class UserController : KnomeControllerBase
     /// Changes a user's department assignment. Restricted to HR Administrators and System Administrators.
     /// </summary>
     [HttpPut("{id:int}/department")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin)]
+    [Authorize(Roles = Roles.SystemAndHRAdmins)]
     [ProducesResponseType(typeof(ApiResponse<UserProfileDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangeUserDepartment(int id, [FromBody] ChangeDepartmentDto dto)
     {
@@ -124,7 +124,7 @@ public class UserController : KnomeControllerBase
     /// Changes a user's role assignments. Restricted to HR Administrators and System Administrators.
     /// </summary>
     [HttpPut("{id:int}/roles")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin + ",System Admin,SYSADM")]
+    [Authorize(Roles = Roles.SystemAndHRAdmins)]
     [ProducesResponseType(typeof(ApiResponse<UserProfileDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangeUserRoles(int id, [FromBody] ChangeRoleDto dto)
     {
@@ -136,7 +136,7 @@ public class UserController : KnomeControllerBase
     /// Reactivates a suspended or inactive user. Restricted to HR Administrators and System Administrators.
     /// </summary>
     [HttpPut("{id:int}/activate")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin)]
+    [Authorize(Roles = Roles.SystemAndHRAdmins)]
     [ProducesResponseType(typeof(ApiResponse<UserProfileDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ActivateUser(int id)
     {
@@ -148,7 +148,7 @@ public class UserController : KnomeControllerBase
     /// Suspends a user temporarily or permanently per FR-SM-04. Restricted to HR Administrators and System Administrators.
     /// </summary>
     [HttpPut("{id:int}/suspend")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin)]
+    [Authorize(Roles = Roles.SystemAndHRAdmins)]
     [ProducesResponseType(typeof(ApiResponse<UserProfileDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SuspendUser(int id, [FromBody] SuspendUserDto dto)
     {
@@ -161,7 +161,7 @@ public class UserController : KnomeControllerBase
     /// Restricted to HR Administrators and System Administrators.
     /// </summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin + ",System Admin,SYSADM")]
+    [Authorize(Roles = Roles.SystemAndHRAdmins)]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteUser(int id)
     {
@@ -311,7 +311,7 @@ public class UserController : KnomeControllerBase
     /// Retrieves role assignment requests (System Admin only).
     /// </summary>
     [HttpGet("role-requests")]
-    [Authorize(Roles = Roles.SystemAdmin + "," + Roles.HRAdmin)]
+    [Authorize(Roles = Roles.SystemAndHRAdmins)]
     [ProducesResponseType(typeof(ApiResponse<List<KnomeRoleRequestDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRoleRequests([FromQuery] string? status = null)
     {
@@ -323,7 +323,7 @@ public class UserController : KnomeControllerBase
     /// Approves a role assignment request and assigns the specified role (System Admin only).
     /// </summary>
     [HttpPost("role-requests/{requestId:int}/approve")]
-    [Authorize(Roles = Roles.SystemAdmin + "," + Roles.HRAdmin)]
+    [Authorize(Roles = Roles.SystemAndHRAdmins)]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ApproveRoleRequest(int requestId, [FromBody] ApproveKnomeRoleRequestDto dto)
     {
@@ -336,7 +336,7 @@ public class UserController : KnomeControllerBase
     /// Rejects a role assignment request (System Admin only).
     /// </summary>
     [HttpPost("role-requests/{requestId:int}/reject")]
-    [Authorize(Roles = Roles.SystemAdmin + "," + Roles.HRAdmin)]
+    [Authorize(Roles = Roles.SystemAndHRAdmins)]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RejectRoleRequest(int requestId, [FromBody] RejectKnomeRoleRequestDto dto)
     {

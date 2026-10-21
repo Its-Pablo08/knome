@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import { interactionsApi, searchApi, communitiesApi, notificationsApi, adminApi, postsApi, resolveMediaUrl, getCommunityImages } from '../../utils/apiService';
-import { useUser } from '../contexts/UserContext';
+import { useUser, INITIAL_USERS, resolveEmployeeName, KNOWN_ROSTER_NAMES, KNOWN_ROSTER_DETAILS } from '../contexts/UserContext';
 import HighlightText from '../ui/HighlightText';
 
 export default function ShareProfileModal({ isOpen, onClose, user }) {
@@ -129,34 +129,79 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
         const loadAllUsers = async () => {
             setIsUserSearching(true);
             try {
-                let merged = [...(contextUsers || [])];
-                try {
-                    const apiRes = await adminApi.getUsers(1, 100).catch(() => null);
-                    const apiList = apiRes?.data?.items || apiRes?.items || (Array.isArray(apiRes) ? apiRes : []);
-                    apiList.forEach(u => {
-                        const uId = u.userId || u.id;
-                        if (uId && !merged.some(m => String(m.userId || m.id) === String(uId))) {
-                            merged.push({
-                                id: uId,
-                                userId: uId,
-                                employeeId: u.employeeId,
-                                name: u.fullName || u.name,
-                                fullName: u.fullName || u.name,
-                                role: u.roleName || u.role || u.designation || 'Employee',
-                                roleName: u.roleName || u.role || 'Employee',
-                                designation: u.designation || u.roleName || 'Employee',
-                                department: u.departmentName || u.department || 'MPOnline',
-                                avatar: u.profilePhotoUrl || u.avatar || null
-                            });
+                const merged = [];
+                const addUnique = (u) => {
+                    if (!u) return;
+                    const uId = u.userId || u.UserId || u.id || u.Id;
+                    const rawEmpId = u.employeeId || u.EmployeeId || u.authorEmployeeId || u.AuthorEmployeeId || u.empId || '';
+                    const empId = rawEmpId || (uId ? (Object.keys(KNOWN_ROSTER_NAMES).find(k => isNaN(k) && KNOWN_ROSTER_NAMES[k] === KNOWN_ROSTER_NAMES[String(uId)]) || `MPO${uId}`) : '');
+                    const rawName = u.fullName || u.FullName || u.title || u.Title || u.authorFullName || u.AuthorFullName || u.name || u.displayName || '';
+                    const rawDept = u.departmentName || u.DepartmentName || u.department || u.Department || '';
+
+                    const matchedDetails = (uId && KNOWN_ROSTER_DETAILS[String(uId)]) || (empId && KNOWN_ROSTER_DETAILS[empId.toUpperCase()]);
+                    const matchedInitial = (INITIAL_USERS || []).find(iu => 
+                        (uId && String(iu.userId || iu.id) === String(uId)) ||
+                        (empId && iu.employeeId && String(iu.employeeId).toUpperCase() === String(empId).toUpperCase())
+                    );
+
+                    const resolvedName = resolveEmployeeName(rawName, empId, uId, rawDept);
+                    const finalName = (resolvedName && resolvedName !== 'Employee')
+                        ? resolvedName
+                        : (matchedInitial?.name || matchedInitial?.fullName || (rawName && rawName !== 'Employee' ? rawName : (KNOWN_ROSTER_NAMES[empId?.toUpperCase()] || KNOWN_ROSTER_NAMES[String(uId)] || 'Colleague')));
+
+                    const finalDept = rawDept || matchedDetails?.department || matchedInitial?.department || 'MPOnline';
+                    const finalDesig = (matchedDetails?.designation) || u.designation || u.Designation || (u.summary ? u.summary.split('|')[0].trim() : '') || matchedInitial?.designation || 'Staff Member';
+                    const finalRole = (matchedDetails?.roleName) || u.roleName || u.RoleName || u.role || u.Role || matchedInitial?.roleName || 'Employee';
+                    const finalAvatar = u.profilePhotoUrl || u.ProfilePhotoUrl || u.avatar || u.authorProfilePhotoUrl || matchedInitial?.avatar || null;
+
+                    const existsIndex = merged.findIndex(m => 
+                        (uId && String(m.userId || m.id) === String(uId)) ||
+                        (empId && m.employeeId && String(m.employeeId).toUpperCase() === String(empId).toUpperCase()) ||
+                        (finalName && finalName !== 'Employee' && m.name && m.name.toLowerCase() === finalName.toLowerCase())
+                    );
+
+                    const record = {
+                        id: uId,
+                        userId: uId,
+                        employeeId: empId,
+                        name: finalName,
+                        fullName: finalName,
+                        role: finalRole,
+                        roleName: finalRole,
+                        designation: finalDesig,
+                        department: finalDept,
+                        avatar: finalAvatar
+                    };
+
+                    if (existsIndex >= 0) {
+                        if (merged[existsIndex].name === 'Employee' || merged[existsIndex].name === 'User' || !merged[existsIndex].name) {
+                            merged[existsIndex] = record;
                         }
-                    });
+                    } else {
+                        merged.push(record);
+                    }
+                };
+
+                // Seed with live context users and baseline roster
+                (contextUsers || []).forEach(addUnique);
+                (INITIAL_USERS || []).forEach(addUnique);
+
+                try {
+                    let apiRes = await adminApi.getUsers(1, 100).catch(() => null);
+                    if (!apiRes || !(apiRes?.data?.items || apiRes?.items || (Array.isArray(apiRes) && apiRes.length > 0))) {
+                        apiRes = await searchApi.searchUsers('', 100).catch(() => null);
+                    }
+                    const apiList = apiRes?.data?.items || apiRes?.items || (Array.isArray(apiRes) ? apiRes : (apiRes?.data || []));
+                    if (Array.isArray(apiList)) {
+                        apiList.forEach(addUnique);
+                    }
                 } catch { /* keep context users */ }
 
                 const currentId = String(currentUser?.userId || currentUser?.id || '');
                 const currentEmpId = String(currentUser?.employeeId || '').toLowerCase();
 
                 const filtered = merged.filter(u => {
-                    const idMatch = String(u.userId || u.id) === currentId;
+                    const idMatch = currentId && String(u.userId || u.id) === currentId;
                     const empMatch = currentEmpId && String(u.employeeId || '').toLowerCase() === currentEmpId;
                     return !idMatch && !empMatch;
                 });
@@ -657,8 +702,8 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                                 ) : displayedUserList.length > 0 ? (
                                     displayedUserList.map(targetUser => {
                                         const targetId = targetUser.id || targetUser.userId;
-                                        const targetName = targetUser.title || targetUser.fullName || targetUser.name || 'User';
-                                        const targetRole = targetUser.summary || targetUser.designation || targetUser.roleName || targetUser.role || 'Employee';
+                                        const targetName = targetUser.fullName || targetUser.name || targetUser.title || 'Colleague';
+                                        const targetRole = (targetUser.designation && targetUser.designation !== 'Employee' && targetUser.designation !== 'Staff' ? targetUser.designation : (targetUser.roleName || targetUser.role || 'Employee'));
                                         const targetDept = targetUser.department || targetUser.departmentName || 'MPOnline';
                                         const targetEmpId = targetUser.employeeId || '';
                                         const targetAvatar = resolveMediaUrl(targetUser.authorProfilePhotoUrl || targetUser.profilePhotoUrl || targetUser.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(targetName)}&background=6366f1&color=fff&bold=true`;

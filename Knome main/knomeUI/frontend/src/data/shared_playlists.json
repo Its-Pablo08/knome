@@ -1060,9 +1060,9 @@
         "description": "AI",
         "thumbnail": "http://localhost:5096/uploads/media/media_36c2a5422d824b3986b80eb48b9fb893.jpg",
         "duration": "4 MB",
-        "views": "1",
-        "likes": 0,
-        "isLiked": false,
+        "views": "2",
+        "likes": 1,
+        "isLiked": true,
         "category": "Training & Tutorials",
         "date": "Oct 13, 2026",
         "author": "Deepak Simrodia",
@@ -1078,19 +1078,19 @@
           "contentId": 20048,
           "commentsCount": 0,
           "reactionSummary": {
-            "totalCount": 0,
-            "likeCount": 0,
+            "totalCount": 1,
+            "likeCount": 1,
             "celebrateCount": 0,
             "supportCount": 0,
             "heartCount": 0,
-            "currentUserReactionType": null,
+            "currentUserReactionType": "Like",
             "topReactionTypes": [],
             "reactions": []
           },
           "sharesCount": 0,
-          "viewsCount": 1,
-          "isBookmarkedByCurrentUser": false,
-          "engagementScore": 1
+          "viewsCount": 2,
+          "isBookmarkedByCurrentUser": true,
+          "engagementScore": 5
         }
       },
       {
@@ -1099,7 +1099,7 @@
         "description": "GitHub Actions Tutorial - Deploy Node.js Application with CI CD and GitHub Actions\n\nUploaded via Enterprise Video Portal. Channel: Piyush Garg",
         "thumbnail": "https://i.ytimg.com/vi/y7S2oSjJ8PA/hqdefault.jpg",
         "duration": "Video Session",
-        "views": "0",
+        "views": "1",
         "likes": 0,
         "isLiked": false,
         "category": "Training & Tutorials",
@@ -1129,13 +1129,13 @@
             "reactions": []
           },
           "sharesCount": 0,
-          "viewsCount": 0,
+          "viewsCount": 1,
           "isBookmarkedByCurrentUser": false,
-          "engagementScore": 0
+          "engagementScore": 1
         }
       }
     ],
-    "type": "Series",
+    "type": "Playlist",
     "createdDate": "2026-10-13"
   },
   {
@@ -1647,68 +1647,100 @@
     "createdDate": "2026-10-05"
   },
   {
-    "id": "pl_series_testing",
+    "id": "pl_1791873638952_njy4zlxzy8",
     "title": "testing",
-    "description": "Enterprise Incident Response Pipeline and System Architecture testing series.",
+    "description": "",
     "category": "Training & Tutorials",
     "author": "Loveneesh Sharma",
-    "authorId": 1,
-    "authorDesignation": "HR Administrator",
-    "thumbnail": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=90&w=1200",
+    "authorId": 1791873593893,
+    "authorDesignation": "HR Admin",
+    "thumbnail": "http://localhost:5096/uploads/media/media_36c2a5422d824b3986b80eb48b9fb893.jpg",
     "type": "Series",
-    "createdDate": "2026-10-12",
+    "createdDate": "2026-10-13",
     "videoIds": [
-      "yt_test_1",
-      "yt_test_2"
+      "20048",
+      "20047"
     ],
     "episodes": [
       {
-        "id": "yt_test_1",
-        "videoId": "ER9SspLe4Hg",
-        "title": "#1: Incident Response Pipeline Overview | System Architecture",
-        "description": "Part 1 of Incident Response Pipeline: Database Failure, Server Clones, and Rollback Strategies.",
-        "thumbnail": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=90&w=1200",
-        "duration": "18:24",
-        "views": "0",
+        "id": "20048",
+        "title": "🎥 Video Asset Placement D",
+        "description": "AI",
+        "thumbnail": "http://localhost:5096/uploads/media/media_36c2a5422d824b3986b80eb48b9fb893.jpg",
+        "duration": "4 MB",
+        "views": "1",
         "likes": 0,
+        "isLiked": false,
         "category": "Training & Tutorials",
-        "date": "Oct 12, 2026",
-        "author": "Loveneesh Sharma",
-        "authorId": 1,
-        "authorDesignation": "HR Administrator",
-        "tags": [
-          "IncidentResponse",
-          "Pipeline",
-          "Architecture"
-        ],
-        "sourceUrl": "https://www.youtube.com/watch?v=ER9SspLe4Hg",
-        "sourceType": "YouTube",
-        "playlistId": "pl_series_testing",
-        "episodeIndex": 1
+        "date": "Oct 13, 2026",
+        "author": "Deepak Simrodia",
+        "authorId": 1057,
+        "uploaderUserId": 1057,
+        "authorAvatar": null,
+        "authorDesignation": "Software Developer",
+        "tags": [],
+        "sourceUrl": "http://localhost:5096/uploads/media/media_4c26d0290f7b423eb1a7630f1e7b5de0.mp4",
+        "sourceType": "LocalUpload",
+        "engagementSummary": {
+          "contentType": "Video",
+          "contentId": 20048,
+          "commentsCount": 0,
+          "reactionSummary": {
+            "totalCount": 0,
+            "likeCount": 0,
+            "celebrateCount": 0,
+            "supportCount": 0,
+            "heartCount": 0,
+            "currentUserReactionType": null,
+            "topReactionTypes": [],
+            "reactions": []
+          },
+          "sharesCount": 0,
+          "viewsCount": 1,
+          "isBookmarkedByCurrentUser": false,
+          "engagementScore": 1
+        }
       },
       {
-        "id": "yt_test_2",
-        "videoId": "hKB-YGF14SY",
-        "title": "#2: Automated Diagnostics & System Recovery Runbooks",
-        "description": "Part 2 of Incident Response Pipeline: Hands-on implementation of automated diagnostics and runbooks.",
-        "thumbnail": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=90&w=1200",
-        "duration": "24:10",
+        "id": "20047",
+        "title": "GitHub Actions Tutorial - Deploy Node.js Application with CI CD and GitHub Actions",
+        "description": "GitHub Actions Tutorial - Deploy Node.js Application with CI CD and GitHub Actions\n\nUploaded via Enterprise Video Portal. Channel: Piyush Garg",
+        "thumbnail": "https://i.ytimg.com/vi/y7S2oSjJ8PA/hqdefault.jpg",
+        "duration": "Video Session",
         "views": "0",
         "likes": 0,
+        "isLiked": false,
         "category": "Training & Tutorials",
-        "date": "Oct 12, 2026",
-        "author": "Loveneesh Sharma",
-        "authorId": 1,
-        "authorDesignation": "HR Administrator",
+        "date": "Oct 9, 2026",
+        "author": "Sourabh Sahu",
+        "authorId": 3,
+        "uploaderUserId": 3,
+        "authorAvatar": null,
+        "authorDesignation": "Talent Acquisition Manager",
         "tags": [
-          "IncidentResponse",
-          "Diagnostics",
-          "Recovery"
+          "#git"
         ],
-        "sourceUrl": "https://www.youtube.com/watch?v=hKB-YGF14SY",
-        "sourceType": "YouTube",
-        "playlistId": "pl_series_testing",
-        "episodeIndex": 2
+        "sourceUrl": "https://youtu.be/y7S2oSjJ8PA?si=ec13zikM14Hi-bQg",
+        "sourceType": "Stream",
+        "engagementSummary": {
+          "contentType": "Video",
+          "contentId": 20047,
+          "commentsCount": 0,
+          "reactionSummary": {
+            "totalCount": 0,
+            "likeCount": 0,
+            "celebrateCount": 0,
+            "supportCount": 0,
+            "heartCount": 0,
+            "currentUserReactionType": null,
+            "topReactionTypes": [],
+            "reactions": []
+          },
+          "sharesCount": 0,
+          "viewsCount": 0,
+          "isBookmarkedByCurrentUser": false,
+          "engagementScore": 0
+        }
       }
     ],
     "channelName": null

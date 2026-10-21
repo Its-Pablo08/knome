@@ -469,7 +469,7 @@ export const ROLE_USER_MANUALS = {
                         points: [
                             'Employee: Standard self-service access, content publishing, community participation.',
                             'Community Admin: Channel governance, membership approvals, pinned announcements.',
-                            'HR Admin: Talent openings, org broadcasts, community proposal approvals, HR analytics.',
+                            'HR Admin: Talent openings, org broadcasts, community proposal approvals, Analytics.',
                             'System Admin: Full security authority, account suspensions, moderation queue, audit trail.'
                         ]
                     },

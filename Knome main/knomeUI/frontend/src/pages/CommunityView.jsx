@@ -2621,6 +2621,9 @@ export default function CommunityView() {
 
         const handleMembersUpdated = (e) => {
             const targetId = e?.detail?.communityId || communityId || community?.id || 101;
+            if (e?.key && !e.key.includes(String(targetId)) && !e.key.startsWith('knome_community_')) {
+                return;
+            }
             if (e?.detail?.communityId && communityId && String(e.detail.communityId) !== String(communityId)) {
                 return;
             }
@@ -6972,9 +6975,9 @@ export default function CommunityView() {
                                                 .map(userItem => {
                                                     const uId = userItem.id || userItem.userId;
                                                     const isSelected = shareSelectedUsers.includes(uId);
-                                                    const uName = userItem.name || userItem.fullName || 'User';
-                                                    const uRole = userItem.roleName || userItem.designation || userItem.role || 'Employee';
                                                     const uEmp = userItem.employeeId || '';
+                                                    const uName = resolveEmployeeName(userItem.name || userItem.fullName, uEmp, uId, userItem.department) || userItem.name || userItem.fullName || 'Colleague';
+                                                    const uRole = (userItem.designation && userItem.designation !== 'Employee' && userItem.designation !== 'Staff' ? userItem.designation : (userItem.roleName || userItem.role || 'Employee')) + (userItem.department ? ` • ${userItem.department}` : '');
                                                     const uAvatar = resolveMediaUrl(userItem.avatar || userItem.profilePhotoUrl) || `https://ui-avatars.com/api/?name=${encodeURIComponent(uName)}&background=6366f1&color=fff&bold=true`;
 
                                                     return (

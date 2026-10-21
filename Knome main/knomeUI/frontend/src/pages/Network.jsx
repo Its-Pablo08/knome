@@ -106,13 +106,19 @@ export default function Network() {
         const handleNetworkUpdate = () => {
             fetchAllNetworkData(true);
         };
+        const handleStorage = (e) => {
+            if (e && e.key && !e.key.startsWith('knome_sent_connection') && !e.key.startsWith('knome_user_relations') && !e.key.startsWith('knome_connections')) {
+                return;
+            }
+            fetchAllNetworkData(true);
+        };
         window.addEventListener('network-updated', handleNetworkUpdate);
         window.addEventListener('knome_notification_received', handleNetworkUpdate);
-        window.addEventListener('storage', handleNetworkUpdate);
+        window.addEventListener('storage', handleStorage);
         return () => {
             window.removeEventListener('network-updated', handleNetworkUpdate);
             window.removeEventListener('knome_notification_received', handleNetworkUpdate);
-            window.removeEventListener('storage', handleNetworkUpdate);
+            window.removeEventListener('storage', handleStorage);
         };
     }, []);
 

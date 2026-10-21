@@ -42,8 +42,10 @@ export default function Posts() {
         }
     }, [location.search]);
 
-    const loadPosts = async () => {
-        setIsLoading(true);
+    const loadPosts = async (isSilent = false) => {
+        if (!isSilent && posts.length === 0) {
+            setIsLoading(true);
+        }
         try {
             const data = await postsApi.getPosts(null, null, 1, 100);
             let mapped = data ? data.map(mapPost) : [];
@@ -173,7 +175,25 @@ export default function Posts() {
                 return parseDate(b) - parseDate(a);
             });
 
-            setPosts(accessiblePosts);
+            setPosts(prev => {
+                if (prev.length === accessiblePosts.length) {
+                    const isIdentical = prev.every((p, i) => {
+                        const next = accessiblePosts[i];
+                        return (
+                            (p.id === next.id || p.postId === next.postId) &&
+                            p.status === next.status &&
+                            p.likesCount === next.likesCount &&
+                            p.commentsCount === next.commentsCount &&
+                            p.sharesCount === next.sharesCount &&
+                            p.isLiked === next.isLiked &&
+                            p.isSaved === next.isSaved &&
+                            p.content === next.content
+                        );
+                    });
+                    if (isIdentical) return prev;
+                }
+                return accessiblePosts;
+            });
         } catch (error) {
             console.error('Failed to load posts', error);
         } finally {
@@ -182,7 +202,7 @@ export default function Posts() {
     };
 
     useEffect(() => {
-        loadPosts();
+        loadPosts(posts.length > 0);
         const handlePostDeleted = (e) => {
             const deletedId = e?.detail?.id || e;
             if (deletedId) {
@@ -191,13 +211,13 @@ export default function Posts() {
             }
         };
         const handlePostCreated = () => {
-            loadPosts();
+            loadPosts(true);
         };
 
-        // Check every 15s to transition scheduled posts live according to scheduled publication time
+        // Check periodically (every 30s) to transition scheduled posts live silently without flickering
         const interval = setInterval(() => {
-            loadPosts();
-        }, 15000);
+            loadPosts(true);
+        }, 30000);
 
         window.addEventListener('post-deleted', handlePostDeleted);
         window.addEventListener('post-created', handlePostCreated);
@@ -281,7 +301,7 @@ export default function Posts() {
     const handlePostCreated = () => {
         setSelectedTag('All');
         // Small delay so backend processes the new post before refetch
-        setTimeout(() => loadPosts(), 300);
+        setTimeout(() => loadPosts(true), 300);
     };
 
     return (
@@ -462,7 +482,7 @@ export default function Posts() {
                                             try {
                                                 await deleteDraft(currentUser?.userId || currentUser?.id, dId, postsApi);
                                                 addToast("Draft deleted successfully", "success");
-                                                loadPosts();
+                                                loadPosts(true);
                                             } catch (e) {
                                                 console.error("Failed to delete draft:", e);
                                                 addToast("Failed to delete draft", "error");
@@ -505,7 +525,7 @@ export default function Posts() {
                                                 } catch (e) {}
                                                 setSelectedTag('All');
                                                 addToast("Draft published successfully! 🚀", "success");
-                                                loadPosts();
+                                                loadPosts(true);
                                                 window.dispatchEvent(new CustomEvent('post-created'));
                                             } catch (e) {
                                                 console.error("Failed to publish draft:", e);
@@ -518,7 +538,7 @@ export default function Posts() {
                                 filteredPosts.slice(0, visibleCount).map(post => (
                                     <PostCard key={post.id} post={post} searchQuery={searchQuery} onPostDeleted={(deletedId) => {
                                         if (deletedId) setPosts(prev => prev.filter(p => p.id !== deletedId && p.postId !== deletedId));
-                                        loadPosts();
+                                        loadPosts(true);
                                     }} />
                                 ))
                             )}

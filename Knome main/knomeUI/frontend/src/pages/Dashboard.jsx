@@ -106,7 +106,12 @@ export default function Dashboard() {
                     }
                     return evt === 'HRANNOUNCEMENT' || evt === 'ADMINBROADCAST' || item.isBroadcast === true || item.sender === 'HR Administration';
                 });
-                setAnnouncements(validAnnouncements);
+                setAnnouncements(prev => {
+                    if (prev.length === validAnnouncements.length && prev.every((a, i) => (a.id || a.broadcastId) === (validAnnouncements[i].id || validAnnouncements[i].broadcastId) && a.message === validAnnouncements[i].message)) {
+                        return prev;
+                    }
+                    return validAnnouncements;
+                });
             }).catch(() => {
                 setAnnouncements([]);
             });
@@ -120,7 +125,7 @@ export default function Dashboard() {
         return () => {
             window.removeEventListener('knome:broadcast-updated', handleBroadcastUpdate);
         };
-    }, [currentUser?.userId, currentUser?.employeeId, currentUser?.karma]);
+    }, [currentUser?.userId, currentUser?.employeeId]);
 
     useEffect(() => {
         const hour = new Date().getHours();
@@ -167,8 +172,10 @@ export default function Dashboard() {
 
     const currentUserIdStr = String(currentUser?.userId || currentUser?.id || '');
 
-    const loadPosts = async (filterType = activeFilter) => {
-        setIsLoading(true);
+    const loadPosts = async (filterType = activeFilter, isSilent = false) => {
+        if (!isSilent && posts.length === 0) {
+            setIsLoading(true);
+        }
         try {
             const data = await dashboardApi.getFeed(filterType);
             let mapped = (data && Array.isArray(data)) ? data.map(mapFeedItem) : [];
@@ -239,10 +246,27 @@ export default function Dashboard() {
                 return parseDate(b) - parseDate(a);
             });
 
-            setPosts(postsAndArticlesOnly);
+            setPosts(prev => {
+                if (prev.length === postsAndArticlesOnly.length) {
+                    const isIdentical = prev.every((p, i) => {
+                        const n = postsAndArticlesOnly[i];
+                        return (
+                            (p.id === n.id || p.contentId === n.contentId || p.postId === n.postId) &&
+                            p.status === n.status &&
+                            p.likesCount === n.likesCount &&
+                            p.commentsCount === n.commentsCount &&
+                            p.sharesCount === n.sharesCount &&
+                            p.isLiked === n.isLiked &&
+                            p.isSaved === n.isSaved
+                        );
+                    });
+                    if (isIdentical) return prev;
+                }
+                return postsAndArticlesOnly;
+            });
         } catch (err) {
             console.error('Failed to load feed:', err);
-            setPosts([]);
+            if (posts.length === 0) setPosts([]);
         } finally {
             setIsLoading(false);
         }
@@ -610,9 +634,9 @@ export default function Dashboard() {
                 </aside>
             </div>
 
-            <CreatePostModal isOpen={isCreatePostOpen} onClose={() => setIsCreatePostOpen(false)} onPostCreated={() => loadPosts(500)} />
-            <CreateArticleModal isOpen={isCreateArticleOpen} onClose={() => setIsCreateArticleOpen(false)} onArticleCreated={() => loadPosts(activeFilter)} />
-            <UploadVideoModal isOpen={isUploadVideoOpen} onClose={() => setIsUploadVideoOpen(false)} onVideoUploaded={() => loadPosts(activeFilter)} />
+            <CreatePostModal isOpen={isCreatePostOpen} onClose={() => setIsCreatePostOpen(false)} onPostCreated={() => loadPosts(activeFilter, true)} />
+            <CreateArticleModal isOpen={isCreateArticleOpen} onClose={() => setIsCreateArticleOpen(false)} onArticleCreated={() => loadPosts(activeFilter, true)} />
+            <UploadVideoModal isOpen={isUploadVideoOpen} onClose={() => setIsUploadVideoOpen(false)} onVideoUploaded={() => loadPosts(activeFilter, true)} />
             <BroadcastModal
                 isOpen={isBroadcastModalOpen}
                 onClose={() => {

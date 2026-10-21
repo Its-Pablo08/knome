@@ -22,6 +22,9 @@ export default function FloatingMessagesButton() {
 
     useEffect(() => {
         const handleMsgUpdate = (e) => {
+            if (e && e.key && !e.key.startsWith('knome_unread_messages') && !e.key.startsWith('knome_direct_messages')) {
+                return;
+            }
             if (e?.detail?.unreadCount !== undefined) {
                 setUnreadCount(e.detail.unreadCount);
             } else {

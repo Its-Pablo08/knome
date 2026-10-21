@@ -129,6 +129,9 @@ export default function Navbar() {
 
     useEffect(() => {
         const handleMsgUpdate = (e) => {
+            if (e && e.key && !e.key.startsWith('knome_unread_messages') && !e.key.startsWith('knome_direct_messages')) {
+                return;
+            }
             if (e?.detail?.unreadCount !== undefined) {
                 setUnreadMsgCount(e.detail.unreadCount);
             } else {
@@ -924,10 +927,22 @@ export default function Navbar() {
             const freshCommunity = localCommunityNotifs.filter(n => !apiIds.has(String(n.id)));
             const freshGeneric = localGenericNotifs.filter(n => !apiIds.has(String(n.id)) && !freshCommunity.some(c => String(c.id) === String(n.id)));
             const combined = [...freshCommunity, ...freshGeneric, ...apiNotifs];
-            setAllNotifs(sortNotifsDescending(combined));
+            const sortedNew = sortNotifsDescending(combined);
+            setAllNotifs(prev => {
+                if (prev.length === sortedNew.length && prev.every((n, i) => String(n.id) === String(sortedNew[i].id) && n.unread === sortedNew[i].unread)) {
+                    return prev;
+                }
+                return sortedNew;
+            });
         } catch (error) {
             // Fallback: show all local notifs sorted newest first without polluting console
-            setAllNotifs(sortNotifsDescending([...getLocalCommunityNotifs(), ...getLocalGenericNotifs()]));
+            setAllNotifs(prev => {
+                const localSorted = sortNotifsDescending([...getLocalCommunityNotifs(), ...getLocalGenericNotifs()]);
+                if (prev.length === localSorted.length && prev.every((n, i) => String(n.id) === String(localSorted[i].id) && n.unread === localSorted[i].unread)) {
+                    return prev;
+                }
+                return localSorted;
+            });
         }
     };
 
@@ -961,7 +976,10 @@ export default function Navbar() {
         };
 
         // Also listen for storage changes (multi-tab invite, share, or backend update)
-        const handleStorageChange = () => {
+        const handleStorageChange = (e) => {
+            if (e && e.key && !e.key.startsWith('knome_notification') && !e.key.startsWith('knome_community_invite') && !e.key.startsWith('knome_generic_notif')) {
+                return;
+            }
             fetchNotifications();
             const localCommunityNotifs = getLocalCommunityNotifs();
             const localGenericNotifs = getLocalGenericNotifs();
@@ -1303,12 +1321,12 @@ export default function Navbar() {
             }
         });
 
-        // Periodic polling backup every 15 seconds to ensure notifications are never missed
+        // Periodic polling backup every 30 seconds to ensure notifications are never missed
         const notifInterval = setInterval(() => {
             if (!isStopped && localStorage.getItem('knome_jwt')) {
                 fetchNotifications();
             }
-        }, 15000);
+        }, 30000);
 
         const handleWindowFocus = () => {
             if (!isStopped && localStorage.getItem('knome_jwt')) {

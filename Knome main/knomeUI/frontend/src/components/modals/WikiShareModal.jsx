@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { wikiApi } from '../../utils/wikiService';
 import { communitiesApi, profileApi, adminApi, postsApi, notificationsApi, resolveMediaUrl, getCommunityImages } from '../../utils/apiService';
-import { useUser } from '../contexts/UserContext';
+import { useUser, resolveEmployeeName, KNOWN_ROSTER_NAMES, KNOWN_ROSTER_DETAILS, INITIAL_USERS } from '../contexts/UserContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmDialogContext';
 import HighlightText from '../ui/HighlightText';
@@ -129,14 +129,24 @@ export default function WikiShareModal({
             try {
                 const res = await profileApi.searchUsers(q, 1, 20);
                 const items = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-                const normalized = items.map(u => ({
-                    userId: u.userId || u.id,
-                    fullName: u.fullName || u.title || u.authorFullName || u.name || 'Colleague',
-                    employeeId: u.employeeId || u.authorEmployeeId || '',
-                    designation: u.designation || u.department || u.departmentName || u.summary || 'Employee',
-                    department: u.departmentName || u.department || 'MPOnline',
-                    profilePhotoUrl: u.profilePhotoUrl || u.authorProfilePhotoUrl || u.thumbnailUrl || ''
-                }));
+                const normalized = items.map(u => {
+                    const uId = u.userId || u.id;
+                    const empId = u.employeeId || u.authorEmployeeId || '';
+                    const rawName = u.fullName || u.title || u.authorFullName || u.name || '';
+                    const dept = u.departmentName || u.department || '';
+                    const resolvedName = resolveEmployeeName(rawName, empId, uId, dept);
+                    const matchedDetails = (uId && KNOWN_ROSTER_DETAILS[String(uId)]) || (empId && KNOWN_ROSTER_DETAILS[empId.toUpperCase()]);
+                    const finalName = (resolvedName && resolvedName !== 'Employee') ? resolvedName : (rawName || 'Colleague');
+                    const desig = (matchedDetails?.designation) || u.designation || (u.summary ? u.summary.split('|')[0].trim() : '') || 'Staff Member';
+                    return {
+                        userId: uId,
+                        fullName: finalName,
+                        employeeId: empId,
+                        designation: desig,
+                        department: dept || matchedDetails?.department || 'MPOnline',
+                        profilePhotoUrl: u.profilePhotoUrl || u.authorProfilePhotoUrl || u.thumbnailUrl || ''
+                    };
+                });
                 setUserResults(normalized);
             } catch {
                 setUserResults([]);

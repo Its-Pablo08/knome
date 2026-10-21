@@ -53,10 +53,24 @@ export function getSystemConfig() {
 export function saveSystemConfig(newConfig) {
     if (typeof window === 'undefined') return;
     try {
+        const current = getSystemConfig();
         const merged = {
-            ...getSystemConfig(),
+            ...current,
             ...newConfig,
         };
+
+        // Prevent redundant writes and event storms if config hasn't changed
+        let hasChanges = false;
+        for (const key of Object.keys(merged)) {
+            if (merged[key] !== current[key]) {
+                hasChanges = true;
+                break;
+            }
+        }
+        if (!hasChanges) {
+            return current;
+        }
+
         localStorage.setItem(SYSTEM_CONFIG_KEY, JSON.stringify(merged));
         if (typeof queueMicrotask === 'function') {
             queueMicrotask(() => {
@@ -165,15 +179,22 @@ export function isPodcastsEnabled() {
 }
 
 let backendSyncPromise = null;
+let lastBackendSyncTime = 0;
+const SYNC_THROTTLE_MS = 20000;
 
 /**
  * Loads the authoritative approval policies and platform services from backend SQL Server.
  */
 export async function loadSystemApprovalSettingFromBackend(forceRefresh = false) {
     if (typeof window === 'undefined') return getSystemConfig();
+    const now = Date.now();
+    if (!forceRefresh && (now - lastBackendSyncTime < SYNC_THROTTLE_MS)) {
+        return getSystemConfig();
+    }
     if (forceRefresh) backendSyncPromise = null;
     if (backendSyncPromise) return backendSyncPromise;
 
+    lastBackendSyncTime = now;
     backendSyncPromise = (async () => {
         try {
             const { apiClient } = await import('./apiClient');
@@ -244,6 +265,23 @@ export async function loadSystemApprovalSettingFromBackend(forceRefresh = false)
 }
 
 let isGlobalInitialSyncCompleted = true;
+let activeHookCount = 0;
+let globalSyncIntervalId = null;
+
+function ensureGlobalPoller() {
+    if (globalSyncIntervalId === null && typeof window !== 'undefined') {
+        globalSyncIntervalId = setInterval(() => {
+            loadSystemApprovalSettingFromBackend(false).catch(() => {});
+        }, 60000);
+    }
+}
+
+function releaseGlobalPoller() {
+    if (activeHookCount <= 0 && globalSyncIntervalId !== null) {
+        clearInterval(globalSyncIntervalId);
+        globalSyncIntervalId = null;
+    }
+}
 
 /**
  * React hook to reactively subscribe to system configuration changes.
@@ -255,59 +293,50 @@ export function useSystemConfig() {
     const [isLoaded, setIsLoaded] = useState(true);
 
     useEffect(() => {
-        // Asynchronous background sync with backend database without blocking initial UI paint
-        loadSystemApprovalSettingFromBackend(false).then(latestConfig => {
-            isGlobalInitialSyncCompleted = true;
-            if (latestConfig) {
-                setConfig(latestConfig);
-            }
-        }).catch(() => {
-            isGlobalInitialSyncCompleted = true;
-        });
+        activeHookCount++;
+        ensureGlobalPoller();
+
+        // Initial background sync if needed
+        loadSystemApprovalSettingFromBackend(false).catch(() => {});
 
         const handleConfigChange = (e) => {
-            if (e?.detail) {
-                setConfig(prev => ({ ...prev, ...e.detail }));
-            } else {
-                setConfig(getSystemConfig());
-            }
+            const next = e?.detail || getSystemConfig();
+            setConfig(prev => {
+                let hasChanges = false;
+                for (const key of Object.keys(next)) {
+                    if (next[key] !== prev[key]) {
+                        hasChanges = true;
+                        break;
+                    }
+                }
+                return hasChanges ? { ...prev, ...next } : prev;
+            });
         };
 
         const handleStorage = (e) => {
-            if (e.key === SYSTEM_CONFIG_KEY || e.key === null) {
-                setConfig(getSystemConfig());
+            if (e.key === SYSTEM_CONFIG_KEY) {
+                const latest = getSystemConfig();
+                setConfig(prev => {
+                    let hasChanges = false;
+                    for (const key of Object.keys(latest)) {
+                        if (latest[key] !== prev[key]) {
+                            hasChanges = true;
+                            break;
+                        }
+                    }
+                    return hasChanges ? { ...prev, ...latest } : prev;
+                });
             }
         };
-
-        // Window focus & tab visibility re-sync: ensures regular users immediately receive admin changes
-        const handleReSync = () => {
-            loadSystemApprovalSettingFromBackend(true).then(latestConfig => {
-                if (latestConfig) setConfig(latestConfig);
-            }).catch(() => {});
-        };
-
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                handleReSync();
-            }
-        };
-
-        // Periodic light background re-sync (every 30 seconds)
-        const pollInterval = setInterval(() => {
-            handleReSync();
-        }, 30000);
 
         window.addEventListener(SYSTEM_CONFIG_EVENT, handleConfigChange);
         window.addEventListener('storage', handleStorage);
-        window.addEventListener('focus', handleReSync);
-        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
-            clearInterval(pollInterval);
+            activeHookCount--;
+            releaseGlobalPoller();
             window.removeEventListener(SYSTEM_CONFIG_EVENT, handleConfigChange);
             window.removeEventListener('storage', handleStorage);
-            window.removeEventListener('focus', handleReSync);
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, []);
 

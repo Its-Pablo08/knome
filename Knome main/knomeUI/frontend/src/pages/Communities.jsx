@@ -151,7 +151,10 @@ export default function Communities() {
         }
     };
 
-    const loadCommunities = async () => {
+    const loadCommunities = async (isSilent = false) => {
+        if (!isSilent && communities.length === 0) {
+            setIsLoading(true);
+        }
         loadPendingApprovals();
         try {
             const data = await communitiesApi.getAll().catch(() => null);
@@ -374,8 +377,23 @@ export default function Communities() {
             });
 
 
-            // Display all communities without restrictive whitelist
-            setCommunities(combinedList);
+            // Display all communities with equality checking to avoid layout thrashing
+            setCommunities(prev => {
+                if (prev.length === combinedList.length) {
+                    const isIdentical = prev.every((c, i) => {
+                        const target = combinedList[i];
+                        return (
+                            c.id === target.id &&
+                            c.name === target.name &&
+                            c.members === target.members &&
+                            c.membershipStatus === target.membershipStatus &&
+                            c.isJoined === target.isJoined
+                        );
+                    });
+                    if (isIdentical) return prev;
+                }
+                return combinedList;
+            });
         } catch (err) {
             console.error('Failed to load communities:', err);
         } finally {
@@ -384,7 +402,7 @@ export default function Communities() {
     };
 
     React.useEffect(() => {
-        loadCommunities();
+        loadCommunities(communities.length > 0);
 
         // Check if navigated with ?tab=Approvals
         const params = new URLSearchParams(window.location.search);
@@ -394,30 +412,38 @@ export default function Communities() {
 
         const handleApprovalRequested = () => {
             loadPendingApprovals();
-            loadCommunities();
+            loadCommunities(true);
         };
 
         const handleCommunityUpdate = () => {
-            loadCommunities();
+            loadCommunities(true);
             loadPendingApprovals();
         };
 
         const handleWindowFocus = () => {
-            loadCommunities();
+            loadCommunities(true);
             loadPendingApprovals();
         };
 
-        // Real-time polling every 6 seconds to synchronize cross-window admin approvals automatically
+        // Silent background polling every 30 seconds
         const pollInterval = setInterval(() => {
-            loadCommunities();
-        }, 6000);
+            loadCommunities(true);
+        }, 30000);
+
+        const handleStorage = (e) => {
+            if (e && e.key && !e.key.startsWith('knome_pending_community') && !e.key.startsWith('knome_community') && !e.key.startsWith('knome_joined_communities')) {
+                return;
+            }
+            loadPendingApprovals();
+            loadCommunities(true);
+        };
 
         window.addEventListener('focus', handleWindowFocus);
         window.addEventListener('community-created', handleCommunityUpdate);
         window.addEventListener('community-joined-change', handleCommunityUpdate);
         window.addEventListener('community-suspended-change', handleCommunityUpdate);
         window.addEventListener('community-approval-requested', handleApprovalRequested);
-        window.addEventListener('storage', handleApprovalRequested);
+        window.addEventListener('storage', handleStorage);
         return () => {
             clearInterval(pollInterval);
             window.removeEventListener('focus', handleWindowFocus);
@@ -425,7 +451,7 @@ export default function Communities() {
             window.removeEventListener('community-joined-change', handleCommunityUpdate);
             window.removeEventListener('community-suspended-change', handleCommunityUpdate);
             window.removeEventListener('community-approval-requested', handleApprovalRequested);
-            window.removeEventListener('storage', handleApprovalRequested);
+            window.removeEventListener('storage', handleStorage);
         };
     }, [isHRorAdmin]);
 

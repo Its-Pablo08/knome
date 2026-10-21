@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Knome – Platform Functionalities | MPOnline Limited</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy: #0f172a; --blue: #1a56db; --sky: #2563eb;
+      --teal: #0891b2; --green: #16a34a; --amber: #d97706; --red: #dc2626;
+      --slate-50: #f8fafc; --slate-100: #f1f5f9; --slate-200: #e2e8f0;
+      --slate-300: #cbd5e1; --slate-500: #64748b; --slate-700: #334155;
+      --slate-900: #0f172a;
+    }
+    html, body { width: 100%; height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f8fafc; color: #1e293b; }
+
+    /* ── NAV ── */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 28px;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(14px);
+      border-bottom: 1px solid #e2e8f0;
+      box-shadow: 0 1px 6px rgba(15,23,42,0.04);
+    }
+    .nav-brand { color: #0f172a; font-weight: 800; font-size: 1rem; display:flex;align-items:center;gap:10px; }
+    .nav-logo { width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--blue),#0ea5e9);display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:900;color:#fff;box-shadow:0 2px 6px rgba(26,86,219,0.25); }
+    .nav-subtitle { font-size:.72rem;font-weight:500;color:#64748b; }
+    .nav-dots { display:flex;gap:7px; }
+    .nav-dot { width:8px;height:8px;border-radius:50%;background:#cbd5e1;cursor:pointer;transition:all .3s; }
+    .nav-dot.active { background:var(--blue);transform:scale(1.4); }
+    .nav-right { display:flex;align-items:center;gap:10px; }
+    .slide-counter { color:#64748b;font-size:.75rem;min-width:44px;text-align:center;font-weight:600; }
+    .nav-btn { background:#ffffff;border:1px solid #cbd5e1;color:#1e293b;padding:5px 15px;border-radius:6px;cursor:pointer;font-size:.78rem;font-weight:600;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+    .nav-btn:hover { background:#f1f5f9;border-color:#94a3b8; }
+
+    /* ── SLIDES ── */
+    .slides-wrapper { position:fixed;top:0;left:0;width:100%;height:100%;overflow:hidden; }
+    .slide {
+      position:absolute;top:0;left:0;width:100%;height:100%;
+      display:flex;flex-direction:column;justify-content:center;align-items:center;
+      padding:70px 56px 44px;
+      opacity:0;transform:translateX(55px);
+      transition:opacity .48s ease,transform .48s ease;
+      pointer-events:none;
+    }
+    .slide.active { opacity:1;transform:translateX(0);pointer-events:all; }
+    .slide.exit   { opacity:0;transform:translateX(-55px); }
+
+    /* ── LIGHT BACKGROUNDS ── */
+    .bg1 { background: radial-gradient(circle at 50% 30%, #eef6ff 0%, #f8fafc 70%); }
+    .bg2 { background: #f8fafc; }
+    .bg3 { background: linear-gradient(145deg, #f0fdf4 0%, #f8fafc 100%); }
+    .bg4 { background: linear-gradient(145deg, #eff6ff 0%, #f8fafc 100%); }
+    .bg5 { background: linear-gradient(145deg, #f0fdfa 0%, #f8fafc 100%); }
+    .bg6 { background: #f8fafc; }
+    .bg7 { background: linear-gradient(145deg, #fffbeb 0%, #f8fafc 100%); }
+    .bg8 { background: #f8fafc; }
+    .bg9 { background: linear-gradient(145deg, #f5f3ff 0%, #f8fafc 100%); }
+    .bg10 { background: radial-gradient(circle at 50% 30%, #eff6ff 0%, #f8fafc 70%); }
+
+    /* ── TEXT ── */
+    .tag { display:inline-block;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:.68rem;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;padding:4px 14px;border-radius:20px;margin-bottom:14px; }
+    .h1 { font-size:clamp(1.9rem,3.8vw,2.9rem);font-weight:900;color:#0f172a;line-height:1.15;text-align:center;margin-bottom:10px;letter-spacing:-0.5px; }
+    .h1 .accent { color:var(--blue); }
+    .sub { font-size:clamp(.85rem,1.2vw,1.02rem);color:#475569;text-align:center;max-width:650px;line-height:1.65;margin-bottom:26px; }
+    .h2 { font-size:clamp(1.35rem,2.2vw,1.95rem);font-weight:800;color:#0f172a;margin-bottom:6px;text-align:center;letter-spacing:-0.3px; }
+    .h2-sub { font-size:.85rem;color:#64748b;text-align:center;margin-bottom:20px; }
+
+    /* ── HERO ── */
+    .hero-k { width:72px;height:72px;border-radius:18px;background:linear-gradient(135deg,var(--blue),#0ea5e9);display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:900;color:#fff;margin-bottom:20px;box-shadow:0 8px 30px rgba(26,86,219,.3); }
+    .hero-badges { display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-bottom:26px; }
+    .hero-badge { background:#ffffff;border:1px solid #e2e8f0;color:#334155;padding:6px 15px;border-radius:50px;font-size:.76rem;font-weight:600;box-shadow:0 2px 6px rgba(15,23,42,0.04); }
+    .hero-footer { position:absolute;bottom:18px;left:0;right:0;display:flex;justify-content:space-between;padding:0 56px;font-size:.67rem;color:#94a3b8; }
+    .conf-label { color:#dc2626;font-weight:700; }
+
+    /* ── MODULE GRID ── */
+    .mod-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:920px;width:100%; }
+    .mod-card { background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;padding:16px 14px;transition:all .22s;box-shadow:0 2px 8px rgba(15,23,42,0.04); }
+    .mod-card:hover { transform:translateY(-3px);box-shadow:0 8px 20px rgba(15,23,42,0.08);border-color:#cbd5e1; }
+    .mod-icon { font-size:1.6rem;margin-bottom:9px; }
+    .mod-name { font-size:.84rem;font-weight:700;color:#0f172a;margin-bottom:5px; }
+    .mod-desc { font-size:.72rem;color:#64748b;line-height:1.55; }
+    .mod-blue  { border-color:#bfdbfe;background:#f0f7ff; }
+    .mod-teal  { border-color:#99f6e4;background:#f0fdfa; }
+    .mod-green { border-color:#bbf7d0;background:#f0fdf4; }
+    .mod-amber { border-color:#fde68a;background:#fffbeb; }
+    .mod-purple{ border-color:#e9d5ff;background:#faf5ff; }
+
+    /* ── FEATURE PANEL ── */
+    .feat-split { display:grid;grid-template-columns:1fr 1fr;gap:20px;width:100%;max-width:920px; }
+    .feat-panel { background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px;box-shadow:0 4px 16px rgba(15,23,42,0.05); }
+    .feat-hdr { display:flex;align-items:center;gap:11px;margin-bottom:14px; }
+    .feat-ico { width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff; }
+    .fi-b { background:linear-gradient(135deg,#1a56db,#3b82f6); }
+    .fi-t { background:linear-gradient(135deg,#0284c7,#0ea5e9); }
+    .fi-g { background:linear-gradient(135deg,#16a34a,#22c55e); }
+    .fi-a { background:linear-gradient(135deg,#d97706,#f59e0b); }
+    .feat-title { font-size:.98rem;font-weight:800;color:#0f172a; }
+    .feat-subtitle { font-size:.68rem;color:#64748b; }
+    .items { display:flex;flex-direction:column;gap:7px; }
+    .item { display:flex;align-items:flex-start;gap:9px;padding:7px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px; }
+    .item-dot { width:6px;height:6px;border-radius:50%;margin-top:5px;flex-shrink:0; }
+    .db { background:#2563eb; } .dt { background:#0891b2; }
+    .dg { background:#16a34a; } .da { background:#d97706; }
+    .item-text { font-size:.75rem;color:#334155;line-height:1.5; }
+
+    /* ── ARCH STACK ── */
+    .arch { width:100%;max-width:760px;display:flex;flex-direction:column;gap:9px; }
+    .arch-row { display:flex;align-items:center;gap:12px;background:#ffffff;border:1px solid #e2e8f0;border-radius:11px;padding:11px 18px;box-shadow:0 2px 6px rgba(15,23,42,0.04); }
+    .arch-lbl { font-size:.64rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;min-width:82px;color:#64748b; }
+    .chips { display:flex;flex-wrap:wrap;gap:7px; }
+    .chip { padding:3px 10px;border-radius:5px;font-size:.72rem;font-weight:600; }
+    .c-b { background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe; }
+    .c-t { background:#f0fdfa;color:#0e7490;border:1px solid #99f6e4; }
+    .c-g { background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0; }
+    .c-p { background:#faf5ff;color:#6b21a8;border:1px solid #e9d5ff; }
+    .c-a { background:#fffbeb;color:#b45309;border:1px solid #fde68a; }
+    .c-r { background:#fef2f2;color:#b91c1c;border:1px solid #fecaca; }
+
+    /* ── TIMELINE ── */
+    .tl { width:100%;max-width:820px;display:flex;flex-direction:column; }
+    .tl-row { display:flex;align-items:stretch; }
+    .tl-phase { width:106px;flex-shrink:0;text-align:right;padding:9px 14px 9px 0;border-right:2px solid #cbd5e1; }
+    .tl-pname { font-size:.7rem;font-weight:700;color:#1d4ed8; }
+    .tl-pwk   { font-size:.61rem;color:#94a3b8; }
+    .tl-dot-col { width:22px;flex-shrink:0;display:flex;flex-direction:column;align-items:center; }
+    .tl-dot { width:11px;height:11px;border-radius:50%;border:2px solid #3b82f6;background:#ffffff;margin-top:11px;box-shadow:0 0 0 3px #eff6ff; }
+    .tl-line { flex:1;width:2px;background:#e2e8f0; }
+    .tl-cnt { flex:1;padding:7px 0 7px 14px; }
+    .tl-t { font-size:.8rem;font-weight:700;color:#0f172a;margin-bottom:4px; }
+    .tl-pills { display:flex;flex-wrap:wrap;gap:5px; }
+    .tl-pill { font-size:.65rem;padding:2px 9px;border-radius:20px;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;font-weight:500; }
+
+    /* ── THANK YOU / CONTACT ── */
+    .ty-orb { width:96px;height:96px;border-radius:50%;background:linear-gradient(135deg,var(--blue),#0ea5e9);display:flex;align-items:center;justify-content:center;font-size:2.4rem;margin-bottom:20px;box-shadow:0 8px 32px rgba(26,86,219,.28); }
+    .contact-row { display:flex;gap:11px;margin-top:18px;flex-wrap:wrap;justify-content:center; }
+    .cpill { background:#ffffff;border:1px solid #e2e8f0;border-radius:50px;padding:7px 18px;color:#334155;font-size:.76rem;font-weight:600;box-shadow:0 2px 6px rgba(15,23,42,0.04); }
+
+    /* ── SLIDE FOOTER ── */
+    .sfooter { position:absolute;bottom:14px;left:56px;right:56px;display:flex;justify-content:space-between;font-size:.63rem;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px; }
+    .sfooter .cr { color:#dc2626;font-weight:700; }
+
+    /* ── PROGRESS & KBD ── */
+    .prog-bar { position:fixed;bottom:0;left:0;right:0;height:3px;background:#e2e8f0;z-index:200; }
+    .prog-fill { height:100%;background:linear-gradient(90deg,var(--blue),#0ea5e9);transition:width .4s ease; }
+    .kbd { position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:.62rem;color:#94a3b8;background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;padding:3px 13px;z-index:200;pointer-events:none;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">
+    <div class="nav-logo">K</div>
+    <div>
+      <div>Knome</div>
+      <div class="nav-subtitle">MPOnline Limited</div>
+    </div>
+  </div>
+  <div class="nav-dots" id="navDots"></div>
+  <div class="nav-right">
+    <span class="slide-counter" id="counter">1 / 10</span>
+    <button class="nav-btn" id="prevBtn">← Prev</button>
+    <button class="nav-btn" id="nextBtn">Next →</button>
+  </div>
+</nav>
+
+<div class="prog-bar"><div class="prog-fill" id="progFill" style="width:10%"></div></div>
+<div class="slides-wrapper">
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 1 · COVER
+═══════════════════════════════════════════════════ -->
+<div class="slide bg1 active" data-index="0">
+  <div class="hero-k">K</div>
+  <div class="tag">MPOnline Limited · Platform Overview</div>
+  <h1 class="h1">Knome<br><span class="accent">Enterprise Excellence Portal</span></h1>
+  <p class="sub">A unified knowledge-sharing and collaboration platform — connecting every employee through Communities, Wiki, Clips, Posts, and real-time Messaging.</p>
+  <div class="hero-badges">
+    <span class="hero-badge">🏘️ Communities</span>
+    <span class="hero-badge">📖 Wiki</span>
+    <span class="hero-badge">🎬 Clips</span>
+    <span class="hero-badge">💬 Direct Messaging</span>
+    <span class="hero-badge">🏆 Karma &amp; Leaderboard</span>
+    <span class="hero-badge">💼 Job Board</span>
+    <span class="hero-badge">📊 Admin Console</span>
+  </div>
+  <div class="hero-footer">
+    <span>Knome v1.0 · Enterprise Platform</span>
+    <span class="conf-label">CONFIDENTIAL</span>
+    <span>Slide 1 / 10</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 2 · ALL FUNCTIONALITIES
+═══════════════════════════════════════════════════ -->
+<div class="slide bg2" data-index="1">
+  <div class="tag">Core Functionalities</div>
+  <h2 class="h2">What Knome Can Do</h2>
+  <p class="h2-sub">8 powerful modules — one unified enterprise platform</p>
+  <div class="mod-grid">
+    <div class="mod-card mod-blue">
+      <div class="mod-icon">🏘️</div>
+      <div class="mod-name">Communities</div>
+      <div class="mod-desc">Department-based groups, public/private visibility, member management, pinned content</div>
+    </div>
+    <div class="mod-card mod-blue">
+      <div class="mod-icon">📖</div>
+      <div class="mod-name">Wiki</div>
+      <div class="mod-desc">Structured knowledge articles, rich editor, version history, collaborative publishing</div>
+    </div>
+    <div class="mod-card mod-teal">
+      <div class="mod-icon">🎬</div>
+      <div class="mod-name">Clips</div>
+      <div class="mod-desc">Short-form video channel, upload/record, personalised feed, comments &amp; likes</div>
+    </div>
+    <div class="mod-card mod-amber">
+      <div class="mod-icon">📰</div>
+      <div class="mod-name">Posts &amp; Articles</div>
+      <div class="mod-desc">Rich text posts, image/video embeds, reactions, announcements banner</div>
+    </div>
+    <div class="mod-card mod-purple">
+      <div class="mod-icon">💬</div>
+      <div class="mod-name">Direct Messaging</div>
+      <div class="mod-desc">Real-time 1-to-1 &amp; group chat, file sharing, read receipts via SignalR</div>
+    </div>
+    <div class="mod-card mod-amber">
+      <div class="mod-icon">🏆</div>
+      <div class="mod-name">Karma &amp; Leaderboard</div>
+      <div class="mod-desc">Points for contributions, badges, rank board, monthly reset cycles</div>
+    </div>
+    <div class="mod-card mod-green">
+      <div class="mod-icon">💼</div>
+      <div class="mod-name">Job Board</div>
+      <div class="mod-desc">Internal vacancy listings, apply flow, HR-managed postings</div>
+    </div>
+    <div class="mod-card mod-blue">
+      <div class="mod-icon">📊</div>
+      <div class="mod-name">Admin Console</div>
+      <div class="mod-desc">Analytics dashboard, user management, role assignment, system configuration</div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 2 / 10</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 3 · COMMUNITIES FUNCTIONALITY
+═══════════════════════════════════════════════════ -->
+<div class="slide bg3" data-index="2">
+  <div class="tag">Functionality</div>
+  <h2 class="h2">🏘️ Communities</h2>
+  <p class="h2-sub">Structured group spaces for departments and interest areas</p>
+  <div class="feat-split">
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-b">🏘️</div>
+        <div><div class="feat-title">Group Management</div><div class="feat-subtitle">Create &amp; organize communities</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Create public or private communities</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Join request approval workflow</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Community admin role assignment</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Department-scoped or company-wide visibility</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Member list management &amp; removal</div></div>
+      </div>
+    </div>
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-g">📌</div>
+        <div><div class="feat-title">Content &amp; Engagement</div><div class="feat-subtitle">Share &amp; interact within groups</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Pin Wiki articles &amp; Clips to communities</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Community-level posts and announcements</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Content moderation by Community Admin</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Share profiles &amp; articles with members</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Community analytics: members, engagement</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 3 / 10</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 4 · WIKI FUNCTIONALITY
+═══════════════════════════════════════════════════ -->
+<div class="slide bg4" data-index="3">
+  <div class="tag">Functionality</div>
+  <h2 class="h2">📖 Wiki — Knowledge Base</h2>
+  <p class="h2-sub">Structured, searchable knowledge articles with collaborative publishing</p>
+  <div class="feat-split">
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-b">📝</div>
+        <div><div class="feat-title">Create &amp; Publish</div><div class="feat-subtitle">Rich authoring tools for all roles</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Rich text editor — headings, images, tables, code</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Draft → Review → Publish workflow</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Full version history &amp; rollback</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Tag-based categorisation &amp; search indexing</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">✅ Available to: Employee, Community Admin, HR Admin, <strong style="color:var(--sky)">Sys Admin</strong></div></div>
+      </div>
+    </div>
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-g">🔗</div>
+        <div><div class="feat-title">Share &amp; Discover</div><div class="feat-subtitle">Controlled visibility across the org</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Share with specific employees via name/ID search</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Department-scoped or company-wide access</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Read-only link sharing with optional expiry</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Pin articles to Community pages</div></div>
+        <div class="item"><div class="item-dot dg"></div><div class="item-text">Views, read-time &amp; engagement analytics</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 4 / 10</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 5 · CLIPS FUNCTIONALITY
+═══════════════════════════════════════════════════ -->
+<div class="slide bg5" data-index="4">
+  <div class="tag">Functionality</div>
+  <h2 class="h2">🎬 Clips — Video Channel</h2>
+  <p class="h2-sub">Internal short-form video knowledge sharing — powered by all roles</p>
+  <div class="feat-split">
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-t">🎥</div>
+        <div><div class="feat-title">Upload &amp; Create</div><div class="feat-subtitle">Easy video content production</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Upload MP4 / WebM pre-recorded videos</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">In-browser screen recording capability</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Custom thumbnail, title &amp; description</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Department / category tagging</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">✅ Available to: Employee, Community Admin, HR Admin, <strong style="color:var(--teal)">Sys Admin</strong></div></div>
+      </div>
+    </div>
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-a">📡</div>
+        <div><div class="feat-title">Watch &amp; Engage</div><div class="feat-subtitle">Social-style video experience</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Personalised video feed based on interests</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Likes, comments &amp; Karma point rewards</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Share Clips to Communities or DMs</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">View count &amp; completion rate analytics</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Playlist &amp; learning-path collections</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 5 / 10</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 6 · ROLE CAPABILITY MATRIX
+═══════════════════════════════════════════════════ -->
+<div class="slide bg6" data-index="5" style="padding:60px 24px 28px;overflow-y:auto;justify-content:flex-start;">
+  <div class="tag">Access Control</div>
+  <h2 class="h2">Role Capability Matrix</h2>
+  <p class="h2-sub">Complete feature permissions across all four roles</p>
+
+  <div style="width:100%;max-width:960px;margin:0 auto;background:#ffffff;border-radius:8px;box-shadow:0 4px 20px rgba(15,23,42,0.06);border:1px solid #cbd5e1;overflow:hidden;">
+    <!-- Matrix Table -->
+    <table style="width:100%;border-collapse:collapse;font-family:'Segoe UI',Inter,Arial,sans-serif;font-size:0.69rem;line-height:1.2;">
+      <thead>
+        <tr>
+          <th style="background:#16365c;color:#ffffff;font-weight:700;text-align:left;padding:6px 12px;border:1px solid #234876;width:34%;">Feature / Action</th>
+          <th style="background:#16365c;color:#ffffff;font-weight:700;text-align:center;padding:6px 8px;border:1px solid #234876;width:16.5%;">Employee</th>
+          <th style="background:#16365c;color:#ffffff;font-weight:700;text-align:center;padding:6px 8px;border:1px solid #234876;width:16.5%;">Community Admin</th>
+          <th style="background:#16365c;color:#ffffff;font-weight:700;text-align:center;padding:6px 8px;border:1px solid #234876;width:16.5%;">HR Admin</th>
+          <th style="background:#16365c;color:#ffffff;font-weight:700;text-align:center;padding:6px 8px;border:1px solid #234876;width:16.5%;">Sys Admin</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Create / Edit personal profile</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Create text / image / video post</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Publish articles / blogs</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">📖 Publish Wiki articles</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#1a56db;font-weight:900;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Upload video to Video Channel</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">🎬 Upload Clips (Short Videos)</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#1a56db;font-weight:900;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Upload / record podcast</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Create community</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Approve community join requests</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Moderate community content</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Manage platform banners/announcements</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Post internal job vacancies</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">View analytics dashboard</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Manage user access and roles</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Configure system settings</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Earn / view Karma Points</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Follow employees / build network</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Report / flag content</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+        <tr>
+          <td style="background:#edf3f8;color:#16365c;font-weight:700;padding:2.5px 8px;border:1px solid #b8cce4;white-space:nowrap;">Suspend users</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#ffffff;color:#a6a6a6;font-weight:600;font-size:0.8rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">X</td>
+          <td style="background:#e2efda;color:#276a3c;font-weight:800;font-size:0.92rem;text-align:center;padding:1.5px 6px;border:1px solid #b8cce4;">✓</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 6 / 10</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 7 · POSTS, DM & KARMA FUNCTIONALITY
+═══════════════════════════════════════════════════ -->
+<div class="slide bg7" data-index="6">
+  <div class="tag">Functionality</div>
+  <h2 class="h2">Posts · Messaging · Karma</h2>
+  <p class="h2-sub">Communication, engagement and recognition features</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;max-width:920px;width:100%">
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-b">📰</div>
+        <div><div class="feat-title">Posts &amp; Articles</div><div class="feat-subtitle">Content publishing</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Text, image &amp; video posts</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Reactions: like, clap, celebrate</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Threaded comments &amp; replies</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Pinned announcements banner</div></div>
+        <div class="item"><div class="item-dot db"></div><div class="item-text">Share to communities / DM</div></div>
+      </div>
+    </div>
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-t">💬</div>
+        <div><div class="feat-title">Direct Messaging</div><div class="feat-subtitle">Real-time communication</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">1-to-1 &amp; group conversations</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Real-time via SignalR WebSockets</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">File &amp; image attachments</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Read receipts &amp; typing indicators</div></div>
+        <div class="item"><div class="item-dot dt"></div><div class="item-text">Message search &amp; history</div></div>
+      </div>
+    </div>
+    <div class="feat-panel">
+      <div class="feat-hdr">
+        <div class="feat-ico fi-a">🏆</div>
+        <div><div class="feat-title">Karma System</div><div class="feat-subtitle">Gamified engagement</div></div>
+      </div>
+      <div class="items">
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Points for posts, Wiki, Clips</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Badges for milestones &amp; streaks</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Org-wide leaderboard ranking</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Monthly reset &amp; recognition</div></div>
+        <div class="item"><div class="item-dot da"></div><div class="item-text">Profile karma score display</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 7 / 10</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 8 · TECH ARCHITECTURE
+═══════════════════════════════════════════════════ -->
+<div class="slide bg8" data-index="7">
+  <div class="tag">Technology Stack</div>
+  <h2 class="h2">Technical Architecture</h2>
+  <p class="h2-sub">Enterprise-grade, scalable stack powering every Knome functionality</p>
+  <div class="arch">
+    <div class="arch-row">
+      <div class="arch-lbl">Frontend</div>
+      <div class="chips">
+        <span class="chip c-b">React 18 + Vite</span>
+        <span class="chip c-t">React Router v6</span>
+        <span class="chip c-b">Axios</span>
+        <span class="chip c-p">Vanilla CSS</span>
+        <span class="chip c-t">SignalR Client</span>
+      </div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-lbl">Backend API</div>
+      <div class="chips">
+        <span class="chip c-b">.NET 8 Web API</span>
+        <span class="chip c-g">JWT Auth + RBAC</span>
+        <span class="chip c-a">Entity Framework Core</span>
+        <span class="chip c-t">SignalR Hubs</span>
+      </div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-lbl">Database</div>
+      <div class="chips">
+        <span class="chip c-b">SQL Server 2022</span>
+        <span class="chip c-r">Redis Cache</span>
+        <span class="chip c-g">Azure Blob Storage</span>
+      </div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-lbl">DevOps</div>
+      <div class="chips">
+        <span class="chip c-t">Docker + Compose</span>
+        <span class="chip c-p">GitHub Actions CI/CD</span>
+        <span class="chip c-a">Azure App Service</span>
+        <span class="chip c-g">Nginx Reverse Proxy</span>
+      </div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-lbl">Security</div>
+      <div class="chips">
+        <span class="chip c-r">HTTPS / TLS 1.3</span>
+        <span class="chip c-a">CORS Policies</span>
+        <span class="chip c-g">Role-Based Auth</span>
+        <span class="chip c-b">Audit Logging</span>
+      </div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 8 / 10</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 9 · IMPLEMENTATION TIMELINE
+═══════════════════════════════════════════════════ -->
+<div class="slide bg9" data-index="8">
+  <div class="tag">Project Roadmap</div>
+  <h2 class="h2">Implementation Timeline</h2>
+  <p class="h2-sub">16-week phased delivery — Q3 2026 go-live target</p>
+  <div class="tl">
+    <div class="tl-row">
+      <div class="tl-phase"><div class="tl-pname">Phase 1</div><div class="tl-pwk">Wk 1–3</div></div>
+      <div class="tl-dot-col"><div class="tl-dot" style="background:#2563eb;border-color:#2563eb"></div><div class="tl-line"></div></div>
+      <div class="tl-cnt"><div class="tl-t">Foundation &amp; Architecture</div><div class="tl-pills"><span class="tl-pill">DB Schema</span><span class="tl-pill">Auth &amp; JWT</span><span class="tl-pill">API Scaffold</span><span class="tl-pill">React Setup</span></div></div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-phase"><div class="tl-pname">Phase 2</div><div class="tl-pwk">Wk 4–7</div></div>
+      <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
+      <div class="tl-cnt"><div class="tl-t">Core Modules — Communities, Wiki, Posts, Profiles</div><div class="tl-pills"><span class="tl-pill">Communities</span><span class="tl-pill">Wiki Module</span><span class="tl-pill">Posts &amp; Articles</span><span class="tl-pill">User Profiles</span></div></div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-phase"><div class="tl-pname">Phase 3</div><div class="tl-pwk">Wk 8–11</div></div>
+      <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
+      <div class="tl-cnt"><div class="tl-t">Advanced Features — Clips, Chat, Karma, Jobs</div><div class="tl-pills"><span class="tl-pill">Clips Video Channel</span><span class="tl-pill">Real-time DM</span><span class="tl-pill">Karma System</span><span class="tl-pill">Job Board</span></div></div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-phase"><div class="tl-pname">Phase 4</div><div class="tl-pwk">Wk 12–14</div></div>
+      <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
+      <div class="tl-cnt"><div class="tl-t">Admin Console, Analytics &amp; RBAC</div><div class="tl-pills"><span class="tl-pill">Admin Dashboard</span><span class="tl-pill">Analytics</span><span class="tl-pill">RBAC Finalization</span><span class="tl-pill">System Settings</span></div></div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-phase"><div class="tl-pname">Phase 5</div><div class="tl-pwk">Wk 15–16</div></div>
+      <div class="tl-dot-col"><div class="tl-dot" style="background:#16a34a;border-color:#16a34a"></div></div>
+      <div class="tl-cnt"><div class="tl-t">Testing, UAT &amp; Go-Live</div><div class="tl-pills"><span class="tl-pill" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d">QA Testing</span><span class="tl-pill" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d">UAT Sign-off</span><span class="tl-pill" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d">Production Deploy</span></div></div>
+    </div>
+  </div>
+  <div class="sfooter"><span>Knome v1.0 · MPOnline Limited</span><span class="cr">CONFIDENTIAL</span><span>Slide 9 / 10</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SLIDE 10 · THANK YOU
+═══════════════════════════════════════════════════ -->
+<div class="slide bg10" data-index="9">
+  <div class="ty-orb">🚀</div>
+  <div class="tag">Thank You</div>
+  <h1 class="h1">One Platform.<br><span class="accent">Every Functionality. Every Employee.</span></h1>
+  <p class="sub">Knome brings Communities, Wiki, Clips, Messaging, Karma and the Job Board under one roof — with role-based access control for every action.</p>
+  <div class="contact-row">
+    <span class="cpill">📧 knome@mponline.gov.in</span>
+    <span class="cpill">🌐 knome.mponline.gov.in</span>
+    <span class="cpill">📅 Q3 2026 Go-Live</span>
+    <span class="cpill">🔖 v1.0 — Enterprise Edition</span>
+  </div>
+  <div class="hero-footer">
+    <span>Knome v1.0 · Enterprise Excellence Portal · MPOnline Limited</span>
+    <span class="conf-label">CONFIDENTIAL</span>
+    <span>Slide 10 / 10</span>
+  </div>
+</div>
+
+</div><!-- /slides-wrapper -->
+
+<div class="kbd">← → Arrow keys · Click Prev / Next · Click dots to jump</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const dotsEl = document.getElementById('navDots');
+  const counter = document.getElementById('counter');
+  const prog = document.getElementById('progFill');
+  const total = slides.length;
+  let cur = 0, busy = false;
+
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'nav-dot' + (i===0?' active':'');
+    d.onclick = () => go(i);
+    dotsEl.appendChild(d);
+  });
+
+  function ui() {
+    document.querySelectorAll('.nav-dot').forEach((d,i) => d.classList.toggle('active', i===cur));
+    counter.textContent = `${cur+1} / ${total}`;
+    prog.style.width = `${((cur+1)/total)*100}%`;
+  }
+
+  function go(idx) {
+    if (busy || idx===cur || idx<0 || idx>=total) return;
+    busy = true;
+    const prev = cur; cur = idx;
+    slides[prev].classList.add('exit');
+    slides[cur].classList.add('active');
+    setTimeout(() => { slides[prev].classList.remove('active','exit'); busy=false; }, 500);
+    ui();
+  }
+
+  document.getElementById('nextBtn').onclick = () => go(cur+1);
+  document.getElementById('prevBtn').onclick = () => go(cur-1);
+  document.addEventListener('keydown', e => {
+    if (e.key==='ArrowRight'||e.key==='ArrowDown') go(cur+1);
+    if (e.key==='ArrowLeft' ||e.key==='ArrowUp')   go(cur-1);
+  });
+  let tx=0;
+  document.addEventListener('touchstart', e => tx=e.touches[0].clientX);
+  document.addEventListener('touchend',   e => {
+    const d = tx - e.changedTouches[0].clientX;
+    if (Math.abs(d)>50) d>0 ? go(cur+1) : go(cur-1);
+  });
+  ui();
+</script>
+</body>
+</html>

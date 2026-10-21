@@ -21,7 +21,30 @@
 
 ---
 
-## Slide 3: EmployeeHub Single Sign-On (SSO) & Dual-Issuer JWT Trust
+## Slide 3: Role-Based Access Control (RBAC) — Capability Model
+*FRD capability boundaries — ✓ permitted | — not assigned in the FRD*
+
+| Capability | EMP | CADM | HRADM | SYSADM |
+| :--- | :---: | :---: | :---: | :---: |
+| **Create / edit personal profile** | ✓ | ✓ | ✓ | ✓ |
+| **Create text / image / video posts** | ✓ | ✓ | ✓ | — |
+| **Publish articles / blogs** | ✓ | ✓ | ✓ | — |
+| **Upload video / podcast** | ✓ | ✓ | ✓ | — |
+| **Create community** | ✓ | — | ✓ | ✓ |
+| **Approve community join requests** | — | ✓ | ✓ | ✓ |
+| **Moderate community content** | — | ✓ | ✓ | ✓ |
+| **Manage banners / announcements** | — | — | ✓ | ✓ |
+| **Post internal job vacancies** | — | — | ✓ | ✓ |
+| **View analytics dashboard** | — | ✓ | ✓ | ✓ |
+| **Manage user access & roles** | — | — | — | ✓ |
+| **Configure system settings** | — | — | — | ✓ |
+| **Earn / view Karma Points** | ✓ | ✓ | ✓ | — |
+
+> **Key principle:** Authorization is role-scoped; SYSADM owns access/configuration, while CADM governs community-level operations and HRADM governs HR/platform functions.
+
+---
+
+## Slide 4: EmployeeHub Single Sign-On (SSO) & Dual-Issuer JWT Trust
 ### The Authentication Mechanism:
 ```
 [EmployeeHub Login (:5001)] 
@@ -50,7 +73,7 @@
 
 ---
 
-## Slide 4: Full-Stack Technical Architecture
+## Slide 5: Full-Stack Technical Architecture
 - **Backend Framework:** ASP.NET Core 10 (C#), Clean Controller-Service-Repository architecture.
 - **Frontend Framework:** React 19, Vite HMR, TypeScript/JSX, Vanilla CSS + Tailwind utility tokens.
 - **Database:** Microsoft SQL Server 2022 (Normalized relational schema with live EF Core 10 scaffolding).
@@ -59,7 +82,7 @@
 
 ---
 
-## Slide 5: Knowledge Articles & Enterprise Documentation
+## Slide 6: Knowledge Articles & Enterprise Documentation
 - **Rich Editor:** Multi-format publishing with code blocks, tables, and callouts.
 - **Revision History:** Full audit trail of article versions with author attribution.
 - **Category Tagging:** Cross-departmental discovery with keyword search.
@@ -67,14 +90,103 @@
 
 ---
 
-## Slide 6: Media Studio — Videos & Technical Podcasts
+## Slide 7: Media Studio — Videos & Technical Podcasts
 - **Video Modules:** Self-hosted video streaming & YouTube Playlist synchronization with automatic metadata extraction.
 - **Podcast Channels:** Audio series with continuous background player, speaker tagging, and transcript viewing.
 - **Interactive Engagement:** Video timestamp discussions, like/dislike counts, and saved bookmarks.
 
 ---
 
-## Slide 7: Communities & Governance Lifecycle
+## Slide 8: How It Works: Posts, Articles, Wiki, Videos, Podcasts & Clips
+*(Simple step-by-step lifecycle flows with visual diagrams so anyone can easily understand)*
+
+### Quick Comparison Matrix
+| Format | What Is It Used For? | Who Can Create? | Approval Needed? | Karma Points |
+| :--- | :--- | :--- | :--- | :--- |
+| **📰 Posts** | Quick updates, milestones & team news | Any Employee | ⚡ Instant Pass (Auto-filtered) | **+2 Karma** |
+| **📄 Articles** | Detailed guides, SOPs & manuals | Any Employee | ⚡ Instant Pass to Knowledge Hub | **+10 Karma** |
+| **🎬 Clips** | 90s vertical video reels & screen tips | Any Employee | ⚡ Instant Pass to Reels Feed | **+8 Karma** |
+| **📖 Wiki** | Company handbook, policies & audit trails | Any Employee | ⚡ Instant Pass (Full Version History) | **+10 Karma** |
+| **📹 Videos** | Full training courses & tutorials | Leads / Approved Staff | 🛡️ **Admin Clearance Required** | **+8 Karma** |
+| **🎙️ Podcasts** | Leadership talks & audio series | Voice Leads / Leaders | 🛡️ **Admin Clearance Required** | **+8 Karma** |
+
+---
+
+### Step-by-Step Flow Diagrams for Each Format:
+
+#### 1. 📰 Posts: Quick Updates & Team Announcements
+*Fast, informal updates to celebrate wins, ask questions, or broadcast team news across the company.*
+```mermaid
+flowchart LR
+    A["1. Write & Tag<br/>(Text, images, @mentions)"] --> B["2. Instant Auto-Check<br/>(1s safety scan)"]
+    B --> C["3. Live on Feed<br/>(Real-time company stream)"]
+    C --> D["4. React & Earn<br/>(Likes, comments & +2 Karma)"]
+```
+- **Real Workplace Example:** A project lead posts: *"Great job team! MPOnline Portal Phase 1 migration completed ahead of schedule 🚀"* — teammates reply with congratulations and claps.
+
+---
+
+#### 2. 📄 Articles: In-Depth Guides, Best Practices & Manuals
+*Long-form structured guides with headings, diagrams, bullet points, and attached documents.*
+```mermaid
+flowchart LR
+    A["1. Draft in Editor<br/>(Rich text, headings, code)"] --> B["2. Tag Category<br/>(IT, Finance, HR & read-time)"]
+    B --> C["3. Knowledge Hub<br/>(Searchable company library)"]
+    C --> D["4. Read In-App<br/>(Protected view & +10 Karma)"]
+```
+- **Real Workplace Example:** An IT senior writes: *"Complete Guide: Connecting to MPOnline VPN from Home on Windows & Mac"* — new joiners find it in seconds instead of calling the helpdesk.
+
+---
+
+#### 3. 🎬 Clips: Quick 90-Second Vertical How-To Videos
+*Bite-sized vertical video reels for screen recordings, feature spotlights, and quick productivity tips.*
+```mermaid
+flowchart LR
+    A["1. Record or Upload<br/>(Screen recorder, up to 90s)"] --> B["2. Auto 9:16 Format<br/>(Optimized for mobile & desktop)"]
+    B --> C["3. Swipeable Feed<br/>(Continuous vertical viewer)"]
+    C --> D["4. Double-Tap & +8<br/>(Likes, bookmarks & +8 Karma)"]
+```
+- **Real Workplace Example:** A finance team member records a 45-second screen capture: *"How to download approved invoice vouchers in 3 clicks"* — saves colleagues 20 minutes every day.
+
+---
+
+#### 4. 📖 Wiki: Company Handbook, Policies & Official SOPs
+*The single source of truth for standard procedures, with complete version tracking and 1-click restore.*
+```mermaid
+flowchart LR
+    A["1. Write Procedure<br/>(Official SOP or checklist)"] --> B["2. Version Diff & Undo<br/>(Immutable audit & 1-click rollback)"]
+    B --> C["3. Topic Tree<br/>(Clean folder structure)"]
+    C --> D["4. Zero Knowledge Loss<br/>(Permanent record & +10 Karma)"]
+```
+- **Real Workplace Example:** Operations publishes the *"Hardware Replacement & Laptop Request SOP"*. When policy updates 6 months later, previous versions remain readable for audit.
+
+---
+
+#### 5. 📹 Videos: Official Training Courses & Masterclasses
+*Horizontal multi-minute training courses with admin quality control and chapter timestamps.*
+```mermaid
+flowchart LR
+    A["1. Upload Video<br/>(MP4 or YouTube playlist)"] --> B["2. Admin Review Gate<br/>(Mandatory Admin Approval)"]
+    B --> C["3. Video Hub Stream<br/>(Live catalog & fast player)"]
+    C --> D["4. Chapter Learning<br/>(Discussions & +8 Karma)"]
+```
+- **Real Workplace Example:** Cybersecurity team uploads a 25-minute *"Data Privacy & Phishing Defense 2026"* course. System Admin approves it, making it mandatory training for 1,200 staff.
+
+---
+
+#### 6. 🎙️ Podcasts: Audio Broadcasts & Leadership Talks
+*Audio episodes employees can listen to in the background while multitasking or during their commute.*
+```mermaid
+flowchart LR
+    A["1. Upload Episode<br/>(MP3, cover art, speaker bio)"] --> B["2. Admin Review Gate<br/>(Mandatory Admin Approval)"]
+    B --> C["3. Background Player<br/>(Continuous playback while browsing)"]
+    C --> D["4. Rate & Bookmark<br/>(Episode feedback & +8 Karma)"]
+```
+- **Real Workplace Example:** Managing Director records *"Monthly Leadership Address: 2026 Goals & Tech Roadmap"*. Staff listen with headphones while completing their morning tasks.
+
+---
+
+## Slide 9: Communities & Governance Lifecycle
 1. **Creation:** Standard employees submit community requests with custom rules, banner, and FAQs.
 2. **Review Queue:** Request is marked as `Pending Approval` and immediately dispatches a real-time notification to HR & System Admins.
 3. **Approval Dashboard:** Admins review pending communities on `/communities?tab=Approvals`.
@@ -82,11 +194,11 @@
 
 ---
 
-## Slide 8: Gamification & Karma Engine
+## Slide 10: Gamification & Karma Engine
 - **Autonomous SQL Server Ledger:** Points awarded automatically via `dbo.KarmaTransactions` for verified engagement.
-  - `+10 Pts`: Publishing an Article
-  - `+8 Pts`: Uploading Video / Podcast
-  - `+2 Pts`: Creating Feed Updates
+  - `+10 Pts`: Publishing an Article or Wiki
+  - `+8 Pts`: Uploading Video, Podcast or Clip
+  - `+2 Pts`: Creating Feed Updates / Posts
   - `+1 to +3 Pts`: Receiving Reactions, Comments & Shares
 - **Tier Progression:**
   - **Bronze (Newbie):** 0 – 250 Pts
@@ -97,7 +209,7 @@
 
 ---
 
-## Slide 9: Standardized Sharing & Document Protection
+## Slide 11: Standardized Sharing & Document Protection
 - **Unified 2-Option Share Modal:**
   1. `Share to Community` (Post content directly into specialized community feed)
   2. `Share with Users` (Send targeted peer-to-peer notification to specific colleagues)
@@ -108,14 +220,14 @@
 
 ---
 
-## Slide 10: SignalR Real-Time Notifications
+## Slide 12: SignalR Real-Time Notifications
 - **WebSockets Engine:** Instant push delivery for comments, mentions, invites, and badge promotions.
 - **Strict Chronological Priority:** Latest incoming notifications are pinned at Index 0 (top of list) with "Just now" timestamps.
 - **Real-Time Role Unlock:** When an Admin assigns a role, the employee's pending modal clears instantly without browser refresh.
 
 ---
 
-## Slide 11: HR Analytics & Workforce Intelligence
+## Slide 13: Analytics & Workforce Intelligence
 - **100% Live SQL Server Database Metrics:**
   - `RPT-01 (User Engagement)`: Registered workforce, active users, suspension status, and karma breakdown.
   - `RPT-02 (Community Health)`: Member counts, active communities, and post frequency.
@@ -126,22 +238,22 @@
 
 ---
 
-## Slide 12: 4-Tier Role-Based Access Control (RBAC)
+## Slide 14: 4-Tier Role Governance Architecture
 - **Employee (`EMP`):** Content creation, learning tracks, community participation, and karma progression.
 - **Community Admin (`CADM`):** Community space moderation, join request review, and group settings.
-- **HR Administrator (`HRADM`):** Company-wide broadcasts, community approvals, user role management, and HR analytics.
+- **HR Administrator (`HRADM`):** Company-wide broadcasts, community approvals, user role management, and platform analytics.
 - **System Administrator (`SYSADM`):** Full platform governance, immutable security audit logs, and account lifecycle.
 
 ---
 
-## Slide 13: Strategic Business Impact for MPOnline
+## Slide 15: Strategic Business Impact for MPOnline
 - **40%+ Faster Onboarding:** Consolidated video tutorials and SOPs accelerate knowledge ramp-up for new recruits.
 - **Zero Knowledge Loss:** Critical solutions and architecture blueprints preserved in institutional memory.
 - **Government Compliance:** On-premise SQL Server deployment, in-app document protection, and immutable audit logs.
 
 ---
 
-## Slide 14: Conclusion & Live Demonstration
+## Slide 16: Conclusion & Live Demonstration
 - **Live System URLs:**
   - **EmployeeHub SSO:** `http://localhost:5001`
   - **Knome Web Portal:** `http://localhost:5173`

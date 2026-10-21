@@ -12,8 +12,10 @@ export default function MyCommunitiesWidget() {
     const [isLoading, setIsLoading] = useState(true);
     const [isExpanded, setIsExpanded] = useState(false);
 
-    const loadCommunities = async () => {
-        setIsLoading(true);
+    const loadCommunities = async (isSilent = false) => {
+        if (!isSilent && communities.length === 0) {
+            setIsLoading(true);
+        }
         try {
             const res = await communitiesApi.getAll(500).catch(() => null);
             const userKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
@@ -85,7 +87,12 @@ export default function MyCommunitiesWidget() {
 
             // Only display communities the current user has joined
             const joinedOnly = mapped.filter(c => c.isJoined);
-            setCommunities(joinedOnly);
+            setCommunities(prev => {
+                if (prev.length === joinedOnly.length && prev.every((c, i) => c.id === joinedOnly[i].id && c.name === joinedOnly[i].name && c.membersCount === joinedOnly[i].membersCount)) {
+                    return prev;
+                }
+                return joinedOnly;
+            });
         } catch (err) {
             console.error('Failed to load communities widget:', err);
         } finally {
@@ -94,14 +101,20 @@ export default function MyCommunitiesWidget() {
     };
 
     useEffect(() => {
-        loadCommunities();
+        loadCommunities(communities.length > 0);
 
-        const handleJoinedChange = () => loadCommunities();
+        const handleJoinedChange = () => loadCommunities(true);
+        const handleStorage = (e) => {
+            if (e && e.key && !e.key.startsWith('knome_joined_communities') && !e.key.startsWith('knome_community') && !e.key.startsWith('knome_custom_communities') && !e.key.startsWith('knome_deleted_community_ids')) {
+                return;
+            }
+            loadCommunities(true);
+        };
         window.addEventListener('community-joined-change', handleJoinedChange);
-        window.addEventListener('storage', handleJoinedChange);
+        window.addEventListener('storage', handleStorage);
         return () => {
             window.removeEventListener('community-joined-change', handleJoinedChange);
-            window.removeEventListener('storage', handleJoinedChange);
+            window.removeEventListener('storage', handleStorage);
         };
     }, [currentUser?.id]);
 

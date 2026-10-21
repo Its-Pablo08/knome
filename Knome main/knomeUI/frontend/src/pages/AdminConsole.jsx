@@ -31,6 +31,8 @@ import CreateCommunityModal from '../components/modals/CreateCommunityModal';
 import HighlightText from '../components/ui/HighlightText';
 import { addRestrictedWord } from '../utils/restrictedWords';
 import { getSystemConfig, saveSystemConfig, DEFAULT_SYSTEM_CONFIG } from '../utils/systemConfig';
+import { getContentTypeConfig } from '../utils/contentTypeConfig';
+import ContentTypeBadge from '../components/ui/ContentTypeBadge';
 
 // Helper to provide realistic reported post content if live API call returns empty/404
 const getFallbackPostContent = (report) => {
@@ -341,7 +343,7 @@ export default function AdminConsole() {
     const activeDomain = useMemo(() => {
         if (['users', 'role_requests'].includes(activeTab)) return 'governance';
         if (['audit', 'serilog', 'analytics'].includes(activeTab)) return 'operations';
-        if (['approval_policy', 'moderation', 'media_approvals'].includes(activeTab)) return 'moderation';
+        if (['approval_policy', 'moderation', 'media_approvals', 'community_approvals'].includes(activeTab)) return 'moderation';
         return 'moderation';
     }, [activeTab]);
 
@@ -3593,11 +3595,11 @@ export default function AdminConsole() {
                                 <span className={`text-[10px] font-black uppercase tracking-wider ${activeDomain === 'moderation' ? 'text-indigo-200' : 'text-slate-400'}`}>
                                     Domain 1
                                 </span>
-                                {(pendingCount + pendingMediaApprovals.length) > 0 && (
+                                {(pendingCount + pendingMediaApprovals.length + pendingCommunityApprovals.length) > 0 && (
                                     <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
                                         activeDomain === 'moderation' ? 'bg-amber-400 text-slate-950' : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
                                     }`}>
-                                        {pendingCount + pendingMediaApprovals.length} Pending
+                                        {pendingCount + pendingMediaApprovals.length + pendingCommunityApprovals.length} Pending
                                     </span>
                                 )}
                             </div>
@@ -3605,7 +3607,7 @@ export default function AdminConsole() {
                                 Moderation & Content Safety
                             </h3>
                             <p className={`text-[10px] sm:text-[11px] truncate ${activeDomain === 'moderation' ? 'text-indigo-100' : 'text-slate-400'}`}>
-                                Reports & Media Approvals
+                                Reports, Media & Community Approvals
                             </p>
                         </div>
                     </div>
@@ -3765,6 +3767,27 @@ export default function AdminConsole() {
                                             : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                                     }`}>
                                         {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('community_approvals')}
+                                    className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                        activeTab === 'community_approvals'
+                                            ? 'bg-amber-500 text-white shadow-xs'
+                                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-[16px] text-amber-500">approval</span>
+                                    <span>Community Approval ({pendingCommunityApprovals.length})</span>
+                                    {pendingCommunityApprovals.length > 0 && (
+                                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                    )}
+                                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                                        configState.requireCommunityApproval !== false
+                                            ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                                            : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                    }`}>
+                                        {configState.requireCommunityApproval !== false ? 'ON' : 'OFF'}
                                     </span>
                                 </button>
                             </>
@@ -4308,9 +4331,9 @@ export default function AdminConsole() {
 
             {/* TAB 5: USER DIRECTORY FILTERS */}
             {activeTab === 'users' && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                    {/* 1. All Users */}
-                    <div 
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                    {/* 1. All Employees (Removed from frontend) */}
+                    {false && <div 
                         onClick={() => { setUserSearchTerm(''); showToast(`Showing all ${usersList.length} registered employees`); }}
                         className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
                             !userSearchTerm
@@ -4324,11 +4347,11 @@ export default function AdminConsole() {
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{usersList.length}</p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">All Employees</p>
-                    </div>
+                    </div>}
 
                     {/* 2. Active Accounts */}
                     <div 
-                        onClick={() => { setUserSearchTerm('Active'); showToast(`Filtered: Showing ${activeUsersCount} active employee accounts`); }}
+                        onClick={() => { if (userSearchTerm === 'Active') { setUserSearchTerm(''); showToast(`Showing all ${usersList.length} registered employees`); } else { setUserSearchTerm('Active'); showToast(`Filtered: Showing ${activeUsersCount} active employee accounts`); } }}
                         className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
                             userSearchTerm === 'Active'
                                 ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/50 shadow-md scale-[1.02]' 
@@ -4345,7 +4368,7 @@ export default function AdminConsole() {
 
                     {/* 3. Administrators */}
                     <div 
-                        onClick={() => { setUserSearchTerm('Admin'); showToast(`Filtered: Showing ${activeModeratorsCount} administrators`); }}
+                        onClick={() => { if (userSearchTerm === 'Admin') { setUserSearchTerm(''); showToast(`Showing all ${usersList.length} registered employees`); } else { setUserSearchTerm('Admin'); showToast(`Filtered: Showing ${activeModeratorsCount} administrators`); } }}
                         className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
                             userSearchTerm === 'Admin'
                                 ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/50 shadow-md scale-[1.02]' 
@@ -4362,7 +4385,7 @@ export default function AdminConsole() {
 
                     {/* 4. Suspended Users */}
                     <div 
-                        onClick={() => { setUserSearchTerm('Suspended'); showToast(`Filtered: Showing ${suspendedUsersCount} suspended accounts`); }}
+                        onClick={() => { if (userSearchTerm === 'Suspended') { setUserSearchTerm(''); showToast(`Showing all ${usersList.length} registered employees`); } else { setUserSearchTerm('Suspended'); showToast(`Filtered: Showing ${suspendedUsersCount} suspended accounts`); } }}
                         className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
                             userSearchTerm === 'Suspended'
                                 ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
@@ -4819,10 +4842,19 @@ export default function AdminConsole() {
                                                 <td className="px-2 py-2">
                                                     <button
                                                         onClick={() => handleOpenPostPreview(r)}
-                                                        className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:underline cursor-pointer"
+                                                        className={`group inline-flex items-center gap-1.5 font-bold hover:underline cursor-pointer transition-colors text-left text-xs whitespace-nowrap ${getContentTypeConfig(r.contentType).textColor} ${getContentTypeConfig(r.contentType).hoverColor}`}
                                                         title={`Click to preview ${r.contentType} #${r.contentId}`}
                                                     >
-                                                        <span className="material-symbols-outlined text-[14px]">description</span>
+                                                        {(() => {
+                                                            const typeCfg = getContentTypeConfig(r.contentType);
+                                                            return (
+                                                                <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border shadow-2xs transition-transform group-hover:scale-105 ${typeCfg.badgeBg} ${typeCfg.borderColor}`}>
+                                                                    <span className={`material-symbols-outlined text-[13px] leading-none ${typeCfg.iconColor}`}>
+                                                                        {typeCfg.icon}
+                                                                    </span>
+                                                                </span>
+                                                            );
+                                                        })()}
                                                         <span><HighlightText text={`${r.contentType} #${r.contentId}`} query={searchQuery} /></span>
                                                     </button>
                                                 </td>
@@ -5135,16 +5167,16 @@ export default function AdminConsole() {
                                                                     {u.isActive ? 'person_off' : 'person_check'}
                                                                 </span>
                                                             </button>
-                                                            {isSysAdmin && (
+                                                            {/* Delete User button removed per security policy
                                                                 <button
-                                                                    onClick={() => handleDeleteUser(u)}
+                                                                    onClick={() => {}}
                                                                     className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-500/10 text-red-600 hover:bg-red-600 hover:text-white transition-colors cursor-pointer"
                                                                     title="Delete User"
                                                                     aria-label="Delete User"
                                                                 >
                                                                     <span className="material-symbols-outlined text-[17px]">delete</span>
                                                                 </button>
-                                                            )}
+                                                            */}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -8652,7 +8684,7 @@ export default function AdminConsole() {
                                             icon: 'badge',
                                             badge: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
                                             title: 'HR Admin (HR Governance)',
-                                            desc: 'Manage departments, broadcast announcements, HR analytics, and job postings.'
+                                            desc: 'Manage departments, broadcast announcements, analytics, and job postings.'
                                         },
                                         {
                                             name: 'System Admin',
@@ -8789,7 +8821,19 @@ export default function AdminConsole() {
                                 </div>
                                 <div>
                                     <p className="text-slate-400 font-semibold text-[11px]">Target Content</p>
-                                    <p className="font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{previewReport.contentType} #{previewReport.contentId}</p>
+                                    {(() => {
+                                        const typeCfg = getContentTypeConfig(previewReport.contentType);
+                                        return (
+                                            <div className={`flex items-center gap-1.5 font-bold mt-1 text-xs ${typeCfg.textColor}`}>
+                                                <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border shadow-2xs ${typeCfg.badgeBg} ${typeCfg.borderColor}`}>
+                                                    <span className={`material-symbols-outlined text-[13px] leading-none ${typeCfg.iconColor}`}>
+                                                        {typeCfg.icon}
+                                                    </span>
+                                                </span>
+                                                <span>{previewReport.contentType || 'Content'} #{previewReport.contentId}</span>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 
@@ -9159,7 +9203,16 @@ export default function AdminConsole() {
                                 </div>
                             ) : (
                                 <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-center space-y-2">
-                                    <span className="material-symbols-outlined text-3xl text-slate-400">article</span>
+                                    {(() => {
+                                        const typeCfg = getContentTypeConfig(previewReport.contentType);
+                                        return (
+                                            <div className={`w-12 h-12 rounded-xl mx-auto flex items-center justify-center border shadow-2xs ${typeCfg.badgeBg} ${typeCfg.borderColor}`}>
+                                                <span className={`material-symbols-outlined text-2xl ${typeCfg.iconColor}`}>
+                                                    {typeCfg.icon}
+                                                </span>
+                                            </div>
+                                        );
+                                    })()}
                                     <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
                                         {previewReport.contentType} #{previewReport.contentId}
                                     </p>
@@ -9764,7 +9817,7 @@ export default function AdminConsole() {
                                     {(selectedUserDetailsUser.roleName || getUserAssignedRole(selectedUserDetailsUser)).includes('System')
                                         ? '🛡️ Full System Admin: Complete governance authority over user accounts, audit trails, community moderation, and platform parameters.'
                                         : (selectedUserDetailsUser.roleName || getUserAssignedRole(selectedUserDetailsUser)).includes('HR')
-                                        ? '🪪 HR Admin: Authorized for organization-wide Org community assignments, HR analytics dashboards, and job postings.'
+                                        ? '🪪 HR Admin: Authorized for organization-wide Org community assignments, analytics dashboards, and job postings.'
                                         : (selectedUserDetailsUser.roleName || getUserAssignedRole(selectedUserDetailsUser)).includes('Community')
                                         ? '👥 Community Admin: Authorized for content moderation, pinned discussions, user approvals, and channel safety enforcement.'
                                         : '👤 Standard Employee: Access to feed posting, media channels, communities collaboration, and karma rewards.'}

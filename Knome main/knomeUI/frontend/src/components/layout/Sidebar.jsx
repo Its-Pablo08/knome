@@ -80,6 +80,9 @@ export default function Sidebar() {
 
     useEffect(() => {
         const handleMsgUpdate = (e) => {
+            if (e && e.key && !e.key.startsWith('knome_unread_messages') && !e.key.startsWith('knome_direct_messages')) {
+                return;
+            }
             if (e?.detail?.unreadCount !== undefined) {
                 setUnreadMessages(e.detail.unreadCount);
             } else {
@@ -121,7 +124,7 @@ export default function Sidebar() {
         navItems.push({ to: '/admin-console', icon: 'admin_panel_settings', label: 'Admin Console', color: '#f43f5e' });
     }
     if (isHrOrSysAdmin) {
-        navItems.push({ to: '/hr-analytics', icon: 'bar_chart', label: 'HR Analytics', color: '#ef4444' });
+        navItems.push({ to: '/analytics', icon: 'bar_chart', label: 'Analytics', color: '#ef4444', matchPaths: ['/analytics', '/hr-analytics'] });
     }
 
     const allQuickLinks = [

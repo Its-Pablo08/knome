@@ -15,9 +15,11 @@ export default function HotPostsWidget() {
     const [hotPosts, setHotPosts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    const fetchHotPosts = async () => {
+    const fetchHotPosts = async (isSilent = false) => {
         try {
-            setIsLoading(true);
+            if (!isSilent && hotPosts.length === 0) {
+                setIsLoading(true);
+            }
             const data = await dashboardApi.getHotFeed(timeWindow, 5);
             
             if (data && Array.isArray(data)) {
@@ -30,13 +32,18 @@ export default function HotPostsWidget() {
                     score: p.hotScore || 0,
                     isRecent: (new Date() - new Date(p.publishedDate)) < 86400000, // < 24h
                 }));
-                setHotPosts(ranked);
+                setHotPosts(prev => {
+                    if (prev.length === ranked.length && prev.every((p, i) => p.id === ranked[i].id && p.score === ranked[i].score && p.title === ranked[i].title)) {
+                        return prev;
+                    }
+                    return ranked;
+                });
             } else {
                 setHotPosts([]);
             }
         } catch (error) {
             console.error('Failed to fetch hot posts:', error);
-            setHotPosts([]);
+            if (hotPosts.length === 0) setHotPosts([]);
         } finally {
             setIsLoading(false);
         }
@@ -63,15 +70,21 @@ export default function HotPostsWidget() {
     };
 
     useEffect(() => {
-        fetchHotPosts();
+        fetchHotPosts(hotPosts.length > 0);
 
         // Listen for post creation events to update Hot Posts dynamically!
-        const handleRefresh = () => fetchHotPosts();
+        const handleRefresh = () => fetchHotPosts(true);
+        const handleStorage = (e) => {
+            if (e && e.key && !e.key.startsWith('knome_local_posts') && !e.key.startsWith('knome_deleted_post_ids')) {
+                return;
+            }
+            fetchHotPosts(true);
+        };
         window.addEventListener('post-created', handleRefresh);
-        window.addEventListener('storage', handleRefresh);
+        window.addEventListener('storage', handleStorage);
         return () => {
             window.removeEventListener('post-created', handleRefresh);
-            window.removeEventListener('storage', handleRefresh);
+            window.removeEventListener('storage', handleStorage);
         };
     }, [timeWindow]);
 
