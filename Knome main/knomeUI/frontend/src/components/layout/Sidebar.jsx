@@ -367,7 +367,7 @@ export default function Sidebar() {
                 </Link>
 
                 {/* Center Create Post Floating Action Button */}
-                {currentUser?.role !== 'SYSADM' && isPostsEnabled && (
+                {isPostsEnabled && (
                     <button
                         onClick={openPostModal}
                         className="w-11 h-11 -mt-4 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-500 to-pink-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/35 active:scale-95 transition-transform cursor-pointer"

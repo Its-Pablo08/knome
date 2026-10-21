@@ -4,6 +4,18 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useUser, getUserStatusConfig, deduplicateMembers, roleNameToCode } from '../components/contexts/UserContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
 import { useToast } from '../components/contexts/ToastContext';
+import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, communitiesApi, mediaApi, clipsApi, settingsApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
+import { apiClient } from '../utils/apiClient';
+import * as XLSX from 'xlsx';
+import useScrollLoading from '../hooks/useScrollLoading';
+import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
+import SuspendUserModal from '../components/modals/SuspendUserModal';
+import CreateCommunityModal from '../components/modals/CreateCommunityModal';
+import HighlightText from '../components/ui/HighlightText';
+import { addRestrictedWord } from '../utils/restrictedWords';
+import { getSystemConfig, saveSystemConfig, DEFAULT_SYSTEM_CONFIG } from '../utils/systemConfig';
+import { getContentTypeConfig } from '../utils/contentTypeConfig';
+import ContentTypeBadge from '../components/ui/ContentTypeBadge';
 
 const localRoleMap = {
     'Employee': 'EMP',
@@ -14,9 +26,9 @@ const localRoleMap = {
     'System Administrator': 'SYSADM',
     'System Admin': 'SYSADM'
 };
-import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, communitiesApi, mediaApi, clipsApi, settingsApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
-import { apiClient } from '../utils/apiClient';
-import * as XLSX from 'xlsx';
+
+
+
 
 const formatCommunityType = (type) => {
     const t = String(type || '').trim().toLowerCase();
@@ -24,15 +36,15 @@ const formatCommunityType = (type) => {
     if (t.includes('private')) return 'Private';
     return 'Public';
 };
-import useScrollLoading from '../hooks/useScrollLoading';
-import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
-import SuspendUserModal from '../components/modals/SuspendUserModal';
-import CreateCommunityModal from '../components/modals/CreateCommunityModal';
-import HighlightText from '../components/ui/HighlightText';
-import { addRestrictedWord } from '../utils/restrictedWords';
-import { getSystemConfig, saveSystemConfig, DEFAULT_SYSTEM_CONFIG } from '../utils/systemConfig';
-import { getContentTypeConfig } from '../utils/contentTypeConfig';
-import ContentTypeBadge from '../components/ui/ContentTypeBadge';
+
+
+
+
+
+
+
+
+
 
 // Helper to provide realistic reported post content if live API call returns empty/404
 const getFallbackPostContent = (report) => {

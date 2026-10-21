@@ -239,11 +239,16 @@ export default function Articles() {
 
     const handleTagKeyDown = (e) => {
         if (e.key === 'Enter' && tagInput.trim() !== '') {
-            if (!tags.includes(tagInput.trim())) {
-                setTags([...tags, tagInput.trim()]);
-            }
-            setTagInput('');
             e.preventDefault();
+            const newTags = tagInput
+                .split(/[\s,;]+/)
+                .map(t => t.trim())
+                .filter(Boolean)
+                .map(t => t.length > 50 ? t.slice(0, 50) : t);
+            
+            const merged = Array.from(new Set([...tags, ...newTags]));
+            setTags(merged);
+            setTagInput('');
         }
     };
 
@@ -541,11 +546,18 @@ export default function Articles() {
         
         let finalTags = [...tags];
         if (tagInput.trim()) {
-            finalTags = [...finalTags, ...tagInput.split(',').map(t => t.trim()).filter(Boolean)];
-            finalTags = [...new Set(finalTags)];
+            const extra = tagInput
+                .split(/[\s,;]+/)
+                .map(t => t.trim())
+                .filter(Boolean)
+                .map(t => t.length > 50 ? t.slice(0, 50) : t);
+            finalTags = [...finalTags, ...extra];
         }
+        finalTags = Array.from(new Set(finalTags.map(t => t.trim()).filter(Boolean).map(t => t.length > 50 ? t.slice(0, 50) : t)));
 
-        const resolvedAttachments = attachments.map(a => a.backendUrl || a.url).filter(url => !url.startsWith('blob:'));
+        const resolvedAttachments = attachments
+            .map(a => a.backendUrl || a.url)
+            .filter(url => Boolean(url) && typeof url === 'string' && !url.startsWith('blob:'));
 
         const finalContentHtml = cleanHtml.trim() || `<p>${editorText}</p>`;
 
@@ -707,15 +719,13 @@ export default function Articles() {
 
                         {/* Action Right */}
                         <div className="relative z-10 shrink-0 flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
-                            {currentUser?.role !== 'SYSADM' && (
-                                <button 
-                                    onClick={() => setViewMode('create')}
-                                    className="w-full sm:w-auto px-6 py-3 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-700 transition-colors shadow-lg shadow-sky-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                                >
-                                    <span className="material-symbols-outlined text-[20px]">edit_document</span>
-                                    Write Article
-                                </button>
-                            )}
+                            <button 
+                                onClick={() => setViewMode('create')}
+                                className="w-full sm:w-auto px-6 py-3 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-700 transition-colors shadow-lg shadow-sky-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">edit_document</span>
+                                Write Article
+                            </button>
                         </div>
                     </div>
 

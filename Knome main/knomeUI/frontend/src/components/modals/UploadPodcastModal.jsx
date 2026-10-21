@@ -12,11 +12,10 @@ const ALLOWED_EXTENSIONS = ['.mp3', '.wav', '.aac', '.ogg', '.m4a', '.webm', '.f
 export default function UploadPodcastModal({ isOpen, onClose }) {
     const { currentUser } = useUser();
     const { addToast } = useToast();
-    const isCurrentUserAdmin = ['SYSADM'].includes(currentUser?.role) ||
+    const isCurrentUserAdmin = ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
         currentUser?.roleCode === 'SYSADM' ||
-        ['System Administrator', 'System Admin'].includes(currentUser?.roleName) ||
-        currentUser?.role === 'System Administrator' ||
-        currentUser?.role === 'System Admin';
+        ['System Administrator', 'System Admin', 'HR Administrator', 'Community Administrator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r || '').toUpperCase())));
 
     const [tab, setTab] = useState('upload');
     const [isRecording, setIsRecording] = useState(false);

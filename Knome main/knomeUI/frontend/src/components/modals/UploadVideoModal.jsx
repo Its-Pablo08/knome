@@ -28,8 +28,9 @@ const dataUrlToFile = (dataUrl, filename = 'thumbnail.jpg') => {
 export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
     const { currentUser } = useUser();
     const { addToast } = useToast();
-    const isCurrentUserAdmin = ['SYSADM', 'CADM', 'HRADM'].includes(currentUser?.role) ||
-        ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin'].includes(currentUser?.roleName);
+    const isCurrentUserAdmin = ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r || '').toUpperCase())));
 
     const [sourceTab, setSourceTab] = useState('direct');
     const [title, setTitle] = useState('');

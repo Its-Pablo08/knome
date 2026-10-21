@@ -35,14 +35,14 @@ public class PostArticleProfile : Profile
             .ForMember(dest => dest.AuthorDesignation, opt => opt.MapFrom(src => src.AuthorUser != null ? src.AuthorUser.Designation : null))
             .ForMember(dest => dest.AuthorProfilePhotoUrl, opt => opt.MapFrom(src => src.AuthorUser != null ? src.AuthorUser.ProfilePhotoUrl : null))
             .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.Name : string.Empty))
-            .ForMember(dest => dest.Tags, opt => opt.MapFrom(src => src.ArticleTags.Select(t => t.Tag).ToList()))
-            .ForMember(dest => dest.AttachmentUrls, opt => opt.MapFrom(src => src.ArticleAttachments.Select(pa => pa.FileUrl).ToList()))
-            .ForMember(dest => dest.Attachments, opt => opt.MapFrom(src => src.ArticleAttachments))
+            .ForMember(dest => dest.Tags, opt => opt.MapFrom(src => src.ArticleTags != null ? src.ArticleTags.Select(t => t.Tag).ToList() : new List<string>()))
+            .ForMember(dest => dest.AttachmentUrls, opt => opt.MapFrom(src => src.ArticleAttachments != null ? src.ArticleAttachments.Select(pa => pa.FileUrl).ToList() : new List<string>()))
+            .ForMember(dest => dest.Attachments, opt => opt.MapFrom(src => src.ArticleAttachments != null ? src.ArticleAttachments : new List<ArticleAttachment>()))
             .ForMember(dest => dest.VersionsCount, opt => opt.MapFrom(src => src.ArticleVersions != null ? src.ArticleVersions.Count : 0))
             .ForMember(dest => dest.EngagementSummary, opt => opt.Ignore());
 
         CreateMap<Article, ArticleDetailDto>()
             .IncludeBase<Article, ArticleDto>()
-            .ForMember(dest => dest.Versions, opt => opt.MapFrom(src => src.ArticleVersions.OrderByDescending(v => v.EditedDate)));
+            .ForMember(dest => dest.Versions, opt => opt.MapFrom(src => src.ArticleVersions != null ? src.ArticleVersions.OrderByDescending(v => v.EditedDate).ToList() : new List<ArticleVersion>()));
     }
 }

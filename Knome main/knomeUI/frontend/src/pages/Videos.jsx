@@ -1617,13 +1617,11 @@ export default function Videos() {
                             <span className="material-symbols-outlined text-[18px]">playlist_add</span>
                             Create Series
                         </button>
-                        {currentUser?.role !== 'SYSADM' && (
-                            <button onClick={() => setIsUploadOpen(true)}
-                                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-red-600/30 transition-all cursor-pointer active:scale-95">
-                                <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
-                                Upload Video
-                            </button>
-                        )}
+                        <button onClick={() => setIsUploadOpen(true)}
+                            className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-red-600/30 transition-all cursor-pointer active:scale-95">
+                            <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
+                            Upload Video
+                        </button>
                     </div>
                 </div>
 

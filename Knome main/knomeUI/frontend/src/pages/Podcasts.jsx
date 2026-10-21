@@ -563,15 +563,13 @@ export default function Podcasts() {
 
                     {/* Action Right */}
                     <div className="relative z-10 shrink-0 flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
-                        {currentUser?.role !== 'SYSADM' && (
-                            <button 
-                                onClick={() => setIsUploadOpen(true)}
-                                className="w-full sm:w-auto px-6 py-3 bg-pink-500 text-white font-bold rounded-xl hover:bg-pink-600 transition-colors shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 cursor-pointer"
-                            >
-                                <span className="material-symbols-outlined text-[20px]">podcasts</span>
-                                Create Podcast
-                            </button>
-                        )}
+                        <button 
+                            onClick={() => setIsUploadOpen(true)}
+                            className="w-full sm:w-auto px-6 py-3 bg-pink-500 text-white font-bold rounded-xl hover:bg-pink-600 transition-colors shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <span className="material-symbols-outlined text-[20px]">podcasts</span>
+                            Create Podcast
+                        </button>
                     </div>
                 </div>
 

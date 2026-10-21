@@ -512,7 +512,7 @@ export default function Dashboard() {
                     )}
 
                     {/* Create Post Composer */}
-                    {currentUser?.role !== 'SYSADM' && (isPostsEnabled || isArticlesEnabled || isVideosEnabled) && (
+                    {(isPostsEnabled || isArticlesEnabled || isVideosEnabled) && (
                         <div className="rounded-2xl overflow-hidden transition-all duration-300 hover:border-indigo-500/30"
                             style={{
                                 background: 'var(--bg-card)',

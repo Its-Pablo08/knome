@@ -27,9 +27,9 @@
 | Capability | EMP | CADM | HRADM | SYSADM |
 | :--- | :---: | :---: | :---: | :---: |
 | **Create / edit personal profile** | ✓ | ✓ | ✓ | ✓ |
-| **Create text / image / video posts** | ✓ | ✓ | ✓ | — |
-| **Publish articles / blogs** | ✓ | ✓ | ✓ | — |
-| **Upload video / podcast** | ✓ | ✓ | ✓ | — |
+| **Create text / image / video posts** | ✓ | ✓ | ✓ | ✓ |
+| **Publish articles / blogs** | ✓ | ✓ | ✓ | ✓ |
+| **Upload video / podcast** | ✓ | ✓ | ✓ | ✓ |
 | **Create community** | ✓ | — | ✓ | ✓ |
 | **Approve community join requests** | — | ✓ | ✓ | ✓ |
 | **Moderate community content** | — | ✓ | ✓ | ✓ |
@@ -38,7 +38,7 @@
 | **View analytics dashboard** | — | ✓ | ✓ | ✓ |
 | **Manage user access & roles** | — | — | — | ✓ |
 | **Configure system settings** | — | — | — | ✓ |
-| **Earn / view Karma Points** | ✓ | ✓ | ✓ | — |
+| **Earn / view Karma Points** | ✓ | ✓ | ✓ | ✓ |
 
 > **Key principle:** Authorization is role-scoped; SYSADM owns access/configuration, while CADM governs community-level operations and HRADM governs HR/platform functions.
 

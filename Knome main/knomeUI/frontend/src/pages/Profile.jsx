@@ -822,19 +822,17 @@ export default function Profile() {
         !['HR Administrator', 'HR Admin', 'Community Administrator', 'Community Admin', 'Employee'].includes(displayUser?.roleName)
     );
 
-    const tabs = isSysAdmin 
-        ? ['About', 'Communities', 'Network'] 
-        : [
-            'About',
-            ...(isPostsEnabled ? ['Posts'] : []),
-            ...(isClipsEnabled ? ['Clips'] : []),
-            ...(isArticlesEnabled ? ['Articles'] : []),
-            ...(isVideosEnabled ? ['Videos'] : []),
-            ...(isPodcastsEnabled ? ['Audio'] : []),
-            'Communities',
-            'Network',
-            'Karma'
-          ];
+    const tabs = [
+        'About',
+        ...(isPostsEnabled ? ['Posts'] : []),
+        ...(isClipsEnabled ? ['Clips'] : []),
+        ...(isArticlesEnabled ? ['Articles'] : []),
+        ...(isVideosEnabled ? ['Videos'] : []),
+        ...(isPodcastsEnabled ? ['Audio'] : []),
+        'Communities',
+        'Network',
+        ...(!isSysAdmin ? ['Karma'] : [])
+    ];
 
     const avatarSource = resolveImageUrl(displayUser?.avatar || displayUser?.profilePhotoUrl, displayUser?.name || displayUser?.fullName);
 
@@ -1146,13 +1144,11 @@ export default function Profile() {
                         </div>
                     )}
                     {/* Interactive Stats Row */}
-                    <div className={`grid ${isSysAdmin ? 'grid-cols-2 md:grid-cols-4' : (isOwnProfile ? 'grid-cols-3 md:grid-cols-5' : 'grid-cols-3 md:grid-cols-6')} gap-4 py-6 border-t border-slate-100 dark:border-slate-800/50 mt-5`}>
-                        {!isSysAdmin && (
-                            <button onClick={() => setActiveTab('Posts')} className="text-center group cursor-pointer transition-transform hover:scale-105">
-                                <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-br from-indigo-500 to-purple-500">{stats.posts}</p>
-                                <p className="text-slate-500 dark:text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1 group-hover:text-indigo-500 transition-colors">Posts</p>
-                            </button>
-                        )}
+                    <div className={`grid ${!isSysAdmin ? (isOwnProfile ? 'grid-cols-3 md:grid-cols-5' : 'grid-cols-3 md:grid-cols-6') : (isOwnProfile ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3 md:grid-cols-5')} gap-4 py-6 border-t border-slate-100 dark:border-slate-800/50 mt-5`}>
+                        <button onClick={() => setActiveTab('Posts')} className="text-center group cursor-pointer transition-transform hover:scale-105">
+                            <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-br from-indigo-500 to-purple-500">{stats.posts}</p>
+                            <p className="text-slate-500 dark:text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1 group-hover:text-indigo-500 transition-colors">Posts</p>
+                        </button>
                         <button onClick={() => { setActiveTab('Network'); setNetworkFilter('Followers'); }} className="text-center border-l border-slate-100 dark:border-slate-800/50 group cursor-pointer transition-transform hover:scale-105">
                             <p className="text-2xl font-black text-slate-900 dark:text-white group-hover:text-indigo-500 transition-colors">{stats.followers}</p>
                             <p className="text-slate-500 dark:text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1 group-hover:text-indigo-500 transition-colors">Followers</p>

@@ -128,12 +128,17 @@ public class ArticleRepository : IArticleRepository
         _db.Articles.Add(article);
         await _db.SaveChangesAsync();
 
-        foreach (var t in tags.Distinct())
+        var normalizedTags = (tags ?? new List<string>())
+            .SelectMany(t => t.Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+            .Select(t => t.Trim())
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t.Length > 50 ? t.Substring(0, 50) : t)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var t in normalizedTags)
         {
-            if (!string.IsNullOrWhiteSpace(t))
-            {
-                _db.ArticleTags.Add(new ArticleTag { ArticleId = article.ArticleId, Tag = t.Trim() });
-            }
+            _db.ArticleTags.Add(new ArticleTag { ArticleId = article.ArticleId, Tag = t });
         }
 
         foreach (var url in attachmentUrls)
@@ -161,12 +166,17 @@ public class ArticleRepository : IArticleRepository
         var existingTags = await _db.ArticleTags.Where(at => at.ArticleId == article.ArticleId).ToListAsync();
         _db.ArticleTags.RemoveRange(existingTags);
 
-        foreach (var t in tags.Distinct())
+        var normalizedTags = (tags ?? new List<string>())
+            .SelectMany(t => t.Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+            .Select(t => t.Trim())
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t.Length > 50 ? t.Substring(0, 50) : t)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var t in normalizedTags)
         {
-            if (!string.IsNullOrWhiteSpace(t))
-            {
-                _db.ArticleTags.Add(new ArticleTag { ArticleId = article.ArticleId, Tag = t.Trim() });
-            }
+            _db.ArticleTags.Add(new ArticleTag { ArticleId = article.ArticleId, Tag = t });
         }
 
         // Update attachments

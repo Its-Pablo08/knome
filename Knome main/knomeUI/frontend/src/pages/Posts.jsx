@@ -333,51 +333,47 @@ export default function Posts() {
 
                 {/* Action Right */}
                 <div className="relative z-10 shrink-0 flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
-                    {currentUser?.role !== 'SYSADM' && (
-                        <>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setSelectedTag(selectedTag === '📝 Drafts' ? 'All' : '📝 Drafts');
-                                    setTimeout(() => {
-                                        document.getElementById('posts-feed-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                    }, 50);
-                                }}
-                                className={`w-full sm:w-auto px-5 py-3 font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer border active:scale-95 shadow-sm ${
-                                    selectedTag === '📝 Drafts'
-                                        ? 'bg-slate-900 text-white border-slate-900 shadow-md dark:bg-slate-700 dark:border-slate-600'
-                                        : 'bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-slate-300 backdrop-blur-xs'
-                                }`}
-                                title="View all saved drafts"
-                            >
-                                <span className={`material-symbols-outlined text-[20px] ${selectedTag === '📝 Drafts' ? 'text-amber-400' : 'text-amber-500'}`}>
-                                    draft
-                                </span>
-                                <span>Drafts</span>
-                                {authorDraftCount > 0 && (
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-black transition-colors ${
-                                        selectedTag === '📝 Drafts'
-                                            ? 'bg-amber-400 text-slate-950'
-                                            : 'bg-amber-500 text-white'
-                                    }`}>
-                                        {authorDraftCount}
-                                    </span>
-                                )}
-                            </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setSelectedTag(selectedTag === '📝 Drafts' ? 'All' : '📝 Drafts');
+                            setTimeout(() => {
+                                document.getElementById('posts-feed-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }, 50);
+                        }}
+                        className={`w-full sm:w-auto px-5 py-3 font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer border active:scale-95 shadow-sm ${
+                            selectedTag === '📝 Drafts'
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-md dark:bg-slate-700 dark:border-slate-600'
+                                : 'bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-slate-300 backdrop-blur-xs'
+                        }`}
+                        title="View all saved drafts"
+                    >
+                        <span className={`material-symbols-outlined text-[20px] ${selectedTag === '📝 Drafts' ? 'text-amber-400' : 'text-amber-500'}`}>
+                            draft
+                        </span>
+                        <span>Drafts</span>
+                        {authorDraftCount > 0 && (
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-black transition-colors ${
+                                selectedTag === '📝 Drafts'
+                                    ? 'bg-amber-400 text-slate-950'
+                                    : 'bg-amber-500 text-white'
+                            }`}>
+                                {authorDraftCount}
+                            </span>
+                        )}
+                    </button>
 
-                            <button 
-                                type="button"
-                                onClick={() => {
-                                    setDraftToEdit(null);
-                                    setIsCreatePostOpen(true);
-                                }}
-                                className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                            >
-                                <span className="material-symbols-outlined text-[20px]">edit_square</span>
-                                Write Post
-                            </button>
-                        </>
-                    )}
+                    <button 
+                        type="button"
+                        onClick={() => {
+                            setDraftToEdit(null);
+                            setIsCreatePostOpen(true);
+                        }}
+                        className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">edit_square</span>
+                        Write Post
+                    </button>
                 </div>
             </div>
 
@@ -561,18 +557,16 @@ export default function Posts() {
                                         ? 'You do not have any posts waiting to be published.'
                                         : 'Try adjusting your search criteria or tags filter.')}
                             </p>
-                            {currentUser?.role !== 'SYSADM' && (
-                                <button
-                                    onClick={() => {
-                                        setDraftToEdit(null);
-                                        setIsCreatePostOpen(true);
-                                    }}
-                                    className="mt-2 px-5 py-2 font-bold text-xs rounded-xl bg-indigo-500 text-white hover:bg-indigo-600 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-                                >
-                                    <span className="material-symbols-outlined text-[16px]">add</span>
-                                    {selectedTag === '⏰ Scheduled' ? 'Schedule a Post' : 'Create First Post'}
-                                </button>
-                            )}
+                            <button
+                                onClick={() => {
+                                    setDraftToEdit(null);
+                                    setIsCreatePostOpen(true);
+                                }}
+                                className="mt-2 px-5 py-2 font-bold text-xs rounded-xl bg-indigo-500 text-white hover:bg-indigo-600 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">add</span>
+                                {selectedTag === '⏰ Scheduled' ? 'Schedule a Post' : 'Create First Post'}
+                            </button>
                         </div>
                     )}
                 </main>
