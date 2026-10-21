@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Knome.API.Constants;
 using Knome.API.Exceptions;
 using Knome.API.Interfaces;
 using Knome.API.Responses;
@@ -251,6 +252,7 @@ public class MediaController : KnomeControllerBase
         return Ok(ApiResponse<object>.SuccessResponse(201, "Media submitted for approval.", item));
     }
 
+    [Authorize(Roles = $"{Roles.Moderator},{Roles.SystemAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin")]
     [HttpDelete("pending/{id}")]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
     public IActionResult RemovePendingMedia(string id)

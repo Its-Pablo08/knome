@@ -263,7 +263,7 @@ public class InteractionController : KnomeControllerBase
         return CreatedAtAction(nameof(GetPendingReports), new { }, ApiResponse<ModerationReportDto>.SuccessResponse(201, "Content reported successfully.", report));
     }
 
-    [Authorize(Roles = $"{Roles.CommunityAdmin},{Roles.HRAdmin},{Roles.SystemAdmin}")]
+    [Authorize(Roles = $"{Roles.Moderator},{Roles.CommunityAdmin},{Roles.SystemAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin")]
     [HttpGet("reports")]
     [ProducesResponseType(typeof(ApiResponse<List<ModerationReportDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetReports([FromQuery] string? status = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 100)
@@ -272,7 +272,7 @@ public class InteractionController : KnomeControllerBase
         return Ok(ApiResponse<List<ModerationReportDto>>.SuccessResponse(200, "Moderation reports retrieved successfully.", reports));
     }
 
-    [Authorize(Roles = $"{Roles.CommunityAdmin},{Roles.HRAdmin},{Roles.SystemAdmin}")]
+    [Authorize(Roles = $"{Roles.Moderator},{Roles.CommunityAdmin},{Roles.SystemAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin")]
     [HttpGet("reports/pending")]
     [ProducesResponseType(typeof(ApiResponse<List<ModerationReportDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPendingReports([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
@@ -281,7 +281,7 @@ public class InteractionController : KnomeControllerBase
         return Ok(ApiResponse<List<ModerationReportDto>>.SuccessResponse(200, "Pending reports retrieved successfully.", reports));
     }
 
-    [Authorize(Roles = $"{Roles.CommunityAdmin},{Roles.HRAdmin},{Roles.SystemAdmin}")]
+    [Authorize(Roles = $"{Roles.Moderator},{Roles.CommunityAdmin},{Roles.SystemAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin")]
     [HttpPut("reports/{reportId}/resolve")]
     [ProducesResponseType(typeof(ApiResponse<ModerationReportDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ResolveReport(long reportId, [FromBody] ResolveReportDto dto)

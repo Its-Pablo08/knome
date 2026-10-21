@@ -429,6 +429,69 @@ export const ROLE_USER_MANUALS = {
         ]
     },
 
+    moderator: {
+        roleKey: 'moderator',
+        title: 'Moderator Content Safety & Media Approvals Manual',
+        docId: 'MPO-KNOME-SOP-MOD-2026',
+        version: 'v1.0 (2026)',
+        classification: 'Content Moderation & Media Safety SOP',
+        lastUpdated: 'October 2026',
+        executiveSummary: 'This standard operating procedure defines protocols for Knome Content Moderators. It governs investigations of reported posts and comments, remediation actions, author notifications, reporter confidentiality safeguards, and evaluating employee video and podcast submissions before public or departmental distribution.',
+        chapters: [
+            {
+                chapterNumber: 1,
+                title: 'Moderator Mandate & Ethical Standards',
+                icon: 'gavel',
+                summary: 'Principles of impartial moderation, workplace safety, and prompt review turnarounds.',
+                sections: [
+                    {
+                        heading: '1.1 Scope of Authority',
+                        content: 'Moderators are responsible for upholding organizational communication standards across MPOnline. Their authority encompasses reviewing all reported feed posts, articles, and comments, as well as approving or declining multimedia submissions.',
+                        points: [
+                            'Maintain impartiality regardless of author designation or department.',
+                            'Action reports and media approvals within 24 hours of submission.',
+                            'Strictly protect the identity of employees who report violations.'
+                        ]
+                    }
+                ]
+            },
+            {
+                chapterNumber: 2,
+                title: 'Content Moderation Reports Queue',
+                icon: 'report',
+                summary: 'Investigating flagged content, violation reasons, and remediation protocols.',
+                sections: [
+                    {
+                        heading: '2.1 Flagged Content Investigation',
+                        content: 'The Content Moderation tab in the Moderation Console presents all employee-reported items:',
+                        points: [
+                            'Review in Context: Inspect the post, comments, author profile, and reporter remarks.',
+                            'Dismiss Flag: If the item adheres to organizational policy, mark it as reviewed/dismissed.',
+                            'Remove Content: Permanently remove violating posts or comments from all feeds.'
+                        ]
+                    }
+                ]
+            },
+            {
+                chapterNumber: 3,
+                title: 'Media Approvals Queue (Videos & Podcasts)',
+                icon: 'video_library',
+                summary: 'Clearance workflow for employee video tutorials and podcast submissions.',
+                sections: [
+                    {
+                        heading: '3.1 Media Review Protocol',
+                        content: 'When media approval is enforced, submissions queue in the Media Approvals tab:',
+                        points: [
+                            'Preview Media: Watch video or listen to audio to ensure professional appropriateness.',
+                            'Approve: Immediately publishes the media into the public or departmental catalog.',
+                            'Decline: Rejects the submission and optionally provides actionable feedback to the creator.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+
     systemAdmin: {
         roleKey: 'systemAdmin',
         title: 'System Administrator Security & Master Governance Manual',
@@ -470,7 +533,8 @@ export const ROLE_USER_MANUALS = {
                             'Employee: Standard self-service access, content publishing, community participation.',
                             'Community Admin: Channel governance, membership approvals, pinned announcements.',
                             'HR Admin: Talent openings, org broadcasts, community proposal approvals, Analytics.',
-                            'System Admin: Full security authority, account suspensions, moderation queue, audit trail.'
+                            'Moderator: Content moderation flags, reported posts & comments, video & podcast approvals.',
+                            'System Admin: Full security authority, account suspensions, approval policy, audit trail.'
                         ]
                     },
                     {
@@ -503,18 +567,16 @@ export const ROLE_USER_MANUALS = {
             },
             {
                 chapterNumber: 4,
-                title: 'Content Moderation Reports Queue',
-                icon: 'report',
-                summary: 'Investigating flagged content, protecting reporter confidentiality, and remediation actions.',
+                title: 'Platform Approval Policy & Community Clearance',
+                icon: 'verified_user',
+                summary: 'Configuring enterprise approval switches, community creation clearance, and domain governance.',
                 sections: [
                     {
-                        heading: '4.1 Reviewing Flagged Reports',
-                        content: 'The Moderation Queue displays items flagged by employees or automated safety filters:',
+                        heading: '4.1 Content & Community Approval Policy',
+                        content: 'The Approval Policy switch enforces organization-wide pre-publication clearance across media and community creations. When active, creations await review before publishing.',
                         points: [
-                            'Investigate Content: Inspect original post, article, media, or comment in full context.',
-                            'Reporter Identity Confidentiality: Reporter details are strictly segregated to protect reporting employees from workplace retaliation.',
-                            'Dismiss Flag: Mark report as false positive if content adheres to community guidelines.',
-                            'Remove Content: Permanently soft-delete infringing content with an audit notification to the author.'
+                            'Community Approvals: System Administrators inspect and approve or reject proposed communities.',
+                            'Media Delegation: Content moderation flags and media approvals are handled by dedicated Moderators.'
                         ]
                     }
                 ]

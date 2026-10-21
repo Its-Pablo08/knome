@@ -8,7 +8,7 @@ import FloatingMessagesButton from '../widgets/FloatingMessagesButton';
 
 export default function Layout({ children }) {
     const location = useLocation();
-    const isNoSidebarPage = location.pathname.startsWith('/admin-console');
+    const isNoSidebarPage = location.pathname.startsWith('/admin-console') || location.pathname.startsWith('/moderation-console');
     const isMessagesPage = location.pathname.startsWith('/messages') || location.pathname.startsWith('/chat');
     const isClipsPage = location.pathname.startsWith('/clips');
     const isFullScreenPage = isMessagesPage || isClipsPage;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useUser, getUserStatusConfig, deduplicateMembers, roleNameToCode } from '../components/contexts/UserContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
 import { useToast } from '../components/contexts/ToastContext';
@@ -24,7 +24,8 @@ const localRoleMap = {
     'HR Administrator': 'HRADM',
     'HR Admin': 'HRADM',
     'System Administrator': 'SYSADM',
-    'System Admin': 'SYSADM'
+    'System Admin': 'SYSADM',
+    'Moderator': 'MOD'
 };
 
 
@@ -336,17 +337,34 @@ export const renderScoreBadge = (aiScore, reasonCode, snippet) => {
 export default function AdminConsole() {
     const { currentUser, users: contextUsers, updateUserRoleInList, toggleUserActiveStatus, deleteUserFromList, addKarmaPointsToUser, awardRuleKarma } = useUser();
     const navigate = useNavigate();
+    const location = useLocation();
     const confirm = useConfirm();
 
-    // Strict Role-Based Authorization — Admin Console is exclusively for System Administrators
+    // Strict Role-Based Authorization — Console access for System Admins and Content Moderators
     const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
                        ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
                        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMINISTRATOR', 'SYSTEMADMIN', 'SYSTEM ADMIN'].includes(String(r || '').toUpperCase())));
 
-    const isAuthorized = isSysAdmin;
+    const isModerator = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                        ['MODERATOR'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
+                        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r || '').toUpperCase())));
+
+    const isAuthorized = isSysAdmin || isModerator;
+
+    // Synchronize URL path with user role context (/moderation-console for Moderator, /admin-console for SysAdmin)
+    useEffect(() => {
+        if (isModerator && !isSysAdmin && location.pathname === '/admin-console') {
+            navigate('/moderation-console', { replace: true });
+        } else if (isSysAdmin && location.pathname === '/moderation-console') {
+            navigate('/admin-console', { replace: true });
+        }
+    }, [isModerator, isSysAdmin, location.pathname, navigate]);
 
     // Active Navigation Tab & Hierarchical Functional Domain
-    const [activeTab, setActiveTab] = useState('moderation');
+    // Content Moderation & Media Approvals are transferred to Moderator.
+    // If logged in as Moderator, default to 'moderation'.
+    // If logged in as System Admin, default to 'users' (Governance).
+    const [activeTab, setActiveTab] = useState(() => (isModerator && !isSysAdmin) ? 'moderation' : 'users');
     const [approvalSubTab, setApprovalSubTab] = useState('governance'); // 'governance' | 'modules'
     const [lastUpdatedTime, setLastUpdatedTime] = useState(new Date().toLocaleTimeString());
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -356,13 +374,22 @@ export default function AdminConsole() {
         if (['users', 'role_requests'].includes(activeTab)) return 'governance';
         if (['audit', 'serilog', 'analytics'].includes(activeTab)) return 'operations';
         if (['approval_policy', 'moderation', 'media_approvals', 'community_approvals'].includes(activeTab)) return 'moderation';
-        return 'moderation';
-    }, [activeTab]);
+        return (isModerator && !isSysAdmin) ? 'moderation' : 'governance';
+    }, [activeTab, isModerator, isSysAdmin]);
 
     // Switch Domain and Auto-select First Tab in that Domain
     const handleDomainSelect = (domain) => {
+        if (isModerator && !isSysAdmin && domain !== 'moderation') {
+            showToast('Access restricted: Moderators have access strictly to Moderation & Content Safety.', 'warning');
+            return;
+        }
         if (domain === 'moderation') {
-            setActiveTab('moderation');
+            if (isSysAdmin && !isModerator) {
+                // Content Moderation & Media Approvals transferred to Moderator; SysAdmin opens approval policy
+                setActiveTab('approval_policy');
+            } else {
+                setActiveTab('moderation');
+            }
         } else if (domain === 'governance') {
             setActiveTab('users');
         } else if (domain === 'operations') {
@@ -482,6 +509,7 @@ export default function AdminConsole() {
                 const list = Array.isArray(custom) ? custom : [custom];
                 for (const r of list) {
                     const str = String(r).toLowerCase();
+                    if (str.includes('mod')) return 'Moderator';
                     if (str.includes('system') || str.includes('sysadm')) return 'System Admin';
                     if (str.includes('hr') || str.includes('hrad')) return 'HR Admin';
                     if (str.includes('community') || str.includes('cadm')) return 'Community Admin';
@@ -496,6 +524,7 @@ export default function AdminConsole() {
         if (u.roleName) {
             const rName = String(u.roleName).trim();
             const lower = rName.toLowerCase();
+            if (lower.includes('mod')) return 'Moderator';
             if (lower.includes('system') || lower.includes('sysadm')) return 'System Admin';
             if (lower.includes('hr') || lower.includes('hrad')) return 'HR Admin';
             if (lower.includes('community') || lower.includes('cadm')) return 'Community Admin';
@@ -506,6 +535,7 @@ export default function AdminConsole() {
         if (Array.isArray(u.roles) && u.roles.length > 0) {
             for (const r of u.roles) {
                 const str = String(typeof r === 'string' ? r : (r.roleName || '')).toLowerCase();
+                if (str.includes('mod')) return 'Moderator';
                 if (str.includes('system') || str.includes('sysadm')) return 'System Admin';
                 if (str.includes('hr') || str.includes('hrad')) return 'HR Admin';
                 if (str.includes('community') || str.includes('cadm')) return 'Community Admin';
@@ -523,6 +553,7 @@ export default function AdminConsole() {
             );
             if (req && req.status === 'Approved' && req.assignedRoleName) {
                 const str = String(req.assignedRoleName).toLowerCase();
+                if (str.includes('mod')) return 'Moderator';
                 if (str.includes('system') || str.includes('sysadm')) return 'System Admin';
                 if (str.includes('hr') || str.includes('hrad')) return 'HR Admin';
                 if (str.includes('community') || str.includes('cadm')) return 'Community Admin';
@@ -533,6 +564,7 @@ export default function AdminConsole() {
         // 4. Check user context or local role code
         if (u.role) {
             const str = String(u.role).toLowerCase();
+            if (str.includes('mod')) return 'Moderator';
             if (str.includes('sys') || str === 'sysadm') return 'System Admin';
             if (str.includes('hr') || str === 'hradm') return 'HR Admin';
             if (str.includes('com') || str === 'cadm') return 'Community Admin';
@@ -548,6 +580,9 @@ export default function AdminConsole() {
 
     const getRoleBadgeStyle = (roleName) => {
         const r = (roleName || '').toLowerCase();
+        if (r.includes('mod')) {
+            return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 font-black';
+        }
         if (r.includes('system') || r.includes('sysadm')) {
             return 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700/50 font-black';
         }
@@ -1344,14 +1379,40 @@ export default function AdminConsole() {
         }
     };
 
-    // 1. Fetch Moderation Reports from Backend API
+    // 1. Fetch Moderation Reports from Backend API + Local Reports Cache
     const fetchReports = async () => {
         setIsLoadingReports(true);
         try {
-            const res = await interactionsApi.getAllReports();
-            const apiItems = res?.data || (Array.isArray(res) ? res : (res?.items || []));
-            if (Array.isArray(apiItems) && apiItems.length > 0) {
-                const mapped = apiItems.map(r => {
+            let apiItems = [];
+            try {
+                const res = await interactionsApi.getAllReports();
+                apiItems = res?.data || (Array.isArray(res) ? res : (res?.items || []));
+                if (!Array.isArray(apiItems)) apiItems = [];
+            } catch (backendErr) {
+                console.warn("Backend reports fetch notice (falling back to cache/local):", backendErr);
+            }
+
+            // Always load and merge locally submitted reports (from ReportModal / custom content)
+            let localReports = [];
+            try {
+                localReports = JSON.parse(localStorage.getItem('knome_moderation_reports') || '[]');
+                if (!Array.isArray(localReports)) localReports = [];
+            } catch {}
+
+            // Combine backend items and local items, deduplicating by reportId or contentType_contentId
+            const combinedMap = new Map();
+            localReports.forEach(lr => {
+                const key = lr.reportId ? `rep_${lr.reportId}` : `${lr.contentType}_${lr.contentId}`;
+                combinedMap.set(key, lr);
+            });
+            apiItems.forEach(ai => {
+                const key = ai.reportId ? `rep_${ai.reportId}` : `${ai.contentType}_${ai.contentId}`;
+                combinedMap.set(key, ai);
+            });
+
+            const allItems = Array.from(combinedMap.values());
+            if (allItems.length > 0) {
+                const mapped = allItems.map(r => {
                     const scoreInfo = detectReportScore(r.reasonCode, r.postContentSnippet, r.aiScore);
                     const rawReportDate = r.reportedDate ? new Date(r.reportedDate).getTime() : 0;
                     const rawActDate = r.actionDate ? new Date(r.actionDate).getTime() : 0;
@@ -1398,15 +1459,15 @@ export default function AdminConsole() {
                         || '';
 
                     return {
-                        reportId: r.reportId,
+                        reportId: r.reportId || (Date.now() + Math.floor(Math.random() * 1000)),
                         reporterUserId: r.reporterUserId || 0,
                         reporterFullName: r.reporterFullName || `User #${r.reporterUserId}`,
                         reportedUserId: r.reportedUserId || cachedData?.authorUserId || null,
                         reportedUserName: resolvedReportedAuthor,
-                        contentType: r.contentType,
+                        contentType: r.contentType || 'Post',
                         contentId: r.contentId,
                         communityName: r.communityName || 'Engineering & Tech',
-                        reasonCode: r.reasonCode,
+                        reasonCode: r.reasonCode || 'Inappropriate',
                         severity: r.severity || scoreInfo.severity,
                         aiScore: scoreInfo.formattedScore,
                         scoreNum: scoreInfo.scoreNum,
@@ -1415,7 +1476,7 @@ export default function AdminConsole() {
                         moderatorFullName: r.moderatorFullName,
                         actionTaken: r.actionTaken,
                         postContentSnippet: resolvedSnippet,
-                        rawReportedDate: rawReportDate,
+                        rawReportedDate: rawReportDate || Date.now(),
                         rawActionDate: rawActDate,
                         reportedDate: r.reportedDate ? new Date(r.reportedDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
                         actionDate: r.actionDate ? new Date(r.actionDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : null
@@ -1428,7 +1489,14 @@ export default function AdminConsole() {
                 setReports([]);
             }
         } catch (err) {
-            console.error("Failed to load live moderation reports from backend:", err);
+            console.error("Failed to load live moderation reports:", err);
+            try {
+                const fallbackLocal = JSON.parse(localStorage.getItem('knome_moderation_reports') || '[]');
+                if (Array.isArray(fallbackLocal) && fallbackLocal.length > 0) {
+                    setReports(fallbackLocal);
+                    return;
+                }
+            } catch {}
             setReports([]);
         } finally {
             setIsLoadingReports(false);
@@ -2432,6 +2500,7 @@ export default function AdminConsole() {
             'HR Administrator': 'HRADM',
             'Community Admin': 'CADM',
             'Community Administrator': 'CADM',
+            'Moderator': 'MOD',
             'Employee': 'EMP'
         };
 
@@ -2458,6 +2527,21 @@ export default function AdminConsole() {
         const isCurrentUser = (currentUser?.userId && String(currentUser.userId) === String(roleUserId)) || 
                               (currentUser?.id && String(currentUser.id) === String(roleUserId)) ||
                               (currentUser?.employeeId && targetUser?.employeeId && currentUser.employeeId.toUpperCase() === targetUser.employeeId.toUpperCase());
+        
+        try {
+            const overrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+            const targetKeys = [
+                String(roleUserId),
+                targetUser?.userId ? String(targetUser.userId) : null,
+                targetUser?.id ? String(targetUser.id) : null,
+                targetUser?.employeeId ? targetUser.employeeId.toUpperCase() : null,
+                targetUser?.email ? targetUser.email.toLowerCase() : null,
+                isCurrentUser && currentUser?.employeeId ? currentUser.employeeId.toUpperCase() : null
+            ].filter(Boolean);
+            targetKeys.forEach(k => { overrides[k] = rolesToAssign; });
+            localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
+        } catch {}
+
         setIsRoleModalOpen(false);
         showToast(`Role for ${roleUserName} updated to '${primaryRole}'.${isCurrentUser ? ' Your permissions have been updated!' : ''}`);
 
@@ -3365,7 +3449,7 @@ export default function AdminConsole() {
                     </div>
                     <h1 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Access Restricted</h1>
                     <p className="text-slate-500 dark:text-slate-400 text-sm mb-6 leading-relaxed">
-                        This portal is strictly restricted to System Admins. HR Admins and standard users do not have permissions to view or manage content moderation reports.
+                        This console is strictly restricted to System Administrators and Content Moderators. Standard users do not have permissions to access this management console.
                     </p>
                     <Link to="/" className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all">
                         Return to Dashboard
@@ -3413,9 +3497,9 @@ export default function AdminConsole() {
                         <span>/</span>
                         <span 
                             className="hover:text-indigo-600 cursor-pointer transition-colors"
-                            onClick={() => setActiveTab('moderation')}
+                            onClick={() => (isModerator && !isSysAdmin) ? setActiveTab('moderation') : setActiveTab('users')}
                         >
-                            Admin Console
+                            {(isModerator && !isSysAdmin) ? 'Moderation Console' : 'Admin Console'}
                         </span>
                         <span>/</span>
                         <span 
@@ -3441,7 +3525,7 @@ export default function AdminConsole() {
                     </div>
                     <div className="flex items-center gap-2.5 flex-wrap">
                         <h1 className="text-lg md:text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                            Admin Console & Moderation
+                            {(isModerator && !isSysAdmin) ? 'Moderation Console & Content Safety' : 'Admin Console & Governance'}
                         </h1>
                         <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase border border-rose-500/20">
                             Enterprise Portal
@@ -3454,27 +3538,17 @@ export default function AdminConsole() {
 
                 {/* Right: Quick Action Controls & Search */}
                 <div className="flex items-center gap-2">
-                    {/* Global Quick Search */}
+                    {/* Quick Search */}
                     <div className="relative hidden lg:block w-48">
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            placeholder="Global Search..."
+                            placeholder="Search..."
                             className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
                         />
                         <span className="material-symbols-outlined absolute right-2 top-1.5 text-slate-400 text-[16px]">search</span>
                     </div>
-
-                    {/* Refresh Button */}
-                    <button
-                        onClick={handleRefreshAll}
-                        title="Refresh Console Data"
-                        className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-all border border-slate-200 dark:border-slate-700 cursor-pointer flex items-center gap-1 text-xs font-bold px-2.5"
-                    >
-                        <span className={`material-symbols-outlined text-[16px] ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`}>refresh</span>
-                        <span className="hidden sm:inline">Refresh</span>
-                    </button>
 
                     {/* Export Dropdown */}
                     <div className="relative">
@@ -3619,7 +3693,7 @@ export default function AdminConsole() {
                                 Moderation & Content Safety
                             </h3>
                             <p className={`text-[10px] sm:text-[11px] truncate ${activeDomain === 'moderation' ? 'text-indigo-100' : 'text-slate-400'}`}>
-                                Reports, Media & Community Approvals
+                                {(isModerator && !isSysAdmin) ? 'Reports & Media Approvals Queue' : (isSysAdmin && !isModerator) ? 'Approval Policies (Moderation transferred to Moderator)' : 'Reports, Media & Community Approvals'}
                             </p>
                         </div>
                     </div>
@@ -3635,11 +3709,19 @@ export default function AdminConsole() {
 
                 {/* Pillar 2: User Governance & Access */}
                 <div 
-                    onClick={() => handleDomainSelect('governance')}
+                    onClick={() => {
+                        if (isModerator && !isSysAdmin) {
+                            showToast('Access restricted: User Governance is restricted to System Administrators.', 'warning');
+                            return;
+                        }
+                        handleDomainSelect('governance');
+                    }}
                     className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
-                        activeDomain === 'governance'
-                            ? 'bg-gradient-to-r from-purple-600 to-indigo-700 text-white border-purple-600 shadow-md shadow-purple-500/20 ring-2 ring-purple-500/30'
-                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:border-purple-400/60 shadow-xs'
+                        isModerator && !isSysAdmin 
+                            ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800'
+                            : activeDomain === 'governance'
+                                ? 'bg-gradient-to-r from-purple-600 to-indigo-700 text-white border-purple-600 shadow-md shadow-purple-500/20 ring-2 ring-purple-500/30'
+                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:border-purple-400/60 shadow-xs'
                     }`}
                 >
                     <div className="flex items-center gap-3 min-w-0">
@@ -3653,7 +3735,9 @@ export default function AdminConsole() {
                                 <span className={`text-[10px] font-black uppercase tracking-wider ${activeDomain === 'governance' ? 'text-purple-200' : 'text-slate-400'}`}>
                                     Domain 2
                                 </span>
-                                {roleRequests.filter(r => r.status === 'Pending').length > 0 && (
+                                {isModerator && !isSysAdmin ? (
+                                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-500">SysAdmin</span>
+                                ) : roleRequests.filter(r => r.status === 'Pending').length > 0 && (
                                     <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black animate-pulse ${
                                         activeDomain === 'governance' ? 'bg-amber-400 text-slate-950' : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
                                     }`}>
@@ -3681,11 +3765,19 @@ export default function AdminConsole() {
 
                 {/* Pillar 3: System Operations & Compliance */}
                 <div 
-                    onClick={() => handleDomainSelect('operations')}
+                    onClick={() => {
+                        if (isModerator && !isSysAdmin) {
+                            showToast('Access restricted: Operations & Compliance are restricted to System Administrators.', 'warning');
+                            return;
+                        }
+                        handleDomainSelect('operations');
+                    }}
                     className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
-                        activeDomain === 'operations'
-                            ? 'bg-gradient-to-r from-cyan-600 to-slate-800 text-white border-cyan-600 shadow-md shadow-cyan-500/20 ring-2 ring-cyan-500/30'
-                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:border-cyan-400/60 shadow-xs'
+                        isModerator && !isSysAdmin 
+                            ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800'
+                            : activeDomain === 'operations'
+                                ? 'bg-gradient-to-r from-cyan-600 to-slate-800 text-white border-cyan-600 shadow-md shadow-cyan-500/20 ring-2 ring-cyan-500/30'
+                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:border-cyan-400/60 shadow-xs'
                     }`}
                 >
                     <div className="flex items-center gap-3 min-w-0">
@@ -3699,7 +3791,9 @@ export default function AdminConsole() {
                                 <span className={`text-[10px] font-black uppercase tracking-wider ${activeDomain === 'operations' ? 'text-cyan-200' : 'text-slate-400'}`}>
                                     Domain 3
                                 </span>
-                                {systemLogCounts.errors > 0 ? (
+                                {isModerator && !isSysAdmin ? (
+                                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-500">SysAdmin</span>
+                                ) : systemLogCounts.errors > 0 ? (
                                     <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
                                         activeDomain === 'operations' ? 'bg-rose-300 text-rose-950' : 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30'
                                     }`}>
@@ -3738,70 +3832,78 @@ export default function AdminConsole() {
                     <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap py-0.5">
                         {activeDomain === 'moderation' && (
                             <>
-                                <button
-                                    onClick={() => setActiveTab('moderation')}
-                                    className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
-                                        activeTab === 'moderation'
-                                            ? 'bg-indigo-600 text-white shadow-xs'
-                                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-[16px]">gavel</span>
-                                    <span>Content Moderation ({reports.length})</span>
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('media_approvals')}
-                                    className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
-                                        activeTab === 'media_approvals'
-                                            ? 'bg-indigo-600 text-white shadow-xs'
-                                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-[16px] text-rose-500">video_library</span>
-                                    <span>Media Approvals ({pendingMediaApprovals.length})</span>
-                                    {pendingMediaApprovals.length > 0 && (
-                                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                                    )}
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('approval_policy')}
-                                    className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
-                                        activeTab === 'approval_policy'
-                                            ? 'bg-rose-600 text-white shadow-xs'
-                                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-[16px] text-rose-500">fact_check</span>
-                                    <span>Approval Policy & Toggle</span>
-                                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
-                                        configState.requireContentAndCommunityApproval !== false
-                                            ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
-                                            : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                                    }`}>
-                                        {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
-                                    </span>
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('community_approvals')}
-                                    className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
-                                        activeTab === 'community_approvals'
-                                            ? 'bg-amber-500 text-white shadow-xs'
-                                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-[16px] text-amber-500">approval</span>
-                                    <span>Community Approval ({pendingCommunityApprovals.length})</span>
-                                    {pendingCommunityApprovals.length > 0 && (
-                                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                                    )}
-                                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
-                                        configState.requireCommunityApproval !== false
-                                            ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
-                                            : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                                    }`}>
-                                        {configState.requireCommunityApproval !== false ? 'ON' : 'OFF'}
-                                    </span>
-                                </button>
+                                {(!isSysAdmin || isModerator) && (
+                                    <>
+                                        <button
+                                            onClick={() => setActiveTab('moderation')}
+                                            className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                activeTab === 'moderation'
+                                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">gavel</span>
+                                            <span>Content Moderation ({reports.length})</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('media_approvals')}
+                                            className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                activeTab === 'media_approvals'
+                                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
+                                        >
+                                            <span className="material-symbols-outlined text-[16px] text-rose-500">video_library</span>
+                                            <span>Media Approvals ({pendingMediaApprovals.length})</span>
+                                            {pendingMediaApprovals.length > 0 && (
+                                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                                            )}
+                                        </button>
+                                    </>
+                                )}
+                                {(!isModerator || isSysAdmin) && (
+                                    <>
+                                        <button
+                                            onClick={() => setActiveTab('approval_policy')}
+                                            className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                activeTab === 'approval_policy'
+                                                    ? 'bg-rose-600 text-white shadow-xs'
+                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
+                                        >
+                                            <span className="material-symbols-outlined text-[16px] text-rose-500">fact_check</span>
+                                            <span>Approval Policy & Toggle</span>
+                                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                                                configState.requireContentAndCommunityApproval !== false
+                                                    ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
+                                                    : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                            }`}>
+                                                {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
+                                            </span>
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('community_approvals')}
+                                            className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                activeTab === 'community_approvals'
+                                                    ? 'bg-amber-500 text-white shadow-xs'
+                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
+                                        >
+                                            <span className="material-symbols-outlined text-[16px] text-amber-500">approval</span>
+                                            <span>Community Approval ({pendingCommunityApprovals.length})</span>
+                                            {pendingCommunityApprovals.length > 0 && (
+                                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                            )}
+                                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                                                configState.requireCommunityApproval !== false
+                                                    ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                                                    : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                            }`}>
+                                                {configState.requireCommunityApproval !== false ? 'ON' : 'OFF'}
+                                            </span>
+                                        </button>
+                                    </>
+                                )}
                             </>
                         )}
 
@@ -3885,7 +3987,7 @@ export default function AdminConsole() {
             {/* ─── HIERARCHY TIER 3: CONTEXTUAL FILTER & ACTION STRIP (STRICTLY SCOPED TO ACTIVE MODULE) ─── */}
 
             {/* TAB 1: CONTENT MODERATION FILTERS */}
-            {activeTab === 'moderation' && (
+            {activeTab === 'moderation' && (!isSysAdmin || isModerator) && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-3">
                     {/* 1. All Reports */}
                     <div 
@@ -4002,7 +4104,7 @@ export default function AdminConsole() {
             )}
 
             {/* TAB 2: MEDIA APPROVALS CONTROLS & FILTERS */}
-            {activeTab === 'media_approvals' && (
+            {activeTab === 'media_approvals' && (!isSysAdmin || isModerator) && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
                     {/* 1. All Pending Media */}
                     <div 
@@ -4663,6 +4765,23 @@ export default function AdminConsole() {
 
             {/* ─── TAB 1: CONTENT MODERATION ─── */}
             {activeTab === 'moderation' && (
+                (isSysAdmin && !isModerator) ? (
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center max-w-xl mx-auto my-8 shadow-xs">
+                        <div className="w-14 h-14 bg-amber-500/15 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <span className="material-symbols-outlined text-3xl">gavel</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">Content Moderation Transferred</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                            Content Moderation rights have been transferred to the <strong>Moderator</strong> role. System Administrators no longer have moderation rights.
+                        </p>
+                        <button
+                            onClick={() => { setActivePillar('governance'); setActiveTab('users'); }}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+                        >
+                            Return to User Governance
+                        </button>
+                    </div>
+                ) : (
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden flex flex-col">
                     {/* ─── 4. SINGLE COMPACT FILTERS & BULK ACTIONS TOOLBAR ─── */}
                     <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 flex flex-wrap items-center justify-between gap-2 shrink-0">
@@ -4983,6 +5102,7 @@ export default function AdminConsole() {
                         <ScrollLoadingIndicator isVisible={visibleReportCount < sortedReports.length} text="Loading more moderation reports on scroll..." />
                     </div>
                 </div>
+                )
             )}
 
             {/* ─── TAB 2: USER GOVERNANCE ─── */}
@@ -8078,6 +8198,23 @@ export default function AdminConsole() {
 
             {/* ─── TAB: MEDIA APPROVALS (VIDEOS & PODCASTS) ─── */}
             {activeTab === 'media_approvals' && (
+                (isSysAdmin && !isModerator) ? (
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center max-w-xl mx-auto my-8 shadow-xs">
+                        <div className="w-14 h-14 bg-amber-500/15 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <span className="material-symbols-outlined text-3xl">video_library</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">Media Approvals Transferred</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                            Media Approvals rights have been transferred to the <strong>Moderator</strong> role. System Administrators no longer have media approval rights.
+                        </p>
+                        <button
+                            onClick={() => { setActivePillar('governance'); setActiveTab('approval_policy'); }}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+                        >
+                            Return to Approval Policy
+                        </button>
+                    </div>
+                ) : (
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs p-6 space-y-6">
                     {/* Content & Community Approval Policy Banner directly in Media Approvals */}
                     <div className="p-3.5 bg-gradient-to-r from-rose-50 to-orange-50 dark:from-rose-950/30 dark:to-orange-950/20 rounded-xl border border-rose-200 dark:border-rose-900/50 flex flex-wrap items-center justify-between gap-3 shadow-xs">
@@ -8197,10 +8334,11 @@ export default function AdminConsole() {
                                 <span className="material-symbols-outlined text-[32px]">task_alt</span>
                             </div>
                             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">No {mediaTypeFilter !== 'All' ? mediaTypeFilter : 'Pending'} Media Approvals</h3>
-                            <p className="text-xs text-slate-400 max-w-sm mt-1">All {mediaTypeFilter !== 'All' ? mediaTypeFilter.toLowerCase() : 'submitted podcast and video'} submissions have been reviewed and processed by system admins.</p>
+                            <p className="text-xs text-slate-400 max-w-sm mt-1">All {mediaTypeFilter !== 'All' ? mediaTypeFilter.toLowerCase() : 'submitted podcast and video'} submissions have been reviewed and processed by moderators.</p>
                         </div>
                     )}
                 </div>
+                )
             )}
 
             {/* ─── TAB: COMMUNITY APPROVALS QUEUE (EMPLOYEE SUBMISSIONS AWAITING ADMIN CLEARANCE) ─── */}
@@ -8699,17 +8837,25 @@ export default function AdminConsole() {
                                             desc: 'Manage departments, broadcast announcements, analytics, and job postings.'
                                         },
                                         {
+                                            name: 'Moderator',
+                                            icon: 'gavel',
+                                            badge: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+                                            title: 'Moderator (Content & Media Moderation)',
+                                            desc: 'Review and resolve reported content flags, approve or decline employee video and podcast submissions.'
+                                        },
+                                        {
                                             name: 'System Admin',
                                             icon: 'shield_person',
                                             badge: 'bg-purple-500/15 text-purple-700 dark:text-purple-300',
                                             title: 'System Admin (Full Platform Control)',
-                                            desc: 'Full governance, user administration, security audit logs, and media approvals.'
+                                            desc: 'Full platform governance, user administration, security audit logs, approval policies, and system configuration.'
                                         }
                                     ].map(roleItem => {
                                         const rawRole = selectedRoles[0] || 'Employee';
                                         const currentNormalized = (rawRole === 'HR Administrator' || rawRole === 'HR Admin' || rawRole === 'HRAdmin') ? 'HR Admin'
                                             : (rawRole === 'System Administrator' || rawRole === 'System Admin' || rawRole === 'SystemAdmin') ? 'System Admin'
                                             : (rawRole === 'Community Administrator' || rawRole === 'Community Admin' || rawRole === 'CommunityAdmin') ? 'Community Admin'
+                                            : (rawRole === 'Moderator' || rawRole === 'MOD') ? 'Moderator'
                                             : 'Employee';
                                         const isSelected = currentNormalized === roleItem.name;
                                         return (

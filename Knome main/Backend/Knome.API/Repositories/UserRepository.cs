@@ -155,6 +155,7 @@ public class UserRepository : Repository<Models.User>, IUserRepository
                 var s when s.Equals("HRADM", StringComparison.OrdinalIgnoreCase) => "HR Administrator",
                 var s when s.Equals("Community Administrator", StringComparison.OrdinalIgnoreCase) => "Community Admin",
                 var s when s.Equals("CADM", StringComparison.OrdinalIgnoreCase) => "Community Admin",
+                var s when s.Equals("MOD", StringComparison.OrdinalIgnoreCase) => "Moderator",
                 var s when s.Equals("EMP", StringComparison.OrdinalIgnoreCase) => "Employee",
                 _ => trimmed
             };

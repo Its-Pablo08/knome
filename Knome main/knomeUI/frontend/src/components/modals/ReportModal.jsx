@@ -50,28 +50,33 @@ export default function ReportModal({ isOpen, onClose, targetType = 'Post', targ
                 localStorage.setItem('knome_reported_posts_cache', JSON.stringify(existingCache));
             } catch {}
 
+            // Always persist report locally so it immediately displays in the Moderation Console
+            const newReport = {
+                reportId: Date.now(),
+                reporterUserId: activeReporterUserId,
+                reporterFullName: activeReporterName,
+                contentType: formattedType,
+                contentId: numericId || targetId,
+                reasonCode: selectedCode,
+                details: details || '',
+                status: 'Pending',
+                reportedDate: new Date().toISOString(),
+                reportedUserName: safeTargetName,
+                reportedUserId: targetUserId || null,
+                postContentSnippet: targetContent || details || ''
+            };
+            try {
+                const existing = JSON.parse(localStorage.getItem('knome_moderation_reports') || '[]');
+                const filtered = Array.isArray(existing) ? existing.filter(r => !(r.contentId === (numericId || targetId) && r.contentType === formattedType)) : [];
+                localStorage.setItem('knome_moderation_reports', JSON.stringify([newReport, ...filtered]));
+            } catch {}
+
             if (!isNaN(numericId) && numericId > 0 && !String(targetId).startsWith('yt_')) {
-                await interactionsApi.reportContent(formattedType, numericId, { reasonCode: selectedCode });
-            } else {
-                // For custom / imported content, persist in local moderation reports
-                const newReport = {
-                    reportId: Date.now(),
-                    reporterUserId: activeReporterUserId,
-                    reporterFullName: activeReporterName,
-                    contentType: formattedType,
-                    contentId: targetId,
-                    reasonCode: selectedCode,
-                    details: details || '',
-                    status: 'Pending',
-                    reportedDate: new Date().toISOString(),
-                    reportedUserName: safeTargetName,
-                    reportedUserId: targetUserId || null,
-                    postContentSnippet: targetContent || details || ''
-                };
                 try {
-                    const existing = JSON.parse(localStorage.getItem('knome_moderation_reports') || '[]');
-                    localStorage.setItem('knome_moderation_reports', JSON.stringify([newReport, ...existing]));
-                } catch {}
+                    await interactionsApi.reportContent(formattedType, numericId, { reasonCode: selectedCode });
+                } catch (apiErr) {
+                    console.warn("Backend report API note (saved in local moderation queue):", apiErr);
+                }
             }
 
             setIsSuccess(true);

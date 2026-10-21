@@ -15,6 +15,7 @@ export const roleNameToCode = {
     'HR Admin': 'HRADM',
     'System Administrator': 'SYSADM',
     'System Admin': 'SYSADM',
+    'Moderator': 'MOD',
     'Pending Role Assignment': 'PENDING',
     'PENDING': 'PENDING',
 };
@@ -46,6 +47,9 @@ export const expandRoles = (rolesList) => {
             expanded.add('Community Administrator');
             expanded.add('CADM');
             expanded.add('CommunityAdmin');
+        } else if (upper === 'MOD' || upper === 'MODERATOR') {
+            expanded.add('Moderator');
+            expanded.add('MOD');
         } else if (upper === 'EMP' || upper === 'EMPLOYEE') {
             expanded.add('Employee');
             expanded.add('EMP');
@@ -400,6 +404,7 @@ export const UserProvider = ({ children }) => {
                     const cleanPrimary = (primary === 'System Administrator' || primary === 'SYSADM') ? 'System Admin'
                         : (primary === 'HR Administrator' || primary === 'HRADM') ? 'HR Admin'
                         : (primary === 'Community Administrator' || primary === 'CADM') ? 'Community Admin'
+                        : (primary === 'Moderator' || primary === 'MOD') ? 'Moderator'
                         : primary;
                     const code = roleNameToCode[cleanPrimary] || roleNameToCode[primary] || 'EMP';
                     return { ...u, role: code, roleName: cleanPrimary, roles: expandRoles(customRoles) };
@@ -444,6 +449,7 @@ export const UserProvider = ({ children }) => {
         const roleCodeMap = {
             'System Administrator': 'SYSADM',
             'System Admin': 'SYSADM',
+            'Moderator': 'MOD',
             'HR Administrator': 'HRADM',
             'HR Admin': 'HRADM',
             'Community Admin': 'CADM',
@@ -454,12 +460,44 @@ export const UserProvider = ({ children }) => {
         let derivedRole = localUser.role || 'EMP';
         let derivedRoleName = localUser.roleName || 'Employee';
 
-        if (Array.isArray(profile.roles) && profile.roles.length > 0) {
-            const rolePriority = ['System Admin', 'System Administrator', 'HR Admin', 'HR Administrator', 'Community Admin', 'Community Administrator', 'Employee'];
+        // 0. Check localStorage role overrides first (authoritative user assignments)
+        let customOverride = null;
+        try {
+            const savedOverrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+            const targetKeys = [
+                String(profile.userId || ''),
+                String(localUser.userId || ''),
+                String(localUser.id || ''),
+                (profile.employeeId || localUser.employeeId || '').toUpperCase(),
+                (profile.email || localUser.email || '').toLowerCase()
+            ].filter(Boolean);
+            for (const k of targetKeys) {
+                if (savedOverrides[k]) {
+                    const candidate = Array.isArray(savedOverrides[k]) ? savedOverrides[k] : [savedOverrides[k]];
+                    if (candidate.length > 0) {
+                        customOverride = candidate;
+                        break;
+                    }
+                }
+            }
+        } catch {}
+
+        if (customOverride && customOverride.length > 0) {
+            const primary = customOverride.find(r => r !== 'Employee' && r !== 'EMP') || customOverride[0];
+            const cleanPrimary = (primary === 'System Administrator' || primary === 'SYSADM') ? 'System Admin'
+                : (primary === 'HR Administrator' || primary === 'HRADM') ? 'HR Admin'
+                : (primary === 'Community Administrator' || primary === 'CADM') ? 'Community Admin'
+                : (primary === 'Moderator' || primary === 'MOD') ? 'Moderator'
+                : primary;
+            derivedRoleName = cleanPrimary;
+            derivedRole = roleCodeMap[cleanPrimary] || roleCodeMap[primary] || 'EMP';
+        } else if (Array.isArray(profile.roles) && profile.roles.length > 0) {
+            const rolePriority = ['Moderator', 'System Admin', 'System Administrator', 'HR Admin', 'HR Administrator', 'Community Admin', 'Community Administrator', 'Employee'];
             const highestRole = rolePriority.find(r => profile.roles.includes(r) || (r === 'System Admin' && profile.roles.includes('System Administrator')) || (r === 'HR Admin' && profile.roles.includes('HR Administrator'))) || profile.roles[0];
             const cleanRole = (highestRole === 'System Administrator' || highestRole === 'System Admin') ? 'System Admin'
                 : (highestRole === 'HR Administrator' || highestRole === 'HR Admin') ? 'HR Admin'
                 : (highestRole === 'Community Administrator' || highestRole === 'Community Admin') ? 'Community Admin'
+                : (highestRole === 'Moderator' || highestRole === 'MOD') ? 'Moderator'
                 : highestRole;
             derivedRoleName = cleanRole;
             derivedRole = roleCodeMap[highestRole] || roleCodeMap[cleanRole] || 'EMP';
@@ -480,14 +518,16 @@ export const UserProvider = ({ children }) => {
         // Persist roles into knome_role_overrides so any browser reload retains assigned roles
         try {
             const overrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
-            if (profile.userId) overrides[String(profile.userId)] = singleRoleList;
-            if (resolvedEmpId) overrides[resolvedEmpId.toUpperCase()] = singleRoleList;
-            if (localUser.userId) overrides[String(localUser.userId)] = singleRoleList;
-            if (localUser.id) overrides[String(localUser.id)] = singleRoleList;
-            if (localUser.employeeId) overrides[localUser.employeeId.toUpperCase()] = singleRoleList;
-            if (localUser.email) overrides[localUser.email.toLowerCase()] = singleRoleList;
-            if (profile.email) overrides[profile.email.toLowerCase()] = singleRoleList;
-            localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
+            if (!customOverride) {
+                if (profile.userId) overrides[String(profile.userId)] = singleRoleList;
+                if (resolvedEmpId) overrides[resolvedEmpId.toUpperCase()] = singleRoleList;
+                if (localUser.userId) overrides[String(localUser.userId)] = singleRoleList;
+                if (localUser.id) overrides[String(localUser.id)] = singleRoleList;
+                if (localUser.employeeId) overrides[localUser.employeeId.toUpperCase()] = singleRoleList;
+                if (localUser.email) overrides[localUser.email.toLowerCase()] = singleRoleList;
+                if (profile.email) overrides[profile.email.toLowerCase()] = singleRoleList;
+                localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
+            }
         } catch {}
 
         setUsersList(prev => {
@@ -689,10 +729,28 @@ export const UserProvider = ({ children }) => {
                                     ? resolved 
                                     : (matchedInitial?.name || matchedInitial?.fullName || (rawName && rawName !== 'Employee' ? rawName : (KNOWN_ROSTER_NAMES[empId?.toUpperCase()] || KNOWN_ROSTER_NAMES[String(uId)] || 'Colleague')));
 
-                                const roles = Array.isArray(u.roles) && u.roles.length > 0 
-                                    ? u.roles 
+                                let customOverride = null;
+                                try {
+                                    const savedOverrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+                                    const targetKeys = [String(uId || ''), String(empId || '').toUpperCase()].filter(Boolean);
+                                    for (const k of targetKeys) {
+                                        if (savedOverrides[k]) {
+                                            const candidate = Array.isArray(savedOverrides[k]) ? savedOverrides[k] : [savedOverrides[k]];
+                                            if (candidate.length > 0) { customOverride = candidate; break; }
+                                        }
+                                    }
+                                } catch {}
+
+                                const rawRoles = customOverride || (Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : null);
+                                const roles = rawRoles 
+                                    ? rawRoles 
                                     : [u.roleName || u.role || matchedDetails?.roleName || matchedInitial?.roleName || 'Employee'];
-                                const primaryRole = roles.find(r => r !== 'Employee') || roles[0] || matchedDetails?.roleName || matchedInitial?.roleName || 'Employee';
+                                const rawPrimary = roles.find(r => r !== 'Employee' && r !== 'EMP') || roles[0] || matchedDetails?.roleName || matchedInitial?.roleName || 'Employee';
+                                const primaryRole = (rawPrimary === 'System Administrator' || rawPrimary === 'SYSADM') ? 'System Admin'
+                                    : (rawPrimary === 'HR Administrator' || rawPrimary === 'HRADM') ? 'HR Admin'
+                                    : (rawPrimary === 'Community Administrator' || rawPrimary === 'CADM') ? 'Community Admin'
+                                    : (rawPrimary === 'Moderator' || rawPrimary === 'MOD') ? 'Moderator'
+                                    : rawPrimary;
                                 const roleCode = roleNameToCode[primaryRole] || matchedInitial?.role || 'EMP';
                                 const designation = (matchedDetails?.designation) || u.designation || u.Designation || matchedInitial?.designation || (u.summary ? u.summary.split('|')[0].trim() : '') || 'Staff Member';
                                 const department = rawDept || matchedDetails?.department || matchedInitial?.department || 'General';
@@ -1359,6 +1417,7 @@ export const UserProvider = ({ children }) => {
         const cleanPrimary = (primaryRoleName === 'System Administrator' || primaryRoleName === 'SYSADM') ? 'System Admin'
             : (primaryRoleName === 'HR Administrator' || primaryRoleName === 'HRADM') ? 'HR Admin'
             : (primaryRoleName === 'Community Administrator' || primaryRoleName === 'CADM') ? 'Community Admin'
+            : (primaryRoleName === 'Moderator' || primaryRoleName === 'MOD') ? 'Moderator'
             : primaryRoleName;
         const newRoleCode = roleNameToCode[cleanPrimary] || roleNameToCode[primaryRoleName] || (primaryRoleName === 'Pending Role Assignment' ? 'PENDING' : 'EMP');
         const singleRoleList = [cleanPrimary];
@@ -1624,7 +1683,7 @@ export const UserProvider = ({ children }) => {
      */
     const updateCurrentUserRole = useCallback((newRoleName) => {
         if (!currentUser) return;
-        const targetId = currentUser.userId || currentUser.id;
+        const targetId = currentUser.userId || currentUser.id || currentUser.employeeId;
         updateUserRoleInList(targetId, newRoleName);
     }, [currentUser, updateUserRoleInList]);
 

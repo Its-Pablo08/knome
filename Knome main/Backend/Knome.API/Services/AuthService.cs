@@ -907,6 +907,13 @@ public class AuthService : IAuthService
                 claims.Add(new Claim(ClaimTypes.Role, "CADM"));
                 claims.Add(new Claim("role", "CADM"));
             }
+            else if (rUpper.Contains("MOD"))
+            {
+                claims.Add(new Claim(ClaimTypes.Role, "Moderator"));
+                claims.Add(new Claim("role", "Moderator"));
+                claims.Add(new Claim(ClaimTypes.Role, "MOD"));
+                claims.Add(new Claim("role", "MOD"));
+            }
             else if (rUpper.Contains("EMPLOYEE") || rUpper == "EMP")
             {
                 claims.Add(new Claim(ClaimTypes.Role, "Employee"));

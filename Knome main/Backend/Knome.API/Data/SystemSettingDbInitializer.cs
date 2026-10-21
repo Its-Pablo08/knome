@@ -60,6 +60,12 @@ BEGIN
     INSERT INTO [dbo].[SystemSettings] ([SettingKey], [SettingValue], [Description], [UpdatedDate])
     VALUES ('EnableEmail', 'true', 'Enable outgoing email dispatch and notification services.', SYSUTCDATETIME());
 END
+
+IF NOT EXISTS (SELECT 1 FROM [dbo].[Roles] WHERE [RoleCode] = 'MOD' OR [RoleName] = 'Moderator')
+BEGIN
+    INSERT INTO [dbo].[Roles] ([RoleCode], [RoleName], [Description])
+    VALUES ('MOD', 'Moderator', 'Review and resolve reported content, approve or decline employee video and podcast submissions.');
+END
 ";
             await db.Database.ExecuteSqlRawAsync(ddl);
             Log.Information("SystemSettings database table & configuration defaults verified successfully.");

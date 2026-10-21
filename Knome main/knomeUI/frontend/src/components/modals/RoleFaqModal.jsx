@@ -57,6 +57,18 @@ const DEFAULT_ROLES_META = {
         scopeDescription: 'Post internal job openings, approve new community requests, send company announcements, and view team engagement numbers.',
         keyAreas: ['Job Openings', 'Company Announcements', 'Community Requests', 'Analytics']
     },
+    moderator: {
+        id: 'moderator',
+        label: 'Moderator',
+        title: 'Moderator',
+        badge: 'Moderator Guide',
+        icon: 'gavel',
+        color: 'rose',
+        accentBg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
+        activeTabClass: 'bg-rose-600 text-white shadow-md shadow-rose-500/20',
+        scopeDescription: 'Review and resolve reported content flags across posts and comments, and inspect employee video and podcast submissions before publishing.',
+        keyAreas: ['Content Moderation', 'Reported Content Flags', 'Media Approvals (Videos & Podcasts)', 'Safety Actions']
+    },
     systemAdmin: {
         id: 'systemAdmin',
         label: 'System Admin',
@@ -66,8 +78,8 @@ const DEFAULT_ROLES_META = {
         color: 'amber',
         accentBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
         activeTabClass: 'bg-amber-600 text-white shadow-md shadow-amber-500/20',
-        scopeDescription: 'Manage user accounts and roles, review reported posts, and check system activity logs.',
-        keyAreas: ['User Accounts & Roles', 'Account Status', 'Reported Content', 'System Activity Logs']
+        scopeDescription: 'Manage user accounts and role assignments, approval policies, community clearance, and system activity logs.',
+        keyAreas: ['User Accounts & Roles', 'Account Status', 'Approval Policy', 'Community Approvals', 'System Activity Logs']
     }
 };
 
@@ -263,24 +275,22 @@ const DEFAULT_FAQ_DATA = {
             id: 301,
             category: 'Admin Scope',
             question: 'What can a System Administrator do?',
-            answer: `System Administrators have full control over platform settings and safety:
-- Access the full Admin Console (/admin-console).
-- Assign and change user roles (Employee, Community Admin, HR Admin, System Admin).
+            answer: `System Administrators have control over platform settings, governance, and audit trails:
+- Access the Admin Console (/admin-console).
+- Assign and change user roles (Employee, Community Admin, HR Admin, Moderator, System Admin).
 - Pause or reactivate employee accounts.
-- Review and resolve reported posts and comments.
-- View system activity logs to see all administrative changes.`
+- Configure platform approval policies and clear community requests.
+- View system activity logs to see all administrative changes.
+- (Note: Content moderation and media approvals have been transferred to the Moderator role).`
         },
         {
             id: 302,
-            category: 'Moderation',
-            question: 'How do I handle reported posts?',
-            answer: `When an employee reports a post or comment:
-1. Open the Admin Console and click the Content Moderation tab.
-2. Click any report to view the reported content, author, and reason.
-3. Choose an action:
-   - Dismiss: Keep the post if it follows company guidelines.
-   - Delete Content: Permanently remove the post from all feeds.
-   - Suspend User: Pause the author's account if the violation was serious.`
+            category: 'Moderation Delegation',
+            question: 'Who handles content moderation and media approvals?',
+            answer: `Content moderation and media approvals have been delegated exclusively to the Moderator role:
+- Moderators review reported content flags and resolve violation reports.
+- Moderators inspect employee video and podcast submissions in the Media Approvals queue.
+- System Administrators focus on platform configuration, user roles, security, and approval policies.`
         },
         {
             id: 303,
@@ -311,6 +321,31 @@ const DEFAULT_FAQ_DATA = {
 2. You will see a clear, dated list of actions such as role updates, suspensions, and content deletions.
 3. You can filter by date, action type, or admin name to easily find specific events.`
         }
+    ],
+
+    moderator: [
+        {
+            id: 401,
+            category: 'Content Moderation',
+            question: 'How do I handle reported posts and comments?',
+            answer: `When an employee reports inappropriate content:
+1. Open the Moderation Console (/admin-console) and select Content Moderation.
+2. Review the reported item, the reporter notes, and violation reason.
+3. Choose an action:
+   - Dismiss: Keep the post if it adheres to organizational guidelines.
+   - Removed Content: Permanently remove violating content.
+   - Suspend User: Recommend or trigger a temporary user pause for severe offenses.`
+        },
+        {
+            id: 402,
+            category: 'Media Approvals',
+            question: 'How do I approve or decline employee videos and podcasts?',
+            answer: `When employees upload media under approval policy:
+1. Open the Moderation Console and select Media Approvals.
+2. Filter between Videos and Podcasts.
+3. Click Preview to watch or listen to the submission.
+4. Click "Approve" to publish the submission instantly to all employees, or "Decline" with feedback if it violates corporate guidelines.`
+        }
     ]
 };
 
@@ -332,6 +367,9 @@ export default function RoleFaqModal({ isOpen, onClose }) {
 
         if (role.includes('system') || role.includes('sysadm') || roles.some(r => r.includes('sysadm') || r.includes('system'))) {
             return 'systemAdmin';
+        }
+        if (role.includes('moderator') || role.includes('mod') || roles.some(r => r.includes('moderator') || r === 'mod' || r === 'MOD')) {
+            return 'moderator';
         }
         if (role.includes('hr') || roles.some(r => r.includes('hr'))) {
             return 'hrAdmin';
@@ -565,6 +603,7 @@ export default function RoleFaqModal({ isOpen, onClose }) {
         allRolesMeta.employee || DEFAULT_ROLES_META.employee,
         allRolesMeta.communityAdmin || DEFAULT_ROLES_META.communityAdmin,
         allRolesMeta.hrAdmin || DEFAULT_ROLES_META.hrAdmin,
+        allRolesMeta.moderator || DEFAULT_ROLES_META.moderator,
         allRolesMeta.systemAdmin || DEFAULT_ROLES_META.systemAdmin,
     ];
 

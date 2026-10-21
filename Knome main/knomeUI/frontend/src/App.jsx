@@ -224,7 +224,8 @@ function App() {
                     <Route path="/wiki/:id"        element={<FeatureProtectedPage feature="isWikiEnabled" featureName="Wiki" icon="menu_book"><WikiView /></FeatureProtectedPage>} />
                     <Route path="/hr-analytics"    element={<ProtectedPage><HRAnalytics /></ProtectedPage>} />
                     <Route path="/analytics"       element={<ProtectedPage><HRAnalytics /></ProtectedPage>} />
-                    <Route path="/admin-console"   element={<ProtectedPage><AdminConsole /></ProtectedPage>} />
+                    <Route path="/admin-console"      element={<ProtectedPage><AdminConsole /></ProtectedPage>} />
+                    <Route path="/moderation-console" element={<ProtectedPage><AdminConsole /></ProtectedPage>} />
                     <Route path="/profile"         element={<ProtectedPage><Profile /></ProtectedPage>} />
                     <Route path="/profile/:id"     element={<ProtectedPage><Profile /></ProtectedPage>} />
                     <Route path="/search"          element={<ProtectedPage><Search /></ProtectedPage>} />
