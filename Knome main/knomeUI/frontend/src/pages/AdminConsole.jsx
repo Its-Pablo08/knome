@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useUser, getUserStatusConfig, deduplicateMembers, roleNameToCode } from '../components/contexts/UserContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
 import { useToast } from '../components/contexts/ToastContext';
@@ -335,7 +335,7 @@ export const renderScoreBadge = (aiScore, reasonCode, snippet) => {
 };
 
 export default function AdminConsole() {
-    const { currentUser, users: contextUsers, updateUserRoleInList, toggleUserActiveStatus, deleteUserFromList, addKarmaPointsToUser, awardRuleKarma } = useUser();
+    const { currentUser, users: contextUsers, updateUserRoleInList, updateUserDetailsInList, toggleUserActiveStatus, deleteUserFromList, addKarmaPointsToUser, awardRuleKarma } = useUser();
     const navigate = useNavigate();
     const location = useLocation();
     const confirm = useConfirm();
@@ -349,22 +349,34 @@ export default function AdminConsole() {
                         ['MODERATOR'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
                         (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r || '').toUpperCase())));
 
-    const isAuthorized = isSysAdmin || isModerator;
+    const isHrAdmin = ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                      ['HR ADMINISTRATOR', 'HR ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
+                      (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['HRADM', 'HR ADMINISTRATOR', 'HRADMIN', 'HR ADMIN'].includes(String(r || '').toUpperCase())));
 
-    // Synchronize URL path with user role context (/moderation-console for Moderator, /admin-console for SysAdmin)
+    const isAuthorized = isSysAdmin || isHrAdmin || isModerator;
+
+    // Synchronize URL path with user role context (/moderation-console for Moderator, /admin-console for SysAdmin & HR Admin)
     useEffect(() => {
         if (isModerator && !isSysAdmin && location.pathname === '/admin-console') {
             navigate('/moderation-console', { replace: true });
-        } else if (isSysAdmin && location.pathname === '/moderation-console') {
+        } else if ((isSysAdmin || isHrAdmin) && location.pathname === '/moderation-console') {
             navigate('/admin-console', { replace: true });
         }
-    }, [isModerator, isSysAdmin, location.pathname, navigate]);
+    }, [isModerator, isSysAdmin, isHrAdmin, location.pathname, navigate]);
 
     // Active Navigation Tab & Hierarchical Functional Domain
-    // Content Moderation & Media Approvals are transferred to Moderator.
-    // If logged in as Moderator, default to 'moderation'.
-    // If logged in as System Admin, default to 'users' (Governance).
-    const [activeTab, setActiveTab] = useState(() => (isModerator && !isSysAdmin) ? 'moderation' : 'users');
+    const [searchParams] = useSearchParams();
+    const queryDomain = searchParams.get('domain');
+    const queryTab = searchParams.get('tab');
+
+    // Default activeTab
+    const defaultInitialTab = (isHrAdmin && !isSysAdmin) 
+        ? 'users' 
+        : (isModerator && !isSysAdmin)
+            ? 'moderation'
+            : ((queryTab && queryTab !== 'role_requests') ? queryTab : (queryDomain === 'governance' ? 'users' : queryDomain === 'operations' ? 'audit' : 'moderation'));
+
+    const [activeTab, setActiveTab] = useState(defaultInitialTab);
     const [approvalSubTab, setApprovalSubTab] = useState('governance'); // 'governance' | 'modules'
     const [lastUpdatedTime, setLastUpdatedTime] = useState(new Date().toLocaleTimeString());
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -373,14 +385,27 @@ export default function AdminConsole() {
     const activeDomain = useMemo(() => {
         if (['users', 'role_requests'].includes(activeTab)) return 'governance';
         if (['audit', 'serilog', 'analytics'].includes(activeTab)) return 'operations';
-        if (['approval_policy', 'moderation', 'media_approvals', 'community_approvals'].includes(activeTab)) return 'moderation';
-        return (isModerator && !isSysAdmin) ? 'moderation' : 'governance';
-    }, [activeTab, isModerator, isSysAdmin]);
+        if (activeTab === 'approval_policy') return isSysAdmin ? 'moderation' : 'governance';
+        if (['moderation', 'media_approvals', 'community_approvals'].includes(activeTab)) return 'moderation';
+        if (isModerator && !isSysAdmin) return 'moderation';
+        if (isHrAdmin && !isSysAdmin) return 'governance';
+        return 'moderation';
+    }, [activeTab, isModerator, isHrAdmin, isSysAdmin]);
+
+    useEffect(() => {
+        if (activeTab === 'role_requests') {
+            setActiveTab('users');
+        }
+    }, [activeTab]);
 
     // Switch Domain and Auto-select First Tab in that Domain
     const handleDomainSelect = (domain) => {
         if (isModerator && !isSysAdmin && domain !== 'moderation') {
             showToast('Access restricted: Moderators have access strictly to Moderation & Content Safety.', 'warning');
+            return;
+        }
+        if (isHrAdmin && !isSysAdmin && domain !== 'governance') {
+            showToast('Access Restricted: Content Moderation & Operations domains are restricted to System Administrators.', 'warning');
             return;
         }
         if (domain === 'moderation') {
@@ -443,6 +468,43 @@ export default function AdminConsole() {
     const [roleUserId, setRoleUserId] = useState('');
     const [roleUserName, setRoleUserName] = useState('');
     const [selectedRoles, setSelectedRoles] = useState(['Employee']);
+
+    // ── Edit Employee Accounts, Roles & Privileges State ──
+    const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState(null);
+    const [editForm, setEditForm] = useState({
+        fullName: '',
+        designation: '',
+        department: '',
+        location: 'Bhopal HQ',
+        email: '',
+        mobileNo: '',
+        roleName: 'Employee',
+        isActive: true,
+        privileges: []
+    });
+    const [isSavingEmployee, setIsSavingEmployee] = useState(false);
+
+    const ROLE_DEFAULT_PRIVILEGES = {
+        'Employee': ['post_creation', 'article_writing', 'video_upload', 'podcast_upload', 'community_join', 'direct_messaging'],
+        'Community Admin': ['post_creation', 'article_writing', 'video_upload', 'podcast_upload', 'community_join', 'direct_messaging', 'community_manage', 'content_moderation'],
+        'HR Admin': ['post_creation', 'article_writing', 'video_upload', 'podcast_upload', 'community_join', 'direct_messaging', 'hr_analytics', 'user_governance'],
+        'System Admin': ['post_creation', 'article_writing', 'video_upload', 'podcast_upload', 'community_join', 'direct_messaging', 'community_manage', 'hr_analytics', 'user_governance', 'content_moderation', 'system_operations']
+    };
+
+    const PLATFORM_PRIVILEGES_CONFIG = [
+        { key: 'post_creation', label: 'Create & Publish Posts', desc: 'Author feed posts, upload attachments and share updates', icon: 'edit_note', category: 'Content' },
+        { key: 'article_writing', label: 'Write & Publish Articles', desc: 'Author long-form enterprise editorial articles and guides', icon: 'article', category: 'Content' },
+        { key: 'video_upload', label: 'Upload Videos', desc: 'Publish video learning content, walkthroughs and sessions', icon: 'smart_display', category: 'Media' },
+        { key: 'podcast_upload', label: 'Upload Podcasts', desc: 'Publish audio podcasts and technical broadcasts', icon: 'podcasts', category: 'Media' },
+        { key: 'community_join', label: 'Join & Participate in Communities', desc: 'Access public & joined private organizational channels', icon: 'groups', category: 'Collaboration' },
+        { key: 'direct_messaging', label: 'Direct Messaging & Chat', desc: 'Send peer-to-peer encrypted messages and team communications', icon: 'chat', category: 'Collaboration' },
+        { key: 'community_manage', label: 'Community Management', desc: 'Create channels, manage memberships and pin discussions', icon: 'diversity_3', category: 'Administration' },
+        { key: 'hr_analytics', label: 'HR Analytics & Broadcaster', desc: 'Access department engagement reports and organization announcements', icon: 'insights', category: 'Administration' },
+        { key: 'user_governance', label: 'User Directory & Role Governance', desc: 'Manage employee accounts, assign roles and configure privileges', icon: 'manage_accounts', category: 'Governance' },
+        { key: 'content_moderation', label: 'Content Safety & Moderation', desc: 'Review reported content, take actions and manage restricted keywords', icon: 'gavel', category: 'Governance' },
+        { key: 'system_operations', label: 'System Operations & Serilog Logs', desc: 'Access server telemetry, system logs and enterprise configurations', icon: 'terminal', category: 'System' }
+    ];
 
     // Comprehensive User Details Modal State
     const [selectedUserDetailsUser, setSelectedUserDetailsUser] = useState(null);
@@ -1716,8 +1778,8 @@ export default function AdminConsole() {
     };
 
     const handleApproveRoleRequest = async (requestId, roleName, empName, empId) => {
-        if (!isSysAdmin) {
-            showToast('Access Denied: Only System Administrators can approve role requests.');
+        if (!isSysAdmin && !isHrAdmin) {
+            showToast('Access Denied: Only Administrators can approve role requests.');
             return;
         }
         try {
@@ -1727,7 +1789,7 @@ export default function AdminConsole() {
             setRoleRequests(prev => {
                 const updated = prev.map(r => 
                     (r.requestId === requestId || (empId && r.employeeId?.toUpperCase() === empId.toUpperCase()))
-                        ? { ...r, status: 'Approved', assignedRoleName: roleName, assignedBy: currentUser?.name || 'System Admin' } 
+                        ? { ...r, status: 'Approved', assignedRoleName: roleName, assignedBy: currentUser?.name || (isSysAdmin ? 'System Admin' : 'HR Admin') } 
                         : r
                 );
                 localStorage.setItem('knome_pending_role_requests', JSON.stringify(updated));
@@ -1758,16 +1820,16 @@ export default function AdminConsole() {
     };
 
     const handleRejectRoleRequest = async (requestId, empName) => {
-        if (!isSysAdmin) {
-            showToast('Access Denied: Only System Administrators can reject role requests.');
+        if (!isSysAdmin && !isHrAdmin) {
+            showToast('Access Denied: Only Administrators can reject role requests.');
             return;
         }
         try {
-            await adminApi.rejectRoleRequest(requestId, 'Rejected by System Admin').catch(() => {});
+            await adminApi.rejectRoleRequest(requestId, 'Rejected by ' + (isSysAdmin ? 'System Admin' : 'HR Admin')).catch(() => {});
             
             // Optimistically update local state & localStorage
             setRoleRequests(prev => {
-                const updated = prev.map(r => r.requestId === requestId ? { ...r, status: 'Rejected', assignedBy: currentUser?.name || 'System Admin' } : r);
+                const updated = prev.map(r => r.requestId === requestId ? { ...r, status: 'Rejected', assignedBy: currentUser?.name || (isSysAdmin ? 'System Admin' : 'HR Admin') } : r);
                 localStorage.setItem('knome_pending_role_requests', JSON.stringify(updated));
                 return updated;
             });
@@ -2451,8 +2513,8 @@ export default function AdminConsole() {
 
     // Handle Role Change Submission (Strict RBAC - System Administrator Only)
     const handleConfirmRoleChange = async () => {
-        if (!isSysAdmin) {
-            showToast('Access Denied: Only System Administrators are permitted to modify user roles.');
+        if (!isSysAdmin && !isHrAdmin) {
+            showToast('Access Denied: Only Administrators are permitted to modify user roles.');
             setIsRoleModalOpen(false);
             return;
         }
@@ -2465,7 +2527,8 @@ export default function AdminConsole() {
         } catch {}
 
         try {
-            await adminApi.changeUserRoles(roleUserId, rolesToAssign);
+            const numericId = Number(roleUserId);
+            await adminApi.changeUserRoles(!isNaN(numericId) && numericId > 0 ? numericId : roleUserId, rolesToAssign);
         } catch (err) {
             console.warn("Backend role change notice:", err);
         }
@@ -2491,6 +2554,10 @@ export default function AdminConsole() {
             };
             updateStoredRequests('knome_pending_role_requests');
             updateStoredRequests('eh_role_requests');
+            const roleOverrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+            roleOverrides[String(roleUserId)] = rolesToAssign;
+            if (targetUser?.employeeId) roleOverrides[targetUser.employeeId.toUpperCase()] = rolesToAssign;
+            localStorage.setItem('knome_role_overrides', JSON.stringify(roleOverrides));
         } catch (e) {}
 
         const roleCodeMap = {
@@ -2550,6 +2617,202 @@ export default function AdminConsole() {
             `Assigned role '${primaryRole}' to Employee #${roleUserId} (${roleUserName})`,
             'text-indigo-600 font-bold'
         );
+    };
+
+    // ── Open Edit Employee Accounts, Roles & Privileges Modal ──
+    const handleOpenEditUserModal = (u) => {
+        if (!u) return;
+        const assignedRole = getUserAssignedRole(u);
+        let storedPrivileges = null;
+        try {
+            const raw = localStorage.getItem(`knome_user_privileges_${u.userId || u.id}`);
+            if (raw) storedPrivileges = JSON.parse(raw);
+        } catch {}
+
+        setEditingUser(u);
+        setEditForm({
+            fullName: u.fullName || u.name || '',
+            designation: u.designation || '',
+            department: u.department || u.departmentName || 'Information Technology',
+            location: u.location || 'Bhopal HQ',
+            email: u.email || '',
+            mobileNo: u.mobileNo || '',
+            roleName: assignedRole,
+            isActive: u.isActive !== false,
+            privileges: Array.isArray(storedPrivileges) && storedPrivileges.length > 0
+                ? storedPrivileges
+                : (ROLE_DEFAULT_PRIVILEGES[assignedRole] || ROLE_DEFAULT_PRIVILEGES['Employee'])
+        });
+        setIsEditUserModalOpen(true);
+    };
+
+    // ── Handle Role Selection inside Edit Modal with RBAC ──
+    const handleRoleChangeInModal = (newRole) => {
+        if (isHrAdmin && !isSysAdmin && (newRole === 'System Admin' || newRole === 'System Administrator')) {
+            showToast('Access Restricted: Only System Administrators are permitted to grant the System Admin role.', 'warning');
+            return;
+        }
+        setEditForm(prev => ({
+            ...prev,
+            roleName: newRole,
+            privileges: ROLE_DEFAULT_PRIVILEGES[newRole] || prev.privileges
+        }));
+    };
+
+    // ── Toggle Granular Privilege inside Edit Modal ──
+    const handleTogglePrivilegeInModal = (privilegeKey) => {
+        setEditForm(prev => {
+            const exists = prev.privileges.includes(privilegeKey);
+            const newPrivs = exists 
+                ? prev.privileges.filter(k => k !== privilegeKey)
+                : [...prev.privileges, privilegeKey];
+            return { ...prev, privileges: newPrivs };
+        });
+    };
+
+    // ── Save Employee Details, Roles & Privileges ──
+    const handleSaveEmployeeEdit = async () => {
+        if (!editingUser) return;
+        const targetId = Number(editingUser.userId || editingUser.id);
+        const targetEmpId = (editingUser.employeeId || '').toUpperCase();
+        const resolvedRole = editForm.roleName || 'Employee';
+
+        // Strict RBAC: HR Admin cannot modify or demote a System Admin
+        const currentTargetRole = getUserAssignedRole(editingUser);
+        if (isHrAdmin && !isSysAdmin && (currentTargetRole === 'System Admin' || currentTargetRole === 'System Administrator')) {
+            showToast('Access Denied: HR Administrators cannot modify System Administrator accounts.', 'error');
+            return;
+        }
+
+        // Strict RBAC: HR Admin cannot elevate to System Admin
+        if (isHrAdmin && !isSysAdmin && (resolvedRole === 'System Admin' || resolvedRole === 'System Administrator')) {
+            showToast('Access Denied: Only System Administrators can grant System Admin privileges.', 'error');
+            return;
+        }
+
+        setIsSavingEmployee(true);
+        try {
+            // 1. Save Role to backend database via PUT /api/users/{id}/roles
+            if (targetId && !isNaN(targetId) && targetId > 0) {
+                try {
+                    await adminApi.changeUserRoles(targetId, [resolvedRole]);
+                } catch (e) {
+                    console.warn('Backend role change warning:', e);
+                }
+            }
+
+            // 2. Save Active / Suspended status if changed
+            if (editForm.isActive !== editingUser.isActive) {
+                try {
+                    if (editForm.isActive) {
+                        await adminApi.activateUser(targetId);
+                    } else {
+                        await adminApi.suspendUser(targetId, 'Administrative update', 365, null, true);
+                    }
+                } catch (e) {
+                    console.warn('Backend status update warning:', e);
+                }
+            }
+
+            const roleCodeMap = {
+                'System Admin': 'SYSADM',
+                'System Administrator': 'SYSADM',
+                'HR Admin': 'HRADM',
+                'HR Administrator': 'HRADM',
+                'Community Admin': 'CADM',
+                'Community Administrator': 'CADM',
+                'Employee': 'EMP'
+            };
+
+            const updatedPayload = {
+                fullName: editForm.fullName.trim() || editingUser.fullName,
+                name: editForm.fullName.trim() || editingUser.name,
+                designation: editForm.designation.trim() || editingUser.designation,
+                department: editForm.department.trim() || editingUser.department,
+                location: editForm.location.trim() || editingUser.location,
+                email: editForm.email.trim() || editingUser.email,
+                mobileNo: editForm.mobileNo.trim() || editingUser.mobileNo,
+                roleName: resolvedRole,
+                role: roleCodeMap[resolvedRole] || 'EMP',
+                roles: [resolvedRole],
+                isActive: editForm.isActive,
+                isSuspended: !editForm.isActive,
+                status: editForm.isActive ? 'Active' : 'Suspended',
+                privileges: editForm.privileges
+            };
+
+            // 3. Update global UserContext & local storage across the platform
+            if (updateUserDetailsInList) {
+                updateUserDetailsInList(targetId || targetEmpId, updatedPayload);
+            }
+
+            // 4. Update local usersList table state in AdminConsole
+            setUsersList(prev => prev.map(u => {
+                const matchId = (u.userId && String(u.userId) === String(targetId)) || (u.id && String(u.id) === String(targetId));
+                const matchEmp = u.employeeId && targetEmpId && u.employeeId.toUpperCase() === targetEmpId;
+                if (matchId || matchEmp) {
+                    return { ...u, ...updatedPayload };
+                }
+                return u;
+            }));
+
+            // 5. Update local storage overrides & privileges cache
+            try {
+                const userOverrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
+                userOverrides[String(targetId)] = updatedPayload;
+                if (targetEmpId) userOverrides[targetEmpId] = updatedPayload;
+                localStorage.setItem('knome_user_overrides', JSON.stringify(userOverrides));
+
+                const roleOverrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+                roleOverrides[String(targetId)] = [resolvedRole];
+                if (targetEmpId) roleOverrides[targetEmpId] = [resolvedRole];
+                localStorage.setItem('knome_role_overrides', JSON.stringify(roleOverrides));
+
+                localStorage.setItem(`knome_user_privileges_${targetId}`, JSON.stringify(editForm.privileges));
+                if (targetEmpId) localStorage.setItem(`knome_user_privileges_${targetEmpId}`, JSON.stringify(editForm.privileges));
+
+                const suspendedAccounts = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
+                if (!editForm.isActive) {
+                    suspendedAccounts[String(targetId)] = true;
+                    if (targetEmpId) suspendedAccounts[targetEmpId] = true;
+                } else {
+                    delete suspendedAccounts[String(targetId)];
+                    if (targetEmpId) delete suspendedAccounts[targetEmpId];
+                }
+                localStorage.setItem('knome_suspended_accounts', JSON.stringify(suspendedAccounts));
+
+                const storedReqs = JSON.parse(localStorage.getItem('knome_pending_role_requests') || '[]');
+                if (Array.isArray(storedReqs)) {
+                    const updatedReqs = storedReqs.map(r => {
+                        if (String(r.userId) === String(targetId) || (r.employeeId && r.employeeId.toUpperCase() === targetEmpId)) {
+                            return { ...r, status: 'Approved', assignedRoleName: resolvedRole, role: resolvedRole };
+                        }
+                        return r;
+                    });
+                    localStorage.setItem('knome_pending_role_requests', JSON.stringify(updatedReqs));
+                }
+            } catch (e) {
+                console.warn('Storage sync error:', e);
+            }
+
+            // 6. Log audit entry
+            logAuditEntry(
+                'UserEdited',
+                `Updated Employee #${targetId || targetEmpId} (${updatedPayload.fullName}) - Role: ${resolvedRole}, Dept: ${updatedPayload.department}, Privileges: ${editForm.privileges.length} active`,
+                'text-indigo-600 font-bold',
+                'User',
+                targetId
+            );
+
+            showToast(`Employee details, role & privileges updated for ${updatedPayload.fullName}!`, 'success');
+            setIsEditUserModalOpen(false);
+            setEditingUser(null);
+        } catch (err) {
+            console.error('Failed to save employee changes:', err);
+            showToast('Failed to save employee changes: ' + (err?.message || 'Unknown error'), 'error');
+        } finally {
+            setIsSavingEmployee(false);
+        }
     };
 
     // Fetch and sync independent approval, feature & communication policies from backend on mount
@@ -3497,7 +3760,7 @@ export default function AdminConsole() {
                         <span>/</span>
                         <span 
                             className="hover:text-indigo-600 cursor-pointer transition-colors"
-                            onClick={() => (isModerator && !isSysAdmin) ? setActiveTab('moderation') : setActiveTab('users')}
+                            onClick={() => (isModerator && !isSysAdmin) ? setActiveTab('moderation') : isSysAdmin ? setActiveTab('moderation') : setActiveTab('users')}
                         >
                             {(isModerator && !isSysAdmin) ? 'Moderation Console' : 'Admin Console'}
                         </span>
@@ -3513,7 +3776,7 @@ export default function AdminConsole() {
                             {activeTab === 'moderation' ? 'Content Reports' :
                              activeTab === 'media_approvals' ? 'Media Approvals' :
                              activeTab === 'approval_policy' ? (approvalSubTab === 'modules' ? 'Platform Feature Access Control' : 'Governance & Platform Approvals') :
-                             activeTab === 'community_approvals' ? 'Community Creation Approvals' :
+
                              activeTab === 'ai_moderation' ? 'AI Moderation Rules' :
                              activeTab === 'communities' ? 'Community Moderation' :
                              activeTab === 'users' ? 'User Directory' :
@@ -3660,8 +3923,9 @@ export default function AdminConsole() {
             </div>
 
             {/* ─── HIERARCHY TIER 1: FUNCTIONAL DOMAIN PILLARS ─── */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 mb-3">
-                {/* Pillar 1: Content Moderation & Safety */}
+            <div className={`grid grid-cols-1 ${isSysAdmin ? 'md:grid-cols-3' : 'md:grid-cols-1'} gap-2.5 mb-3`}>
+                {/* Pillar 1: Content Moderation & Safety (System Admin Only) */}
+                {isSysAdmin && (
                 <div 
                     onClick={() => handleDomainSelect('moderation')}
                     className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
@@ -3681,11 +3945,11 @@ export default function AdminConsole() {
                                 <span className={`text-[10px] font-black uppercase tracking-wider ${activeDomain === 'moderation' ? 'text-indigo-200' : 'text-slate-400'}`}>
                                     Domain 1
                                 </span>
-                                {(pendingCount + pendingMediaApprovals.length + pendingCommunityApprovals.length) > 0 && (
+                                {(pendingCount + pendingMediaApprovals.length) > 0 && (
                                     <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
                                         activeDomain === 'moderation' ? 'bg-amber-400 text-slate-950' : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
                                     }`}>
-                                        {pendingCount + pendingMediaApprovals.length + pendingCommunityApprovals.length} Pending
+                                        {pendingCount + pendingMediaApprovals.length} Pending
                                     </span>
                                 )}
                             </div>
@@ -3706,6 +3970,7 @@ export default function AdminConsole() {
                         </span>
                     </div>
                 </div>
+                )}
 
                 {/* Pillar 2: User Governance & Access */}
                 <div 
@@ -3735,14 +4000,8 @@ export default function AdminConsole() {
                                 <span className={`text-[10px] font-black uppercase tracking-wider ${activeDomain === 'governance' ? 'text-purple-200' : 'text-slate-400'}`}>
                                     Domain 2
                                 </span>
-                                {isModerator && !isSysAdmin ? (
+                                {isModerator && !isSysAdmin && (
                                     <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-500">SysAdmin</span>
-                                ) : roleRequests.filter(r => r.status === 'Pending').length > 0 && (
-                                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black animate-pulse ${
-                                        activeDomain === 'governance' ? 'bg-amber-400 text-slate-950' : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                                    }`}>
-                                        {roleRequests.filter(r => r.status === 'Pending').length} Requests
-                                    </span>
                                 )}
                             </div>
                             <h3 className="font-extrabold text-xs sm:text-sm tracking-tight truncate">
@@ -3763,7 +4022,8 @@ export default function AdminConsole() {
                     </div>
                 </div>
 
-                {/* Pillar 3: System Operations & Compliance */}
+                {/* Pillar 3: System Operations & Compliance (System Admin Only) */}
+                {isSysAdmin && (
                 <div 
                     onClick={() => {
                         if (isModerator && !isSysAdmin) {
@@ -3824,12 +4084,47 @@ export default function AdminConsole() {
                         </span>
                     </div>
                 </div>
+                )}
             </div>
 
             {/* ─── HIERARCHY TIER 2: FUNCTIONAL SUB-TABS (SCOPED TO ACTIVE DOMAIN) ─── */}
-            {activeDomain !== 'governance' && (
+            {/* Tier 2 Sub-Tabs Bar */}
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 mb-3 shadow-xs flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap py-0.5">
+                        {activeDomain === 'governance' && (
+                            <>
+                                <button
+                                    onClick={() => setActiveTab('users')}
+                                    className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                        activeTab === 'users'
+                                            ? 'bg-purple-600 text-white shadow-xs'
+                                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">group</span>
+                                    <span>User Directory ({usersList.length})</span>
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('approval_policy')}
+                                    className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                        activeTab === 'approval_policy'
+                                            ? 'bg-rose-600 text-white shadow-xs'
+                                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-[16px] text-rose-500">fact_check</span>
+                                    <span>Approval Policy & Toggle</span>
+                                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                                        configState.requireContentAndCommunityApproval !== false
+                                            ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
+                                            : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                    }`}>
+                                        {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
+                                    </span>
+                                </button>
+                            </>
+                        )}
+
                         {activeDomain === 'moderation' && (
                             <>
                                 {(!isSysAdmin || isModerator) && (
@@ -3982,7 +4277,7 @@ export default function AdminConsole() {
                     </div>
                 </div>
             </div>
-            )}
+
 
             {/* ─── HIERARCHY TIER 3: CONTEXTUAL FILTER & ACTION STRIP (STRICTLY SCOPED TO ACTIVE MODULE) ─── */}
 
@@ -4445,7 +4740,7 @@ export default function AdminConsole() {
 
             {/* TAB 5: USER DIRECTORY FILTERS */}
             {activeTab === 'users' && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                     {/* 1. All Employees (Removed from frontend) */}
                     {false && <div 
                         onClick={() => { setUserSearchTerm(''); showToast(`Showing all ${usersList.length} registered employees`); }}
@@ -5219,14 +5514,26 @@ export default function AdminConsole() {
                                                             {(() => {
                                                                 const role = getUserAssignedRole(u);
                                                                 return (
-                                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] inline-flex items-center gap-1 shadow-xs ${getRoleBadgeStyle(role)}`}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            if (isSysAdmin || isHrAdmin) {
+                                                                                setRoleUserId(String(u.userId || u.id));
+                                                                                setRoleUserName(u.fullName || u.name);
+                                                                                setSelectedRoles([role]);
+                                                                                setIsRoleModalOpen(true);
+                                                                            }
+                                                                        }}
+                                                                        className={`px-2.5 py-0.5 rounded-full text-[10px] inline-flex items-center gap-1 shadow-xs transition-transform ${getRoleBadgeStyle(role)} ${(isSysAdmin || isHrAdmin) ? 'cursor-pointer hover:scale-105' : ''}`}
+                                                                        title={isSysAdmin || isHrAdmin ? "Click to edit role" : role}
+                                                                    >
                                                                         <span className="material-symbols-outlined text-[13px]">
                                                                             {role.toLowerCase().includes('system') ? 'shield_person' :
                                                                              role.toLowerCase().includes('hr') ? 'badge' :
                                                                              role.toLowerCase().includes('community') ? 'groups' : 'person'}
                                                                         </span>
                                                                         <span>{role}</span>
-                                                                    </span>
+                                                                    </button>
                                                                 );
                                                             })()}
                                                         </div>
@@ -5270,19 +5577,23 @@ export default function AdminConsole() {
                                                             >
                                                                 <span className="material-symbols-outlined text-[18px]">visibility</span>
                                                             </button>
-                                                            {isSysAdmin && (
+                                                            {(isSysAdmin || isHrAdmin) && (
                                                                 <button
                                                                     onClick={() => {
+                                                                        const userRole = getUserAssignedRole(u);
                                                                         setRoleUserId(String(u.userId || u.id));
                                                                         setRoleUserName(u.fullName || u.name);
-                                                                        setSelectedRoles([getUserAssignedRole(u)]);
+                                                                        setSelectedRoles([userRole]);
                                                                         setIsRoleModalOpen(true);
+
+
+
                                                                     }}
                                                                     className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 transition-colors cursor-pointer"
                                                                     title="Edit Role"
                                                                     aria-label="Edit Role"
                                                                 >
-                                                                    <span className="material-symbols-outlined text-[17px]">tune</span>
+                                                                    <span className="material-symbols-outlined text-[17px]">edit</span>
                                                                 </button>
                                                             )}
                                                             <button
@@ -8861,7 +9172,13 @@ export default function AdminConsole() {
                                         return (
                                             <div
                                                 key={roleItem.name}
-                                                onClick={() => setSelectedRoles([roleItem.name])}
+                                                onClick={() => {
+                                                    if (isHrAdmin && !isSysAdmin && roleItem.name === 'System Admin') {
+                                                        showToast('Access Restricted: Only System Administrators can assign the System Admin role.', 'warning');
+                                                        return;
+                                                    }
+                                                    setSelectedRoles([roleItem.name]);
+                                                }}
                                                 className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
                                                     isSelected
                                                         ? 'border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/30 ring-1 ring-indigo-600'
@@ -9890,7 +10207,20 @@ export default function AdminConsole() {
                         <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto custom-scrollbar">
                             {/* KPI Strip */}
                             <div className="grid grid-cols-3 gap-3">
-                                <div className="p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-center">
+                                <div 
+                                    onClick={() => {
+                                        if (isSysAdmin || isHrAdmin) {
+                                            const role = getUserAssignedRole(selectedUserDetailsUser);
+                                            setRoleUserId(String(selectedUserDetailsUser.userId || selectedUserDetailsUser.id));
+                                            setRoleUserName(selectedUserDetailsUser.fullName || selectedUserDetailsUser.name);
+                                            setSelectedRoles([role]);
+                                            setIsUserDetailsModalOpen(false);
+                                            setIsRoleModalOpen(true);
+                                        }
+                                    }}
+                                    className={`p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-center ${(isSysAdmin || isHrAdmin) ? 'cursor-pointer hover:bg-indigo-100/60 dark:hover:bg-indigo-900/60 transition-colors' : ''}`}
+                                    title={isSysAdmin || isHrAdmin ? "Click to edit role" : "Assigned Role"}
+                                >
                                     <span className="text-[10px] uppercase font-bold text-indigo-500 tracking-wider">Assigned Role</span>
                                     <p className="text-xs font-black text-indigo-950 dark:text-indigo-200 mt-0.5">
                                         {selectedUserDetailsUser.roleName || getUserAssignedRole(selectedUserDetailsUser)}

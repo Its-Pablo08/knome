@@ -51,7 +51,8 @@ export default function Sidebar() {
         if (item.matchPaths && Array.isArray(item.matchPaths)) {
             return item.matchPaths.some(p => pathname === p || (p !== '/' && pathname.startsWith(p + '/')));
         }
-        return item.to === '/' ? pathname === '/' : pathname === item.to || pathname.startsWith(item.to + '/');
+        const itemPath = (item.to || '').split('?')[0];
+        return itemPath === '/' ? pathname === '/' : pathname === itemPath || pathname.startsWith(itemPath + '/');
     };
 
     // Calculate unread messages count from localStorage or default
@@ -120,15 +121,23 @@ export default function Sidebar() {
                         ['MODERATOR'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
                         (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r || '').toUpperCase())));
 
-    const isHrOrSysAdmin = ['SYSADM', 'HRADM', 'SYSTEM ADMIN', 'HR ADMIN', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
+    const isHrAdmin = ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                      ['HR ADMINISTRATOR', 'HR ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
+                      (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['HRADM', 'HR ADMINISTRATOR', 'HRADMIN', 'HR ADMIN'].includes(String(r || '').toUpperCase())));
+
+    const isHrOrSysAdmin = isSysAdmin || isHrAdmin ||
+                           ['SYSADM', 'HRADM', 'SYSTEM ADMIN', 'HR ADMIN', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
                            ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
                            (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'SYSTEMADMIN', 'HRADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'ADMIN'].includes(String(r || '').toUpperCase())));
 
     if (isSysAdmin) {
         navItems.push({ to: '/admin-console', icon: 'admin_panel_settings', label: 'Admin Console', color: '#f43f5e' });
+    } else if (isHrAdmin) {
+        navItems.push({ to: '/admin-console?domain=governance', icon: 'manage_accounts', label: 'User & Access Governance', color: '#8b5cf6', matchPaths: ['/admin-console'] });
     } else if (isModerator) {
         navItems.push({ to: '/moderation-console', icon: 'gavel', label: 'Moderation Console', color: '#f59e0b', matchPaths: ['/moderation-console', '/admin-console'] });
     }
+
     if (isHrOrSysAdmin) {
         navItems.push({ to: '/analytics', icon: 'bar_chart', label: 'Analytics', color: '#ef4444', matchPaths: ['/analytics', '/hr-analytics'] });
     }

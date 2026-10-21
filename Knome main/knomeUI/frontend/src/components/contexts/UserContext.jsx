@@ -397,8 +397,11 @@ export const UserProvider = ({ children }) => {
     const getInitialUsersList = () => {
         try {
             const overrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+            const userOverrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
             return INITIAL_USERS.map(u => {
-                const customRoles = overrides[String(u.userId)] || overrides[String(u.id)] || overrides[u.employeeId?.toUpperCase()] || (u.email && overrides[u.email.toLowerCase()]);
+                const uOverride = userOverrides[String(u.userId)] || userOverrides[String(u.id)] || (u.employeeId && userOverrides[u.employeeId.toUpperCase()]) || (u.email && userOverrides[u.email.toLowerCase()]) || {};
+                const mergedU = { ...u, ...uOverride };
+                const customRoles = overrides[String(mergedU.userId)] || overrides[String(mergedU.id)] || (mergedU.employeeId && overrides[mergedU.employeeId.toUpperCase()]) || (mergedU.email && overrides[mergedU.email.toLowerCase()]);
                 if (customRoles && Array.isArray(customRoles) && customRoles.length > 0) {
                     const primary = customRoles.find(r => r !== 'Employee' && r !== 'EMP') || customRoles[0] || 'Employee';
                     const cleanPrimary = (primary === 'System Administrator' || primary === 'SYSADM') ? 'System Admin'
@@ -407,9 +410,9 @@ export const UserProvider = ({ children }) => {
                         : (primary === 'Moderator' || primary === 'MOD') ? 'Moderator'
                         : primary;
                     const code = roleNameToCode[cleanPrimary] || roleNameToCode[primary] || 'EMP';
-                    return { ...u, role: code, roleName: cleanPrimary, roles: expandRoles(customRoles) };
+                    return { ...mergedU, role: code, roleName: cleanPrimary, roles: expandRoles(customRoles) };
                 }
-                return { ...u, roles: expandRoles([u.roleName || u.role || 'Employee']) };
+                return { ...mergedU, roles: expandRoles([mergedU.roleName || mergedU.role || 'Employee']) };
             });
         } catch {
             return INITIAL_USERS.map(u => ({ ...u, roles: expandRoles([u.roleName || u.role || 'Employee']) }));
@@ -1472,6 +1475,128 @@ export const UserProvider = ({ children }) => {
     }, [usersList]);
 
     /**
+     * Updates complete employee details, designation, department, role, location, status, and custom privileges.
+     * Persists overrides and propagates immediately to usersList and currentUser.
+     */
+    const updateUserDetailsInList = useCallback((targetIdentifier, updatedData) => {
+        if (!targetIdentifier || !updatedData) return;
+        
+        const rawRole = updatedData.roleName || updatedData.role || 'Employee';
+        const cleanRole = (rawRole === 'System Administrator' || rawRole === 'SYSADM') ? 'System Admin'
+            : (rawRole === 'HR Administrator' || rawRole === 'HRADM') ? 'HR Admin'
+            : (rawRole === 'Community Administrator' || rawRole === 'CADM') ? 'Community Admin'
+            : rawRole;
+        const newRoleCode = roleNameToCode[cleanRole] || 'EMP';
+        const rolesList = [cleanRole];
+
+        // Persist overrides in localStorage
+        try {
+            const userOverrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
+            const roleOverrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
+            
+            const prevUserOverride = userOverrides[String(targetIdentifier)] || {};
+            const mergedOverride = {
+                ...prevUserOverride,
+                ...updatedData,
+                role: newRoleCode,
+                roleName: cleanRole,
+                roles: rolesList
+            };
+
+            userOverrides[String(targetIdentifier)] = mergedOverride;
+            roleOverrides[String(targetIdentifier)] = rolesList;
+
+            if (updatedData.employeeId) {
+                userOverrides[updatedData.employeeId.toUpperCase()] = mergedOverride;
+                roleOverrides[updatedData.employeeId.toUpperCase()] = rolesList;
+            }
+            if (updatedData.email) {
+                userOverrides[updatedData.email.toLowerCase()] = mergedOverride;
+                roleOverrides[updatedData.email.toLowerCase()] = rolesList;
+            }
+
+            localStorage.setItem('knome_user_overrides', JSON.stringify(userOverrides));
+            localStorage.setItem('knome_role_overrides', JSON.stringify(roleOverrides));
+
+            if (updatedData.privileges) {
+                localStorage.setItem(`knome_user_privileges_${targetIdentifier}`, JSON.stringify(updatedData.privileges));
+            }
+        } catch (e) {
+            console.warn('[UserContext] Failed to persist user overrides:', e);
+        }
+
+        try { apiClient.clearCache(); } catch {}
+
+        // Update reactive usersList
+        setUsersList(prev => prev.map(u => {
+            const matchById = u.userId && String(u.userId) === String(targetIdentifier);
+            const matchBySeedId = u.id && String(u.id) === String(targetIdentifier);
+            const matchByEmpId = (u.employeeId && updatedData.employeeId && u.employeeId.toUpperCase() === updatedData.employeeId.toUpperCase()) ||
+                                 (u.employeeId && u.employeeId.toUpperCase() === String(targetIdentifier).toUpperCase());
+            const matchByEmail = (u.email && updatedData.email && u.email.toLowerCase() === updatedData.email.toLowerCase()) ||
+                                 (u.email && u.email.toLowerCase() === String(targetIdentifier).toLowerCase());
+
+            if (matchById || matchBySeedId || matchByEmpId || matchByEmail) {
+                return {
+                    ...u,
+                    ...updatedData,
+                    name: updatedData.fullName || updatedData.name || u.name,
+                    fullName: updatedData.fullName || updatedData.name || u.fullName,
+                    designation: updatedData.designation !== undefined ? updatedData.designation : u.designation,
+                    department: updatedData.department !== undefined ? updatedData.department : u.department,
+                    location: updatedData.location !== undefined ? updatedData.location : u.location,
+                    email: updatedData.email !== undefined ? updatedData.email : u.email,
+                    role: newRoleCode,
+                    roleName: cleanRole,
+                    roles: rolesList,
+                    isActive: updatedData.isActive !== undefined ? updatedData.isActive : u.isActive,
+                    isSuspended: updatedData.isActive !== undefined ? !updatedData.isActive : u.isSuspended,
+                    status: updatedData.isActive === false ? 'Suspended' : (updatedData.status || (u.isActive ? 'Active' : 'Suspended')),
+                    privileges: updatedData.privileges || u.privileges
+                };
+            }
+            return u;
+        }));
+
+        // Update currentUser if matching
+        setCurrentUser(prev => {
+            if (!prev) return prev;
+            const matchById = prev.userId && String(prev.userId) === String(targetIdentifier);
+            const matchBySeedId = prev.id && String(prev.id) === String(targetIdentifier);
+            const matchByEmpId = (prev.employeeId && updatedData.employeeId && prev.employeeId.toUpperCase() === updatedData.employeeId.toUpperCase()) ||
+                                 (prev.employeeId && prev.employeeId.toUpperCase() === String(targetIdentifier).toUpperCase());
+            const matchByEmail = (prev.email && updatedData.email && prev.email.toLowerCase() === updatedData.email.toLowerCase()) ||
+                                 (prev.email && prev.email.toLowerCase() === String(targetIdentifier).toLowerCase());
+
+            if (matchById || matchBySeedId || matchByEmpId || matchByEmail) {
+                return {
+                    ...prev,
+                    ...updatedData,
+                    name: updatedData.fullName || updatedData.name || prev.name,
+                    fullName: updatedData.fullName || updatedData.name || prev.fullName,
+                    designation: updatedData.designation !== undefined ? updatedData.designation : prev.designation,
+                    department: updatedData.department !== undefined ? updatedData.department : prev.department,
+                    location: updatedData.location !== undefined ? updatedData.location : prev.location,
+                    email: updatedData.email !== undefined ? updatedData.email : prev.email,
+                    role: newRoleCode,
+                    roleName: cleanRole,
+                    roles: rolesList,
+                    isActive: updatedData.isActive !== undefined ? updatedData.isActive : prev.isActive,
+                    isSuspended: updatedData.isActive !== undefined ? !updatedData.isActive : prev.isSuspended,
+                    status: updatedData.isActive === false ? 'Suspended' : (updatedData.status || (prev.isActive ? 'Active' : 'Suspended')),
+                    privileges: updatedData.privileges || prev.privileges
+                };
+            }
+            return prev;
+        });
+
+        // Broadcast event for all components/hooks listening
+        try {
+            window.dispatchEvent(new CustomEvent('knome-user-updated', { detail: { targetIdentifier, updatedData } }));
+        } catch {}
+    }, []);
+
+    /**
      * Award Karma Points according to official MPOnline Enterprise Karma Rules & Daily Caps
      * @param {string|number} userId - Target user ID
      * @param {string} ruleKey - 'POST' | 'ARTICLE' | 'VIDEO' | 'PODCAST' | 'LIKE_RECEIVED' | 'COMMENT_RECEIVED' | 'SHARE_RECEIVED' | 'COMMUNITY_PARTICIPATION'
@@ -1748,6 +1873,7 @@ export const UserProvider = ({ children }) => {
             refreshCurrentUser,
             updateCurrentUserRole,
             updateUserRoleInList,
+            updateUserDetailsInList,
             updateUserStatus,
             toggleUserActiveStatus,
             deleteUserFromList,
@@ -1776,6 +1902,7 @@ export const useUser = () => {
             refreshKarma: async () => {},
             updateCurrentUserRole: () => {},
             updateUserRoleInList: () => {},
+            updateUserDetailsInList: () => {},
             deleteUserFromList: () => {},
         };
     }
