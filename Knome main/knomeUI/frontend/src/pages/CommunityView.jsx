@@ -159,12 +159,17 @@ const normalizeMemberData = (m, contextUsers = []) => {
 
     const resolvedDept = String(m.department || matched?.department || 'MPOnline').trim();
 
-    const isCommAdmin = m.memberType === 'Admin' || 
+    const isCommAdmin = m.isCommAdmin === true ||
+                        m.memberType === 'Admin' || 
                         m.memberType === 'Moderator' || 
                         m.memberType === 'Community Administrator' || 
-                        m.memberType === 'Community Admin';
+                        m.memberType === 'Community Admin' ||
+                        m.roleName === 'Community Admin' ||
+                        m.roleName === 'Admin' ||
+                        m.role === 'Community Admin' ||
+                        m.role === 'Admin';
 
-    const roleName = isCommAdmin ? 'Admin' : 'Member';
+    const roleName = isCommAdmin ? 'Community Admin' : 'Member';
 
     const avatar = resolveMediaUrl(m.profilePhotoUrl || matched?.avatar) || 
         `https://ui-avatars.com/api/?name=${encodeURIComponent(resolvedName)}&background=6366f1&color=fff`;
@@ -1263,10 +1268,10 @@ export default function CommunityView() {
                       (community?.createdBy && currentUser?.name && community.createdBy.toLowerCase().includes(currentUser.name.toLowerCase())) ||
                       (community?.adminContact && currentUser?.name && community.adminContact.toLowerCase().includes(currentUser.name.toLowerCase()));
 
-    // Treat SYSADM, CADM, HRADM, and active assigned Admins/Moderators as Community Admins
-    const isAdmin = ['SYSADM', 'CADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
-                    ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'Admin'].includes(currentUser?.roleName) ||
-                    (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'SYSADM', 'HRADM', 'CADM', 'Admin'].includes(r))) ||
+    // Treat SYSADM, CADM, HRADM, MODERATOR, and active assigned Admins/Moderators as Community Admins
+    const isAdmin = ['SYSADM', 'CADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'MODERATOR', 'MOD'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                    ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'Admin', 'Moderator'].includes(currentUser?.roleName) ||
+                    (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'SYSADM', 'HRADM', 'CADM', 'Admin', 'Moderator', 'MODERATOR', 'MOD'].includes(r))) ||
                     Boolean(community?.isCurrentUserAdmin) ||
                     membersList.some(m => {
                         const mUid = String(m.userId || m.id || '');
@@ -1274,17 +1279,17 @@ export default function CommunityView() {
                         const isMatch = (currentUser?.id && mUid === String(currentUser.id)) ||
                                         (currentUser?.userId && mUid === String(currentUser.userId)) ||
                                         (currentUser?.employeeId && mEmp && mEmp === String(currentUser.employeeId).toUpperCase());
-                        return isMatch && (m.memberType === 'Admin' || m.memberType === 'Moderator' || m.roleName === 'Admin' || m.role === 'Admin');
+                        return isMatch && (m.memberType === 'Admin' || m.memberType === 'Moderator' || m.memberType === 'Community Admin' || m.roleName === 'Community Admin' || m.roleName === 'Admin' || m.role === 'Community Admin' || m.role === 'Admin' || m.isCommAdmin === true);
                     });
 
-    const isSysAdmin = ['SYSADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
-                       ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin'].includes(currentUser?.roleName) ||
-                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin'].includes(r)));
+    const isSysAdmin = ['SYSADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'MODERATOR', 'MOD'].includes(String(currentUser?.role || '').toUpperCase()) || 
+                       ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin', 'Moderator'].includes(currentUser?.roleName) ||
+                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin', 'Moderator', 'MODERATOR', 'MOD'].includes(r)));
 
     const canManageApprovals = isSysAdmin || 
-                               ['CADM', 'COMMUNITY ADMIN', 'COMMUNITY ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
-                               ['Community Administrator', 'Community Admin'].includes(currentUser?.roleName) ||
-                               (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['CADM', 'Community Administrator', 'Community Admin', 'HRADM', 'SYSADM'].includes(String(r || '').toUpperCase())));
+                               ['CADM', 'COMMUNITY ADMIN', 'COMMUNITY ADMINISTRATOR', 'MODERATOR', 'MOD'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                               ['Community Administrator', 'Community Admin', 'Moderator'].includes(currentUser?.roleName) ||
+                               (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['CADM', 'Community Administrator', 'Community Admin', 'HRADM', 'SYSADM', 'MODERATOR', 'MOD'].includes(String(r || '').toUpperCase())));
 
     // Load organization directory for admin member addition modal
     useEffect(() => {
@@ -1435,6 +1440,8 @@ export default function CommunityView() {
                 localStorage.setItem('knome_notifications', JSON.stringify(cleanedNotifs));
             } catch (_) {}
 
+            const isRoleAdmin = selectedRoleToAdd === 'Admin' || selectedRoleToAdd === 'Community Admin' || selectedRoleToAdd === 'Community Administrator';
+
             // 4. Construct rich member objects for local cache
             const newMemberObjects = selectedUsers.map(u => ({
                 userId: u.userId || u.id,
@@ -1447,7 +1454,9 @@ export default function CommunityView() {
                 departmentName: u.departmentName || u.department || 'Technology',
                 profilePhotoUrl: u.profilePhotoUrl || u.avatar || null,
                 avatar: u.avatar || u.profilePhotoUrl || null,
-                memberType: selectedRoleToAdd,
+                memberType: isRoleAdmin ? 'Admin' : 'Member',
+                isCommAdmin: isRoleAdmin,
+                roleName: isRoleAdmin ? 'Community Admin' : 'Member',
                 status: 'Approved',
                 joinedDate: new Date().toISOString()
             }));
@@ -1485,7 +1494,7 @@ export default function CommunityView() {
                         name: community?.name || 'Community',
                         category: community?.category || 'General',
                         type: community?.type || 'Private',
-                        role: selectedRoleToAdd || 'Member',
+                        role: isRoleAdmin ? 'Community Admin' : 'Member',
                         status: 'joined',
                         joinedDate: new Date().toISOString()
                     });
@@ -1515,7 +1524,7 @@ export default function CommunityView() {
                     await communitiesApi.addMembers(targetId, {
                         userIds: selectedUserIdsToAdd.map(Number).filter(n => !isNaN(n) && n > 0),
                         employeeIds: selectedUsers.map(u => u.employeeId || u.empId).filter(Boolean),
-                        memberType: selectedRoleToAdd,
+                        memberType: isRoleAdmin ? 'Admin' : 'Member',
                         members: selectedUsers.map(u => ({
                             userId: Number(u.userId || u.id) || null,
                             employeeId: u.employeeId || u.empId || null,
@@ -1526,6 +1535,16 @@ export default function CommunityView() {
                             profilePhotoUrl: u.profilePhotoUrl || u.avatar || null
                         }))
                     });
+
+                    // Explicitly invoke addAdmin endpoint when Community Admin role is chosen
+                    if (isRoleAdmin) {
+                        for (const u of selectedUsers) {
+                            const uid = Number(u.userId || u.id);
+                            if (!isNaN(uid) && uid > 0) {
+                                await communitiesApi.addAdmin(targetId, uid).catch(() => null);
+                            }
+                        }
+                    }
                 } catch (apiErr) {
                     console.warn('Backend communitiesApi.addMembers warning (falling back to authoritative local sync):', apiErr);
                 }
@@ -1747,7 +1766,20 @@ export default function CommunityView() {
                 const memberMap = new Map();
                 (Array.isArray(rawMembers) ? rawMembers : []).forEach(m => {
                     const key = String(m?.userId || m?.id || '');
-                    if (key) memberMap.set(key, m);
+                    if (key) {
+                        const localItem = localMembersApi.find(lm => String(lm.userId || lm.id) === key);
+                        const isLocalAdmin = localItem && (localItem.isCommAdmin || localItem.memberType === 'Admin' || localItem.roleName === 'Community Admin');
+                        const isDtoAdmin = m.isCommAdmin || m.memberType === 'Admin' || m.roleName === 'Community Admin' || m.memberType === 'Moderator';
+                        const isCreator = String(commData.createdByUserId || commData.creatorUserId || '') === key;
+                        const finalIsAdmin = isDtoAdmin || isLocalAdmin || isCreator;
+
+                        memberMap.set(key, {
+                            ...m,
+                            memberType: finalIsAdmin ? 'Admin' : (m.memberType || 'Member'),
+                            isCommAdmin: finalIsAdmin,
+                            roleName: finalIsAdmin ? 'Community Admin' : 'Member'
+                        });
+                    }
                 });
 
                 // 2. Only preserve purely mock/local offline invites that haven't synced to DB
@@ -1755,7 +1787,13 @@ export default function CommunityView() {
                     const key = String(m?.userId || m?.id || '');
                     const isMockOrLocalInvite = Boolean(m?.isLocalInvite || m?.isMockInvite || m?.isPendingInvite || (Number(key) > 1000000000));
                     if (key && !memberMap.has(key) && isMockOrLocalInvite) {
-                        memberMap.set(key, m);
+                        const isLocalAdmin = m.isCommAdmin || m.memberType === 'Admin' || m.roleName === 'Community Admin';
+                        memberMap.set(key, {
+                            ...m,
+                            memberType: isLocalAdmin ? 'Admin' : (m.memberType || 'Member'),
+                            isCommAdmin: isLocalAdmin,
+                            roleName: isLocalAdmin ? 'Community Admin' : 'Member'
+                        });
                     }
                 });
 
@@ -1814,7 +1852,10 @@ export default function CommunityView() {
                     return ((currentUid && mUid === currentUid) || (currentEmpId && mEmp === currentEmpId)) && 
                            (m.memberType === 'Admin' || m.memberType === 'Moderator');
                 });
-                const isCommAdmin = Boolean(commData.isCurrentUserAdmin) || isMemberAdmin;
+                const isPlatformAdminCaller = ['SYSADM', 'CADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'MODERATOR', 'MOD'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                    ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'Admin', 'Moderator'].includes(currentUser?.roleName) ||
+                    (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'SYSADM', 'HRADM', 'CADM', 'Admin', 'Moderator', 'MODERATOR', 'MOD'].includes(r)));
+                const isCommAdmin = Boolean(commData.isCurrentUserAdmin) || isMemberAdmin || isPlatformAdminCaller;
 
                 const isCurrentRemoved = removedSet.has(currentUid.toLowerCase()) || 
                                          (currentEmpId && removedSet.has(currentEmpId.toLowerCase())) || 
@@ -2605,6 +2646,9 @@ export default function CommunityView() {
                 mergedPosts = [commWelcomePost];
             }
 
+            const deletedPostIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
+            mergedPosts = mergedPosts.filter(p => !deletedPostIds.includes(String(p.id)) && !deletedPostIds.includes(String(p.postId)) && p.status !== 'Removed' && p.status !== 'Deleted');
+
             // Sync sanitized posts into community storage so stale Loveneesh post is wiped
             safeSetStorage(savedPostsKey, mergedPosts);
 
@@ -2826,6 +2870,21 @@ export default function CommunityView() {
             }
         };
 
+        const handlePostDeleted = (e) => {
+            const delId = e?.detail?.postId || e?.detail?.id;
+            let delPostIds = [];
+            try {
+                delPostIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
+            } catch (_) {}
+            setPosts(prev => prev.filter(p => {
+                const pid = String(p.id || p.postId);
+                if (delId && pid === String(delId)) return false;
+                if (delPostIds.includes(pid)) return false;
+                if (p.status === 'Removed' || p.status === 'Deleted') return false;
+                return true;
+            }));
+        };
+
         window.addEventListener('community-members-updated', handleMembersUpdated);
         window.addEventListener('community-joined-change', handleMembersUpdated);
         window.addEventListener('community-suspended-change', handleMembersUpdated);
@@ -2833,9 +2892,12 @@ export default function CommunityView() {
         window.addEventListener('community-posts-updated', handleFeedOrPostsUpdated);
         window.addEventListener('community-post-created', handleFeedOrPostsUpdated);
         window.addEventListener('post-created', handleFeedOrPostsUpdated);
+        window.addEventListener('post-deleted', handlePostDeleted);
+        window.addEventListener('knome_content_moderated', handlePostDeleted);
         window.addEventListener('community-files-updated', handleMembersUpdated);
         window.addEventListener('storage', handleMembersUpdated);
         window.addEventListener('storage', handleFeedOrPostsUpdated);
+        window.addEventListener('storage', handlePostDeleted);
 
         return () => {
             window.removeEventListener('community-members-updated', handleMembersUpdated);
@@ -2845,9 +2907,12 @@ export default function CommunityView() {
             window.removeEventListener('community-posts-updated', handleFeedOrPostsUpdated);
             window.removeEventListener('community-post-created', handleFeedOrPostsUpdated);
             window.removeEventListener('post-created', handleFeedOrPostsUpdated);
+            window.removeEventListener('post-deleted', handlePostDeleted);
+            window.removeEventListener('knome_content_moderated', handlePostDeleted);
             window.removeEventListener('community-files-updated', handleMembersUpdated);
             window.removeEventListener('storage', handleMembersUpdated);
             window.removeEventListener('storage', handleFeedOrPostsUpdated);
+            window.removeEventListener('storage', handlePostDeleted);
         };
     }, [communityId, currentUser?.id, currentUser?.userId]);
 
@@ -3122,13 +3187,26 @@ export default function CommunityView() {
 
 
 
-    const handleToggleRole = async (memberId, currentRole) => {
+    const handleToggleRole = async (memberId, currentRole, targetExplicitRole = null) => {
         const targetId = communityId || community?.id || 101;
         const targetMember = membersList.find(m => String(m.userId || m.id) === String(memberId));
         const memberName = targetMember?.fullName || targetMember?.name || 'Member';
-        const isCurrentlyAdmin = currentRole === 'Admin' || currentRole === 'Moderator' || currentRole === 'Community Administrator';
+        const isCurrentlyAdmin = currentRole === 'Admin' || currentRole === 'Moderator' || currentRole === 'Community Administrator' || targetMember?.isCommAdmin;
 
-        if (isCurrentlyAdmin) {
+        const desiredRole = targetExplicitRole 
+            ? (targetExplicitRole.toLowerCase().includes('admin') ? 'Admin' : 'Member')
+            : (isCurrentlyAdmin ? 'Member' : 'Admin');
+
+        if (desiredRole === 'Member') {
+            const adminsCount = getAdminCount();
+            if (!isSysAdmin && isCurrentlyAdmin && adminsCount <= 1) {
+                setAdminProtectionWarning({
+                    title: 'Cannot Change Role',
+                    message: `"${memberName}" is currently the only Community Admin for this community. A community must always have at least one active Community Admin.\n\nPlease assign another member as Community Admin before changing this role.`
+                });
+                return;
+            }
+
             try {
                 await communitiesApi.removeAdmin(targetId, memberId);
             } catch (err) {
@@ -3139,14 +3217,23 @@ export default function CommunityView() {
         } else {
             try {
                 await communitiesApi.addAdmin(targetId, memberId);
-            } catch (err) { /* best effort */ }
+            } catch (err) {
+                const msg = err?.response?.data?.message || err?.message || 'Failed to promote member to Admin.';
+                showToast(msg, 'warning');
+                return;
+            }
         }
 
-        const newRole = isCurrentlyAdmin ? 'Member' : 'Admin';
+        const newRole = desiredRole;
         setMembersList(prev => {
             const updated = prev.map(m => {
                 if (String(m.userId || m.id) === String(memberId)) {
-                    return { ...m, memberType: newRole };
+                    return { 
+                        ...m, 
+                        memberType: newRole,
+                        isCommAdmin: newRole === 'Admin',
+                        roleName: newRole === 'Admin' ? 'Community Admin' : 'Member'
+                    };
                 }
                 return m;
             });
@@ -3163,7 +3250,7 @@ export default function CommunityView() {
             }));
         }
 
-        showToast(`Member role updated to ${newRole === 'Admin' ? 'Community Admin' : 'Community Member'} for ${memberName}.`, 'success');
+        showToast(`Member role updated to ${newRole === 'Admin' ? 'Community Admin' : 'Employee'} for ${memberName}.`, 'success');
     };
 
     const getAdminCount = () => {
@@ -5932,14 +6019,23 @@ export default function CommunityView() {
                                                     <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                                                          {isAdmin && String(m.userId || m.id) !== String(currentUser?.id) && (
                                                              <>
-                                                                 {!m.isCommAdmin && (
+                                                                 {!m.isCommAdmin ? (
                                                                      <button 
-                                                                         onClick={() => handleToggleRole(m.userId || m.id, m.memberType)}
+                                                                         onClick={() => handleToggleRole(m.userId || m.id, m.memberType, 'Admin')}
                                                                          className="px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
-                                                                         title="Promote to Community Admin"
+                                                                         title="Change role to Community Admin"
                                                                      >
                                                                          <span className="material-symbols-outlined text-[14px]">manage_accounts</span>
-                                                                         <span>Admin</span>
+                                                                         <span>Make Admin</span>
+                                                                     </button>
+                                                                 ) : (
+                                                                     <button 
+                                                                         onClick={() => handleToggleRole(m.userId || m.id, m.memberType, 'Employee')}
+                                                                         className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
+                                                                         title="Change role to Employee / Member"
+                                                                     >
+                                                                         <span className="material-symbols-outlined text-[14px]">badge</span>
+                                                                         <span>Make Employee</span>
                                                                      </button>
                                                                  )}
                                                                  <button 
@@ -7819,7 +7915,7 @@ export default function CommunityView() {
                         {/* Footer */}
                         <div className="px-6 py-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between gap-3 shrink-0">
                             <span className="text-xs text-slate-500">
-                                Will be added as <strong className="text-slate-800 dark:text-slate-200">{selectedRoleToAdd}</strong>
+                                Will be added as <strong className="text-slate-800 dark:text-slate-200">{(selectedRoleToAdd === 'Admin' || selectedRoleToAdd === 'Community Admin') ? 'Community Admin' : 'Member'}</strong>
                             </span>
                             <div className="flex items-center gap-2.5">
                                 <button

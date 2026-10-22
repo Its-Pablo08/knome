@@ -20,5 +20,7 @@ public class UserSummaryDto
     public DateTime? SuspendedUntil { get; set; }
     public int KarmaPoints { get; set; }
     public string KarmaBadgeLevel { get; set; } = "Bronze";
+    public string? Role { get; set; }
+    public string? RoleName { get; set; }
     public List<string> Roles { get; set; } = new();
 }

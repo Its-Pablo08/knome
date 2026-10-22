@@ -45,10 +45,11 @@ public class PostService : IPostService
             r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" ||
             r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" ||
             r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM" ||
-            (r.RoleName != null && r.RoleName.Contains("Admin")) ||
-            (r.RoleCode != null && r.RoleCode.Contains("ADM"))))
+            r.RoleName == Roles.Moderator || r.RoleCode == "MOD" ||
+            (r.RoleName != null && (r.RoleName.Contains("Admin") || r.RoleName.Contains("Mod"))) ||
+            (r.RoleCode != null && (r.RoleCode.Contains("ADM") || r.RoleCode.Contains("MOD")))))
         {
-            throw new UnauthorizedException("You must be the author of this post or an Administrator to modify/delete it.");
+            throw new UnauthorizedException("You must be the author of this post or an Administrator/Moderator to modify/delete it.");
         }
     }
 

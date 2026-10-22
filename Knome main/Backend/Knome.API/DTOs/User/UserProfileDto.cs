@@ -29,6 +29,8 @@ public class UserProfileDto
     public byte ProfileCompletion { get; set; }
     public List<string> Skills { get; set; } = new();
     public List<string> Interests { get; set; } = new();
+    public string? Role { get; set; }
+    public string? RoleName { get; set; }
     public List<string> Roles { get; set; } = new();
 
     // Summary metrics per FR-UP-03 & FR-UP-05

@@ -937,6 +937,17 @@ public class AuthService : IAuthService
 
     private static CurrentUserDto MapToCurrentUser(Models.User user, List<string> roles)
     {
+        var primaryRole = roles.FirstOrDefault() ?? "Employee";
+        var roleCode = primaryRole switch
+        {
+            "System Admin" or "System Administrator" or "SYSADM" => "SYSADM",
+            "HR Admin" or "HR Administrator" or "HRADM" => "HRADM",
+            "Community Admin" or "Community Administrator" or "CADM" => "CADM",
+            "Moderator" or "MOD" => "MOD",
+            "Employee" or "EMP" => "EMP",
+            _ => primaryRole
+        };
+
         return new CurrentUserDto
         {
             UserId = user.UserId,
@@ -945,7 +956,9 @@ public class AuthService : IAuthService
             Email = user.Email,
             Designation = user.Designation,
             Department = user.Department?.Name,
-            Roles = roles
+            Roles = roles,
+            Role = roleCode,
+            RoleName = primaryRole
         };
     }
 }

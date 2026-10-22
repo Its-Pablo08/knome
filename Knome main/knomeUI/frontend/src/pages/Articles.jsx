@@ -53,9 +53,11 @@ export default function Articles() {
         try {
             const data = await getArticles(null, null, null, 1, 50, forceFresh);
             if (Array.isArray(data)) {
-                setAllArticles(data);
+                const deletedArticleIds = JSON.parse(localStorage.getItem('knome_deleted_article_ids') || '[]').map(String);
+                const filtered = data.filter(a => !deletedArticleIds.includes(String(a.id)) && !deletedArticleIds.includes(String(a.articleId)));
+                setAllArticles(filtered);
                 try {
-                    sessionStorage.setItem('knome_cached_articles', JSON.stringify(data));
+                    sessionStorage.setItem('knome_cached_articles', JSON.stringify(filtered));
                 } catch {}
             }
         } catch (err) {
@@ -67,6 +69,37 @@ export default function Articles() {
 
     useEffect(() => {
         loadData();
+        const handleArticleDeleted = (e) => {
+            const deletedId = e?.detail?.id || e?.detail?.articleId || e;
+            if (deletedId) {
+                const delStr = String(deletedId);
+                setAllArticles(prev => prev.filter(a => String(a.id) !== delStr && String(a.articleId) !== delStr));
+            }
+        };
+        const handleContentModerated = (e) => {
+            const { contentId, contentType, actionType } = e?.detail || {};
+            const isRemoval = actionType === 'Removed Content' || actionType === 'Delete';
+            if (isRemoval && contentId && (!contentType || String(contentType).toLowerCase() === 'article')) {
+                const delStr = String(contentId);
+                setAllArticles(prev => prev.filter(a => String(a.id) !== delStr && String(a.articleId) !== delStr));
+            }
+        };
+        const handleStorageChange = (e) => {
+            if (!e.key || e.key === 'knome_deleted_article_ids') {
+                const deletedIds = JSON.parse(localStorage.getItem('knome_deleted_article_ids') || '[]').map(String);
+                if (deletedIds.length > 0) {
+                    setAllArticles(prev => prev.filter(a => !deletedIds.includes(String(a.id)) && !deletedIds.includes(String(a.articleId))));
+                }
+            }
+        };
+        window.addEventListener('article-deleted', handleArticleDeleted);
+        window.addEventListener('knome_content_moderated', handleContentModerated);
+        window.addEventListener('storage', handleStorageChange);
+        return () => {
+            window.removeEventListener('article-deleted', handleArticleDeleted);
+            window.removeEventListener('knome_content_moderated', handleContentModerated);
+            window.removeEventListener('storage', handleStorageChange);
+        };
     }, []);
     
     // List Filtering States

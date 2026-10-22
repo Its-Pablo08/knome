@@ -221,7 +221,11 @@ export default function Videos() {
                 getVideos(force),
                 fetchPlaylists(force)
             ]);
-            if (data && Array.isArray(data)) setVideos(data);
+            if (data && Array.isArray(data)) {
+                const deletedVideoIds = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]').map(String);
+                const filteredVideos = data.filter(v => !deletedVideoIds.includes(String(v.id)) && !deletedVideoIds.includes(String(v.contentId)));
+                setVideos(filteredVideos);
+            }
             if (plData && Array.isArray(plData)) setPlaylists(plData);
         } catch (err) {
             console.error('Error fetching videos:', err);
@@ -290,16 +294,43 @@ export default function Videos() {
                 handleSync(true);
                 fetchVideos(true);
             }
+            if (!e.key || e.key === 'knome_deleted_video_ids') {
+                const deletedVideoIds = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]').map(String);
+                if (deletedVideoIds.length > 0) {
+                    setVideos(prev => prev.filter(v => !deletedVideoIds.includes(String(v.id)) && !deletedVideoIds.includes(String(v.contentId))));
+                }
+            }
+        };
+
+        const onVideoDeleted = (e) => {
+            const deletedId = e?.detail?.id || e?.detail?.videoId || e;
+            if (deletedId) {
+                const delStr = String(deletedId);
+                setVideos(prev => prev.filter(v => String(v.id) !== delStr && String(v.contentId) !== delStr));
+            }
+        };
+
+        const onContentModerated = (e) => {
+            const { contentId, contentType, actionType } = e?.detail || {};
+            const isRemoval = actionType === 'Removed Content' || actionType === 'Delete';
+            if (isRemoval && contentId && (!contentType || String(contentType).toLowerCase() === 'video')) {
+                const delStr = String(contentId);
+                setVideos(prev => prev.filter(v => String(v.id) !== delStr && String(v.contentId) !== delStr));
+            }
         };
 
         window.addEventListener('knome_playlist_updated', onPlaylistUpdated);
         window.addEventListener('storage', onStorage);
+        window.addEventListener('video-deleted', onVideoDeleted);
+        window.addEventListener('knome_content_moderated', onContentModerated);
         // Clean relaxed 60s background sync to avoid hammering the backend
         const intervalId = setInterval(() => handleSync(false), 60000);
 
         return () => {
             window.removeEventListener('knome_playlist_updated', onPlaylistUpdated);
             window.removeEventListener('storage', onStorage);
+            window.removeEventListener('video-deleted', onVideoDeleted);
+            window.removeEventListener('knome_content_moderated', onContentModerated);
             clearInterval(intervalId);
         };
     }, []);

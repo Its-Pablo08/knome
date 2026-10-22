@@ -204,10 +204,26 @@ export default function Posts() {
     useEffect(() => {
         loadPosts(posts.length > 0);
         const handlePostDeleted = (e) => {
-            const deletedId = e?.detail?.id || e;
+            const deletedId = e?.detail?.id || e?.detail?.postId || e;
             if (deletedId) {
                 const delStr = String(deletedId);
                 setPosts(prev => prev.filter(p => String(p.id) !== delStr && String(p.postId) !== delStr));
+            }
+        };
+        const handleContentModerated = (e) => {
+            const { contentId, contentType, actionType } = e?.detail || {};
+            const isRemoval = actionType === 'Removed Content' || actionType === 'Delete';
+            if (isRemoval && contentId && (!contentType || String(contentType).toLowerCase() === 'post')) {
+                const delStr = String(contentId);
+                setPosts(prev => prev.filter(p => String(p.id) !== delStr && String(p.postId) !== delStr));
+            }
+        };
+        const handleStorageChange = (e) => {
+            if (!e.key || e.key === 'knome_deleted_post_ids') {
+                const deletedIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
+                if (deletedIds.length > 0) {
+                    setPosts(prev => prev.filter(p => !deletedIds.includes(String(p.id)) && !deletedIds.includes(String(p.postId))));
+                }
             }
         };
         const handlePostCreated = () => {
@@ -220,11 +236,15 @@ export default function Posts() {
         }, 30000);
 
         window.addEventListener('post-deleted', handlePostDeleted);
+        window.addEventListener('knome_content_moderated', handleContentModerated);
+        window.addEventListener('storage', handleStorageChange);
         window.addEventListener('post-created', handlePostCreated);
         window.addEventListener('knome_drafts_updated', handlePostCreated);
         return () => {
             clearInterval(interval);
             window.removeEventListener('post-deleted', handlePostDeleted);
+            window.removeEventListener('knome_content_moderated', handleContentModerated);
+            window.removeEventListener('storage', handleStorageChange);
             window.removeEventListener('post-created', handlePostCreated);
             window.removeEventListener('knome_drafts_updated', handlePostCreated);
         };

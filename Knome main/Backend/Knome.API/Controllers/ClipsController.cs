@@ -40,7 +40,13 @@ public class ClipsController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.Fil
     {
         return User.IsInRole(Roles.SystemAdmin) ||
                User.IsInRole(Roles.HRAdmin) ||
-               User.IsInRole(Roles.CommunityAdmin);
+               User.IsInRole(Roles.CommunityAdmin) ||
+               User.IsInRole(Roles.Moderator) ||
+               User.IsInRole("Moderator") ||
+               User.IsInRole("MOD") ||
+               User.IsInRole("SYSADM") ||
+               User.IsInRole("HRADM") ||
+               User.IsInRole("CADM");
     }
 
     [HttpGet]

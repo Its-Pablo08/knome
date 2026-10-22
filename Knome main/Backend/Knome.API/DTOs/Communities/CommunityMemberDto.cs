@@ -16,6 +16,8 @@ public class CommunityMemberDto
     public DateTime? DecidedDate { get; set; }
     public int? ApprovedByUserId { get; set; }
     public string? ApprovedByUserName { get; set; }
+    public bool IsCommAdmin { get; set; }
+    public string RoleName { get; set; } = "Member";
 }
 
 public class DecideMembershipDto

@@ -47,7 +47,7 @@ public class FeedRepository : IFeedRepository
             .Include(p => p.AuthorUser)
             .Include(p => p.PostAttachments)
             .Include(p => p.MentionedUsers)
-            .Where(p => p.CreatedDate >= retentionCutoff && (string.IsNullOrEmpty(p.Status) || p.Status == "Published" || (p.Status == "Scheduled" && p.AuthorUserId == currentUserId)) &&
+            .Where(p => p.CreatedDate >= retentionCutoff && p.Status != "Removed" && p.Status != "Deleted" && (string.IsNullOrEmpty(p.Status) || p.Status == "Published" || (p.Status == "Scheduled" && p.AuthorUserId == currentUserId)) &&
                         (p.AuthorUserId == currentUserId ||
                          p.AudienceType == AudienceTypes.Everyone ||
                          p.AudienceType == "Public" ||
@@ -65,7 +65,7 @@ public class FeedRepository : IFeedRepository
         return await _db.Articles
             .Include(a => a.AuthorUser)
             .Include(a => a.ArticleAttachments)
-            .Where(a => (a.Status == ArticleStatuses.Published || (a.Status == ArticleStatuses.Scheduled && a.AuthorUserId == currentUserId)) &&
+            .Where(a => a.Status != "Removed" && a.Status != "Deleted" && (a.Status == ArticleStatuses.Published || (a.Status == ArticleStatuses.Scheduled && a.AuthorUserId == currentUserId)) &&
                         (followedUserIds.Contains(a.AuthorUserId) ||
                          a.AuthorUserId == currentUserId ||
                          true)) // Published enterprise articles

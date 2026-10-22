@@ -144,8 +144,15 @@ public class CommunityRepository : ICommunityRepository
         if (community != null && user != null && !community.Users.Any(u => u.UserId == userId))
         {
             community.Users.Add(user);
-            await _db.SaveChangesAsync();
         }
+
+        var member = await _db.CommunityMembers.FirstOrDefaultAsync(m => m.CommunityId == communityId && m.UserId == userId);
+        if (member != null && member.MemberType != CommunityMemberTypes.Admin)
+        {
+            member.MemberType = CommunityMemberTypes.Admin;
+        }
+
+        await _db.SaveChangesAsync();
     }
 
     public async Task RemoveCommunityAdminAsync(int communityId, int userId)

@@ -204,8 +204,9 @@ export default function Podcasts() {
 
             if (podcastsRes) {
                 const podcastsArray = Array.isArray(podcastsRes) ? podcastsRes : [];
+                const deletedPodIds = JSON.parse(localStorage.getItem('knome_deleted_podcast_ids') || '[]').map(String);
                 const mappedPodcasts = podcastsArray
-                    .filter(p => p.isActive === undefined || p.isActive === null || p.isActive === true || p.isActive === 1 || p.isActive === 'true')
+                    .filter(p => !deletedPodIds.includes(String(p.podcastId)) && (p.isActive === undefined || p.isActive === null || p.isActive === true || p.isActive === 1 || p.isActive === 'true'))
                     .map(p => ({
                     id: p.podcastId,
                     isActive: p.isActive !== false && p.isActive !== 0 && p.isActive !== 'false',
@@ -448,11 +449,46 @@ export default function Podcasts() {
             }
             fetchPodcastsData();
         };
+
+        const handlePodcastDeleted = (e) => {
+            const deletedId = e?.detail?.id || e?.detail?.podcastId || e;
+            if (deletedId) {
+                const delStr = String(deletedId);
+                setPodcastEpisodes(prev => prev.filter(p => String(p.id) !== delStr));
+            }
+        };
+
+        const handleContentModerated = (e) => {
+            const { contentId, contentType, actionType } = e?.detail || {};
+            const isRemoval = actionType === 'Removed Content' || actionType === 'Delete';
+            if (isRemoval && contentId && (!contentType || String(contentType).toLowerCase() === 'podcast')) {
+                const delStr = String(contentId);
+                setPodcastEpisodes(prev => prev.filter(p => String(p.id) !== delStr));
+            }
+        };
+
+        const handleStorage = (e) => {
+            if (!e.key || e.key === 'knome_deleted_podcast_ids') {
+                const deletedPodIds = JSON.parse(localStorage.getItem('knome_deleted_podcast_ids') || '[]').map(String);
+                if (deletedPodIds.length > 0) {
+                    setPodcastEpisodes(prev => prev.filter(p => !deletedPodIds.includes(String(p.id))));
+                }
+            }
+        };
+
         window.addEventListener('podcast-published', handleRefresh);
-        return () => window.removeEventListener('podcast-published', handleRefresh);
+        window.addEventListener('podcast-deleted', handlePodcastDeleted);
+        window.addEventListener('knome_content_moderated', handleContentModerated);
+        window.addEventListener('storage', handleStorage);
+        return () => {
+            window.removeEventListener('podcast-published', handleRefresh);
+            window.removeEventListener('podcast-deleted', handlePodcastDeleted);
+            window.removeEventListener('knome_content_moderated', handleContentModerated);
+            window.removeEventListener('storage', handleStorage);
+        };
     }, [currentUser]);
 
-    const isAdmin = currentUser?.role === 'SYSADM' || currentUser?.role === 'CADM' || currentUser?.role === 'HRADM';
+    const isAdmin = currentUser?.role === 'SYSADM' || currentUser?.role === 'CADM' || currentUser?.role === 'HRADM' || currentUser?.role === 'MOD' || currentUser?.roleName === 'Moderator';
 
     const handleDeletePodcast = async (podcastId) => {
         const ok = await confirm({

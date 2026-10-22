@@ -143,10 +143,11 @@ export default function DocumentViewerModal({ document: docFile, onClose }) {
     const targetSrc = useMemo(() => {
         if (!displayUrl) return '';
         if (!isPdf) return displayUrl;
+        const cleanUrl = displayUrl.split('#')[0];
         const hash = viewMode === 'width' 
-            ? '#toolbar=0&navpanes=0&scrollbar=1&view=FitH' 
-            : '#toolbar=0&navpanes=0&scrollbar=1&view=Fit';
-        return displayUrl.includes('#') ? displayUrl : `${displayUrl}${hash}`;
+            ? '#toolbar=0&navpanes=0&scrollbar=1&view=FitH&zoom=page-width' 
+            : '#toolbar=0&navpanes=0&scrollbar=1&view=Fit&zoom=page-fit';
+        return `${cleanUrl}${hash}`;
     }, [displayUrl, isPdf, viewMode]);
 
     const handleZoomIn = useCallback((e) => {
@@ -375,16 +376,32 @@ export default function DocumentViewerModal({ document: docFile, onClose }) {
                             </span>
                         </div>
                     ) : (
-                        <div className="w-full h-full bg-slate-950 relative flex items-center justify-center">
-                            <iframe 
-                                ref={iframeRef}
-                                src={targetSrc}
-                                title={fileName}
-                                className="w-full h-full border-0 bg-white"
-                                onLoad={() => setIsLoading(false)}
-                                allow="fullscreen"
-                                style={{ overscrollBehavior: 'contain' }}
-                            />
+                        <div className="w-full h-full bg-slate-950 relative flex items-center justify-center overflow-auto p-1 sm:p-3 custom-scrollbar">
+                            <div 
+                                className={`h-full transition-all duration-300 ease-in-out flex items-center justify-center mx-auto ${
+                                    viewMode === 'fit'
+                                        ? 'w-full max-w-[850px] shadow-2xl rounded-xl overflow-hidden ring-1 ring-slate-800'
+                                        : 'w-full max-w-full shadow-none rounded-none'
+                                }`}
+                                style={{
+                                    width: viewMode === 'fit' 
+                                        ? (isFullscreen ? 'min(100%, calc((100vh - 96px) * 0.75))' : 'min(100%, calc((92vh - 100px) * 0.75))')
+                                        : '100%'
+                                }}
+                            >
+                                <iframe 
+                                    key={`pdf-frame-${viewMode}`}
+                                    ref={iframeRef}
+                                    src={targetSrc}
+                                    title={fileName}
+                                    className={`w-full h-full border-0 bg-white transition-all duration-300 ${
+                                        viewMode === 'fit' ? 'rounded-xl' : 'rounded-none'
+                                    }`}
+                                    onLoad={() => setIsLoading(false)}
+                                    allow="fullscreen"
+                                    style={{ overscrollBehavior: 'contain' }}
+                                />
+                            </div>
                         </div>
                     )}
                 </div>

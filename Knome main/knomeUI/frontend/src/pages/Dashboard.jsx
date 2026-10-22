@@ -179,7 +179,9 @@ export default function Dashboard() {
         try {
             const data = await dashboardApi.getFeed(filterType);
             let mapped = (data && Array.isArray(data)) ? data.map(mapFeedItem) : [];
-            const deletedIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
+            const deletedPostIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
+            const deletedArticleIds = JSON.parse(localStorage.getItem('knome_deleted_article_ids') || '[]').map(String);
+            const deletedIds = [...deletedPostIds, ...deletedArticleIds];
 
             // Merge local posts so locally created or shared posts survive refresh
             try {
@@ -198,8 +200,9 @@ export default function Dashboard() {
             } catch (_) {}
 
             const postsAndArticlesOnly = mapped.filter(item => {
-                const itemIdStr = String(item.id || item.contentId || item.postId || '');
+                const itemIdStr = String(item.id || item.contentId || item.postId || item.articleId || '');
                 if (deletedIds.includes(itemIdStr)) return false;
+                if (item.status === 'Removed' || item.status === 'Deleted') return false;
                 const type = (item.type || item.contentType || '').toLowerCase();
                 if (type === 'video' || type === 'podcast') return false;
                 if ((type === 'post' || !type) && !isPostsEnabled) return false;
@@ -291,10 +294,13 @@ export default function Dashboard() {
         dashboardApi.getFeed(activeFilter).then(data => {
             if (data && Array.isArray(data)) {
                 const mapped = data.map(mapFeedItem);
-                const deletedIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
+                const deletedPostIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
+                const deletedArticleIds = JSON.parse(localStorage.getItem('knome_deleted_article_ids') || '[]').map(String);
+                const deletedIds = [...deletedPostIds, ...deletedArticleIds];
                 const postsAndArticlesOnly = mapped.filter(item => {
-                    const itemIdStr = String(item.id || item.contentId || item.postId || '');
+                    const itemIdStr = String(item.id || item.contentId || item.postId || item.articleId || '');
                     if (deletedIds.includes(itemIdStr)) return false;
+                    if (item.status === 'Removed' || item.status === 'Deleted') return false;
                     const type = (item.type || item.contentType || '').toLowerCase();
                     if (type === 'video' || type === 'podcast') return false;
                     if ((type === 'post' || !type) && !isPostsEnabled) return false;
@@ -346,10 +352,41 @@ export default function Dashboard() {
     };
 
     const handlePostDeleted = (e) => {
-        const deletedId = e?.detail?.id || e;
+        const deletedId = e?.detail?.id || e?.detail?.postId || e;
         if (deletedId) {
             const delStr = String(deletedId);
             setPosts(prev => prev.filter(p => String(p.id) !== delStr && String(p.contentId) !== delStr && String(p.postId) !== delStr));
+        }
+    };
+
+    const handleArticleDeleted = (e) => {
+        const deletedId = e?.detail?.id || e?.detail?.articleId || e;
+        if (deletedId) {
+            const delStr = String(deletedId);
+            setPosts(prev => prev.filter(p => String(p.id) !== delStr && String(p.contentId) !== delStr && String(p.articleId) !== delStr));
+        }
+    };
+
+    const handleContentModerated = (e) => {
+        const { contentId, actionType } = e?.detail || {};
+        const isRemoval = actionType === 'Removed Content' || actionType === 'Delete';
+        if (isRemoval && contentId) {
+            const delStr = String(contentId);
+            setPosts(prev => prev.filter(p => String(p.id) !== delStr && String(p.contentId) !== delStr && String(p.postId) !== delStr && String(p.articleId) !== delStr));
+        }
+    };
+
+    const handleStorageChange = (e) => {
+        if (!e.key || e.key === 'knome_deleted_post_ids' || e.key === 'knome_deleted_article_ids') {
+            const deletedPostIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
+            const deletedArticleIds = JSON.parse(localStorage.getItem('knome_deleted_article_ids') || '[]').map(String);
+            const allDel = [...deletedPostIds, ...deletedArticleIds];
+            if (allDel.length > 0) {
+                setPosts(prev => prev.filter(p => {
+                    const idStr = String(p.id || p.contentId || p.postId || p.articleId || '');
+                    return !allDel.includes(idStr);
+                }));
+            }
         }
     };
 
@@ -357,9 +394,15 @@ export default function Dashboard() {
         loadPosts('All');
         window.addEventListener('post-created', handlePostCreated);
         window.addEventListener('post-deleted', handlePostDeleted);
+        window.addEventListener('article-deleted', handleArticleDeleted);
+        window.addEventListener('knome_content_moderated', handleContentModerated);
+        window.addEventListener('storage', handleStorageChange);
         return () => {
             window.removeEventListener('post-created', handlePostCreated);
             window.removeEventListener('post-deleted', handlePostDeleted);
+            window.removeEventListener('article-deleted', handleArticleDeleted);
+            window.removeEventListener('knome_content_moderated', handleContentModerated);
+            window.removeEventListener('storage', handleStorageChange);
         };
     }, []);
 

@@ -70,7 +70,7 @@ public class ArticleController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.F
     }
 
     [HttpPost]
-    [Authorize(Roles = $"{Roles.Employee},{Roles.CommunityAdmin},{Roles.HRAdmin},{Roles.SystemAdmin}")]
+    [Authorize(Roles = $"{Roles.Employee},{Roles.Moderator},{Roles.CommunityAdmin},{Roles.HRAdmin},{Roles.SystemAdmin},MOD,Moderator,EMP,CADM,HRADM,SYSADM")]
     [ProducesResponseType(typeof(ApiResponse<ArticleDto>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateArticle([FromBody] CreateArticleDto dto)
     {
@@ -80,7 +80,7 @@ public class ArticleController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.F
     }
 
     [HttpPut("{articleId}")]
-    [Authorize(Roles = $"{Roles.Employee},{Roles.CommunityAdmin},{Roles.HRAdmin},{Roles.SystemAdmin}")]
+    [Authorize(Roles = $"{Roles.Employee},{Roles.Moderator},{Roles.CommunityAdmin},{Roles.HRAdmin},{Roles.SystemAdmin},MOD,Moderator,EMP,CADM,HRADM,SYSADM")]
     [ProducesResponseType(typeof(ApiResponse<ArticleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateArticle(long articleId, [FromBody] UpdateArticleDto dto)
     {
@@ -90,7 +90,7 @@ public class ArticleController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.F
     }
 
     [HttpDelete("{articleId}")]
-    [Authorize(Roles = $"{Roles.Employee},{Roles.CommunityAdmin},{Roles.HRAdmin},{Roles.SystemAdmin}")]
+    [Authorize(Roles = $"{Roles.Employee},{Roles.Moderator},{Roles.CommunityAdmin},{Roles.HRAdmin},{Roles.SystemAdmin},MOD,Moderator,EMP,CADM,HRADM,SYSADM")]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteArticle(long articleId)
     {

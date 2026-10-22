@@ -40,9 +40,15 @@ public class ArticleService : IArticleService
         if (article.AuthorUserId == currentUserId) return;
 
         var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-        if (user == null || !user.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" || r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" || r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM"))
+        if (user == null || !user.Roles.Any(r => 
+            r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" || 
+            r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" || 
+            r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM" ||
+            r.RoleName == Roles.Moderator || r.RoleCode == "MOD" ||
+            (r.RoleName != null && (r.RoleName.Contains("Admin") || r.RoleName.Contains("Mod"))) ||
+            (r.RoleCode != null && (r.RoleCode.Contains("ADM") || r.RoleCode.Contains("MOD")))))
         {
-            throw new UnauthorizedException("You must be the author of this article or an Administrator to modify/delete it.");
+            throw new UnauthorizedException("You must be the author of this article or an Administrator/Moderator to modify/delete it.");
         }
     }
 

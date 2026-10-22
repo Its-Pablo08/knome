@@ -1019,6 +1019,25 @@ public class ContentInteractionService : IContentInteractionService
     {
         ValidateContentType(contentType);
 
+        // Check if an existing report for this content is already pending/under review to prevent duplicate database entries
+        var existingReport = await _db.ModerationReports
+            .Where(m => m.ContentType.ToLower() == contentType.ToLower() && m.ContentId == contentId && (m.Status == ReportStatuses.Pending || m.Status == ReportStatuses.UnderReview))
+            .OrderByDescending(m => m.ReportedDate)
+            .FirstOrDefaultAsync();
+
+        if (existingReport != null)
+        {
+            // Update the existing report record with latest report details and timestamp
+            existingReport.ReportedDate = KnomeTime.Now;
+            if (!string.IsNullOrWhiteSpace(dto.ReasonCode))
+            {
+                existingReport.ReasonCode = dto.ReasonCode;
+            }
+            await _repo.UpdateReportAsync(existingReport);
+            var reloadedExisting = await _repo.GetReportByIdAsync(existingReport.ReportId);
+            return _mapper.Map<ModerationReportDto>(reloadedExisting);
+        }
+
         var report = new ModerationReport
         {
             ReporterUserId = reporterUserId,
@@ -1060,6 +1079,103 @@ public class ContentInteractionService : IContentInteractionService
         report.ActionDate = KnomeTime.Now;
 
         await _repo.UpdateReportAsync(report);
+
+        // Synchronize content status in the database: if report action was removal/delete, update the underlying entity immediately
+        var isRemoved = string.Equals(dto.Status, "Removed Content", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(dto.Status, "Action Taken", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(dto.Status, "Deleted", StringComparison.OrdinalIgnoreCase) ||
+                        (!string.IsNullOrEmpty(dto.ActionTaken) && (dto.ActionTaken.Contains("Remove", StringComparison.OrdinalIgnoreCase) || dto.ActionTaken.Contains("Delete", StringComparison.OrdinalIgnoreCase)));
+
+        if (isRemoved)
+        {
+            var contentType = report.ContentType?.Trim();
+            var contentId = report.ContentId;
+
+            try
+            {
+                if (string.Equals(contentType, ContentTypes.Post, StringComparison.OrdinalIgnoreCase))
+                {
+                    var post = await _db.Posts.FindAsync(contentId);
+                    if (post != null)
+                    {
+                        post.Status = "Removed";
+                        _db.Posts.Update(post);
+                        await _db.SaveChangesAsync();
+                    }
+                }
+                else if (string.Equals(contentType, ContentTypes.Article, StringComparison.OrdinalIgnoreCase))
+                {
+                    var article = await _db.Articles.FindAsync(contentId);
+                    if (article != null)
+                    {
+                        article.Status = "Removed";
+                        _db.Articles.Update(article);
+                        await _db.SaveChangesAsync();
+                    }
+                }
+                else if (string.Equals(contentType, ContentTypes.Video, StringComparison.OrdinalIgnoreCase))
+                {
+                    var video = await _db.Videos.FindAsync(contentId);
+                    if (video != null)
+                    {
+                        var tags = await _db.VideoTags.Where(vt => vt.VideoId == video.VideoId).ToListAsync();
+                        _db.VideoTags.RemoveRange(tags);
+                        _db.Videos.Remove(video);
+                        await _db.SaveChangesAsync();
+                    }
+                }
+                else if (string.Equals(contentType, ContentTypes.Podcast, StringComparison.OrdinalIgnoreCase))
+                {
+                    var podcast = await _db.Podcasts.FindAsync(contentId);
+                    if (podcast != null)
+                    {
+                        podcast.IsActive = false;
+                        _db.Podcasts.Update(podcast);
+                        await _db.SaveChangesAsync();
+                    }
+                }
+                else if (string.Equals(contentType, "Clip", StringComparison.OrdinalIgnoreCase))
+                {
+                    var clip = await _db.Clips.FindAsync(contentId);
+                    if (clip != null)
+                    {
+                        clip.Status = "Removed";
+                        clip.IsActive = false;
+                        _db.Clips.Update(clip);
+                        await _db.SaveChangesAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating target content status upon moderation removal for {ContentType} #{ContentId}", contentType, contentId);
+            }
+        }
+
+        // Also update any other duplicate pending reports for this exact same content to maintain status parity
+        try
+        {
+            var otherPendingReports = await _db.ModerationReports
+                .Where(r => r.ContentType.ToLower() == report.ContentType.ToLower() && r.ContentId == report.ContentId && r.ReportId != report.ReportId && (r.Status == "Pending" || r.Status == ReportStatuses.Pending || r.Status == ReportStatuses.UnderReview))
+                .ToListAsync();
+
+            if (otherPendingReports.Count > 0)
+            {
+                foreach (var other in otherPendingReports)
+                {
+                    other.Status = report.Status;
+                    other.ModeratorUserId = moderatorUserId;
+                    other.ActionTaken = report.ActionTaken;
+                    other.ActionDate = KnomeTime.Now;
+                    _db.ModerationReports.Update(other);
+                }
+                await _db.SaveChangesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to synchronize status across duplicate reports for {ContentType} #{ContentId}", report.ContentType, report.ContentId);
+        }
 
         // Moderation advisory notification to the content creator if action was taken or resolved
         try

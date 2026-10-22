@@ -138,8 +138,8 @@ export const KNOWN_ROSTER_DETAILS = {
     '1050': { designation: 'Associate Consultant', roleName: 'System Admin', department: 'HR' },
     'MPO089': { designation: 'Associate Consultant', roleName: 'System Admin', department: 'HR' },
     'MPO107': { designation: 'Associate Consultant', roleName: 'System Admin', department: 'HR' },
-    '1057': { designation: 'Software Developer', roleName: 'Employee', department: 'University' },
-    'MPO652': { designation: 'Software Developer', roleName: 'Employee', department: 'University' },
+    '1057': { designation: 'Software Developer', roleName: 'Moderator', department: 'University' },
+    'MPO652': { designation: 'Software Developer', roleName: 'Moderator', department: 'University' },
     '4': { designation: 'Software Engineer', roleName: 'Employee', department: 'Technology' },
     'MPO104': { designation: 'Software Engineer', roleName: 'Employee', department: 'Technology' },
     '6': { designation: 'UI Designer', roleName: 'Community Admin', department: 'Product Design' },
@@ -224,8 +224,8 @@ export const deduplicateMembers = (members = [], contextUsers = []) => {
 
         if (matchedKey) {
             const existing = seen.get(matchedKey);
-            const isExistingAdmin = existing.memberType === 'Admin' || existing.isCommAdmin || existing.roleName === 'Admin' || existing.memberType === 'Community Admin';
-            const isNewAdmin = m.memberType === 'Admin' || m.isCommAdmin || m.roleName === 'Admin' || m.memberType === 'Community Admin';
+            const isExistingAdmin = existing.memberType === 'Admin' || existing.isCommAdmin || existing.roleName === 'Admin' || existing.roleName === 'Community Admin' || existing.memberType === 'Community Admin' || existing.memberType === 'Moderator';
+            const isNewAdmin = m.memberType === 'Admin' || m.isCommAdmin || m.roleName === 'Admin' || m.roleName === 'Community Admin' || m.memberType === 'Community Admin' || m.memberType === 'Moderator';
             const mergedMemberType = (isExistingAdmin || isNewAdmin) ? 'Admin' : (existing.memberType || m.memberType || 'Member');
 
             const genericDesigs = ['employee', 'member', 'user'];
@@ -266,7 +266,7 @@ export const deduplicateMembers = (members = [], contextUsers = []) => {
                 department: mergedDept || existingDept || newDept || 'MPOnline',
                 displayDepartment: mergedDept || existingDept || newDept || 'MPOnline',
                 memberType: mergedMemberType,
-                roleName: (isExistingAdmin || isNewAdmin) ? 'Admin' : 'Member',
+                roleName: (isExistingAdmin || isNewAdmin) ? 'Community Admin' : 'Member',
                 isCommAdmin: isExistingAdmin || isNewAdmin,
                 status: (existing.status === 'Approved' || m.status === 'Approved') ? 'Approved' : (existing.status || m.status),
                 profilePhotoUrl: existing.profilePhotoUrl || m.profilePhotoUrl || existing.avatar || m.avatar
@@ -289,11 +289,18 @@ export const deduplicateMembers = (members = [], contextUsers = []) => {
             const exName = (existing.fullName || existing.name || '').toString().trim().toLowerCase();
             if (exName && exName !== 'employee') seen.set(`name:${exName}`, merged);
         } else {
-            uniqueList.push(m);
-            if (rawEmpId) seen.set(`emp:${rawEmpId}`, m);
-            if (rawUid) seen.set(`uid:${rawUid}`, m);
+            const isAdmin = m.memberType === 'Admin' || m.isCommAdmin === true || m.roleName === 'Admin' || m.roleName === 'Community Admin' || m.memberType === 'Community Admin' || m.memberType === 'Moderator';
+            const enhanced = {
+                ...m,
+                memberType: isAdmin ? 'Admin' : (m.memberType || 'Member'),
+                isCommAdmin: isAdmin,
+                roleName: isAdmin ? 'Community Admin' : (m.roleName === 'Admin' ? 'Community Admin' : (m.roleName || 'Member'))
+            };
+            uniqueList.push(enhanced);
+            if (rawEmpId) seen.set(`emp:${rawEmpId}`, enhanced);
+            if (rawUid) seen.set(`uid:${rawUid}`, enhanced);
             if (normName && normName !== 'employee' && normName !== 'member' && !/^(emp|mpo|mp)\d+$/i.test(normName)) {
-                seen.set(`name:${normName}`, m);
+                seen.set(`name:${normName}`, enhanced);
             }
         }
     }
@@ -372,7 +379,7 @@ export const INITIAL_USERS = [
     { id: 5, userId: 5, employeeId: 'Emp101', email: 'meghna@gmail.com', name: 'Meghna', fullName: 'Meghna', role: 'HRADM', roleName: 'HR Admin', designation: 'Business Analyst', department: 'Product Design', location: 'Bhopal HQ', avatar: null, karmaPoints: 123, karma: 123, isActive: true },
     { id: 1036, userId: 1036, employeeId: 'EMP100', email: 'mayurbansal7089@gmail.com', name: 'Mayur Bansal', fullName: 'Mayur Bansal', role: 'EMP', roleName: 'Employee', designation: 'Software Developer', department: 'Technology', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
     { id: 1050, userId: 1050, employeeId: 'MPO089', email: 'vilash.deshmukh@mponline.gov.in', name: 'Vilash Deshmukh', fullName: 'Vilash Deshmukh', role: 'SYSADM', roleName: 'System Admin', designation: 'Associate Consultant', department: 'HR', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
-    { id: 1057, userId: 1057, employeeId: 'MPO652', email: 'deepak.simrodia@mponline.gov.in', name: 'Deepak Simrodia', fullName: 'Deepak Simrodia', role: 'EMP', roleName: 'Employee', designation: 'Software Developer', department: 'University', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
+    { id: 1057, userId: 1057, employeeId: 'MPO652', email: 'deepak.simrodia@mponline.gov.in', name: 'Deepak Simrodia', fullName: 'Deepak Simrodia', role: 'MOD', roleName: 'Moderator', designation: 'Software Developer', department: 'University', location: 'Bhopal HQ', avatar: null, karmaPoints: 0, karma: 0, isActive: true },
 ];
 
 // Keep the named export `users` for any legacy imports
@@ -463,7 +470,7 @@ export const UserProvider = ({ children }) => {
         let derivedRole = localUser.role || 'EMP';
         let derivedRoleName = localUser.roleName || 'Employee';
 
-        // 0. Check localStorage role overrides first (authoritative user assignments)
+        // 0. Check localStorage role overrides
         let customOverride = null;
         try {
             const savedOverrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
@@ -485,16 +492,8 @@ export const UserProvider = ({ children }) => {
             }
         } catch {}
 
-        if (customOverride && customOverride.length > 0) {
-            const primary = customOverride.find(r => r !== 'Employee' && r !== 'EMP') || customOverride[0];
-            const cleanPrimary = (primary === 'System Administrator' || primary === 'SYSADM') ? 'System Admin'
-                : (primary === 'HR Administrator' || primary === 'HRADM') ? 'HR Admin'
-                : (primary === 'Community Administrator' || primary === 'CADM') ? 'Community Admin'
-                : (primary === 'Moderator' || primary === 'MOD') ? 'Moderator'
-                : primary;
-            derivedRoleName = cleanPrimary;
-            derivedRole = roleCodeMap[cleanPrimary] || roleCodeMap[primary] || 'EMP';
-        } else if (Array.isArray(profile.roles) && profile.roles.length > 0) {
+        // Backend profile is authoritative source of truth if available
+        if (Array.isArray(profile.roles) && profile.roles.length > 0) {
             const rolePriority = ['Moderator', 'System Admin', 'System Administrator', 'HR Admin', 'HR Administrator', 'Community Admin', 'Community Administrator', 'Employee'];
             const highestRole = rolePriority.find(r => profile.roles.includes(r) || (r === 'System Admin' && profile.roles.includes('System Administrator')) || (r === 'HR Admin' && profile.roles.includes('HR Administrator'))) || profile.roles[0];
             const cleanRole = (highestRole === 'System Administrator' || highestRole === 'System Admin') ? 'System Admin'
@@ -504,6 +503,24 @@ export const UserProvider = ({ children }) => {
                 : highestRole;
             derivedRoleName = cleanRole;
             derivedRole = roleCodeMap[highestRole] || roleCodeMap[cleanRole] || 'EMP';
+        } else if (profile.roleName || profile.role) {
+            const rName = profile.roleName || profile.role;
+            const cleanRole = (rName === 'System Administrator' || rName === 'SYSADM') ? 'System Admin'
+                : (rName === 'HR Administrator' || rName === 'HRADM') ? 'HR Admin'
+                : (rName === 'Community Administrator' || rName === 'CADM') ? 'Community Admin'
+                : (rName === 'Moderator' || rName === 'MOD') ? 'Moderator'
+                : rName;
+            derivedRoleName = cleanRole;
+            derivedRole = roleCodeMap[cleanRole] || roleCodeMap[rName] || 'EMP';
+        } else if (customOverride && customOverride.length > 0) {
+            const primary = customOverride.find(r => r !== 'Employee' && r !== 'EMP') || customOverride[0];
+            const cleanPrimary = (primary === 'System Administrator' || primary === 'SYSADM') ? 'System Admin'
+                : (primary === 'HR Administrator' || primary === 'HRADM') ? 'HR Admin'
+                : (primary === 'Community Administrator' || primary === 'CADM') ? 'Community Admin'
+                : (primary === 'Moderator' || primary === 'MOD') ? 'Moderator'
+                : primary;
+            derivedRoleName = cleanPrimary;
+            derivedRole = roleCodeMap[cleanPrimary] || roleCodeMap[primary] || 'EMP';
         } else {
             // New user from EmployeeHub gets default Employee role with full access
             derivedRole = 'EMP';
@@ -518,19 +535,17 @@ export const UserProvider = ({ children }) => {
         const derivedStatus = isSuspended ? 'Suspended' : (!isActive ? 'Inactive' : 'Active');
         const singleRoleList = [derivedRoleName];
 
-        // Persist roles into knome_role_overrides so any browser reload retains assigned roles
+        // Persist authoritative roles into knome_role_overrides so any browser reload retains assigned roles
         try {
             const overrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
-            if (!customOverride) {
-                if (profile.userId) overrides[String(profile.userId)] = singleRoleList;
-                if (resolvedEmpId) overrides[resolvedEmpId.toUpperCase()] = singleRoleList;
-                if (localUser.userId) overrides[String(localUser.userId)] = singleRoleList;
-                if (localUser.id) overrides[String(localUser.id)] = singleRoleList;
-                if (localUser.employeeId) overrides[localUser.employeeId.toUpperCase()] = singleRoleList;
-                if (localUser.email) overrides[localUser.email.toLowerCase()] = singleRoleList;
-                if (profile.email) overrides[profile.email.toLowerCase()] = singleRoleList;
-                localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
-            }
+            if (profile.userId) overrides[String(profile.userId)] = singleRoleList;
+            if (resolvedEmpId) overrides[resolvedEmpId.toUpperCase()] = singleRoleList;
+            if (localUser.userId) overrides[String(localUser.userId)] = singleRoleList;
+            if (localUser.id) overrides[String(localUser.id)] = singleRoleList;
+            if (localUser.employeeId) overrides[localUser.employeeId.toUpperCase()] = singleRoleList;
+            if (localUser.email) overrides[localUser.email.toLowerCase()] = singleRoleList;
+            if (profile.email) overrides[profile.email.toLowerCase()] = singleRoleList;
+            localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
         } catch {}
 
         setUsersList(prev => {
@@ -744,7 +759,7 @@ export const UserProvider = ({ children }) => {
                                     }
                                 } catch {}
 
-                                const rawRoles = customOverride || (Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : null);
+                                const rawRoles = (Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : null) || (u.roleName ? [u.roleName] : null) || customOverride;
                                 const roles = rawRoles 
                                     ? rawRoles 
                                     : [u.roleName || u.role || matchedDetails?.roleName || matchedInitial?.roleName || 'Employee'];

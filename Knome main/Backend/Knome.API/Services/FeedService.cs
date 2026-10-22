@@ -233,7 +233,7 @@ public class FeedService : IFeedService
             var posts = await _db.Posts
                 .Include(p => p.AuthorUser)
                 .Include(p => p.PostAttachments)
-                .Where(p => p.CreatedDate >= cutoff && p.AudienceType == AudienceTypes.Everyone)
+                .Where(p => p.CreatedDate >= cutoff && p.AudienceType == AudienceTypes.Everyone && p.Status != "Removed" && p.Status != "Deleted")
                 .OrderByDescending(p => p.CreatedDate)
                 .Take(50)
                 .ToListAsync();
@@ -279,7 +279,7 @@ public class FeedService : IFeedService
             var articles = await _db.Articles
                 .Include(a => a.AuthorUser)
                 .Include(a => a.ArticleAttachments)
-                .Where(a => (a.PublishedDate ?? a.CreatedDate) >= cutoff && (a.Status == ArticleStatuses.Published || string.IsNullOrEmpty(a.Status)))
+                .Where(a => (a.PublishedDate ?? a.CreatedDate) >= cutoff && a.Status != "Removed" && a.Status != "Deleted" && (a.Status == ArticleStatuses.Published || string.IsNullOrEmpty(a.Status)))
                 .OrderByDescending(a => a.PublishedDate ?? a.CreatedDate)
                 .Take(50)
                 .ToListAsync();

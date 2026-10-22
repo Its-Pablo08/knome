@@ -26,7 +26,10 @@ public class ChangeRoleValidator : AbstractValidator<ChangeRoleDto>
         "System Admin",
         "System Administrator",
         "SystemAdmin",
-        "SYSADM"
+        "SYSADM",
+        Roles.Moderator,
+        "Moderator",
+        "MOD"
     };
 
     public ChangeRoleValidator()
@@ -34,6 +37,6 @@ public class ChangeRoleValidator : AbstractValidator<ChangeRoleDto>
         RuleFor(x => x.RoleNames)
             .NotEmpty().WithMessage("At least one role must be assigned.")
             .Must(roles => roles != null && roles.All(r => ValidRoles.Contains(r)))
-            .WithMessage($"Invalid role name specified. Valid roles are: Employee, Community Admin, HR Admin, System Admin");
+            .WithMessage($"Invalid role name specified. Valid roles are: Employee, Community Admin, HR Admin, System Admin, Moderator");
     }
 }

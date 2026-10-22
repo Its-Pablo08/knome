@@ -67,13 +67,21 @@ export default function ReportModal({ isOpen, onClose, targetType = 'Post', targ
             };
             try {
                 const existing = JSON.parse(localStorage.getItem('knome_moderation_reports') || '[]');
-                const filtered = Array.isArray(existing) ? existing.filter(r => !(r.contentId === (numericId || targetId) && r.contentType === formattedType)) : [];
+                const filtered = Array.isArray(existing) 
+                    ? existing.filter(r => !(String(r.contentId) === String(numericId || targetId) && String(r.contentType || '').toLowerCase() === formattedType.toLowerCase())) 
+                    : [];
                 localStorage.setItem('knome_moderation_reports', JSON.stringify([newReport, ...filtered]));
             } catch {}
 
             if (!isNaN(numericId) && numericId > 0 && !String(targetId).startsWith('yt_')) {
                 try {
                     await interactionsApi.reportContent(formattedType, numericId, { reasonCode: selectedCode });
+                    // Backend confirmed: prune temporary local fallback copy so it doesn't cause dual-entry duplicates
+                    try {
+                        const existing = JSON.parse(localStorage.getItem('knome_moderation_reports') || '[]');
+                        const cleaned = existing.filter(r => !(String(r.contentId) === String(numericId) && String(r.contentType || '').toLowerCase() === formattedType.toLowerCase()));
+                        localStorage.setItem('knome_moderation_reports', JSON.stringify(cleaned));
+                    } catch {}
                 } catch (apiErr) {
                     console.warn("Backend report API note (saved in local moderation queue):", apiErr);
                 }

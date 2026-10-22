@@ -45,6 +45,7 @@ public class PostRepository : IPostRepository
             .Include(p => p.PostAttachments)
             .Include(p => p.MentionedUsers)
             .Where(p => p.CreatedDate >= retentionCutoff && 
+                        p.Status != "Removed" && p.Status != "Deleted" &&
                         (string.IsNullOrEmpty(p.Status) || 
                          p.Status == "Published" || 
                          (p.AuthorUserId == currentUserId)))

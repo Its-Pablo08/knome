@@ -26,6 +26,8 @@ public class CommunityProfile : Profile
             .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.User != null ? src.User.FullName : "Unknown"))
             .ForMember(dest => dest.Designation, opt => opt.MapFrom(src => src.User != null ? src.User.Designation : null))
             .ForMember(dest => dest.ProfilePhotoUrl, opt => opt.MapFrom(src => src.User != null ? src.User.ProfilePhotoUrl : null))
-            .ForMember(dest => dest.ApprovedByUserName, opt => opt.MapFrom(src => src.ApprovedByUser != null ? src.ApprovedByUser.FullName : null));
+            .ForMember(dest => dest.ApprovedByUserName, opt => opt.MapFrom(src => src.ApprovedByUser != null ? src.ApprovedByUser.FullName : null))
+            .ForMember(dest => dest.IsCommAdmin, opt => opt.MapFrom(src => src.MemberType == CommunityMemberTypes.Admin))
+            .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.MemberType == CommunityMemberTypes.Admin ? "Community Admin" : "Member"));
     }
 }

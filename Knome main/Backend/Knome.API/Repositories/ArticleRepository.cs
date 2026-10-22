@@ -48,6 +48,7 @@ public class ArticleRepository : IArticleRepository
             .Include(a => a.ArticleTags)
             .Include(a => a.ArticleAttachments)
             .Include(a => a.ArticleVersions)
+            .Where(a => a.Status != "Removed" && a.Status != "Deleted")
             .AsQueryable();
 
         if (categoryId.HasValue)

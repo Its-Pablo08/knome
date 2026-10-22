@@ -18,7 +18,7 @@ namespace Knome.API.Controllers;
 
 [ApiController]
 [Route("api/audit")]
-[Authorize(Roles = Roles.SystemAdmin + "," + Roles.HRAdmin)]
+[Authorize(Roles = $"{Roles.SystemAdmin},{Roles.HRAdmin},{Roles.Moderator},MOD,Moderator,SYSADM,HRADM,System Admin,HR Admin")]
 public class AuditLogController : KnomeControllerBase
 {
     private readonly IAuditLogService _auditLogService;

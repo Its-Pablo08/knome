@@ -49,7 +49,13 @@ public class InteractionController : KnomeControllerBase
     {
         return User.IsInRole(Roles.CommunityAdmin) ||
                User.IsInRole(Roles.HRAdmin) ||
-               User.IsInRole(Roles.SystemAdmin);
+               User.IsInRole(Roles.SystemAdmin) ||
+               User.IsInRole(Roles.Moderator) ||
+               User.IsInRole("Moderator") ||
+               User.IsInRole("MOD") ||
+               User.IsInRole("SYSADM") ||
+               User.IsInRole("HRADM") ||
+               User.IsInRole("CADM");
     }
 
     [HttpPost("validate-security")]
@@ -281,7 +287,7 @@ public class InteractionController : KnomeControllerBase
         return Ok(ApiResponse<List<ModerationReportDto>>.SuccessResponse(200, "Pending reports retrieved successfully.", reports));
     }
 
-    [Authorize(Roles = $"{Roles.Moderator},{Roles.CommunityAdmin},{Roles.SystemAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin")]
+    [Authorize(Roles = $"{Roles.Moderator},{Roles.CommunityAdmin},{Roles.SystemAdmin},{Roles.HRAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin,HRADM,HR Admin,HR Administrator,CADM,Community Admin,Community Administrator")]
     [HttpPut("reports/{reportId}/resolve")]
     [ProducesResponseType(typeof(ApiResponse<ModerationReportDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ResolveReport(long reportId, [FromBody] ResolveReportDto dto)

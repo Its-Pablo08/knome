@@ -35,6 +35,7 @@ public class CommunityService : ICommunityService
     private readonly ILogger<CommunityService>? _logger;
     private readonly ISystemSettingService? _systemSettingService;
     private readonly IHubContext<NotificationHub>? _hubContext;
+    private readonly IAuditLogService? _auditLogService;
     private static readonly object _commFilesLock = new();
 
     public CommunityService(
@@ -49,7 +50,8 @@ public class CommunityService : ICommunityService
         IConfiguration configuration,
         ILogger<CommunityService>? logger = null,
         ISystemSettingService? systemSettingService = null,
-        IHubContext<NotificationHub>? hubContext = null)
+        IHubContext<NotificationHub>? hubContext = null,
+        IAuditLogService? auditLogService = null)
     {
         _repo = repo;
         _interactionService = interactionService;
@@ -63,6 +65,7 @@ public class CommunityService : ICommunityService
         _logger = logger;
         _systemSettingService = systemSettingService;
         _hubContext = hubContext;
+        _auditLogService = auditLogService;
     }
 
     private static bool IsPrivilegedAdminRole(Role r)
@@ -72,7 +75,8 @@ public class CommunityService : ICommunityService
         var code = (r.RoleCode ?? string.Empty).Trim().ToUpper();
         return name == "SYSTEM ADMINISTRATOR" || name == "SYSTEM ADMIN" || code == "SYSADM" ||
                name == "HR ADMINISTRATOR" || name == "HR ADMIN" || code == "HRADM" ||
-               name == "COMMUNITY ADMINISTRATOR" || name == "COMMUNITY ADMIN" || code == "CADM";
+               name == "COMMUNITY ADMINISTRATOR" || name == "COMMUNITY ADMIN" || code == "CADM" ||
+               name == "MODERATOR" || name == "MOD" || code == "MOD" || code == "MODERATOR";
     }
 
     private async Task CheckIsAdminOrSysAdminAsync(int communityId, int currentUserId)
@@ -419,9 +423,9 @@ public class CommunityService : ICommunityService
 
         if (!isHRorAdmin)
         {
-            // Notify Community Admins, HR Administrators & System Administrators of pending community creation request
+            // Notify Community Admins, HR Administrators, System Administrators & Moderators of pending community creation request
             var adminUserIds = await _db.Users
-                .Where(u => u.IsActive && u.Roles.Any(r => r.RoleName == Roles.HRAdmin || r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.CommunityAdmin || r.RoleCode == "SYSADM" || r.RoleCode == "HRADM" || r.RoleCode == "CADM" || r.RoleName == "System Admin" || r.RoleName == "HR Admin"))
+                .Where(u => u.IsActive && u.Roles.Any(r => r.RoleName == Roles.HRAdmin || r.RoleName == Roles.SystemAdmin || r.RoleName == Roles.CommunityAdmin || r.RoleName == Roles.Moderator || r.RoleCode == "SYSADM" || r.RoleCode == "HRADM" || r.RoleCode == "CADM" || r.RoleCode == "MOD" || r.RoleCode == "MODERATOR" || r.RoleName == "System Admin" || r.RoleName == "HR Admin" || r.RoleName == "Moderator"))
                 .Select(u => u.UserId)
                 .Distinct()
                 .ToListAsync();
@@ -610,6 +614,18 @@ public class CommunityService : ICommunityService
             // Non-critical notification delivery failure
         }
 
+        if (_auditLogService != null)
+        {
+            try
+            {
+                await _auditLogService.RecordAsync(currentUserId, "ApproveCommunity", "Community", communityId, reason: $"Community '{community.Name}' approved.");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to record audit log for community approval {CommunityId}", communityId);
+            }
+        }
+
         return await GetCommunityAsync(communityId, currentUserId);
     }
 
@@ -646,6 +662,18 @@ public class CommunityService : ICommunityService
         catch
         {
             // Non-critical notification delivery failure
+        }
+
+        if (_auditLogService != null)
+        {
+            try
+            {
+                await _auditLogService.RecordAsync(currentUserId, "RejectCommunity", "Community", communityId, reason: dto?.Reason ?? "Community creation rejected.");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to record audit log for community rejection {CommunityId}", communityId);
+            }
         }
     }
 
@@ -777,7 +805,62 @@ public class CommunityService : ICommunityService
         }
 
         var members = await _repo.GetMembersAsync(communityId, status, pageNumber, pageSize);
-        return _mapper.Map<List<CommunityMemberDto>>(members);
+        var dtos = _mapper.Map<List<CommunityMemberDto>>(members);
+
+        // Synchronize community admin status
+        var community = await _db.Communities
+            .Include(c => c.Users)
+            .FirstOrDefaultAsync(c => c.CommunityId == communityId);
+
+        var adminUserIds = community?.Users.Select(u => u.UserId).ToHashSet() ?? new HashSet<int>();
+        var creatorUserId = community?.CreatedByUserId ?? 0;
+
+        foreach (var dto in dtos)
+        {
+            var isUserAdmin = adminUserIds.Contains(dto.UserId) ||
+                              dto.UserId == creatorUserId ||
+                              string.Equals(dto.MemberType, CommunityMemberTypes.Admin, StringComparison.OrdinalIgnoreCase) ||
+                              string.Equals(dto.MemberType, "Community Admin", StringComparison.OrdinalIgnoreCase);
+
+            if (isUserAdmin)
+            {
+                dto.MemberType = CommunityMemberTypes.Admin;
+                dto.IsCommAdmin = true;
+                dto.RoleName = "Community Admin";
+            }
+            else
+            {
+                dto.RoleName = "Member";
+            }
+        }
+
+        // Ensure active community admins are always included in approved member listing
+        if (community != null && community.Users != null && (string.IsNullOrWhiteSpace(status) || string.Equals(status, CommunityMemberStatuses.Approved, StringComparison.OrdinalIgnoreCase)))
+        {
+            foreach (var adminUser in community.Users)
+            {
+                if (!dtos.Any(d => d.UserId == adminUser.UserId))
+                {
+                    dtos.Insert(0, new CommunityMemberDto
+                    {
+                        CommunityId = communityId,
+                        UserId = adminUser.UserId,
+                        EmployeeId = adminUser.EmployeeId ?? string.Empty,
+                        FullName = adminUser.FullName ?? "Administrator",
+                        Designation = adminUser.Designation ?? "Community Admin",
+                        ProfilePhotoUrl = adminUser.ProfilePhotoUrl,
+                        MemberType = CommunityMemberTypes.Admin,
+                        Status = CommunityMemberStatuses.Approved,
+                        RequestedDate = adminUser.CreatedDate,
+                        DecidedDate = adminUser.CreatedDate,
+                        IsCommAdmin = true,
+                        RoleName = "Community Admin"
+                    });
+                }
+            }
+        }
+
+        return dtos;
     }
 
     public async Task<CommunityMemberDto> DecideMembershipAsync(int communityId, int targetUserId, int currentUserId, DecideMembershipDto dto)
@@ -879,6 +962,18 @@ public class CommunityService : ICommunityService
             }
         }
 
+        if (_auditLogService != null)
+        {
+            try
+            {
+                await _auditLogService.RecordAsync(currentUserId, $"DecideCommunityMembership_{dto.Status}", "CommunityMember", targetUserId, reason: $"Membership status updated to {dto.Status} in community {communityId}.");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to record audit log for DecideMembership {CommunityId} {TargetUserId}", communityId, targetUserId);
+            }
+        }
+
         return _mapper.Map<CommunityMemberDto>(member);
     }
 
@@ -942,6 +1037,18 @@ public class CommunityService : ICommunityService
                 _logger?.LogWarning(ex, "Failed to broadcast CommunityMembersUpdated SignalR event for community {CommunityId}", communityId);
             }
         }
+
+        if (_auditLogService != null)
+        {
+            try
+            {
+                await _auditLogService.RecordAsync(currentUserId, "RemoveCommunityMember", "CommunityMember", targetUserId, reason: $"Removed user {targetUserId} from community {communityId}.");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to record audit log for RemoveMember {CommunityId} {TargetUserId}", communityId, targetUserId);
+            }
+        }
     }
 
     public async Task<List<CommunityMemberDto>> AddMembersAsync(int communityId, int currentUserId, AddCommunityMembersDto dto)
@@ -959,7 +1066,13 @@ public class CommunityService : ICommunityService
 
         await CheckIsAdminOrSysAdminAsync(communityId, currentUserId);
 
-        var targetMemberType = string.Equals(dto.MemberType, CommunityMemberTypes.Admin, StringComparison.OrdinalIgnoreCase) 
+        var isTargetAdmin = !string.IsNullOrWhiteSpace(dto.MemberType) && (
+            dto.MemberType.Contains("Admin", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(dto.MemberType, "CADM", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(dto.MemberType, "MOD", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(dto.MemberType, "Moderator", StringComparison.OrdinalIgnoreCase)
+        );
+        var targetMemberType = isTargetAdmin 
             ? CommunityMemberTypes.Admin 
             : CommunityMemberTypes.Member;
 
@@ -1171,7 +1284,31 @@ public class CommunityService : ICommunityService
             }
         }
 
-        return _mapper.Map<List<CommunityMemberDto>>(updatedMembers);
+        var resultDtos = _mapper.Map<List<CommunityMemberDto>>(updatedMembers);
+        var freshCommunity = await _db.Communities.Include(c => c.Users).FirstOrDefaultAsync(c => c.CommunityId == communityId);
+        var freshAdminIds = freshCommunity?.Users.Select(u => u.UserId).ToHashSet() ?? new HashSet<int>();
+        var freshCreatorId = freshCommunity?.CreatedByUserId ?? 0;
+
+        foreach (var d in resultDtos)
+        {
+            var isUserAdmin = freshAdminIds.Contains(d.UserId) ||
+                              d.UserId == freshCreatorId ||
+                              string.Equals(d.MemberType, CommunityMemberTypes.Admin, StringComparison.OrdinalIgnoreCase) ||
+                              string.Equals(d.MemberType, "Community Admin", StringComparison.OrdinalIgnoreCase);
+
+            if (isUserAdmin)
+            {
+                d.MemberType = CommunityMemberTypes.Admin;
+                d.IsCommAdmin = true;
+                d.RoleName = "Community Admin";
+            }
+            else
+            {
+                d.RoleName = "Member";
+            }
+        }
+
+        return resultDtos;
     }
 
     // --- Admin Delegation ---
@@ -1210,6 +1347,18 @@ public class CommunityService : ICommunityService
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "Failed to broadcast CommunityMembersUpdated SignalR event for community {CommunityId}", communityId);
+            }
+        }
+
+        if (_auditLogService != null)
+        {
+            try
+            {
+                await _auditLogService.RecordAsync(currentUserId, "PromoteCommunityAdmin", "CommunityMember", targetUserId, reason: $"Promoted user {targetUserId} to Community Admin in community {communityId}.");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to record audit log for AddAdmin {CommunityId} {TargetUserId}", communityId, targetUserId);
             }
         }
     }
@@ -1252,6 +1401,18 @@ public class CommunityService : ICommunityService
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "Failed to broadcast CommunityMembersUpdated SignalR event for community {CommunityId}", communityId);
+            }
+        }
+
+        if (_auditLogService != null)
+        {
+            try
+            {
+                await _auditLogService.RecordAsync(currentUserId, "DemoteCommunityAdmin", "CommunityMember", targetUserId, reason: $"Demoted user {targetUserId} from Community Admin to Member/Employee in community {communityId}.");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to record audit log for RemoveAdmin {CommunityId} {TargetUserId}", communityId, targetUserId);
             }
         }
     }

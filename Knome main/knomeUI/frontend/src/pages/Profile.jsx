@@ -605,8 +605,12 @@ export default function Profile() {
                             ? await postsApi.getMyPosts(1, 50)
                             : await profileApi.getUserPosts(currentProfileUserId, 1, 50);
                         const rawPosts = Array.isArray(postsRes) ? postsRes : (postsRes?.data || postsRes?.items || []);
+                        const delPostIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
+                        const validPosts = rawPosts
+                            .filter(p => !delPostIds.includes(String(p.postId || p.id)) && p.status !== 'Removed' && p.status !== 'Deleted')
+                            .map(mapPost);
                         if (!isCancelled) {
-                            setTabData(prev => ({ ...prev, posts: rawPosts.map(mapPost) }));
+                            setTabData(prev => ({ ...prev, posts: validPosts }));
                         }
                         break;
                     }
@@ -615,8 +619,10 @@ export default function Profile() {
                             ? await clipsApi.getMyClips(1, 50)
                             : await clipsApi.getUserClips(currentProfileUserId, 1, 50);
                         const rawClips = Array.isArray(clipsRes) ? clipsRes : (clipsRes?.data || clipsRes?.items || []);
+                        const delClipIds = JSON.parse(localStorage.getItem('knome_deleted_clip_ids') || '[]').map(String);
+                        const validClips = rawClips.filter(c => !delClipIds.includes(String(c.clipId || c.id)) && c.status !== 'Removed' && c.status !== 'Deleted' && (c.isActive === undefined || c.isActive === null || c.isActive === true || c.isActive === 1 || c.isActive === 'true'));
                         if (!isCancelled) {
-                            setTabData(prev => ({ ...prev, clips: rawClips }));
+                            setTabData(prev => ({ ...prev, clips: validClips }));
                         }
                         break;
                     }
@@ -625,8 +631,12 @@ export default function Profile() {
                             ? await articlesApi.getMyArticles(1, 50)
                             : await profileApi.getUserArticles(currentProfileUserId, 1, 50);
                         const rawArticles = Array.isArray(articlesRes) ? articlesRes : (articlesRes?.data || articlesRes?.items || []);
+                        const delArticleIds = JSON.parse(localStorage.getItem('knome_deleted_article_ids') || '[]').map(String);
+                        const validArticles = rawArticles
+                            .filter(a => !delArticleIds.includes(String(a.articleId || a.id)) && a.status !== 'Removed' && a.status !== 'Deleted')
+                            .map(mapArticle);
                         if (!isCancelled) {
-                            setTabData(prev => ({ ...prev, articles: rawArticles.map(mapArticle) }));
+                            setTabData(prev => ({ ...prev, articles: validArticles }));
                         }
                         break;
                     }
@@ -635,8 +645,10 @@ export default function Profile() {
                             ? await videosApi.getMyVideos(1, 50)
                             : await profileApi.getUserVideos(currentProfileUserId, 1, 50);
                         const rawVideos = Array.isArray(videosRes) ? videosRes : (videosRes?.data || videosRes?.items || []);
+                        const delVideoIds = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]').map(String);
+                        const validVideos = rawVideos.filter(v => !delVideoIds.includes(String(v.videoId || v.id)) && v.status !== 'Removed' && v.status !== 'Deleted');
                         if (!isCancelled) {
-                            setTabData(prev => ({ ...prev, videos: rawVideos }));
+                            setTabData(prev => ({ ...prev, videos: validVideos }));
                         }
                         break;
                     }
@@ -646,7 +658,8 @@ export default function Profile() {
                             ? await podcastsApi.getMyPodcasts(1, 50)
                             : await profileApi.getUserPodcasts(currentProfileUserId, 1, 50);
                         const rawPodcasts = Array.isArray(podcastsRes) ? podcastsRes : (podcastsRes?.data || podcastsRes?.items || []);
-                        const activePodcasts = rawPodcasts.filter(p => p.isActive === undefined || p.isActive === null || p.isActive === true || p.isActive === 1 || p.isActive === 'true');
+                        const delPodcastIds = JSON.parse(localStorage.getItem('knome_deleted_podcast_ids') || '[]').map(String);
+                        const activePodcasts = rawPodcasts.filter(p => !delPodcastIds.includes(String(p.podcastId || p.id)) && p.status !== 'Removed' && (p.isActive === undefined || p.isActive === null || p.isActive === true || p.isActive === 1 || p.isActive === 'true'));
                         if (!isCancelled) {
                             setTabData(prev => ({ ...prev, podcasts: activePodcasts }));
                         }
@@ -720,6 +733,72 @@ export default function Profile() {
         }
         return () => { isCancelled = true; };
     }, [activeTab, currentProfileUserId, isOwnProfile]);
+
+    useEffect(() => {
+        const handleContentModerated = (e) => {
+            const detail = e?.detail || {};
+            const type = (detail.type || '').toLowerCase();
+            const id = String(detail.id || detail.postId || detail.articleId || detail.videoId || detail.podcastId || detail.clipId || '');
+
+            let delPostIds = [];
+            let delArticleIds = [];
+            let delVideoIds = [];
+            let delPodcastIds = [];
+            let delClipIds = [];
+            try { delPostIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String); } catch (_) {}
+            try { delArticleIds = JSON.parse(localStorage.getItem('knome_deleted_article_ids') || '[]').map(String); } catch (_) {}
+            try { delVideoIds = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]').map(String); } catch (_) {}
+            try { delPodcastIds = JSON.parse(localStorage.getItem('knome_deleted_podcast_ids') || '[]').map(String); } catch (_) {}
+            try { delClipIds = JSON.parse(localStorage.getItem('knome_deleted_clip_ids') || '[]').map(String); } catch (_) {}
+
+            setTabData(prev => ({
+                ...prev,
+                posts: prev.posts.filter(p => {
+                    const pid = String(p.id || p.postId);
+                    if (id && (type === 'post' || !type) && pid === id) return false;
+                    return !delPostIds.includes(pid) && p.status !== 'Removed' && p.status !== 'Deleted';
+                }),
+                articles: prev.articles.filter(a => {
+                    const aid = String(a.id || a.articleId);
+                    if (id && (type === 'article' || !type) && aid === id) return false;
+                    return !delArticleIds.includes(aid) && a.status !== 'Removed' && a.status !== 'Deleted';
+                }),
+                videos: prev.videos.filter(v => {
+                    const vid = String(v.id || v.videoId);
+                    if (id && (type === 'video' || !type) && vid === id) return false;
+                    return !delVideoIds.includes(vid) && v.status !== 'Removed' && v.status !== 'Deleted';
+                }),
+                podcasts: prev.podcasts.filter(pod => {
+                    const podId = String(pod.id || pod.podcastId);
+                    if (id && (type === 'podcast' || !type) && podId === id) return false;
+                    return !delPodcastIds.includes(podId) && pod.status !== 'Removed';
+                }),
+                clips: prev.clips.filter(c => {
+                    const cid = String(c.id || c.clipId);
+                    if (id && (type === 'clip' || !type) && cid === id) return false;
+                    return !delClipIds.includes(cid) && c.status !== 'Removed' && c.status !== 'Deleted';
+                })
+            }));
+        };
+
+        window.addEventListener('post-deleted', handleContentModerated);
+        window.addEventListener('article-deleted', handleContentModerated);
+        window.addEventListener('video-deleted', handleContentModerated);
+        window.addEventListener('podcast-deleted', handleContentModerated);
+        window.addEventListener('clip-deleted', handleContentModerated);
+        window.addEventListener('knome_content_moderated', handleContentModerated);
+        window.addEventListener('storage', handleContentModerated);
+
+        return () => {
+            window.removeEventListener('post-deleted', handleContentModerated);
+            window.removeEventListener('article-deleted', handleContentModerated);
+            window.removeEventListener('video-deleted', handleContentModerated);
+            window.removeEventListener('podcast-deleted', handleContentModerated);
+            window.removeEventListener('clip-deleted', handleContentModerated);
+            window.removeEventListener('knome_content_moderated', handleContentModerated);
+            window.removeEventListener('storage', handleContentModerated);
+        };
+    }, []);
 
     const realKarmaPoints = Number(displayUser.karmaPoints ?? displayUser.karma ?? 0);
     const karmaBadge = getKarmaBadge(realKarmaPoints);

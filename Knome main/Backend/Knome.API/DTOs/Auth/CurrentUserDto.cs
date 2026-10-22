@@ -8,5 +8,7 @@ public class CurrentUserDto
     public string Email { get; set; } = string.Empty;
     public string? Designation { get; set; }
     public string? Department { get; set; }
+    public string? Role { get; set; }
+    public string? RoleName { get; set; }
     public List<string> Roles { get; set; } = new();
 }

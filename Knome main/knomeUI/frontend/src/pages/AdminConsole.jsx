@@ -4,7 +4,7 @@ import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-do
 import { useUser, getUserStatusConfig, deduplicateMembers, roleNameToCode } from '../components/contexts/UserContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
 import { useToast } from '../components/contexts/ToastContext';
-import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, communitiesApi, mediaApi, clipsApi, settingsApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
+import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, videosApi, communitiesApi, mediaApi, clipsApi, settingsApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
 import * as XLSX from 'xlsx';
 import useScrollLoading from '../hooks/useScrollLoading';
@@ -409,12 +409,7 @@ export default function AdminConsole() {
             return;
         }
         if (domain === 'moderation') {
-            if (isSysAdmin && !isModerator) {
-                // Content Moderation & Media Approvals transferred to Moderator; SysAdmin opens approval policy
-                setActiveTab('approval_policy');
-            } else {
-                setActiveTab('moderation');
-            }
+            setActiveTab('moderation');
         } else if (domain === 'governance') {
             setActiveTab('users');
         } else if (domain === 'operations') {
@@ -453,6 +448,7 @@ export default function AdminConsole() {
     // User Management State
     const [usersList, setUsersList] = useState(() => contextUsers || []);
     const [userSearchTerm, setUserSearchTerm] = useState('');
+    const [selectedRoleFilter, setSelectedRoleFilter] = useState('All');
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
     // Suspend Modal Form State
@@ -643,18 +639,18 @@ export default function AdminConsole() {
     const getRoleBadgeStyle = (roleName) => {
         const r = (roleName || '').toLowerCase();
         if (r.includes('mod')) {
-            return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 font-black';
+            return 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-bold';
         }
         if (r.includes('system') || r.includes('sysadm')) {
-            return 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700/50 font-black';
+            return 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 font-bold';
         }
         if (r.includes('hr') || r.includes('hrad')) {
-            return 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700/50 font-black';
+            return 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 font-bold';
         }
         if (r.includes('community') || r.includes('cadm')) {
-            return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/50 font-black';
+            return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-bold';
         }
-        return 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200/40 dark:border-indigo-800/40';
+        return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700';
     };
 
     // Audit Trail State
@@ -1461,95 +1457,207 @@ export default function AdminConsole() {
                 if (!Array.isArray(localReports)) localReports = [];
             } catch {}
 
-            // Combine backend items and local items, deduplicating by reportId or contentType_contentId
-            const combinedMap = new Map();
-            localReports.forEach(lr => {
-                const key = lr.reportId ? `rep_${lr.reportId}` : `${lr.contentType}_${lr.contentId}`;
-                combinedMap.set(key, lr);
-            });
-            apiItems.forEach(ai => {
-                const key = ai.reportId ? `rep_${ai.reportId}` : `${ai.contentType}_${ai.contentId}`;
-                combinedMap.set(key, ai);
-            });
-
-            const allItems = Array.from(combinedMap.values());
-            if (allItems.length > 0) {
-                const mapped = allItems.map(r => {
-                    const scoreInfo = detectReportScore(r.reasonCode, r.postContentSnippet, r.aiScore);
-                    const rawReportDate = r.reportedDate ? new Date(r.reportedDate).getTime() : 0;
-                    const rawActDate = r.actionDate ? new Date(r.actionDate).getTime() : 0;
-
-                    let cachedData = null;
-                    try {
-                        const cache = JSON.parse(localStorage.getItem('knome_reported_posts_cache') || '{}');
-                        cachedData = cache[`${r.contentType}_${r.contentId}`] || cache[`Post_${r.contentId}`] || cache[r.contentId] || null;
-                    } catch {}
-
-                    const isGenericAuthor = !r.reportedUserName || 
-                        r.reportedUserName.toLowerCase().includes('reported author') || 
-                        r.reportedUserName.toLowerCase().includes('content author') || 
-                        r.reportedUserName === r.reporterFullName;
-
-                    const fallbackKnownAuthor = {
-                        10049: 'Suresh verma',
-                        10050: 'Rohan Verma',
-                        10048: 'Aarav Sharma'
-                    }[r.contentId] || null;
-
-                    const resolvedReportedAuthor = (!isGenericAuthor ? r.reportedUserName : null)
-                        || cachedData?.authorName 
-                        || fallbackKnownAuthor
-                        || (r.reportedUserId ? `User #${r.reportedUserId}` : 'Suresh verma');
-
-                    const isBoilerplateSnippet = !r.postContentSnippet ||
-                        r.postContentSnippet.includes('Content removed under admin governance policy') ||
-                        r.postContentSnippet.includes('Content snapshot under administrative review') ||
-                        r.postContentSnippet.startsWith('Reported Inappropriate content for Post') ||
-                        r.postContentSnippet.startsWith('Reported Harassment content for Post') ||
-                        r.postContentSnippet.startsWith('Reported ');
-
-                    const fallbackKnownSnippet = {
-                        10049: 'This internal policy change is completely unfair and unacceptable. Leadership has failed the engineering team and deadlines are completely unreasonable. Stop pushing these broken requirements on us.',
-                        10050: 'This harassment content violates community safety guidelines and MPOnline employee code of conduct. Repeated offensive remarks will lead to administrative suspension.',
-                        10048: 'Inappropriate content flagged for policy review. External unsolicited links and unauthorized promotional spam are prohibited.'
-                    }[r.contentId] || null;
-
-                    const resolvedSnippet = cachedData?.content 
-                        || (!isBoilerplateSnippet ? r.postContentSnippet : null)
-                        || fallbackKnownSnippet
-                        || r.postContentSnippet 
-                        || '';
-
-                    return {
-                        reportId: r.reportId || (Date.now() + Math.floor(Math.random() * 1000)),
-                        reporterUserId: r.reporterUserId || 0,
-                        reporterFullName: r.reporterFullName || `User #${r.reporterUserId}`,
-                        reportedUserId: r.reportedUserId || cachedData?.authorUserId || null,
-                        reportedUserName: resolvedReportedAuthor,
-                        contentType: r.contentType || 'Post',
-                        contentId: r.contentId,
-                        communityName: r.communityName || 'Engineering & Tech',
-                        reasonCode: r.reasonCode || 'Inappropriate',
-                        severity: r.severity || scoreInfo.severity,
-                        aiScore: scoreInfo.formattedScore,
-                        scoreNum: scoreInfo.scoreNum,
-                        status: r.status || 'Pending',
-                        moderatorUserId: r.moderatorUserId,
-                        moderatorFullName: r.moderatorFullName,
-                        actionTaken: r.actionTaken,
-                        postContentSnippet: resolvedSnippet,
-                        rawReportedDate: rawReportDate || Date.now(),
-                        rawActionDate: rawActDate,
-                        reportedDate: r.reportedDate ? new Date(r.reportedDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
-                        actionDate: r.actionDate ? new Date(r.actionDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : null
-                    };
+            // Prune ephemeral local reports if the backend API already contains records for that content
+            if (apiItems.length > 0 && localReports.length > 0) {
+                const apiKeys = new Set(apiItems.map(i => `${String(i.contentType || 'Post').toLowerCase()}_${String(i.contentId)}`));
+                const prunedLocal = localReports.filter(lr => {
+                    const key = `${String(lr.contentType || 'Post').toLowerCase()}_${String(lr.contentId)}`;
+                    const isEphemeral = !lr.reportId || (typeof lr.reportId === 'number' && lr.reportId > 1000000000) || String(lr.reportId).length > 10;
+                    return !(apiKeys.has(key) && isEphemeral);
                 });
-                // Ensure recent reported content is strictly at the top
-                mapped.sort((a, b) => (b.rawReportedDate - a.rawReportedDate) || (b.reportId - a.reportId));
-                setReports(mapped);
-            } else {
-                setReports([]);
+                if (prunedLocal.length !== localReports.length) {
+                    try {
+                        localStorage.setItem('knome_moderation_reports', JSON.stringify(prunedLocal));
+                        localReports = prunedLocal;
+                    } catch {}
+                }
             }
+
+            // Blacklist check to ensure removed content is reflected accurately across all views
+            const postBlacklist = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
+            const artBlacklist = JSON.parse(localStorage.getItem('knome_deleted_article_ids') || '[]').map(String);
+            const vidBlacklist = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]').map(String);
+            const podBlacklist = JSON.parse(localStorage.getItem('knome_deleted_podcast_ids') || '[]').map(String);
+            const clipBlacklist = JSON.parse(localStorage.getItem('knome_deleted_clip_ids') || '[]').map(String);
+
+            // Group all reports by unique content ID: `${contentType}_${contentId}`
+            const contentGroups = new Map();
+            const allRawReports = [...apiItems, ...localReports];
+
+            allRawReports.forEach(r => {
+                if (!r) return;
+                const cType = String(r.contentType || 'Post').trim();
+                const cId = String(r.contentId || '').trim();
+                const key = (cId && cId !== '0') ? `${cType.toLowerCase()}_${cId}` : `rep_${r.reportId}`;
+                if (!contentGroups.has(key)) {
+                    contentGroups.set(key, []);
+                }
+                contentGroups.get(key).push(r);
+            });
+
+            const aggregatedList = [];
+            for (const [key, group] of contentGroups.entries()) {
+                if (!group || group.length === 0) continue;
+
+                // Pick primary database report ID if available (numeric ID < 1000000000), else most recent report
+                const dbReports = group.filter(i => i.reportId && typeof i.reportId === 'number' && i.reportId < 1000000000);
+                const primaryItem = dbReports.length > 0
+                    ? dbReports.sort((a, b) => (b.reportId || 0) - (a.reportId || 0))[0]
+                    : group.sort((a, b) => new Date(b.reportedDate || 0) - new Date(a.reportedDate || 0))[0];
+
+                const cType = primaryItem.contentType || 'Post';
+                const cId = primaryItem.contentId;
+                const cIdStr = String(cId);
+
+                const isBlacklisted = (cType.toLowerCase() === 'post' && postBlacklist.includes(cIdStr)) ||
+                                      (cType.toLowerCase() === 'article' && artBlacklist.includes(cIdStr)) ||
+                                      (cType.toLowerCase() === 'video' && vidBlacklist.includes(cIdStr)) ||
+                                      (cType.toLowerCase() === 'podcast' && podBlacklist.includes(cIdStr)) ||
+                                      (cType.toLowerCase() === 'clip' && clipBlacklist.includes(cIdStr));
+
+                // All unique report IDs associated with this content
+                const allReportIds = [...new Set(group.map(i => i.reportId).filter(Boolean))];
+
+                // Collect and preserve all reporter details across duplicate reports
+                const reportersMap = new Map();
+                group.forEach(i => {
+                    const rId = i.reporterUserId || 0;
+                    const rName = i.reporterFullName || (rId ? `User #${rId}` : 'Anonymous');
+                    const rReason = i.reasonCode || 'Inappropriate';
+                    const rDate = i.reportedDate ? new Date(i.reportedDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Recent';
+                    if (!reportersMap.has(rId) || reportersMap.get(rId).fullName.startsWith('User #')) {
+                        reportersMap.set(rId, {
+                            userId: rId,
+                            fullName: rName,
+                            reasonCode: rReason,
+                            dateStr: rDate
+                        });
+                    }
+                });
+                const allReporters = Array.from(reportersMap.values());
+                const primaryReporter = allReporters.find(rep => rep.userId === primaryItem.reporterUserId) || allReporters[0] || { userId: 0, fullName: 'Anonymous' };
+                const otherReportersCount = Math.max(0, allReporters.length - 1);
+                const allReportersText = `Reported ${group.length} time${group.length === 1 ? '' : 's'}:\n` +
+                    allReporters.map(rep => `• ${rep.fullName} (ID: #${rep.userId}) - Reason: ${rep.reasonCode} (${rep.dateStr})`).join('\n');
+
+                // Determine effective moderation status
+                const removedItem = group.find(i =>
+                    i.status === 'Removed Content' ||
+                    i.status === 'Action Taken' ||
+                    (i.actionTaken && i.actionTaken.toLowerCase().includes('remove')) ||
+                    (i.actionTaken && i.actionTaken.toLowerCase().includes('delete'))
+                );
+                const dismissedItem = group.find(i => i.status === 'Dismissed' || i.status === 'Reviewed');
+                const pendingItem = group.find(i => i.status === 'Pending' || i.status === 'Under Review');
+
+                let effectiveStatus = 'Pending';
+                let effectiveActionTaken = null;
+                let effectiveModeratorName = null;
+                let effectiveModeratorId = null;
+                let effectiveActionDate = null;
+                let effectiveRawActionDate = 0;
+
+                if (isBlacklisted || removedItem) {
+                    effectiveStatus = 'Action Taken';
+                    effectiveActionTaken = removedItem?.actionTaken || 'Deleted';
+                    effectiveModeratorName = removedItem?.moderatorFullName || 'Moderator';
+                    effectiveModeratorId = removedItem?.moderatorUserId || null;
+                    effectiveActionDate = removedItem?.actionDate ? new Date(removedItem.actionDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+                    effectiveRawActionDate = removedItem?.actionDate ? new Date(removedItem.actionDate).getTime() : Date.now();
+                } else if (pendingItem) {
+                    effectiveStatus = 'Pending';
+                } else if (dismissedItem) {
+                    effectiveStatus = 'Dismissed';
+                    effectiveActionTaken = dismissedItem?.actionTaken || 'Dismissed';
+                    effectiveModeratorName = dismissedItem?.moderatorFullName || null;
+                    effectiveModeratorId = dismissedItem?.moderatorUserId || null;
+                    effectiveActionDate = dismissedItem?.actionDate ? new Date(dismissedItem.actionDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : null;
+                    effectiveRawActionDate = dismissedItem?.actionDate ? new Date(dismissedItem.actionDate).getTime() : 0;
+                } else {
+                    effectiveStatus = primaryItem.status || 'Pending';
+                }
+
+                // AI score & severity
+                const scoreInfo = detectReportScore(primaryItem.reasonCode, primaryItem.postContentSnippet, primaryItem.aiScore);
+
+                // Author / target user resolution
+                let cachedData = null;
+                try {
+                    const cache = JSON.parse(localStorage.getItem('knome_reported_posts_cache') || '{}');
+                    cachedData = cache[`${cType}_${cId}`] || cache[`Post_${cId}`] || cache[cId] || null;
+                } catch {}
+
+                const isGenericAuthor = !primaryItem.reportedUserName ||
+                    primaryItem.reportedUserName.toLowerCase().includes('reported author') ||
+                    primaryItem.reportedUserName.toLowerCase().includes('content author') ||
+                    primaryItem.reportedUserName === primaryItem.reporterFullName;
+
+                const fallbackKnownAuthor = {
+                    10049: 'Suresh verma',
+                    10050: 'Rohan Verma',
+                    10048: 'Aarav Sharma'
+                }[cId] || null;
+
+                const resolvedReportedAuthor = (!isGenericAuthor ? primaryItem.reportedUserName : null)
+                    || cachedData?.authorName
+                    || fallbackKnownAuthor
+                    || (primaryItem.reportedUserId ? `User #${primaryItem.reportedUserId}` : 'Suresh verma');
+
+                const isBoilerplateSnippet = !primaryItem.postContentSnippet ||
+                    primaryItem.postContentSnippet.includes('Content removed under admin governance policy') ||
+                    primaryItem.postContentSnippet.includes('Content snapshot under administrative review') ||
+                    primaryItem.postContentSnippet.startsWith('Reported Inappropriate content for Post') ||
+                    primaryItem.postContentSnippet.startsWith('Reported Harassment content for Post') ||
+                    primaryItem.postContentSnippet.startsWith('Reported ');
+
+                const fallbackKnownSnippet = {
+                    10049: 'This internal policy change is completely unfair and unacceptable. Leadership has failed the engineering team and deadlines are completely unreasonable. Stop pushing these broken requirements on us.',
+                    10050: 'This harassment content violates community safety guidelines and MPOnline employee code of conduct. Repeated offensive remarks will lead to administrative suspension.',
+                    10048: 'Inappropriate content flagged for policy review. External unsolicited links and unauthorized promotional spam are prohibited.'
+                }[cId] || null;
+
+                const resolvedSnippet = cachedData?.content
+                    || (!isBoilerplateSnippet ? primaryItem.postContentSnippet : null)
+                    || fallbackKnownSnippet
+                    || primaryItem.postContentSnippet
+                    || '';
+
+                const rawDates = group.map(i => i.rawReportedDate || (i.reportedDate ? new Date(i.reportedDate).getTime() : 0)).filter(d => !isNaN(d) && d > 0);
+                const latestRawReportDate = rawDates.length > 0 ? Math.max(...rawDates) : Date.now();
+
+                aggregatedList.push({
+                    reportId: primaryItem.reportId || (Date.now() + Math.floor(Math.random() * 1000)),
+                    allReportIds,
+                    reportCount: group.length,
+                    reporters: allReporters,
+                    reporterUserId: primaryReporter.userId,
+                    reporterFullName: primaryReporter.fullName,
+                    otherReportersCount,
+                    allReportersText,
+                    reportedUserId: primaryItem.reportedUserId || cachedData?.authorUserId || null,
+                    reportedUserName: resolvedReportedAuthor,
+                    contentType: cType,
+                    contentId: cId,
+                    communityName: primaryItem.communityName || 'Engineering & Tech',
+                    reasonCode: primaryItem.reasonCode || 'Inappropriate',
+                    severity: primaryItem.severity || scoreInfo.severity,
+                    aiScore: scoreInfo.formattedScore,
+                    scoreNum: scoreInfo.scoreNum,
+                    status: effectiveStatus,
+                    moderatorUserId: effectiveModeratorId,
+                    moderatorFullName: effectiveModeratorName,
+                    actionTaken: effectiveActionTaken,
+                    postContentSnippet: resolvedSnippet,
+                    rawReportedDate: latestRawReportDate,
+                    rawActionDate: effectiveRawActionDate,
+                    reportedDate: new Date(latestRawReportDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+                    actionDate: effectiveActionDate
+                });
+            }
+
+            // Ensure recent reported content is strictly at the top
+            aggregatedList.sort((a, b) => (b.rawReportedDate - a.rawReportedDate) || (b.reportId - a.reportId));
+            setReports(aggregatedList);
         } catch (err) {
             console.error("Failed to load live moderation reports:", err);
             try {
@@ -1722,6 +1830,10 @@ export default function AdminConsole() {
     };
 
     const fetchRoleRequests = async () => {
+        if (isModerator && !isSysAdmin) {
+            setIsLoadingRoleRequests(false);
+            return;
+        }
         setIsLoadingRoleRequests(true);
         try {
             const res = await adminApi.getRoleRequests().catch(() => null);
@@ -1977,35 +2089,133 @@ export default function AdminConsole() {
             ? 'Dismissed' 
             : (isReinstate ? 'Reinstated Content' : 'Deleted');
 
+        const targetReport = reports.find(r => r.reportId === reportId || (contentId && String(r.contentId) === String(contentId) && String(r.contentType || '').toLowerCase() === String(contentType || '').toLowerCase()));
+        const idsToResolve = targetReport?.allReportIds || [reportId];
+
         try {
-            await interactionsApi.resolveReport(reportId, isDismiss || isReinstate ? 'Dismiss' : 'Removed Content', `Resolved by ${currentUser?.name || 'Admin'}`);
+            for (const repId of idsToResolve) {
+                if (typeof repId === 'number' && repId < 1000000000) {
+                    await interactionsApi.resolveReport(repId, isDismiss || isReinstate ? 'Dismiss' : 'Removed Content', `Resolved by ${currentUser?.name || 'Moderator'}`).catch(() => {});
+                }
+            }
             if (isDelete && contentId) {
+                const cType = String(contentType || 'Post').trim().toLowerCase();
                 try {
-                    if (contentType === 'Clip') {
+                    if (cType === 'clip') {
                         await clipsApi.delete(contentId);
-                    } else if (contentType === 'Post' || !contentType) {
+                    } else if (cType === 'post') {
                         await postsApi.delete(contentId);
+                    } else if (cType === 'article') {
+                        await articlesApi.delete(contentId);
+                    } else if (cType === 'video') {
+                        await videosApi.delete(contentId);
+                    } else if (cType === 'podcast') {
+                        await podcastsApi.delete(contentId);
                     }
-                } catch {
-                    /* Silently handle deletion */
+                } catch (delErr) {
+                    console.warn('Backend direct delete warning:', delErr);
                 }
             }
         } catch (err) {
             console.warn("Backend API notice:", err);
         }
 
-        // Update the report in state so it appears in Action Taken / Dismissed with recent reported content at top
+        // Update local reports store
+        try {
+            const storedLocalReports = JSON.parse(localStorage.getItem('knome_moderation_reports') || '[]');
+            const updatedLocalReports = storedLocalReports.map(lr => {
+                const matchCid = contentId && String(lr.contentId) === String(contentId) && String(lr.contentType || '').toLowerCase() === String(contentType || '').toLowerCase();
+                const matchId = idsToResolve.includes(lr.reportId);
+                if (matchCid || matchId) {
+                    return {
+                        ...lr,
+                        status: newStatus,
+                        actionTaken: actionTakenText,
+                        actionDate: new Date().toISOString(),
+                        moderatorFullName: currentUser?.name || 'Moderator'
+                    };
+                }
+                return lr;
+            });
+            localStorage.setItem('knome_moderation_reports', JSON.stringify(updatedLocalReports));
+        } catch (e) {}
+
+        // Persistent removal across all views and sessions if action is Delete / Removed Content
+        if (isDelete && contentId) {
+            const cidStr = String(contentId);
+            const cType = String(contentType || 'Post').trim().toLowerCase();
+
+            try {
+                if (cType === 'post') {
+                    const postBlacklist = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]');
+                    if (!postBlacklist.includes(cidStr)) {
+                        postBlacklist.push(cidStr);
+                        localStorage.setItem('knome_deleted_post_ids', JSON.stringify(postBlacklist));
+                    }
+                    // Remove from local and saved posts
+                    const localPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
+                    const filteredLocal = localPosts.filter(p => String(p.id) !== cidStr && String(p.postId) !== cidStr);
+                    localStorage.setItem('knome_local_posts', JSON.stringify(filteredLocal));
+                } else if (cType === 'article') {
+                    const artBlacklist = JSON.parse(localStorage.getItem('knome_deleted_article_ids') || '[]');
+                    if (!artBlacklist.includes(cidStr)) {
+                        artBlacklist.push(cidStr);
+                        localStorage.setItem('knome_deleted_article_ids', JSON.stringify(artBlacklist));
+                    }
+                } else if (cType === 'video') {
+                    const vidBlacklist = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]');
+                    if (!vidBlacklist.includes(cidStr)) {
+                        vidBlacklist.push(cidStr);
+                        localStorage.setItem('knome_deleted_video_ids', JSON.stringify(vidBlacklist));
+                    }
+                    const savedVids = JSON.parse(localStorage.getItem('knome_saved_videos') || '{}');
+                    delete savedVids[cidStr];
+                    localStorage.setItem('knome_saved_videos', JSON.stringify(savedVids));
+                } else if (cType === 'podcast') {
+                    const podBlacklist = JSON.parse(localStorage.getItem('knome_deleted_podcast_ids') || '[]');
+                    if (!podBlacklist.includes(cidStr)) {
+                        podBlacklist.push(cidStr);
+                        localStorage.setItem('knome_deleted_podcast_ids', JSON.stringify(podBlacklist));
+                    }
+                } else if (cType === 'clip') {
+                    const clipBlacklist = JSON.parse(localStorage.getItem('knome_deleted_clip_ids') || '[]');
+                    if (!clipBlacklist.includes(cidStr)) {
+                        clipBlacklist.push(cidStr);
+                        localStorage.setItem('knome_deleted_clip_ids', JSON.stringify(clipBlacklist));
+                    }
+                }
+
+                // Invalidate API cache so all next queries fetch fresh database truth
+                apiClient.clearCache();
+            } catch (e) {
+                console.warn('Failed to update local storage blacklist:', e);
+            }
+
+            // Real-time broadcast events so live feeds and active tabs immediately remove the content
+            window.dispatchEvent(new CustomEvent('post-deleted', { detail: { id: contentId, postId: contentId } }));
+            window.dispatchEvent(new CustomEvent('article-deleted', { detail: { id: contentId, articleId: contentId } }));
+            window.dispatchEvent(new CustomEvent('video-deleted', { detail: { id: contentId, videoId: contentId } }));
+            window.dispatchEvent(new CustomEvent('podcast-deleted', { detail: { id: contentId, podcastId: contentId } }));
+            window.dispatchEvent(new CustomEvent('clip-deleted', { detail: { id: contentId, clipId: contentId } }));
+            window.dispatchEvent(new CustomEvent('knome_content_moderated', { detail: { contentId, contentType, actionType: 'Removed Content' } }));
+            window.dispatchEvent(new Event('storage'));
+        }
+
+        // Update the report (and all duplicate pending reports for this exact same content) in state
         const nowFormatted = new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
         setReports(prev => {
             const updated = prev.map(r => {
-                if (r.reportId === reportId) {
+                const matchThis = r.reportId === reportId;
+                const matchSameContent = contentId && String(r.contentId) === String(contentId) && String(r.contentType || '').toLowerCase() === String(contentType || '').toLowerCase();
+                const matchAnyId = r.allReportIds && r.allReportIds.some(id => idsToResolve.includes(id));
+                if (matchThis || matchSameContent || matchAnyId) {
                     return {
                         ...r,
                         status: newStatus,
                         actionTaken: actionTakenText,
                         actionDate: nowFormatted,
                         rawActionDate: Date.now(),
-                        moderatorFullName: currentUser?.name || currentUser?.fullName || 'System Admin',
+                        moderatorFullName: currentUser?.name || currentUser?.fullName || 'Moderator',
                         moderatorUserId: currentUser?.userId || currentUser?.id || 1
                     };
                 }
@@ -2014,9 +2224,9 @@ export default function AdminConsole() {
             // Keep recent reported content at the top
             return updated.sort((a, b) => (b.rawReportedDate - a.rawReportedDate) || (b.reportId - a.reportId));
         });
-        setSelectedReportIds(prev => prev.filter(id => id !== reportId));
+        setSelectedReportIds(prev => prev.filter(id => id !== reportId && !idsToResolve.includes(id)));
 
-        if (previewReport && previewReport.reportId === reportId) {
+        if (previewReport && (previewReport.reportId === reportId || (isDelete && contentId && String(previewReport.contentId) === String(contentId)))) {
             setIsPreviewOpen(false);
             setPreviewReport(null);
             setPreviewPost(null);
@@ -2032,20 +2242,21 @@ export default function AdminConsole() {
     };
 
     // Bulk Actions Handler
-    const handleBulkResolve = (actionType) => {
+    const handleBulkResolve = async (actionType) => {
         if (selectedReportIds.length === 0) {
             showToast('Please select at least one report for bulk action.');
             return;
         }
 
-        selectedReportIds.forEach(id => {
+        const idsToProcess = [...selectedReportIds];
+        for (const id of idsToProcess) {
             const report = reports.find(r => r.reportId === id);
             if (report && report.status === 'Pending') {
-                handleResolve(id, actionType, report.contentId, report.contentType);
+                await handleResolve(id, actionType, report.contentId, report.contentType);
             }
-        });
+        }
 
-        showToast(`Bulk action '${actionType}' applied to ${selectedReportIds.length} reports.`);
+        showToast(`Bulk action '${actionType}' applied to ${idsToProcess.length} reports.`);
         setSelectedReportIds([]);
     };
 
@@ -2697,7 +2908,10 @@ export default function AdminConsole() {
                 try {
                     await adminApi.changeUserRoles(targetId, [resolvedRole]);
                 } catch (e) {
-                    console.warn('Backend role change warning:', e);
+                    console.error('Backend role change error:', e);
+                    showToast(`Failed to update role in database: ${e?.message || 'Server error'}`, 'error');
+                    setIsSavingEmployee(false);
+                    return;
                 }
             }
 
@@ -2721,6 +2935,8 @@ export default function AdminConsole() {
                 'HR Administrator': 'HRADM',
                 'Community Admin': 'CADM',
                 'Community Administrator': 'CADM',
+                'Moderator': 'MOD',
+                'MOD': 'MOD',
                 'Employee': 'EMP'
             };
 
@@ -3393,6 +3609,20 @@ export default function AdminConsole() {
 
     const activeUserSearchTerm = (userSearchTerm || searchQuery || '').trim().toLowerCase();
     const filteredUsers = usersList.filter(u => {
+        // 1. Role dropdown filter
+        if (selectedRoleFilter && selectedRoleFilter !== 'All') {
+            const assigned = (u.roleName || getUserAssignedRole(u) || '').toLowerCase();
+            const filterNorm = selectedRoleFilter.toLowerCase();
+            if (filterNorm === 'admin' || filterNorm === 'administrators') {
+                const rolesList = getUserRolesList(u).map(r => String(r).toLowerCase());
+                const hasAdminRole = assigned.includes('admin') || assigned.includes('adm') || rolesList.some(r => r.includes('admin') || r.includes('adm'));
+                const isPureEmployee = rolesList.length === 1 && rolesList[0] === 'employee';
+                if (!hasAdminRole || isPureEmployee) return false;
+            } else if (!assigned.includes(filterNorm)) {
+                return false;
+            }
+        }
+
         if (!activeUserSearchTerm) return true;
         if (activeUserSearchTerm === 'suspended') return u.isSuspended === true || u.isPermanentlySuspended === true || (u.status || '').toLowerCase() === 'suspended';
         if (activeUserSearchTerm === 'inactive') return (u.isActive === false && !u.isSuspended && !u.isPermanentlySuspended) || (u.status || '').toLowerCase() === 'inactive';
@@ -3439,7 +3669,7 @@ export default function AdminConsole() {
 
     useEffect(() => {
         resetUserCount();
-    }, [userSearchTerm, searchQuery, activeTab]);
+    }, [userSearchTerm, searchQuery, activeTab, selectedRoleFilter]);
 
     useEffect(() => {
         resetAuditCount();
@@ -3723,7 +3953,7 @@ export default function AdminConsole() {
     }
 
     return (
-        <main className="flex-grow p-3 md:p-4 min-h-screen bg-slate-50 dark:bg-slate-950 relative text-slate-800 dark:text-slate-100 font-sans">
+        <main className="flex-grow p-3 md:p-5 min-h-screen bg-[#f4f7fb] dark:bg-slate-950 relative text-slate-800 dark:text-slate-100 font-sans">
             {/* Action Toast Notification */}
             {actionToast && (
                 <div className={`fixed top-20 right-6 z-[110] px-4 py-2.5 text-white rounded-xl shadow-2xl border text-xs font-bold flex items-center gap-2.5 animate-in fade-in zoom-in ${
@@ -3743,40 +3973,39 @@ export default function AdminConsole() {
             )}
 
             {/* ─── 1. COMPACT PAGE HEADER & QUICK ACTIONS ─── */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 mb-3 shadow-xs flex flex-wrap items-center justify-between gap-3">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 mb-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3.5">
                 {/* Left: Hierarchical Breadcrumbs & Title */}
                 <div>
-                    <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-400 mb-1 flex-wrap">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 mb-2 flex-wrap">
                         <Link 
                             to="/"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 text-xs font-bold transition-all border border-indigo-200 dark:border-indigo-800/60 group"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 group shadow-2xs"
                             title="Return to Hub / Feed"
                         >
-                            <span className="material-symbols-outlined text-[15px] group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
+                            <span className="material-symbols-outlined text-[15px] group-hover:-translate-x-0.5 transition-transform text-slate-500 dark:text-slate-400">arrow_back</span>
                             <span>Back to Hub</span>
                         </Link>
-                        <span className="text-slate-300 dark:text-slate-700">|</span>
-                        <Link to="/" className="hover:text-indigo-600 transition-colors">Home</Link>
-                        <span>/</span>
+                        <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-slate-700">chevron_right</span>
+                        <Link to="/" className="hover:text-slate-900 dark:hover:text-white transition-colors">Home</Link>
+                        <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-slate-700">chevron_right</span>
                         <span 
-                            className="hover:text-indigo-600 cursor-pointer transition-colors"
+                            className="hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors"
                             onClick={() => (isModerator && !isSysAdmin) ? setActiveTab('moderation') : isSysAdmin ? setActiveTab('moderation') : setActiveTab('users')}
                         >
                             {(isModerator && !isSysAdmin) ? 'Moderation Console' : 'Admin Console'}
                         </span>
-                        <span>/</span>
+                        <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-slate-700">chevron_right</span>
                         <span 
-                            className="text-slate-600 dark:text-slate-300 font-semibold cursor-pointer hover:text-indigo-600 transition-colors"
+                            className="text-slate-700 dark:text-slate-300 font-semibold cursor-pointer hover:text-blue-600 transition-colors"
                             onClick={() => handleDomainSelect(activeDomain)}
                         >
                             {activeDomain === 'moderation' ? 'Content Moderation & Safety' : activeDomain === 'governance' ? 'User & Access Governance' : 'Operations & Compliance'}
                         </span>
-                        <span>/</span>
-                        <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+                        <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-slate-700">chevron_right</span>
+                        <span className="text-blue-700 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/50 px-2.5 py-0.5 rounded-lg border border-blue-200/80 dark:border-blue-800/80 shadow-2xs">
                             {activeTab === 'moderation' ? 'Content Reports' :
                              activeTab === 'media_approvals' ? 'Media Approvals' :
                              activeTab === 'approval_policy' ? (approvalSubTab === 'modules' ? 'Platform Feature Access Control' : 'Governance & Platform Approvals') :
-
                              activeTab === 'ai_moderation' ? 'AI Moderation Rules' :
                              activeTab === 'communities' ? 'Community Moderation' :
                              activeTab === 'users' ? 'User Directory' :
@@ -3787,14 +4016,16 @@ export default function AdminConsole() {
                         </span>
                     </div>
                     <div className="flex items-center gap-2.5 flex-wrap">
-                        <h1 className="text-lg md:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                        <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                             {(isModerator && !isSysAdmin) ? 'Moderation Console & Content Safety' : 'Admin Console & Governance'}
                         </h1>
-                        <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase border border-rose-500/20">
-                            Enterprise Portal
+                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs bg-[#0c1838] text-white border border-[#1e295a]">
+                            <span className="material-symbols-outlined text-[13px] text-indigo-400">verified</span>
+                            <span>{isHrAdmin && !isSysAdmin ? 'HR Admin Portal' : 'Enterprise Portal'}</span>
                         </span>
-                        <span className="hidden md:inline-block text-[11px] text-slate-400 font-medium ml-2">
-                            Last updated: <strong className="text-slate-600 dark:text-slate-300">{lastUpdatedTime}</strong>
+                        <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 font-medium bg-[#f8fafc] dark:bg-slate-800/80 px-3 py-1 rounded-full border border-slate-200/80 dark:border-slate-700 shadow-2xs">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Live Sync: <strong className="text-slate-800 dark:text-slate-200 font-bold">{lastUpdatedTime}</strong>
                         </span>
                     </div>
                 </div>
@@ -3802,26 +4033,36 @@ export default function AdminConsole() {
                 {/* Right: Quick Action Controls & Search */}
                 <div className="flex items-center gap-2">
                     {/* Quick Search */}
-                    <div className="relative hidden lg:block w-48">
+                    <div className="relative hidden lg:block w-56">
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            placeholder="Search..."
-                            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                            placeholder="Quick search console..."
+                            className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-3.5 pr-8 py-2 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 transition-all placeholder:text-slate-400 shadow-2xs"
                         />
-                        <span className="material-symbols-outlined absolute right-2 top-1.5 text-slate-400 text-[16px]">search</span>
+                        <span className="material-symbols-outlined absolute right-2.5 top-2.5 text-slate-400 text-[16px]">search</span>
                     </div>
+
+                    {/* Refresh Button */}
+                    <button
+                        onClick={handleRefreshAll}
+                        disabled={isRefreshing}
+                        className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-all border border-slate-200 dark:border-slate-700 cursor-pointer flex items-center justify-center shadow-2xs"
+                        title="Refresh Console Data"
+                    >
+                        <span className={`material-symbols-outlined text-[17px] ${isRefreshing ? 'animate-spin text-blue-600' : ''}`}>sync</span>
+                    </button>
 
                     {/* Export Dropdown */}
                     <div className="relative">
                         <button
                             onClick={() => setIsExportOpen(!isExportOpen)}
-                            className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-all border border-slate-200 dark:border-slate-700 cursor-pointer flex items-center gap-1 text-xs font-bold px-2.5"
+                            className="py-2 px-3 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-xl transition-all border border-slate-200 dark:border-slate-700 cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-2xs"
                         >
-                            <span className="material-symbols-outlined text-[16px]">download</span>
+                            <span className="material-symbols-outlined text-[16px] text-slate-500">download</span>
                             <span>Export</span>
-                            <span className="material-symbols-outlined text-[14px]">expand_more</span>
+                            <span className="material-symbols-outlined text-[15px] text-slate-400">expand_more</span>
                         </button>
                         {isExportOpen && (
                             <>
@@ -3923,355 +4164,428 @@ export default function AdminConsole() {
             </div>
 
             {/* ─── HIERARCHY TIER 1: FUNCTIONAL DOMAIN PILLARS ─── */}
-            <div className={`grid grid-cols-1 ${isSysAdmin ? 'md:grid-cols-3' : 'md:grid-cols-1'} gap-2.5 mb-3`}>
-                {/* Pillar 1: Content Moderation & Safety (System Admin Only) */}
-                {isSysAdmin && (
-                <div 
-                    onClick={() => handleDomainSelect('moderation')}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
-                        activeDomain === 'moderation'
-                            ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white border-indigo-600 shadow-md shadow-indigo-500/20 ring-2 ring-indigo-500/30'
-                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:border-indigo-400/60 shadow-xs'
-                    }`}
-                >
-                    <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
-                            activeDomain === 'moderation' ? 'bg-white/20 text-white' : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-                        }`}>
-                            <span className="material-symbols-outlined text-[22px]">gavel</span>
+            {!isSysAdmin ? (
+                /* Executive Domain Banner for HR Admin & Single Domain Views */
+                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white border border-slate-700/80 shadow-xs p-4 sm:p-5 mb-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 ring-4 ring-indigo-500/10 flex items-center justify-center shrink-0 shadow-inner">
+                            <span className="material-symbols-outlined text-[26px]">admin_panel_settings</span>
                         </div>
                         <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className={`text-[10px] font-black uppercase tracking-wider ${activeDomain === 'moderation' ? 'text-indigo-200' : 'text-slate-400'}`}>
-                                    Domain 1
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-md border border-indigo-500/30">
+                                    GOVERNANCE DOMAIN 02 • HR ACCESS MANAGEMENT
                                 </span>
-                                {(pendingCount + pendingMediaApprovals.length) > 0 && (
-                                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                        activeDomain === 'moderation' ? 'bg-amber-400 text-slate-950' : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                                    }`}>
-                                        {pendingCount + pendingMediaApprovals.length} Pending
-                                    </span>
-                                )}
-                            </div>
-                            <h3 className="font-extrabold text-xs sm:text-sm tracking-tight truncate">
-                                Moderation & Content Safety
-                            </h3>
-                            <p className={`text-[10px] sm:text-[11px] truncate ${activeDomain === 'moderation' ? 'text-indigo-100' : 'text-slate-400'}`}>
-                                {(isModerator && !isSysAdmin) ? 'Reports & Media Approvals Queue' : (isSysAdmin && !isModerator) ? 'Approval Policies (Moderation transferred to Moderator)' : 'Reports, Media & Community Approvals'}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="text-right shrink-0 pl-2">
-                        <span className={`text-base sm:text-lg font-black block leading-none ${activeDomain === 'moderation' ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
-                            {reports.length}
-                        </span>
-                        <span className={`text-[9px] font-bold uppercase tracking-tight ${activeDomain === 'moderation' ? 'text-indigo-200' : 'text-slate-400'}`}>
-                            Reports
-                        </span>
-                    </div>
-                </div>
-                )}
-
-                {/* Pillar 2: User Governance & Access */}
-                <div 
-                    onClick={() => {
-                        if (isModerator && !isSysAdmin) {
-                            showToast('Access restricted: User Governance is restricted to System Administrators.', 'warning');
-                            return;
-                        }
-                        handleDomainSelect('governance');
-                    }}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
-                        isModerator && !isSysAdmin 
-                            ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800'
-                            : activeDomain === 'governance'
-                                ? 'bg-gradient-to-r from-purple-600 to-indigo-700 text-white border-purple-600 shadow-md shadow-purple-500/20 ring-2 ring-purple-500/30'
-                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:border-purple-400/60 shadow-xs'
-                    }`}
-                >
-                    <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
-                            activeDomain === 'governance' ? 'bg-white/20 text-white' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
-                        }`}>
-                            <span className="material-symbols-outlined text-[22px]">admin_panel_settings</span>
-                        </div>
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className={`text-[10px] font-black uppercase tracking-wider ${activeDomain === 'governance' ? 'text-purple-200' : 'text-slate-400'}`}>
-                                    Domain 2
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-md border border-emerald-500/30">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    Live Directory
                                 </span>
-                                {isModerator && !isSysAdmin && (
-                                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-500">SysAdmin</span>
-                                )}
                             </div>
-                            <h3 className="font-extrabold text-xs sm:text-sm tracking-tight truncate">
+                            <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
                                 User & Access Governance
-                            </h3>
-                            <p className={`text-[10px] sm:text-[11px] truncate ${activeDomain === 'governance' ? 'text-purple-100' : 'text-slate-400'}`}>
-                                Employee Accounts, Roles & Privileges
+                            </h2>
+                            <p className="text-xs text-slate-300 font-medium mt-0.5">
+                                Centralized employee accounts, role authorizations, security status, and organization access policies.
                             </p>
                         </div>
                     </div>
-                    <div className="text-right shrink-0 pl-2">
-                        <span className={`text-base sm:text-lg font-black block leading-none ${activeDomain === 'governance' ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
-                            {usersList.length}
-                        </span>
-                        <span className={`text-[9px] font-bold uppercase tracking-tight ${activeDomain === 'governance' ? 'text-purple-200' : 'text-slate-400'}`}>
-                            Users
-                        </span>
-                    </div>
-                </div>
 
-                {/* Pillar 3: System Operations & Compliance (System Admin Only) */}
-                {isSysAdmin && (
-                <div 
-                    onClick={() => {
-                        if (isModerator && !isSysAdmin) {
-                            showToast('Access restricted: Operations & Compliance are restricted to System Administrators.', 'warning');
-                            return;
-                        }
-                        handleDomainSelect('operations');
-                    }}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
-                        isModerator && !isSysAdmin 
-                            ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800'
-                            : activeDomain === 'operations'
-                                ? 'bg-gradient-to-r from-cyan-600 to-slate-800 text-white border-cyan-600 shadow-md shadow-cyan-500/20 ring-2 ring-cyan-500/30'
-                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:border-cyan-400/60 shadow-xs'
-                    }`}
-                >
-                    <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
-                            activeDomain === 'operations' ? 'bg-white/20 text-white' : 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
-                        }`}>
-                            <span className="material-symbols-outlined text-[22px]">settings_suggest</span>
+                    {/* Executive Metric Capsules on Right */}
+                    <div className="flex items-center gap-2.5 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800">
+                        <div className="px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-center min-w-[90px] shadow-2xs">
+                            <span className="text-lg font-black text-white block leading-none">{usersList.length}</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight mt-1 block">Employees</span>
                         </div>
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className={`text-[10px] font-black uppercase tracking-wider ${activeDomain === 'operations' ? 'text-cyan-200' : 'text-slate-400'}`}>
-                                    Domain 3
-                                </span>
-                                {isModerator && !isSysAdmin ? (
-                                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-500">SysAdmin</span>
-                                ) : systemLogCounts.errors > 0 ? (
-                                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                        activeDomain === 'operations' ? 'bg-rose-300 text-rose-950' : 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30'
-                                    }`}>
-                                        {systemLogCounts.errors} Err
-                                    </span>
-                                ) : (
-                                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                        activeDomain === 'operations' ? 'bg-emerald-300 text-emerald-950' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                                    }`}>
-                                        Online
-                                    </span>
-                                )}
-                            </div>
-                            <h3 className="font-extrabold text-xs sm:text-sm tracking-tight truncate">
-                                Operations & Compliance
-                            </h3>
-                            <p className={`text-[10px] sm:text-[11px] truncate ${activeDomain === 'operations' ? 'text-cyan-100' : 'text-slate-400'}`}>
-                                Audit Trail, Server Logs & Platform Analytics
-                            </p>
+                        <div className="px-4 py-2.5 rounded-xl bg-indigo-950/70 border border-indigo-700/60 text-center min-w-[90px] shadow-2xs">
+                            <span className="text-lg font-black text-indigo-300 block leading-none">{activeModeratorsCount}</span>
+                            <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tight mt-1 block">Privileged</span>
                         </div>
-                    </div>
-                    <div className="text-right shrink-0 pl-2">
-                        <span className={`text-base sm:text-lg font-black block leading-none ${activeDomain === 'operations' ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
-                            {auditTrail.length}
-                        </span>
-                        <span className={`text-[9px] font-bold uppercase tracking-tight ${activeDomain === 'operations' ? 'text-cyan-200' : 'text-slate-400'}`}>
-                            Audits
-                        </span>
+                        <div className="px-4 py-2.5 rounded-xl bg-emerald-950/60 border border-emerald-700/50 text-center min-w-[90px] shadow-2xs">
+                            <span className="text-lg font-black text-emerald-400 block leading-none">100%</span>
+                            <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-tight mt-1 block">Account Health</span>
+                        </div>
                     </div>
                 </div>
-                )}
-            </div>
+            ) : (
+                /* Multi-Domain 3-Pillar Deck for System Admin */
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3.5">
+                    {/* Pillar 1: Content Moderation & Safety */}
+                    <div 
+                        onClick={() => handleDomainSelect('moderation')}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group shadow-xs ${
+                            activeDomain === 'moderation'
+                                ? 'bg-[#0c1838] text-white border-[#1e295a] ring-2 ring-blue-500/40 shadow-sm'
+                                : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-slate-200/90 dark:border-slate-800 hover:border-blue-300 dark:hover:border-slate-700 hover:shadow-xs'
+                        }`}
+                    >
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${
+                                activeDomain === 'moderation' 
+                                    ? 'bg-blue-900/60 text-white border border-blue-400/30' 
+                                    : 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50'
+                            }`}>
+                                <span className="material-symbols-outlined text-[22px]">gavel</span>
+                            </div>
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className={`text-[10px] font-black uppercase tracking-wider ${
+                                        activeDomain === 'moderation' ? 'text-blue-200' : 'text-slate-400'
+                                    }`}>
+                                        DOMAIN 1
+                                    </span>
+                                    {(pendingCount + pendingMediaApprovals.length) > 0 && (
+                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shadow-2xs ${
+                                            activeDomain === 'moderation' ? 'bg-amber-400 text-slate-950' : 'bg-amber-50 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/80'
+                                        }`}>
+                                            {pendingCount + pendingMediaApprovals.length} Pending
+                                        </span>
+                                    )}
+                                </div>
+                                <h3 className={`font-extrabold text-xs sm:text-sm tracking-tight truncate ${
+                                    activeDomain === 'moderation' ? 'text-white' : 'text-slate-900 dark:text-white'
+                                }`}>
+                                    Moderation & Content Safety
+                                </h3>
+                                <p className={`text-[10px] sm:text-[11px] truncate ${
+                                    activeDomain === 'moderation' ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'
+                                }`}>
+                                    Reports, Media & Community Approvals
+                                </p>
+                            </div>
+                        </div>
+                        <div className="text-right shrink-0 pl-2">
+                            <span className={`text-lg sm:text-xl font-black block leading-none ${
+                                activeDomain === 'moderation' ? 'text-white' : 'text-slate-900 dark:text-white'
+                            }`}>
+                                {reports.length}
+                            </span>
+                            <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                                activeDomain === 'moderation' ? 'text-blue-300' : 'text-slate-400'
+                            }`}>
+                                REPORTS
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Pillar 2: User Governance & Access */}
+                    <div 
+                        onClick={() => handleDomainSelect('governance')}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group shadow-xs ${
+                            activeDomain === 'governance'
+                                ? 'bg-[#0c1838] text-white border-[#1e295a] ring-2 ring-purple-500/40 shadow-sm'
+                                : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-slate-200/90 dark:border-slate-800 hover:border-purple-300 dark:hover:border-slate-700 hover:shadow-xs'
+                        }`}
+                    >
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${
+                                activeDomain === 'governance' 
+                                    ? 'bg-purple-900/60 text-white border border-purple-400/30' 
+                                    : 'bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50'
+                            }`}>
+                                <span className="material-symbols-outlined text-[22px]">admin_panel_settings</span>
+                            </div>
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className={`text-[10px] font-black uppercase tracking-wider ${
+                                        activeDomain === 'governance' ? 'text-purple-200' : 'text-slate-400'
+                                    }`}>
+                                        DOMAIN 2
+                                    </span>
+                                </div>
+                                <h3 className={`font-extrabold text-xs sm:text-sm tracking-tight truncate ${
+                                    activeDomain === 'governance' ? 'text-white' : 'text-slate-900 dark:text-white'
+                                }`}>
+                                    User & Access Governance
+                                </h3>
+                                <p className={`text-[10px] sm:text-[11px] truncate ${
+                                    activeDomain === 'governance' ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'
+                                }`}>
+                                    Employee Accounts, Roles & Privileges
+                                </p>
+                            </div>
+                        </div>
+                        <div className="text-right shrink-0 pl-2">
+                            <span className={`text-lg sm:text-xl font-black block leading-none ${
+                                activeDomain === 'governance' ? 'text-white' : 'text-slate-900 dark:text-white'
+                            }`}>
+                                {usersList.length}
+                            </span>
+                            <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                                activeDomain === 'governance' ? 'text-purple-300' : 'text-slate-400'
+                            }`}>
+                                USERS
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Pillar 3: System Operations & Compliance */}
+                    <div 
+                        onClick={() => handleDomainSelect('operations')}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group shadow-xs ${
+                            activeDomain === 'operations'
+                                ? 'bg-[#0c1838] text-white border-[#1e295a] ring-2 ring-cyan-500/40 shadow-sm'
+                                : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-slate-200/90 dark:border-slate-800 hover:border-cyan-300 dark:hover:border-slate-700 hover:shadow-xs'
+                        }`}
+                    >
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${
+                                activeDomain === 'operations' 
+                                    ? 'bg-cyan-900/60 text-white border border-cyan-400/30' 
+                                    : 'bg-cyan-50 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-900/50'
+                            }`}>
+                                <span className="material-symbols-outlined text-[22px]">settings_suggest</span>
+                            </div>
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className={`text-[10px] font-black uppercase tracking-wider ${
+                                        activeDomain === 'operations' ? 'text-cyan-200' : 'text-slate-400'
+                                    }`}>
+                                        DOMAIN 3
+                                    </span>
+                                    {systemLogCounts.errors > 0 ? (
+                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white shadow-2xs">
+                                            {systemLogCounts.errors} Err
+                                        </span>
+                                    ) : (
+                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500 text-white shadow-2xs">
+                                            Online
+                                        </span>
+                                    )}
+                                </div>
+                                <h3 className={`font-extrabold text-xs sm:text-sm tracking-tight truncate ${
+                                    activeDomain === 'operations' ? 'text-white' : 'text-slate-900 dark:text-white'
+                                }`}>
+                                    Operations & Compliance
+                                </h3>
+                                <p className={`text-[10px] sm:text-[11px] truncate ${
+                                    activeDomain === 'operations' ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'
+                                }`}>
+                                    Audit Trail, Server Logs & Analytics
+                                </p>
+                            </div>
+                        </div>
+                        <div className="text-right shrink-0 pl-2">
+                            <span className={`text-lg sm:text-xl font-black block leading-none ${
+                                activeDomain === 'operations' ? 'text-white' : 'text-slate-900 dark:text-white'
+                            }`}>
+                                {auditTrail.length}
+                            </span>
+                            <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                                activeDomain === 'operations' ? 'text-cyan-300' : 'text-slate-400'
+                            }`}>
+                                AUDITS
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ─── HIERARCHY TIER 2: FUNCTIONAL SUB-TABS (SCOPED TO ACTIVE DOMAIN) ─── */}
-            {/* Tier 2 Sub-Tabs Bar */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 mb-3 shadow-xs flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap py-0.5">
-                        {activeDomain === 'governance' && (
-                            <>
-                                <button
-                                    onClick={() => setActiveTab('users')}
-                                    className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
-                                        activeTab === 'users'
-                                            ? 'bg-purple-600 text-white shadow-xs'
-                                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-[16px]">group</span>
-                                    <span>User Directory ({usersList.length})</span>
-                                </button>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-2.5 mb-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap py-0.5">
+                    {activeDomain === 'governance' && (
+                        <>
+                            <button
+                                onClick={() => setActiveTab('users')}
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
+                                    activeTab === 'users'
+                                        ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
+                                }`}
+                            >
+                                <span className={`material-symbols-outlined text-[17px] ${
+                                    activeTab === 'users' ? 'text-white' : 'text-blue-600 dark:text-blue-400'
+                                }`}>group</span>
+                                <span>User Directory</span>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+                                    activeTab === 'users' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                }`}>
+                                    {usersList.length}
+                                </span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('approval_policy')}
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
+                                    activeTab === 'approval_policy'
+                                        ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
+                                }`}
+                            >
+                                <span className={`material-symbols-outlined text-[17px] ${
+                                    activeTab === 'approval_policy' ? 'text-white' : 'text-purple-600 dark:text-purple-400'
+                                }`}>policy</span>
+                                <span>Approval Policy & Controls</span>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                                    activeTab === 'approval_policy'
+                                        ? 'bg-white/20 text-white'
+                                        : configState.requireContentAndCommunityApproval !== false
+                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
+                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                }`}>
+                                    {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
+                                </span>
+                            </button>
+                        </>
+                    )}
+
+                    {activeDomain === 'moderation' && (
+                        <>
+                            <button
+                                onClick={() => setActiveTab('moderation')}
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
+                                    activeTab === 'moderation'
+                                        ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-[17px]">gavel</span>
+                                <span>Content Moderation</span>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+                                    activeTab === 'moderation' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                }`}>
+                                    {reports.length}
+                                </span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('media_approvals')}
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
+                                    activeTab === 'media_approvals'
+                                        ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
+                                }`}
+                            >
+                                <span className={`material-symbols-outlined text-[17px] ${
+                                    activeTab === 'media_approvals' ? 'text-white' : 'text-rose-500'
+                                }`}>video_library</span>
+                                <span>Media Approvals</span>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+                                    activeTab === 'media_approvals' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                }`}>
+                                    {pendingMediaApprovals.length}
+                                </span>
+                                {pendingMediaApprovals.length > 0 && (
+                                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                                )}
+                            </button>
+                            {(!isModerator || isSysAdmin) && (
                                 <button
                                     onClick={() => setActiveTab('approval_policy')}
-                                    className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                    className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
                                         activeTab === 'approval_policy'
-                                            ? 'bg-rose-600 text-white shadow-xs'
-                                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                            : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
                                     }`}
                                 >
-                                    <span className="material-symbols-outlined text-[16px] text-rose-500">fact_check</span>
-                                    <span>Approval Policy & Toggle</span>
-                                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
-                                        configState.requireContentAndCommunityApproval !== false
-                                            ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
-                                            : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                                    }`}>
-                                        {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
-                                    </span>
+                                    <span className={`material-symbols-outlined text-[17px] ${
+                                        activeTab === 'approval_policy' ? 'text-white' : 'text-purple-600 dark:text-purple-400'
+                                    }`}>fact_check</span>
+                                    <span>Approval Policy</span>
                                 </button>
-                            </>
-                        )}
-
-                        {activeDomain === 'moderation' && (
-                            <>
-                                {(!isSysAdmin || isModerator) && (
-                                    <>
-                                        <button
-                                            onClick={() => setActiveTab('moderation')}
-                                            className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
-                                                activeTab === 'moderation'
-                                                    ? 'bg-indigo-600 text-white shadow-xs'
-                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                            }`}
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">gavel</span>
-                                            <span>Content Moderation ({reports.length})</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('media_approvals')}
-                                            className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
-                                                activeTab === 'media_approvals'
-                                                    ? 'bg-indigo-600 text-white shadow-xs'
-                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                            }`}
-                                        >
-                                            <span className="material-symbols-outlined text-[16px] text-rose-500">video_library</span>
-                                            <span>Media Approvals ({pendingMediaApprovals.length})</span>
-                                            {pendingMediaApprovals.length > 0 && (
-                                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                                            )}
-                                        </button>
-                                    </>
-                                )}
-                                {(!isModerator || isSysAdmin) && (
-                                    <>
-                                        <button
-                                            onClick={() => setActiveTab('approval_policy')}
-                                            className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
-                                                activeTab === 'approval_policy'
-                                                    ? 'bg-rose-600 text-white shadow-xs'
-                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                            }`}
-                                        >
-                                            <span className="material-symbols-outlined text-[16px] text-rose-500">fact_check</span>
-                                            <span>Approval Policy & Toggle</span>
-                                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
-                                                configState.requireContentAndCommunityApproval !== false
-                                                    ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
-                                                    : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                                            }`}>
-                                                {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
-                                            </span>
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('community_approvals')}
-                                            className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
-                                                activeTab === 'community_approvals'
-                                                    ? 'bg-amber-500 text-white shadow-xs'
-                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                            }`}
-                                        >
-                                            <span className="material-symbols-outlined text-[16px] text-amber-500">approval</span>
-                                            <span>Community Approval ({pendingCommunityApprovals.length})</span>
-                                            {pendingCommunityApprovals.length > 0 && (
-                                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                                            )}
-                                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
-                                                configState.requireCommunityApproval !== false
-                                                    ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
-                                                    : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                                            }`}>
-                                                {configState.requireCommunityApproval !== false ? 'ON' : 'OFF'}
-                                            </span>
-                                        </button>
-                                    </>
-                                )}
-                            </>
-                        )}
+                            )}
+                            <button
+                                onClick={() => setActiveTab('community_approvals')}
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
+                                    activeTab === 'community_approvals'
+                                        ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
+                                }`}
+                            >
+                                <span className={`material-symbols-outlined text-[17px] ${
+                                    activeTab === 'community_approvals' ? 'text-white' : 'text-amber-500'
+                                }`}>approval</span>
+                                <span>Community Approvals</span>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+                                    activeTab === 'community_approvals' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                }`}>
+                                    {pendingCommunityApprovals.length}
+                                </span>
+                            </button>
+                        </>
+                    )}
 
                     {activeDomain === 'operations' && (
                         <>
                             <button
                                 onClick={() => setActiveTab('audit')}
-                                className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
                                     activeTab === 'audit'
-                                        ? 'bg-slate-800 text-white shadow-xs'
-                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                        ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
                                 }`}
                             >
-                                <span className="material-symbols-outlined text-[16px]">history</span>
-                                <span>Audit Trail ({auditTrail.length})</span>
+                                <span className={`material-symbols-outlined text-[17px] ${
+                                    activeTab === 'audit' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'
+                                }`}>history</span>
+                                <span>Audit Trail</span>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+                                    activeTab === 'audit' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                }`}>
+                                    {auditTrail.length}
+                                </span>
                             </button>
                             <button
                                 onClick={() => setActiveTab('serilog')}
-                                className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
                                     activeTab === 'serilog'
-                                        ? 'bg-cyan-600 text-white shadow-xs'
-                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                        ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
                                 }`}
                             >
-                                <span className="material-symbols-outlined text-[16px] text-cyan-400">terminal</span>
-                                <span>Server Logs (Serilog)</span>
+                                <span className={`material-symbols-outlined text-[17px] ${
+                                    activeTab === 'serilog' ? 'text-white' : 'text-cyan-500'
+                                }`}>terminal</span>
+                                <span>Server Logs</span>
                                 {systemLogCounts.errors > 0 && (
-                                    <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-black">
+                                    <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black">
                                         {systemLogCounts.errors}
                                     </span>
                                 )}
                             </button>
                             <button
                                 onClick={() => setActiveTab('analytics')}
-                                className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
                                     activeTab === 'analytics'
-                                        ? 'bg-slate-800 text-white shadow-xs'
-                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                        ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
                                 }`}
                             >
-                                <span className="material-symbols-outlined text-[16px]">analytics</span>
+                                <span className={`material-symbols-outlined text-[17px] ${
+                                    activeTab === 'analytics' ? 'text-white' : 'text-purple-600 dark:text-purple-400'
+                                }`}>analytics</span>
                                 <span>Analytics</span>
                             </button>
                         </>
                     )}
                 </div>
 
-                {/* Live Content & Community Approval Policy Switch (Always visible) */}
-                <div className="flex items-center gap-2.5 pl-2 sm:border-l border-slate-200 dark:border-slate-800 shrink-0">
+                {/* Live Content & Community Approval Policy Switch (Refined Enterprise Toggle) */}
+                <div className="flex items-center gap-3 pl-3 sm:border-l border-slate-200 dark:border-slate-800 shrink-0">
                     <div className="text-right hidden sm:block">
-                        <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 block leading-tight">Content & Community Approval</span>
-                        <span className="text-[9px] text-slate-500 dark:text-slate-400 block">Require admin approval before publish</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white block leading-tight">Content & Community Approval</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">Require admin approval before publish</span>
                     </div>
                     <div 
                         onClick={handleToggleApprovalPolicy}
-                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer select-none transition-all ${
+                        className={`flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border cursor-pointer select-none transition-all shadow-xs ${
                             configState.requireContentAndCommunityApproval !== false
-                                ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 shadow-xs ring-1 ring-rose-400/30'
-                                : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                                ? 'bg-[#0c1838] text-white border-slate-700 ring-1 ring-slate-700/50 hover:border-blue-400'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200'
                         }`}
                         title="Click to toggle Content & Community Approval ON/OFF"
                     >
-                        <span className="material-symbols-outlined text-[16px]">
+                        <span className={`material-symbols-outlined text-[16px] ${
+                            configState.requireContentAndCommunityApproval !== false ? 'text-blue-400' : 'text-slate-400'
+                        }`}>
                             {configState.requireContentAndCommunityApproval !== false ? 'lock' : 'lock_open'}
                         </span>
-                        <span className="text-xs font-black uppercase tracking-tight">
+                        <span className="text-xs font-black uppercase tracking-wider text-white">
                             {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
                         </span>
-                        <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${
-                            configState.requireContentAndCommunityApproval !== false ? 'bg-rose-600' : 'bg-slate-300 dark:bg-slate-700'
+                        <div className={`w-9 h-4.5 rounded-full p-0.5 transition-colors ${
+                            configState.requireContentAndCommunityApproval !== false ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
                         }`}>
-                            <div className={`w-3 h-3 rounded-full bg-white transition-transform ${
-                                configState.requireContentAndCommunityApproval !== false ? 'translate-x-4' : 'translate-x-0'
+                            <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
+                                configState.requireContentAndCommunityApproval !== false ? 'translate-x-4.5' : 'translate-x-0'
                             }`}></div>
                         </div>
                     </div>
@@ -4282,26 +4596,26 @@ export default function AdminConsole() {
             {/* ─── HIERARCHY TIER 3: CONTEXTUAL FILTER & ACTION STRIP (STRICTLY SCOPED TO ACTIVE MODULE) ─── */}
 
             {/* TAB 1: CONTENT MODERATION FILTERS */}
-            {activeTab === 'moderation' && (!isSysAdmin || isModerator) && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-3">
+            {activeTab === 'moderation' && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3.5">
                     {/* 1. All Reports */}
                     <div 
                         onClick={() => { 
                             setActiveMetricCard('total'); 
                             handleResetFilters(); 
                         }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${
                             activeMetricCard === 'total'
-                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
+                                ? 'bg-blue-50/50 dark:bg-blue-950/40 border-blue-400 ring-2 ring-blue-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-blue-300 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-indigo-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">report</span>
-                            <span className="text-[10px] font-bold text-emerald-500">+8%</span>
+                        <div className="flex items-center justify-between text-blue-600 dark:text-blue-400 mb-1.5">
+                            <span className="material-symbols-outlined text-[20px]">report</span>
+                            <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/80 px-2 py-0.5 rounded-full shadow-2xs">+8%</span>
                         </div>
-                        <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{totalReportsCount}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">All Reports</p>
+                        <p className="text-xl font-black text-slate-900 dark:text-white leading-none">{totalReportsCount}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">ALL REPORTS</p>
                     </div>
 
                     {/* 2. Pending Reports */}
@@ -4313,18 +4627,18 @@ export default function AdminConsole() {
                             setDateRangeFilter('All');
                             showToast(`Filtered: Showing ${pendingCount} Pending Reports`); 
                         }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${
                             activeMetricCard === 'pending'
-                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-amber-500/40 hover:border-amber-500 shadow-xs'
+                                ? 'bg-amber-50/50 dark:bg-amber-950/40 border-amber-400 ring-2 ring-amber-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-amber-300 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-amber-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">pending_actions</span>
-                            <span className="text-[10px] font-black text-amber-600 bg-amber-500/15 px-1.5 py-0.2 rounded-full">Needs Action</span>
+                        <div className="flex items-center justify-between text-amber-500 mb-1.5">
+                            <span className="material-symbols-outlined text-[20px]">pending_actions</span>
+                            <span className="text-[10px] font-black text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/80 px-2 py-0.5 rounded-full shadow-2xs">Needs Action</span>
                         </div>
-                        <p className="text-lg font-black text-amber-500 leading-none">{pendingCount}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Pending Reports</p>
+                        <p className="text-xl font-black text-amber-600 dark:text-amber-400 leading-none">{pendingCount}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">PENDING REPORTS</p>
                     </div>
 
                     {/* 3. Removed Reports (previously Action Taken - Red) */}
@@ -4336,18 +4650,18 @@ export default function AdminConsole() {
                             setDateRangeFilter('All');
                             showToast(`Filtered: Showing ${actionTakenCount} Removed Reports`); 
                         }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${
                             activeMetricCard === 'action_taken'
-                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-rose-500/40 hover:border-rose-500 shadow-xs'
+                                ? 'bg-rose-50/50 dark:bg-rose-950/40 border-rose-400 ring-2 ring-rose-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-rose-300 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-rose-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">delete_forever</span>
-                            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/15 px-1.5 py-0.2 rounded-full">Removed</span>
+                        <div className="flex items-center justify-between text-rose-500 mb-1.5">
+                            <span className="material-symbols-outlined text-[20px]">delete_forever</span>
+                            <span className="text-[10px] font-black text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-800/80 px-2 py-0.5 rounded-full shadow-2xs">Removed</span>
                         </div>
-                        <p className="text-lg font-black text-rose-600 dark:text-rose-400 leading-none">{actionTakenCount}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Removed Reports</p>
+                        <p className="text-xl font-black text-rose-600 dark:text-rose-400 leading-none">{actionTakenCount}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">REMOVED REPORTS</p>
                     </div>
 
                     {/* 4. Dismissed Reports (previously Dismissed - Green) */}
@@ -4359,18 +4673,18 @@ export default function AdminConsole() {
                             setDateRangeFilter('All');
                             showToast(`Filtered: Showing ${dismissedCount} Dismissed Reports`); 
                         }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${
                             activeMetricCard === 'dismissed'
-                                ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-emerald-500/40 hover:border-emerald-500 shadow-xs'
+                                ? 'bg-emerald-50/50 dark:bg-emerald-950/40 border-emerald-400 ring-2 ring-emerald-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-emerald-300 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-emerald-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">task_alt</span>
-                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 px-1.5 py-0.2 rounded-full">Dismissed</span>
+                        <div className="flex items-center justify-between text-emerald-500 mb-1.5">
+                            <span className="material-symbols-outlined text-[20px]">task_alt</span>
+                            <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/80 px-2 py-0.5 rounded-full shadow-2xs">Dismissed</span>
                         </div>
-                        <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">{dismissedCount}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Dismissed Reports</p>
+                        <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{dismissedCount}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">DISMISSED REPORTS</p>
                     </div>
 
                     {/* 5. Today's Reports */}
@@ -4382,160 +4696,176 @@ export default function AdminConsole() {
                             setSeverityFilter('All');
                             showToast(`Filtered: Showing ${todayReportsCount} Today's Reports`); 
                         }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${
                             activeMetricCard === 'today'
-                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
+                                ? 'bg-purple-50/50 dark:bg-purple-950/40 border-purple-400 ring-2 ring-purple-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-purple-300 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-indigo-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">today</span>
-                            <span className="text-[10px] font-bold text-indigo-500">+2 new</span>
+                        <div className="flex items-center justify-between text-purple-600 dark:text-purple-400 mb-1.5">
+                            <span className="material-symbols-outlined text-[20px]">today</span>
+                            <span className="text-[10px] font-black text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800/80 px-2 py-0.5 rounded-full shadow-2xs">+2 new</span>
                         </div>
-                        <p className="text-lg font-black text-indigo-500 leading-none">{todayReportsCount}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Reported Today</p>
+                        <p className="text-xl font-black text-purple-600 dark:text-purple-400 leading-none">{todayReportsCount}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">REPORTED TODAY</p>
                     </div>
                 </div>
             )}
 
             {/* TAB 2: MEDIA APPROVALS CONTROLS & FILTERS */}
-            {activeTab === 'media_approvals' && (!isSysAdmin || isModerator) && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            {activeTab === 'media_approvals' && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3.5">
                     {/* 1. All Pending Media */}
                     <div 
                         onClick={() => { setMediaTypeFilter('All'); showToast('Showing all pending media submissions'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
                             mediaTypeFilter === 'All'
-                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-500/40 shadow-xs'
+                                ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-400 dark:border-rose-700 ring-2 ring-rose-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-rose-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">video_library</span>
-                            <span className="text-[10px] font-black text-rose-600 bg-rose-500/15 px-1.5 py-0.2 rounded-full">Queue</span>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-800/60 flex items-center justify-center shrink-0 shadow-2xs">
+                                <span className="material-symbols-outlined text-[18px]">video_library</span>
+                            </div>
+                            <span className="text-[10px] font-black text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 border border-rose-200/80 dark:border-rose-800/60 px-2 py-0.5 rounded-full shadow-2xs">Queue</span>
                         </div>
-                        <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{pendingMediaApprovals.length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">All Pending Submissions</p>
+                        <p className="text-xl font-black text-slate-900 dark:text-white leading-none">{pendingMediaApprovals.length}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">ALL PENDING MEDIA</p>
                     </div>
 
                     {/* 2. Video Submissions */}
                     <div 
                         onClick={() => { setMediaTypeFilter('Video'); showToast('Filtered: Showing Video Submissions'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
                             mediaTypeFilter === 'Video'
-                                ? 'bg-cyan-500/10 border-cyan-500 ring-2 ring-cyan-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-cyan-500/40 shadow-xs'
+                                ? 'bg-cyan-50/60 dark:bg-cyan-950/20 border-cyan-400 dark:border-cyan-700 ring-2 ring-cyan-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-cyan-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">play_circle</span>
-                            <span className="text-[10px] font-bold text-cyan-500">Video</span>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400 border border-cyan-200/80 dark:border-cyan-800/60 flex items-center justify-center shrink-0 shadow-2xs">
+                                <span className="material-symbols-outlined text-[18px]">play_circle</span>
+                            </div>
+                            <span className="text-[10px] font-black text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/50 border border-cyan-200/80 dark:border-cyan-800/60 px-2 py-0.5 rounded-full shadow-2xs">Video</span>
                         </div>
-                        <p className="text-lg font-black text-cyan-500 leading-none">{pendingMediaApprovals.filter(m => m.mediaType === 'Video').length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Videos Only</p>
+                        <p className="text-xl font-black text-cyan-600 dark:text-cyan-400 leading-none">{pendingMediaApprovals.filter(m => m.mediaType === 'Video').length}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">VIDEOS ONLY</p>
                     </div>
 
                     {/* 3. Podcast Submissions */}
                     <div 
                         onClick={() => { setMediaTypeFilter('Podcast'); showToast('Filtered: Showing Podcast Submissions'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
                             mediaTypeFilter === 'Podcast'
-                                ? 'bg-pink-500/10 border-pink-500 ring-2 ring-pink-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-pink-500/40 shadow-xs'
+                                ? 'bg-pink-50/60 dark:bg-pink-950/20 border-pink-400 dark:border-pink-700 ring-2 ring-pink-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-pink-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">podcasts</span>
-                            <span className="text-[10px] font-bold text-pink-500">Audio</span>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="w-8 h-8 rounded-xl bg-pink-50 dark:bg-pink-950/50 text-pink-600 dark:text-pink-400 border border-pink-200/80 dark:border-pink-800/60 flex items-center justify-center shrink-0 shadow-2xs">
+                                <span className="material-symbols-outlined text-[18px]">podcasts</span>
+                            </div>
+                            <span className="text-[10px] font-black text-pink-700 dark:text-pink-300 bg-pink-50 dark:bg-pink-950/50 border border-pink-200/80 dark:border-pink-800/60 px-2 py-0.5 rounded-full shadow-2xs">Audio</span>
                         </div>
-                        <p className="text-lg font-black text-pink-500 leading-none">{pendingMediaApprovals.filter(m => m.mediaType === 'Podcast').length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Podcasts Only</p>
+                        <p className="text-xl font-black text-pink-600 dark:text-pink-400 leading-none">{pendingMediaApprovals.filter(m => m.mediaType === 'Podcast').length}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">PODCASTS ONLY</p>
                     </div>
 
                     {/* 4. Batch Approve All */}
                     <div 
                         onClick={handleBatchApproveMedia}
-                        className="p-2.5 rounded-xl transition-all cursor-pointer group border bg-emerald-500/10 border-emerald-500/40 hover:border-emerald-500 hover:bg-emerald-500/15 shadow-xs"
+                        className="p-3.5 rounded-2xl border transition-all cursor-pointer group bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500 hover:bg-emerald-500/15 shadow-xs"
                     >
-                        <div className="flex items-center justify-between text-emerald-600 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">done_all</span>
-                            <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 px-1.5 py-0.2 rounded-full">One-Click</span>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/60 flex items-center justify-center shrink-0 shadow-2xs">
+                                <span className="material-symbols-outlined text-[18px]">done_all</span>
+                            </div>
+                            <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-full shadow-2xs">One-Click</span>
                         </div>
                         <p className="text-base font-black text-emerald-600 leading-none mt-1">Approve All</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Batch Release to Hub</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">BATCH RELEASE TO HUB</p>
                     </div>
                 </div>
             )}
 
             {/* TAB: COMMUNITY APPROVALS QUICK METRIC CARDS */}
             {activeTab === 'community_approvals' && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3.5">
                     {/* 1. All Pending Community Requests */}
                     <div 
                         onClick={() => { setCommunityApprovalTypeFilter('All'); showToast('Showing all pending community requests'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
                             communityApprovalTypeFilter === 'All'
-                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-500/40 shadow-xs'
+                                ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-400 dark:border-amber-700 ring-2 ring-amber-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-amber-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">approval</span>
-                            <span className="text-[10px] font-bold text-amber-500">All</span>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200/80 dark:border-amber-800/60 flex items-center justify-center shrink-0 shadow-2xs">
+                                <span className="material-symbols-outlined text-[18px]">approval</span>
+                            </div>
+                            <span className="text-[10px] font-black text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200/80 dark:border-amber-800/60 px-2 py-0.5 rounded-full shadow-2xs">Queue</span>
                         </div>
-                        <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{pendingCommunityApprovals.length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Pending Requests</p>
+                        <p className="text-xl font-black text-slate-900 dark:text-white leading-none">{pendingCommunityApprovals.length}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">ALL PENDING REQUESTS</p>
                     </div>
 
                     {/* 2. Public Communities */}
                     <div 
                         onClick={() => { setCommunityApprovalTypeFilter('Public'); showToast('Filtered: Showing Public community requests'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
                             communityApprovalTypeFilter === 'Public'
-                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
+                                ? 'bg-indigo-50/60 dark:bg-indigo-950/20 border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-indigo-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">public</span>
-                            <span className="text-[10px] font-bold text-indigo-500">Public</span>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-800/60 flex items-center justify-center shrink-0 shadow-2xs">
+                                <span className="material-symbols-outlined text-[18px]">public</span>
+                            </div>
+                            <span className="text-[10px] font-black text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200/80 dark:border-indigo-800/60 px-2 py-0.5 rounded-full shadow-2xs">Public</span>
                         </div>
-                        <p className="text-lg font-black text-indigo-500 leading-none">{pendingCommunityApprovals.filter(c => formatCommunityType(c.type) === 'Public').length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Public Channels</p>
+                        <p className="text-xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{pendingCommunityApprovals.filter(c => formatCommunityType(c.type) === 'Public').length}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">PUBLIC CHANNELS</p>
                     </div>
 
                     {/* 3. Private Communities */}
                     <div 
                         onClick={() => { setCommunityApprovalTypeFilter('Private'); showToast('Filtered: Showing Private community requests'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
                             communityApprovalTypeFilter === 'Private'
-                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-500/40 shadow-xs'
+                                ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-400 dark:border-rose-700 ring-2 ring-rose-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-rose-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">lock</span>
-                            <span className="text-[10px] font-bold text-rose-500">Private</span>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-800/60 flex items-center justify-center shrink-0 shadow-2xs">
+                                <span className="material-symbols-outlined text-[18px]">lock</span>
+                            </div>
+                            <span className="text-[10px] font-black text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 border border-rose-200/80 dark:border-rose-800/60 px-2 py-0.5 rounded-full shadow-2xs">Private</span>
                         </div>
-                        <p className="text-lg font-black text-rose-500 leading-none">{pendingCommunityApprovals.filter(c => formatCommunityType(c.type) === 'Private').length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Private Groups</p>
+                        <p className="text-xl font-black text-rose-600 dark:text-rose-400 leading-none">{pendingCommunityApprovals.filter(c => formatCommunityType(c.type) === 'Private').length}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">PRIVATE GROUPS</p>
                     </div>
 
                     {/* 4. Org Communities */}
                     <div 
                         onClick={() => { setCommunityApprovalTypeFilter('Org'); showToast('Filtered: Showing Org-wide community requests'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
                             communityApprovalTypeFilter === 'Org'
-                                ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-500/40 shadow-xs'
+                                ? 'bg-purple-50/60 dark:bg-purple-950/20 border-purple-400 dark:border-purple-700 ring-2 ring-purple-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-purple-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">domain</span>
-                            <span className="text-[10px] font-bold text-purple-500">Org</span>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 border border-purple-200/80 dark:border-purple-800/60 flex items-center justify-center shrink-0 shadow-2xs">
+                                <span className="material-symbols-outlined text-[18px]">domain</span>
+                            </div>
+                            <span className="text-[10px] font-black text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 border border-purple-200/80 dark:border-purple-800/60 px-2 py-0.5 rounded-full shadow-2xs">Org</span>
                         </div>
-                        <p className="text-lg font-black text-purple-500 leading-none">{pendingCommunityApprovals.filter(c => formatCommunityType(c.type) === 'Org').length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Org-Wide</p>
+                        <p className="text-xl font-black text-purple-600 dark:text-purple-400 leading-none">{pendingCommunityApprovals.filter(c => formatCommunityType(c.type) === 'Org').length}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">ORG-WIDE CHANNELS</p>
                     </div>
                 </div>
             )}
@@ -4550,7 +4880,7 @@ export default function AdminConsole() {
                             <span className="text-[10px] font-black text-indigo-600 bg-indigo-500/15 px-1.5 py-0.2 rounded-full">NLP</span>
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{configState.aiToxicityThreshold || 80}%</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Current Threshold</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Current Threshold</p>
                     </div>
 
                     {/* 2. Permissive 50% Preset */}
@@ -4562,12 +4892,12 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-slate-400 group-hover:text-indigo-500 mb-1">
+                        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">filter_1</span>
-                            <span className="text-[10px] font-bold text-slate-400">Low</span>
+                            <span className={`text-[10px] font-bold ${(configState.aiToxicityThreshold || 80) === 50 ? 'text-indigo-600 dark:text-indigo-400 font-black' : 'text-slate-500 dark:text-slate-400'}`}>Low</span>
                         </div>
                         <p className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">50%</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Permissive Mode</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Permissive Mode</p>
                     </div>
 
                     {/* 3. Balanced 80% Preset */}
@@ -4584,7 +4914,7 @@ export default function AdminConsole() {
                             <span className="text-[10px] font-black text-indigo-600 bg-indigo-500/15 px-1.5 py-0.2 rounded-full">Default</span>
                         </div>
                         <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 leading-none">80%</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Balanced (Recommended)</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Balanced (Recommended)</p>
                     </div>
 
                     {/* 4. Strict 95% Preset */}
@@ -4598,10 +4928,10 @@ export default function AdminConsole() {
                     >
                         <div className="flex items-center justify-between text-rose-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">shield</span>
-                            <span className="text-[10px] font-bold text-rose-500">Max</span>
+                            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">Max</span>
                         </div>
-                        <p className="text-lg font-black text-rose-500 leading-none">95%</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Strict Mode</p>
+                        <p className="text-lg font-black text-rose-600 dark:text-rose-400 leading-none">95%</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Strict Mode</p>
                     </div>
 
                     {/* 5. Toggle Auto-Quarantine */}
@@ -4619,12 +4949,12 @@ export default function AdminConsole() {
                     >
                         <div className="flex items-center justify-between text-rose-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">gavel</span>
-                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.aiAutoQuarantine !== false ? 'bg-rose-500/20 text-rose-600' : 'bg-slate-200 text-slate-500'}`}>
+                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.aiAutoQuarantine !== false ? 'bg-rose-500/20 text-rose-600' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
                                 {configState.aiAutoQuarantine !== false ? 'ON' : 'OFF'}
                             </span>
                         </div>
                         <p className="text-base font-black text-slate-900 dark:text-white leading-none mt-1">Auto-Quarantine</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Hide &gt;95% Posts</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Hide &gt;95% Posts</p>
                     </div>
 
                     {/* 6. Toggle Deep PII Scan */}
@@ -4642,12 +4972,12 @@ export default function AdminConsole() {
                     >
                         <div className="flex items-center justify-between text-amber-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">key</span>
-                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.aiDeepScan !== false ? 'bg-amber-500/20 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${configState.aiDeepScan !== false ? 'bg-amber-500/20 text-amber-600' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
                                 {configState.aiDeepScan !== false ? 'ON' : 'OFF'}
                             </span>
                         </div>
                         <p className="text-base font-black text-slate-900 dark:text-white leading-none mt-1">Deep PII Scan</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">PAN / Aadhaar / Keys</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">PAN / Aadhaar / Keys</p>
                     </div>
                 </div>
             )}
@@ -4666,10 +4996,10 @@ export default function AdminConsole() {
                     >
                         <div className="flex items-center justify-between text-indigo-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">forum</span>
-                            <span className="text-[10px] font-bold text-indigo-500">All</span>
+                            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">All</span>
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{communityChannels.length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">All Communities</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">All Communities</p>
                     </div>
 
                     {/* 2. Strict Policy */}
@@ -4685,8 +5015,8 @@ export default function AdminConsole() {
                             <span className="material-symbols-outlined text-[18px]">lock</span>
                             <span className="text-[10px] font-black text-rose-600 bg-rose-500/15 px-1.5 py-0.2 rounded-full">Strict</span>
                         </div>
-                        <p className="text-lg font-black text-rose-500 leading-none">{communityChannels.filter(c => c.status?.toLowerCase() === 'strict').length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Strict Policy</p>
+                        <p className="text-lg font-black text-rose-600 dark:text-rose-400 leading-none">{communityChannels.filter(c => c.status?.toLowerCase() === 'strict').length}</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Strict Policy</p>
                     </div>
 
                     {/* 3. Standard Policy */}
@@ -4702,8 +5032,8 @@ export default function AdminConsole() {
                             <span className="material-symbols-outlined text-[18px]">verified</span>
                             <span className="text-[10px] font-black text-indigo-600 bg-indigo-500/15 px-1.5 py-0.2 rounded-full">Standard</span>
                         </div>
-                        <p className="text-lg font-black text-indigo-500 leading-none">{communityChannels.filter(c => c.status?.toLowerCase() === 'standard').length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Standard Policy</p>
+                        <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 leading-none">{communityChannels.filter(c => c.status?.toLowerCase() === 'standard').length}</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Standard Policy</p>
                     </div>
 
                     {/* 4. Relaxed Policy */}
@@ -4719,8 +5049,8 @@ export default function AdminConsole() {
                             <span className="material-symbols-outlined text-[18px]">public</span>
                             <span className="text-[10px] font-black text-emerald-600 bg-emerald-500/15 px-1.5 py-0.2 rounded-full">Relaxed</span>
                         </div>
-                        <p className="text-lg font-black text-emerald-500 leading-none">{communityChannels.filter(c => c.status?.toLowerCase() === 'relaxed').length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Relaxed Policy</p>
+                        <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">{communityChannels.filter(c => c.status?.toLowerCase() === 'relaxed').length}</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Relaxed Policy</p>
                     </div>
 
                     {/* 5. Create Community Action */}
@@ -4733,80 +5063,132 @@ export default function AdminConsole() {
                             <span className="text-[10px] font-black text-indigo-700 dark:text-indigo-300 bg-indigo-500/20 px-1.5 py-0.2 rounded-full">Action</span>
                         </div>
                         <p className="text-base font-black text-indigo-600 leading-none mt-1">+ Create Channel</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">New Community</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">New Community</p>
                     </div>
                 </div>
             )}
 
             {/* TAB 5: USER DIRECTORY FILTERS */}
             {activeTab === 'users' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-                    {/* 1. All Employees (Removed from frontend) */}
-                    {false && <div 
-                        onClick={() => { setUserSearchTerm(''); showToast(`Showing all ${usersList.length} registered employees`); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            !userSearchTerm
-                                ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-500/40 shadow-xs'
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-5">
+                    {/* 1. All Employees / Total Directory */}
+                    <div 
+                        onClick={() => { 
+                            setUserSearchTerm(''); 
+                            setSelectedRoleFilter('All'); 
+                            showToast(`Showing all ${usersList.length} registered employees`); 
+                        }}
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
+                            !userSearchTerm && selectedRoleFilter === 'All'
+                                ? 'bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/30 dark:from-indigo-950/40 dark:via-slate-900 dark:to-slate-900 border-indigo-500/60 ring-2 ring-indigo-500/20 shadow-md scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-purple-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">badge</span>
-                            <span className="text-[10px] font-bold text-purple-500">Directory</span>
+                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-indigo-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="flex items-center justify-between mb-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center">
+                                <span className="material-symbols-outlined text-[19px]">badge</span>
+                            </div>
+                            <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                Directory
+                            </span>
                         </div>
-                        <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{usersList.length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">All Employees</p>
-                    </div>}
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{usersList.length}</p>
+                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">Total Directory</p>
+                    </div>
 
                     {/* 2. Active Accounts */}
                     <div 
-                        onClick={() => { if (userSearchTerm === 'Active') { setUserSearchTerm(''); showToast(`Showing all ${usersList.length} registered employees`); } else { setUserSearchTerm('Active'); showToast(`Filtered: Showing ${activeUsersCount} active employee accounts`); } }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            userSearchTerm === 'Active'
-                                ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-500/40 shadow-xs'
+                        onClick={() => { 
+                            if (userSearchTerm.toLowerCase() === 'active') { 
+                                setUserSearchTerm(''); 
+                                showToast(`Showing all ${usersList.length} registered employees`); 
+                            } else { 
+                                setUserSearchTerm('Active'); 
+                                showToast(`Filtered: Showing ${activeUsersCount} active employee accounts`); 
+                            } 
+                        }}
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
+                            userSearchTerm.toLowerCase() === 'active'
+                                ? 'bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/30 dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900 border-emerald-500/60 ring-2 ring-emerald-500/20 shadow-md scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-emerald-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">group</span>
-                            <span className="text-[10px] font-bold text-emerald-500">+15%</span>
+                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="flex items-center justify-between mb-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center">
+                                <span className="material-symbols-outlined text-[19px]">verified_user</span>
+                            </div>
+                            <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+                                100% Health
+                            </span>
                         </div>
-                        <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{activeUsersCount}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Active Accounts</p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{activeUsersCount}</p>
+                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">Active Accounts</p>
                     </div>
 
-                    {/* 3. Administrators */}
+                    {/* 3. Privileged Roles */}
                     <div 
-                        onClick={() => { if (userSearchTerm === 'Admin') { setUserSearchTerm(''); showToast(`Showing all ${usersList.length} registered employees`); } else { setUserSearchTerm('Admin'); showToast(`Filtered: Showing ${activeModeratorsCount} administrators`); } }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            userSearchTerm === 'Admin'
-                                ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
+                        onClick={() => { 
+                            if (userSearchTerm.toLowerCase() === 'admin') { 
+                                setUserSearchTerm(''); 
+                                showToast(`Showing all ${usersList.length} registered employees`); 
+                            } else { 
+                                setUserSearchTerm('Admin'); 
+                                showToast(`Filtered: Showing ${activeModeratorsCount} administrators`); 
+                            } 
+                        }}
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
+                            userSearchTerm.toLowerCase() === 'admin'
+                                ? 'bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 dark:from-purple-950/40 dark:via-slate-900 dark:to-slate-900 border-purple-500/60 ring-2 ring-purple-500/20 shadow-md scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-purple-500 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
-                            <span className="text-[10px] font-bold text-purple-500">Live</span>
+                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-purple-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="flex items-center justify-between mb-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50 flex items-center justify-center">
+                                <span className="material-symbols-outlined text-[19px]">admin_panel_settings</span>
+                            </div>
+                            <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60">
+                                Governance
+                            </span>
                         </div>
-                        <p className="text-lg font-black text-purple-500 leading-none">{activeModeratorsCount}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Admins</p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{activeModeratorsCount}</p>
+                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">Privileged Roles</p>
                     </div>
 
-                    {/* 4. Suspended Users */}
+                    {/* 4. Suspended Accounts */}
                     <div 
-                        onClick={() => { if (userSearchTerm === 'Suspended') { setUserSearchTerm(''); showToast(`Showing all ${usersList.length} registered employees`); } else { setUserSearchTerm('Suspended'); showToast(`Filtered: Showing ${suspendedUsersCount} suspended accounts`); } }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            userSearchTerm === 'Suspended'
-                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-500/40 shadow-xs'
+                        onClick={() => { 
+                            if (userSearchTerm.toLowerCase() === 'suspended') { 
+                                setUserSearchTerm(''); 
+                                showToast(`Showing all ${usersList.length} registered employees`); 
+                            } else { 
+                                setUserSearchTerm('Suspended'); 
+                                showToast(`Filtered: Showing ${suspendedUsersCount} suspended accounts`); 
+                            } 
+                        }}
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
+                            userSearchTerm.toLowerCase() === 'suspended'
+                                ? 'bg-gradient-to-br from-rose-50/70 via-white to-rose-50/30 dark:from-rose-950/40 dark:via-slate-900 dark:to-slate-900 border-rose-500/60 ring-2 ring-rose-500/20 shadow-md scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-slate-400 mb-1">
-                            <span className="material-symbols-outlined text-[18px]">person_off</span>
-                            <span className="text-[10px] font-bold text-rose-500">Quarantine</span>
+                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-rose-500 to-amber-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="flex items-center justify-between mb-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/50 flex items-center justify-center">
+                                <span className="material-symbols-outlined text-[19px]">person_off</span>
+                            </div>
+                            <span className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border ${
+                                suspendedUsersCount > 0 
+                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-800/60' 
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                            }`}>
+                                {suspendedUsersCount > 0 ? 'Quarantined' : 'Clean'}
+                            </span>
                         </div>
-                        <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{suspendedUsersCount}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Suspended Accounts</p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{suspendedUsersCount}</p>
+                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">Suspended Accounts</p>
                     </div>
                 </div>
             )}
@@ -4823,12 +5205,12 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-500/40 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-purple-500 mb-1">
+                        <div className="flex items-center justify-between text-purple-600 dark:text-purple-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">verified_user</span>
-                            <span className="text-[10px] font-bold text-purple-500">Total</span>
+                            <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400">Total</span>
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{roleRequests.length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">All Requests</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">All Requests</p>
                     </div>
 
                     {/* 2. Pending Review */}
@@ -4840,12 +5222,12 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-amber-500/40 hover:border-amber-500 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-amber-500 mb-1">
+                        <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">pending_actions</span>
-                            <span className="text-[10px] font-black text-amber-600 bg-amber-500/15 px-1.5 py-0.2 rounded-full">Review</span>
+                            <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.2 rounded-full">Review</span>
                         </div>
-                        <p className="text-lg font-black text-amber-500 leading-none">{roleRequests.filter(r => r.status === 'Pending').length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Pending Approval</p>
+                        <p className="text-lg font-black text-amber-600 dark:text-amber-400 leading-none">{roleRequests.filter(r => r.status === 'Pending').length}</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Pending Approval</p>
                     </div>
 
                     {/* 3. Approved Requests */}
@@ -4857,12 +5239,12 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-500/40 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-emerald-500 mb-1">
+                        <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                            <span className="text-[10px] font-bold text-emerald-500">Granted</span>
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Granted</span>
                         </div>
-                        <p className="text-lg font-black text-emerald-500 leading-none">{roleRequests.filter(r => r.status === 'Approved').length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Approved Requests</p>
+                        <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">{roleRequests.filter(r => r.status === 'Approved').length}</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Approved Requests</p>
                     </div>
 
                     {/* 4. Rejected Requests */}
@@ -4874,19 +5256,15 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-500/40 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-rose-500 mb-1">
+                        <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">cancel</span>
-                            <span className="text-[10px] font-bold text-rose-500">Declined</span>
+                            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">Declined</span>
                         </div>
-                        <p className="text-lg font-black text-rose-500 leading-none">{roleRequests.filter(r => r.status === 'Rejected').length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Rejected Requests</p>
+                        <p className="text-lg font-black text-rose-600 dark:text-rose-400 leading-none">{roleRequests.filter(r => r.status === 'Rejected').length}</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Rejected Requests</p>
                     </div>
                 </div>
             )}
-
-
-
-
 
             {/* TAB 8: AUDIT TRAIL ACTION FILTERS */}
             {activeTab === 'audit' && (
@@ -4900,12 +5278,12 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-indigo-500 mb-1">
+                        <div className="flex items-center justify-between text-indigo-600 dark:text-indigo-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">history</span>
-                            <span className="text-[10px] font-bold text-emerald-500">Tamper-Proof</span>
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Tamper-Proof</span>
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{auditTrail.length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">All Audit Events</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">All Audit Events</p>
                     </div>
 
                     {/* 4. User Governance */}
@@ -4917,12 +5295,12 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-500/40 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-purple-500 mb-1">
+                        <div className="flex items-center justify-between text-purple-600 dark:text-purple-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
-                            <span className="text-[10px] font-bold text-purple-500">Users</span>
+                            <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400">Users</span>
                         </div>
-                        <p className="text-lg font-black text-purple-500 leading-none">{auditTrail.filter(a => a.action?.startsWith('User')).length}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">User Governance</p>
+                        <p className="text-lg font-black text-purple-600 dark:text-purple-400 leading-none">{auditTrail.filter(a => a.action?.startsWith('User')).length}</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">User Governance</p>
                     </div>
                 </div>
             )}
@@ -4939,12 +5317,12 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-cyan-500/40 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-cyan-500 mb-1">
+                        <div className="flex items-center justify-between text-cyan-600 dark:text-cyan-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">terminal</span>
-                            <span className="text-[10px] font-bold text-cyan-500">Telemetry</span>
+                            <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400">Telemetry</span>
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{systemLogCounts.total || 120}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">All Server Logs</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">All Server Logs</p>
                     </div>
 
                     {/* 2. Errors */}
@@ -4956,12 +5334,12 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-rose-500/40 hover:border-rose-500 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-rose-500 mb-1">
+                        <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">error</span>
-                            <span className="text-[10px] font-black text-rose-600 bg-rose-500/15 px-1.5 py-0.2 rounded-full">Severity 1</span>
+                            <span className="text-[10px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/15 px-1.5 py-0.2 rounded-full">Severity 1</span>
                         </div>
-                        <p className="text-lg font-black text-rose-500 leading-none">{systemLogCounts.errors}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Error Events</p>
+                        <p className="text-lg font-black text-rose-600 dark:text-rose-400 leading-none">{systemLogCounts.errors}</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Error Events</p>
                     </div>
 
                     {/* 3. Warnings */}
@@ -4973,12 +5351,12 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-amber-500/40 hover:border-amber-500 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-amber-500 mb-1">
+                        <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">warning</span>
-                            <span className="text-[10px] font-black text-amber-600 bg-amber-500/15 px-1.5 py-0.2 rounded-full">Severity 2</span>
+                            <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.2 rounded-full">Severity 2</span>
                         </div>
-                        <p className="text-lg font-black text-amber-500 leading-none">{systemLogCounts.warnings}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Warnings</p>
+                        <p className="text-lg font-black text-amber-600 dark:text-amber-400 leading-none">{systemLogCounts.warnings}</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Warnings</p>
                     </div>
 
                     {/* 4. Information */}
@@ -4990,12 +5368,12 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-indigo-500 mb-1">
+                        <div className="flex items-center justify-between text-indigo-600 dark:text-indigo-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">info</span>
-                            <span className="text-[10px] font-bold text-indigo-500">Info</span>
+                            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">Info</span>
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{systemLogCounts.info}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Information</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Information</p>
                     </div>
 
                     {/* 5. Debug */}
@@ -5007,12 +5385,12 @@ export default function AdminConsole() {
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-500/40 shadow-xs'
                         }`}
                     >
-                        <div className="flex items-center justify-between text-slate-400 mb-1">
+                        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">bug_report</span>
-                            <span className="text-[10px] font-bold text-slate-400">Trace</span>
+                            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">Trace</span>
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{systemLogCounts.debug}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Debug Traces</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Debug Traces</p>
                     </div>
                 </div>
             )}
@@ -5021,76 +5399,59 @@ export default function AdminConsole() {
             {activeTab === 'analytics' && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
                     <div className="p-2.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-                        <div className="flex items-center justify-between text-indigo-500 mb-1">
+                        <div className="flex items-center justify-between text-indigo-600 dark:text-indigo-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">insights</span>
-                            <span className="text-[10px] font-bold text-emerald-500">99.8%</span>
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">99.8%</span>
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">System Health</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Live Telemetry</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Live Telemetry</p>
                     </div>
 
                     <div className="p-2.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-                        <div className="flex items-center justify-between text-purple-500 mb-1">
+                        <div className="flex items-center justify-between text-purple-600 dark:text-purple-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">groups</span>
-                            <span className="text-[10px] font-bold text-purple-500">{usersList.length}</span>
+                            <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400">{usersList.length}</span>
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{activeUsersCount} Active</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Total Employees</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Total Employees</p>
                     </div>
 
                     <div className="p-2.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-                        <div className="flex items-center justify-between text-cyan-500 mb-1">
+                        <div className="flex items-center justify-between text-cyan-600 dark:text-cyan-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">forum</span>
-                            <span className="text-[10px] font-bold text-cyan-500">Active</span>
+                            <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400">Active</span>
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{communityChannels.length} Channels</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Communities</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Communities</p>
                     </div>
 
                     <div className="p-2.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-                        <div className="flex items-center justify-between text-rose-500 mb-1">
+                        <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">gavel</span>
-                            <span className="text-[10px] font-bold text-rose-500">{pendingCount} Pending</span>
+                            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">{pendingCount} Pending</span>
                         </div>
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-none">{reports.length} Reports</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate mt-1">Safety Governance</p>
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight truncate mt-1">Safety Governance</p>
                     </div>
                 </div>
             )}
 
             {/* ─── TAB 1: CONTENT MODERATION ─── */}
             {activeTab === 'moderation' && (
-                (isSysAdmin && !isModerator) ? (
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center max-w-xl mx-auto my-8 shadow-xs">
-                        <div className="w-14 h-14 bg-amber-500/15 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                            <span className="material-symbols-outlined text-3xl">gavel</span>
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">Content Moderation Transferred</h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                            Content Moderation rights have been transferred to the <strong>Moderator</strong> role. System Administrators no longer have moderation rights.
-                        </p>
-                        <button
-                            onClick={() => { setActivePillar('governance'); setActiveTab('users'); }}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
-                        >
-                            Return to User Governance
-                        </button>
-                    </div>
-                ) : (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden flex flex-col">
+                <div className="flex flex-col gap-3">
                     {/* ─── 4. SINGLE COMPACT FILTERS & BULK ACTIONS TOOLBAR ─── */}
-                    <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-2.5 shadow-xs flex flex-wrap items-center justify-between gap-3 shrink-0">
                         {/* Search & Select Filters */}
-                        <div className="flex flex-wrap items-center gap-2 text-xs font-medium flex-1">
+                        <div className="flex flex-wrap items-center gap-2.5 text-xs font-medium flex-1">
                             {/* Search Input */}
-                            <div className="relative w-48 sm:w-56">
-                                <span className="material-symbols-outlined absolute left-2 top-1.5 text-slate-400 text-[15px]">search</span>
+                            <div className="relative w-56 sm:w-64">
+                                <span className="material-symbols-outlined absolute left-2.5 top-2 text-slate-400 text-[16px]">search</span>
                                 <input
                                     type="text"
                                     value={searchQuery}
                                     onChange={e => setSearchQuery(e.target.value)}
                                     placeholder="Search Report / User / Content..."
-                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-7 pr-2.5 py-1 text-xs outline-none focus:border-indigo-500"
+                                    className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 rounded-xl pl-8.5 pr-3 py-1.5 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 transition-all shadow-2xs"
                                 />
                             </div>
 
@@ -5101,30 +5462,30 @@ export default function AdminConsole() {
                                     setReasonFilter(e.target.value);
                                     if (e.target.value !== 'All') setActiveMetricCard('custom');
                                 }}
-                                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer"
+                                className="bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-2xs"
                             >
-                                <option value="All">Reason: All</option>
-                                <option value="Spam">Spam</option>
-                                <option value="Inappropriate">Inappropriate</option>
-                                <option value="Harassment">Harassment</option>
-                                <option value="Copyright">Copyright</option>
-                                <option value="Other">Other</option>
+                                <option value="All" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Reason: All</option>
+                                <option value="Spam" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Spam</option>
+                                <option value="Inappropriate" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Inappropriate</option>
+                                <option value="Harassment" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Harassment</option>
+                                <option value="Copyright" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Copyright</option>
+                                <option value="Other" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Other</option>
                             </select>
                         </div>
 
                         {/* Right: Bulk Action Controls */}
                         {selectedReportIds.length > 0 && (
-                            <div className="flex items-center gap-1.5 animate-in fade-in bg-indigo-500/10 border border-indigo-500/20 px-2 py-1 rounded-lg text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                            <div className="flex items-center gap-1.5 animate-in fade-in bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300">
                                 <span>{selectedReportIds.length} Selected:</span>
                                 <button
                                     onClick={() => handleBulkResolve('Dismiss')}
-                                    className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-800 dark:text-slate-200 rounded text-[11px] font-bold cursor-pointer"
+                                    className="px-2.5 py-0.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-800 dark:text-slate-200 rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
                                 >
                                     Dismiss
                                 </button>
                                 <button
                                     onClick={() => handleBulkResolve('Removed Content')}
-                                    className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-bold cursor-pointer"
+                                    className="px-2.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
                                 >
                                     Remove
                                 </button>
@@ -5133,493 +5494,287 @@ export default function AdminConsole() {
                     </div>
 
                     {/* ─── 5. HIGH-DENSITY 13-COLUMN TABLE VIEW WITHOUT DOWNBAR OR SIDEBAR ─── */}
-                    <div ref={moderationTableRef} className="w-full overflow-x-auto overflow-y-auto max-h-[calc(100vh-250px)] no-scrollbar">
-                        <table className="w-full text-left border-collapse table-auto text-xs">
-                            <thead className="bg-slate-100/90 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold text-[10.5px] uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 sticky top-0 z-10 backdrop-blur-xs">
-                                <tr>
-                                    <th className="px-2.5 py-2 text-center w-8">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedReportIds.length > 0 && selectedReportIds.length === sortedReports.length}
-                                            onChange={handleSelectAllRows}
-                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                        />
-                                    </th>
-                                    <th className="px-2 py-2 text-center w-12">ID</th>
-                                    <th className="px-2.5 py-2">Reporter</th>
-                                    <th className="px-2.5 py-2">Reported User</th>
-                                    <th className="px-2 py-2">Type</th>
-                                    <th className="px-2 py-2">Community</th>
-                                    <th className="px-2 py-2">Reason</th>
-                                    <th className="px-2 py-2 text-center">Severity</th>
-                                    <th className="px-2 py-2 text-center">Status</th>
-                                    <th className="px-2.5 py-2">System Admin</th>
-                                    <th className="px-2.5 py-2 text-center whitespace-nowrap">Reported Date</th>
-                                    <th className="px-2.5 py-2 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs font-medium">
-                                {isLoadingReports ? (
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden flex flex-col">
+                        <div ref={moderationTableRef} className="w-full overflow-x-auto overflow-y-auto max-h-[calc(100vh-250px)] no-scrollbar">
+                            <table className="w-full text-left border-collapse table-auto text-xs">
+                                <thead className="bg-[#f8fafc] dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-extrabold text-[10.5px] uppercase tracking-wider border-b border-slate-200/90 dark:border-slate-800 sticky top-0 z-10 backdrop-blur-xs">
                                     <tr>
-                                        <td colSpan="12" className="text-center py-8 text-slate-500">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <span className="material-symbols-outlined animate-spin text-indigo-600">sync</span>
-                                                <span>Loading Moderation Reports...</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : sortedReports.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="12" className="text-center py-10 text-slate-500 bg-slate-50/50 dark:bg-slate-900/50">
-                                            <div className="flex flex-col items-center justify-center gap-2 max-w-sm mx-auto">
-                                                <span className="material-symbols-outlined text-4xl text-slate-400">filter_alt_off</span>
-                                                <p className="font-bold text-slate-700 dark:text-slate-200">No moderation reports match the filter criteria</p>
-                                                <p className="text-[11px] text-slate-400">Try clearing status, reason, severity, or search filters to view reports.</p>
-                                                <button
-                                                    onClick={handleResetFilters}
-                                                    className="mt-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs cursor-pointer flex items-center gap-1"
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px]">restart_alt</span>
-                                                    Reset All Filters
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    sortedReports.slice(0, visibleReportCount).map(r => {
-                                        const isPending = r.status === 'Pending';
-                                        const isSelected = selectedReportIds.includes(r.reportId);
-                                        
-                                        // Reason badge style
-                                        let reasonBadgeStyle = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
-                                        if (r.reasonCode === 'Harassment') reasonBadgeStyle = 'bg-rose-500/10 text-rose-600 border border-rose-500/20';
-                                        else if (r.reasonCode === 'Copyright') reasonBadgeStyle = 'bg-purple-500/10 text-purple-600 border border-purple-500/20';
-                                        else if (r.reasonCode === 'Inappropriate') reasonBadgeStyle = 'bg-amber-500/10 text-amber-600 border border-amber-500/20';
-                                        else if (r.reasonCode === 'Spam') reasonBadgeStyle = 'bg-blue-500/10 text-blue-600 border border-blue-500/20';
-
-                                        // Severity badge style
-                                        let severityBadgeStyle = 'bg-slate-100 text-slate-600';
-                                        if (r.severity === 'Critical') severityBadgeStyle = 'bg-rose-600 text-white font-black';
-                                        else if (r.severity === 'High') severityBadgeStyle = 'bg-rose-500/10 text-rose-600 border border-rose-500/20';
-                                        else if (r.severity === 'Medium') severityBadgeStyle = 'bg-amber-500/10 text-amber-600 border border-amber-500/20';
-
-                                        // Status badge style & label
-                                        let statusBadgeStyle = 'bg-amber-500/10 text-amber-600 border border-amber-500/20';
-                                        let statusBadgeLabel = r.status || 'Pending';
-
-                                        if (r.status === 'Action Taken' || (r.actionTaken && r.actionTaken.toLowerCase().includes('remove'))) {
-                                            statusBadgeStyle = 'bg-rose-500/10 text-rose-600 border border-rose-500/20';
-                                            statusBadgeLabel = 'Removed Content';
-                                        } else if (r.status === 'Dismissed' || (r.actionTaken && r.actionTaken.toLowerCase().includes('dismiss'))) {
-                                            statusBadgeStyle = 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20';
-                                            statusBadgeLabel = 'Dismissed';
-                                        } else if (r.status === 'Reviewed') {
-                                            statusBadgeStyle = 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20';
-                                            statusBadgeLabel = 'Dismissed';
-                                        }
-
-                                        return (
-                                            <tr key={r.reportId} className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors ${isSelected ? 'bg-indigo-500/5 dark:bg-indigo-500/10' : ''}`}>
-                                                {/* Checkbox */}
-                                                <td className="px-2.5 py-2 text-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isSelected}
-                                                        onChange={() => handleSelectRow(r.reportId)}
-                                                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                                    />
-                                                </td>
-
-                                                {/* Report ID */}
-                                                <td className="px-2 py-2 text-center font-black text-slate-900 dark:text-white text-[11px]">
-                                                    #{r.reportId}
-                                                </td>
-
-                                                {/* Reporter */}
-                                                <td className="px-2.5 py-2">
-                                                    <div className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[120px]" title={r.reporterFullName}>
-                                                        <HighlightText text={r.reporterFullName} query={searchQuery} />
-                                                    </div>
-                                                    <div className="text-[10px] text-slate-400">ID: #{r.reporterUserId}</div>
-                                                </td>
-
-                                                {/* Reported User */}
-                                                <td className="px-2.5 py-2">
-                                                    {(() => {
-                                                        const targetAuthorId = r.reportedUserId;
-                                                        const foundUser = usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId));
-                                                        let authorName = r.reportedUserName;
-                                                        if (!authorName || authorName.toLowerCase().includes('reported author') || authorName.toLowerCase().includes('content author')) {
-                                                            authorName = foundUser?.fullName || (targetAuthorId === 1 ? 'Loveneesh Sharma' : (targetAuthorId ? `User #${targetAuthorId}` : 'Loveneesh Sharma'));
-                                                        }
-                                                        const authorId = targetAuthorId || foundUser?.userId || 1;
-                                                        return (
-                                                            <>
-                                                                <div className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[120px]" title={authorName}>
-                                                                    <HighlightText text={authorName} query={searchQuery} />
-                                                                </div>
-                                                                <div className="text-[10px] text-slate-400">ID: #{authorId}</div>
-                                                            </>
-                                                        );
-                                                    })()}
-                                                </td>
-
-                                                {/* Content Type */}
-                                                <td className="px-2 py-2">
-                                                    <button
-                                                        onClick={() => handleOpenPostPreview(r)}
-                                                        className={`group inline-flex items-center gap-1.5 font-bold hover:underline cursor-pointer transition-colors text-left text-xs whitespace-nowrap ${getContentTypeConfig(r.contentType).textColor} ${getContentTypeConfig(r.contentType).hoverColor}`}
-                                                        title={`Click to preview ${r.contentType} #${r.contentId}`}
-                                                    >
-                                                        {(() => {
-                                                            const typeCfg = getContentTypeConfig(r.contentType);
-                                                            return (
-                                                                <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border shadow-2xs transition-transform group-hover:scale-105 ${typeCfg.badgeBg} ${typeCfg.borderColor}`}>
-                                                                    <span className={`material-symbols-outlined text-[13px] leading-none ${typeCfg.iconColor}`}>
-                                                                        {typeCfg.icon}
-                                                                    </span>
-                                                                </span>
-                                                            );
-                                                        })()}
-                                                        <span><HighlightText text={`${r.contentType} #${r.contentId}`} query={searchQuery} /></span>
-                                                    </button>
-                                                </td>
-
-                                                {/* Community */}
-                                                <td className="px-2 py-2 text-slate-600 dark:text-slate-300 font-semibold text-[11px] truncate max-w-[110px]" title={r.communityName || 'General'}>
-                                                    <HighlightText text={r.communityName || 'General'} query={searchQuery} />
-                                                </td>
-
-                                                {/* Reason */}
-                                                <td className="px-2 py-2">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black ${reasonBadgeStyle}`}>
-                                                        {r.reasonCode}
-                                                    </span>
-                                                </td>
-
-                                                {/* Severity */}
-                                                <td className="px-2 py-2 text-center">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black ${severityBadgeStyle}`}>
-                                                        {r.severity || 'Medium'}
-                                                    </span>
-                                                </td>
-
-                                                {/* Status */}
-                                                <td className="px-2 py-2 text-center">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black whitespace-nowrap ${statusBadgeStyle}`}>
-                                                        {statusBadgeLabel}
-                                                    </span>
-                                                </td>
-
-                                                {/* System Admin */}
-                                                <td className="px-2.5 py-2">
-                                                    {r.moderatorUserId ? (
-                                                        <div>
-                                                            <div className="font-bold text-slate-700 dark:text-slate-300 text-[11px] truncate max-w-[120px]">{r.moderatorFullName || 'System Admin'}</div>
-                                                            <div className="text-[10px] text-slate-400">{r.actionTaken || 'None'}</div>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-slate-400 italic text-[11px]">Unassigned</span>
-                                                    )}
-                                                </td>
-
-                                                {/* Date */}
-                                                <td className="px-2.5 py-2 text-center text-slate-500 dark:text-slate-400 text-[10.5px] whitespace-nowrap">
-                                                    {r.reportedDate}
-                                                </td>
-
-                                                {/* Actions Column (Compact Icon Buttons) */}
-                                                <td className="px-2.5 py-2 text-right">
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        {/* View Post Icon */}
-                                                        <button
-                                                            onClick={() => handleOpenPostPreview(r)}
-                                                            className="p-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded transition-all cursor-pointer"
-                                                            title="Preview Reported Post"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[15px]">visibility</span>
-                                                        </button>
-
-                                                        {isPending && (
-                                                            <>
-                                                                {/* Dismiss Icon */}
-                                                                <button
-                                                                    onClick={() => handleResolve(r.reportId, 'Dismiss', r.contentId, r.contentType)}
-                                                                    className="p-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded transition-all cursor-pointer"
-                                                                    title="Dismiss Report (Mark Reviewed)"
-                                                                >
-                                                                    <span className="material-symbols-outlined text-[15px]">check_circle</span>
-                                                                </button>
-
-                                                                {/* Remove Content Icon */}
-                                                                <button
-                                                                    onClick={() => handleResolve(r.reportId, 'Removed Content', r.contentId, r.contentType)}
-                                                                    className="p-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 rounded border border-rose-500/20 transition-all cursor-pointer"
-                                                                    title="Remove Violating Content"
-                                                                >
-                                                                    <span className="material-symbols-outlined text-[15px]">delete</span>
-                                                                </button>
-
-                                                                {/* Suspend User Icon */}
-                                                                <button
-                                                                    onClick={() => {
-                                                                        const targetId = r.reportedUserId;
-                                                                        const targetName = r.reportedUserName && r.reportedUserName !== r.reporterFullName ? r.reportedUserName : (targetId ? `User #${targetId}` : 'Reported User');
-                                                                        if (!targetId && (!r.reportedUserName || r.reportedUserName === r.reporterFullName)) {
-                                                                            showToast('Cannot identify reported violating user for suspension.');
-                                                                            return;
-                                                                        }
-                                                                        const targetUser = usersList.find(u => Number(u.userId || u.id) === Number(targetId)) || {
-                                                                            userId: targetId || 0,
-                                                                            fullName: targetName,
-                                                                            name: targetName,
-                                                                            roleName: 'Employee',
-                                                                            department: 'General'
-                                                                        };
-                                                                        setSelectedUserToSuspend(targetUser);
-                                                                        setIsSuspendModalOpen(true);
-                                                                    }}
-                                                                    className="p-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 rounded border border-amber-500/20 transition-all cursor-pointer"
-                                                                    title="Suspend Violating User"
-                                                                >
-                                                                    <span className="material-symbols-outlined text-[15px]">person_off</span>
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
-                        <ScrollLoadingIndicator isVisible={visibleReportCount < sortedReports.length} text="Loading more moderation reports on scroll..." />
-                    </div>
-                </div>
-                )
-            )}
-
-            {/* ─── TAB 2: USER GOVERNANCE ─── */}
-            {activeTab === 'users' && (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs p-4">
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h2 className="text-base font-black text-slate-900 dark:text-white">User Governance & Security Management</h2>
-                            {activeUserSearchTerm && (
-                                <p className="text-xs text-indigo-600 font-semibold mt-0.5">
-                                    Filtering: <strong className="capitalize">{activeUserSearchTerm}</strong> ({filteredUsers.length} Users found)
-                                </p>
-                            )}
-                        </div>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="text"
-                                    value={userSearchTerm}
-                                    onChange={e => setUserSearchTerm(e.target.value)}
-                                    placeholder="Filter by name, role, status (Suspended/Active)..."
-                                    className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs outline-none w-64"
-                                />
-                                {userSearchTerm ? (
-                                    <button
-                                        onClick={() => setUserSearchTerm('')}
-                                        className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg font-bold text-xs cursor-pointer"
-                                    >
-                                        Clear
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={fetchUsers}
-                                        className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg font-bold text-xs cursor-pointer"
-                                    >
-                                        Search
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs">
-                                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold uppercase tracking-wider">
-                                    <tr>
-                                        <th className="px-4 py-2.5">User #</th>
-                                        <th className="px-4 py-2.5">Employee Name & Email</th>
-                                        <th className="px-4 py-2.5">Designation & Dept</th>
-                                        <th className="px-4 py-2.5">Assigned Role</th>
-                                        <th className="px-4 py-2.5">Karma Score</th>
-                                        <th className="px-4 py-2.5">Status</th>
-                                        <th className="px-4 py-2.5 text-right">Governance Actions</th>
+                                        <th className="px-3 py-3 text-center w-8">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedReportIds.length > 0 && selectedReportIds.length === sortedReports.length}
+                                                onChange={handleSelectAllRows}
+                                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                            />
+                                        </th>
+                                        <th className="px-2 py-3 text-center w-12">ID</th>
+                                        <th className="px-3 py-3">Reporter</th>
+                                        <th className="px-3 py-3">Reported User</th>
+                                        <th className="px-2.5 py-3">Type</th>
+                                        <th className="px-2.5 py-3">Community</th>
+                                        <th className="px-2.5 py-3">Reason</th>
+                                        <th className="px-2.5 py-3 text-center">Severity</th>
+                                        <th className="px-2.5 py-3 text-center">Status</th>
+                                        <th className="px-3 py-3">System Admin</th>
+                                        <th className="px-3 py-3 text-center whitespace-nowrap">Reported Date</th>
+                                        <th className="px-3 py-3 text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                    {isLoadingUsers ? (
-                                        <tr><td colSpan="7" className="text-center py-6">Loading user directory...</td></tr>
-                                    ) : filteredUsers.length === 0 ? (
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs font-medium">
+                                    {isLoadingReports ? (
                                         <tr>
-                                            <td colSpan="7" className="text-center py-8 text-slate-500">
-                                                No users found matching "{userSearchTerm}".
-                                                <button onClick={() => setUserSearchTerm('')} className="ml-2 text-indigo-600 underline font-bold cursor-pointer">
-                                                    Clear Filter
-                                                </button>
+                                            <td colSpan="12" className="text-center py-8 text-slate-500">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <span className="material-symbols-outlined animate-spin text-blue-600">sync</span>
+                                                    <span>Loading Moderation Reports...</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : sortedReports.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="12" className="text-center py-10 text-slate-500 bg-slate-50/50 dark:bg-slate-900/50">
+                                                <div className="flex flex-col items-center justify-center gap-2 max-w-sm mx-auto">
+                                                    <span className="material-symbols-outlined text-4xl text-slate-400">filter_alt_off</span>
+                                                    <p className="font-bold text-slate-700 dark:text-slate-200">No moderation reports match the filter criteria</p>
+                                                    <p className="text-[11px] text-slate-400">Try clearing status, reason, severity, or search filters to view reports.</p>
+                                                    <button
+                                                        onClick={handleResetFilters}
+                                                        className="mt-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs cursor-pointer flex items-center gap-1"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[16px]">restart_alt</span>
+                                                        Reset All Filters
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ) : (
-                                        filteredUsers.slice(0, visibleUserCount).map(u => {
-                                            const assignedRole = getUserAssignedRole(u);
-                                            const empId = u.employeeId || `MPO${u.userId || u.id || '100'}`;
-                                            const uEmail = u.email || `${(u.fullName || u.name || 'user').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`;
-                                            const uAvatar = u.avatar || u.profilePhotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName || u.name || 'U')}&background=6366f1&color=fff&bold=true`;
+                                        sortedReports.slice(0, visibleReportCount).map(r => {
+                                            const isPending = r.status === 'Pending';
+                                            const isSelected = selectedReportIds.includes(r.reportId);
+                                            
+                                            // Reason badge style
+                                            let reasonBadgeStyle = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+                                            if (r.reasonCode === 'Harassment') reasonBadgeStyle = 'bg-rose-50 text-rose-700 border border-rose-200/80';
+                                            else if (r.reasonCode === 'Copyright') reasonBadgeStyle = 'bg-purple-50 text-purple-700 border border-purple-200/80';
+                                            else if (r.reasonCode === 'Inappropriate') reasonBadgeStyle = 'bg-amber-50 text-amber-700 border border-amber-200/80';
+                                            else if (r.reasonCode === 'Spam') reasonBadgeStyle = 'bg-blue-50 text-blue-700 border border-blue-200/80';
+
+                                            // Severity badge style
+                                            let severityBadgeStyle = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300';
+                                            if (r.severity === 'Critical') severityBadgeStyle = 'bg-rose-600 text-white font-black';
+                                            else if (r.severity === 'High') severityBadgeStyle = 'bg-rose-50 text-rose-700 border border-rose-200/80';
+                                            else if (r.severity === 'Medium') severityBadgeStyle = 'bg-amber-50 text-amber-700 border border-amber-200/80';
+
+                                            // Status badge style & label
+                                            let statusBadgeStyle = 'bg-amber-50 text-amber-700 border border-amber-200/80';
+                                            let statusBadgeLabel = r.status || 'Pending';
+
+                                            if (r.status === 'Action Taken' || (r.actionTaken && r.actionTaken.toLowerCase().includes('remove'))) {
+                                                statusBadgeStyle = 'bg-rose-50 text-rose-700 border border-rose-200/80';
+                                                statusBadgeLabel = 'Removed Content';
+                                            } else if (r.status === 'Dismissed' || (r.actionTaken && r.actionTaken.toLowerCase().includes('dismiss'))) {
+                                                statusBadgeStyle = 'bg-emerald-50 text-emerald-700 border border-emerald-200/80';
+                                                statusBadgeLabel = 'Dismissed';
+                                            } else if (r.status === 'Reviewed') {
+                                                statusBadgeStyle = 'bg-emerald-50 text-emerald-700 border border-emerald-200/80';
+                                                statusBadgeLabel = 'Dismissed';
+                                            }
 
                                             return (
-                                                <tr key={u.userId || u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                                                    <td className="px-4 py-2.5 font-bold">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-slate-900 dark:text-white font-mono text-[11px]">#{u.userId || u.id}</span>
-                                                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded w-fit mt-0.5 ${
-                                                                assignedRole.toLowerCase().includes('admin') || assignedRole.toLowerCase().includes('adm')
-                                                                    ? 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30'
-                                                                    : 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30'
-                                                            }`}>
-                                                                {assignedRole.toLowerCase().includes('admin') || assignedRole.toLowerCase().includes('adm') ? 'Admin' : 'Member'}
-                                                            </span>
-                                                        </div>
+                                                <tr key={r.reportId} className={`hover:bg-blue-50/25 dark:hover:bg-slate-800/40 transition-colors ${isSelected ? 'bg-blue-500/5 dark:bg-blue-500/10' : ''}`}>
+                                                    {/* Checkbox */}
+                                                    <td className="px-3 py-2.5 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={() => handleSelectRow(r.reportId)}
+                                                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        />
                                                     </td>
-                                                    <td className="px-4 py-2.5">
-                                                        <div className="flex items-center gap-2.5">
-                                                            <img 
-                                                                src={uAvatar} 
-                                                                alt={u.fullName || u.name} 
-                                                                className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0" 
-                                                            />
-                                                            <div className="min-w-0">
-                                                                <p 
-                                                                    onClick={() => {
-                                                                        setSelectedUserDetailsUser(u);
-                                                                        setIsUserDetailsModalOpen(true);
-                                                                    }}
-                                                                    className="font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer transition-colors truncate"
+
+                                                    {/* Report ID */}
+                                                    <td className="px-2 py-2.5 text-center font-black text-slate-900 dark:text-white text-xs">
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            <span>#{r.reportId}</span>
+                                                            {r.reportCount > 1 && (
+                                                                <span 
+                                                                    className="px-1.5 py-0.2 rounded text-[9px] font-black bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60"
+                                                                    title={`${r.reportCount} reports submitted for this content`}
                                                                 >
-                                                                    {u.fullName || u.name}
-                                                                </p>
-                                                                <p className="text-[11px] text-slate-400 truncate max-w-[180px]">{uEmail}</p>
-                                                            </div>
+                                                                    {r.reportCount}x
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </td>
-                                                    <td className="px-4 py-2.5">
-                                                        <p className="font-semibold text-slate-800 dark:text-slate-200">{u.designation || 'Staff Member'}</p>
-                                                        <p className="text-[11px] text-slate-500">{u.department || u.departmentName || 'MPOnline Limited'}</p>
+
+                                                    {/* Reporter */}
+                                                    <td className="px-3 py-2.5">
+                                                        <div className="flex items-center gap-1">
+                                                            <div className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[130px]" title={r.allReportersText || r.reporterFullName}>
+                                                                <HighlightText text={r.reporterFullName} query={searchQuery} />
+                                                            </div>
+                                                            {r.otherReportersCount > 0 && (
+                                                                <span 
+                                                                    className="text-[9.5px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.2 rounded-md shrink-0 border border-blue-200/60 cursor-help" 
+                                                                    title={r.allReportersText}
+                                                                >
+                                                                    +{r.otherReportersCount}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                                            <span>ID: #{r.reporterUserId}</span>
+                                                            {r.reportCount > 1 && (
+                                                                <span className="text-slate-400 font-medium" title={r.allReportersText}>
+                                                                    ({r.reportCount} reports)
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
-                                                    <td className="px-4 py-2.5">
-                                                        <div className="flex items-center">
+
+                                                    {/* Reported User */}
+                                                    <td className="px-3 py-2.5">
+                                                        {(() => {
+                                                            const targetAuthorId = r.reportedUserId;
+                                                            const foundUser = usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId));
+                                                            let authorName = r.reportedUserName;
+                                                            if (!authorName || authorName.toLowerCase().includes('reported author') || authorName.toLowerCase().includes('content author')) {
+                                                                authorName = foundUser?.fullName || (targetAuthorId === 1 ? 'Loveneesh Sharma' : (targetAuthorId ? `User #${targetAuthorId}` : 'Loveneesh Sharma'));
+                                                            }
+                                                            const authorId = targetAuthorId || foundUser?.userId || 1;
+                                                            return (
+                                                                <>
+                                                                    <div className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[130px]" title={authorName}>
+                                                                        <HighlightText text={authorName} query={searchQuery} />
+                                                                    </div>
+                                                                    <div className="text-[10px] text-slate-400">ID: #{authorId}</div>
+                                                                </>
+                                                            );
+                                                        })()}
+                                                    </td>
+
+                                                    {/* Content Type */}
+                                                    <td className="px-2.5 py-2.5">
+                                                        <button
+                                                            onClick={() => handleOpenPostPreview(r)}
+                                                            className={`group inline-flex items-center gap-1.5 font-bold hover:underline cursor-pointer transition-colors text-left text-xs whitespace-nowrap ${getContentTypeConfig(r.contentType).textColor} ${getContentTypeConfig(r.contentType).hoverColor}`}
+                                                            title={`Click to preview ${r.contentType} #${r.contentId}`}
+                                                        >
                                                             {(() => {
-                                                                const role = getUserAssignedRole(u);
+                                                                const typeCfg = getContentTypeConfig(r.contentType);
                                                                 return (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            if (isSysAdmin || isHrAdmin) {
-                                                                                setRoleUserId(String(u.userId || u.id));
-                                                                                setRoleUserName(u.fullName || u.name);
-                                                                                setSelectedRoles([role]);
-                                                                                setIsRoleModalOpen(true);
-                                                                            }
-                                                                        }}
-                                                                        className={`px-2.5 py-0.5 rounded-full text-[10px] inline-flex items-center gap-1 shadow-xs transition-transform ${getRoleBadgeStyle(role)} ${(isSysAdmin || isHrAdmin) ? 'cursor-pointer hover:scale-105' : ''}`}
-                                                                        title={isSysAdmin || isHrAdmin ? "Click to edit role" : role}
-                                                                    >
-                                                                        <span className="material-symbols-outlined text-[13px]">
-                                                                            {role.toLowerCase().includes('system') ? 'shield_person' :
-                                                                             role.toLowerCase().includes('hr') ? 'badge' :
-                                                                             role.toLowerCase().includes('community') ? 'groups' : 'person'}
+                                                                    <span className={`w-5.5 h-5.5 rounded-lg flex items-center justify-center shrink-0 border shadow-2xs transition-transform group-hover:scale-105 ${typeCfg.badgeBg} ${typeCfg.borderColor}`}>
+                                                                        <span className={`material-symbols-outlined text-[13px] leading-none ${typeCfg.iconColor}`}>
+                                                                            {typeCfg.icon}
                                                                         </span>
-                                                                        <span>{role}</span>
-                                                                    </button>
+                                                                    </span>
                                                                 );
                                                             })()}
-                                                        </div>
+                                                            <span><HighlightText text={`${r.contentType} #${r.contentId}`} query={searchQuery} /></span>
+                                                        </button>
                                                     </td>
-                                                    <td className="px-4 py-2.5">
-                                                        {(() => {
-                                                            const singleRole = getUserAssignedRole(u).toLowerCase();
-                                                            const isUserSysAdmin = singleRole.includes('system') || singleRole.includes('sysadm');
-                                                            if (isUserSysAdmin) {
-                                                                return <span className="text-xs font-bold text-slate-400 dark:text-slate-500" title="System Admin is exempt from Karma">— (Exempt)</span>;
-                                                            }
-                                                            return (
-                                                                <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-black">
-                                                                    <span className="material-symbols-outlined text-[15px]">stars</span>
-                                                                    <span>{typeof u.karmaPoints === 'number' ? u.karmaPoints : 0} pts</span>
-                                                                </div>
-                                                            );
-                                                        })()}
+
+                                                    {/* Community */}
+                                                    <td className="px-2.5 py-2.5 text-slate-700 dark:text-slate-300 font-semibold text-xs truncate max-w-[120px]" title={r.communityName || 'General'}>
+                                                        <HighlightText text={r.communityName || 'General'} query={searchQuery} />
                                                     </td>
-                                                    <td className="px-4 py-2.5">
-                                                        {(() => {
-                                                            const statusCfg = getUserStatusConfig(u);
-                                                            return (
-                                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${statusCfg.badgeClass}`}>
-                                                                    <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dotClass}`}></span>
-                                                                    {statusCfg.label}
-                                                                </span>
-                                                            );
-                                                        })()}
+
+                                                    {/* Reason */}
+                                                    <td className="px-2.5 py-2.5">
+                                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${reasonBadgeStyle}`}>
+                                                            {r.reasonCode}
+                                                        </span>
                                                     </td>
-                                                    <td className="px-4 py-2.5 text-right">
+
+                                                    {/* Severity */}
+                                                    <td className="px-2.5 py-2.5 text-center">
+                                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${severityBadgeStyle}`}>
+                                                            {r.severity || 'Medium'}
+                                                        </span>
+                                                    </td>
+
+                                                    {/* Status */}
+                                                    <td className="px-2.5 py-2.5 text-center">
+                                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black whitespace-nowrap ${statusBadgeStyle}`}>
+                                                            {statusBadgeLabel}
+                                                        </span>
+                                                    </td>
+
+                                                    {/* System Admin */}
+                                                    <td className="px-3 py-2.5">
+                                                        {r.moderatorUserId ? (
+                                                            <div>
+                                                                <div className="font-bold text-slate-800 dark:text-slate-200 text-xs truncate max-w-[130px]">{r.moderatorFullName || 'System Admin'}</div>
+                                                                <div className="text-[10px] text-slate-400">{r.actionTaken || 'None'}</div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-400 italic text-xs">Unassigned</span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Date */}
+                                                    <td className="px-3 py-2.5 text-center text-slate-500 dark:text-slate-400 text-xs whitespace-nowrap">
+                                                        {r.reportedDate}
+                                                    </td>
+
+                                                    {/* Actions Column (Compact Icon Buttons) */}
+                                                    <td className="px-3 py-2.5 text-right">
                                                         <div className="flex items-center justify-end gap-1.5">
+                                                            {/* View Post Icon */}
                                                             <button
-                                                                onClick={() => {
-                                                                    setSelectedUserDetailsUser(u);
-                                                                    setIsUserDetailsModalOpen(true);
-                                                                }}
-                                                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                                                                title="View Details"
-                                                                aria-label="View Details"
+                                                                onClick={() => handleOpenPostPreview(r)}
+                                                                className="w-7 h-7 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all shadow-xs cursor-pointer flex items-center justify-center"
+                                                                title="Preview Reported Post"
                                                             >
-                                                                <span className="material-symbols-outlined text-[18px]">visibility</span>
+                                                                <span className="material-symbols-outlined text-[16px]">visibility</span>
                                                             </button>
-                                                            {(isSysAdmin || isHrAdmin) && (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        const userRole = getUserAssignedRole(u);
-                                                                        setRoleUserId(String(u.userId || u.id));
-                                                                        setRoleUserName(u.fullName || u.name);
-                                                                        setSelectedRoles([userRole]);
-                                                                        setIsRoleModalOpen(true);
 
+                                                            {isPending && (
+                                                                <>
+                                                                    {/* Dismiss Icon */}
+                                                                    <button
+                                                                        onClick={() => handleResolve(r.reportId, 'Dismiss', r.contentId, r.contentType)}
+                                                                        className="w-7 h-7 bg-white dark:bg-slate-800 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-all cursor-pointer flex items-center justify-center"
+                                                                        title="Dismiss Report (Mark Reviewed)"
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                                                                    </button>
 
+                                                                    {/* Remove Content Icon */}
+                                                                    <button
+                                                                        onClick={() => handleResolve(r.reportId, 'Removed Content', r.contentId, r.contentType)}
+                                                                        className="w-7 h-7 bg-white dark:bg-slate-800 hover:bg-rose-50 text-rose-600 rounded-lg border border-rose-200 dark:border-rose-800/80 transition-all cursor-pointer flex items-center justify-center"
+                                                                        title="Remove Violating Content"
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                                                                    </button>
 
-                                                                    }}
-                                                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 transition-colors cursor-pointer"
-                                                                    title="Edit Role"
-                                                                    aria-label="Edit Role"
-                                                                >
-                                                                    <span className="material-symbols-outlined text-[17px]">edit</span>
-                                                                </button>
+                                                                    {/* Suspend User Icon */}
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const targetId = r.reportedUserId;
+                                                                            const targetName = r.reportedUserName && r.reportedUserName !== r.reporterFullName ? r.reportedUserName : (targetId ? `User #${targetId}` : 'Reported User');
+                                                                            if (!targetId && (!r.reportedUserName || r.reportedUserName === r.reporterFullName)) {
+                                                                                showToast('Cannot identify reported violating user for suspension.');
+                                                                                return;
+                                                                            }
+                                                                            const targetUser = usersList.find(u => Number(u.userId || u.id) === Number(targetId)) || {
+                                                                                userId: targetId || 0,
+                                                                                fullName: targetName,
+                                                                                name: targetName,
+                                                                                roleName: 'Employee',
+                                                                                department: 'General'
+                                                                            };
+                                                                            setSelectedUserToSuspend(targetUser);
+                                                                            setIsSuspendModalOpen(true);
+                                                                        }}
+                                                                        className="w-7 h-7 bg-white dark:bg-slate-800 hover:bg-amber-50 text-amber-600 rounded-lg border border-amber-200 dark:border-amber-800/80 transition-all cursor-pointer flex items-center justify-center"
+                                                                        title="Suspend Violating User"
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-[16px]">person_off</span>
+                                                                    </button>
+                                                                </>
                                                             )}
-                                                            <button
-                                                                onClick={() => handleToggleUserActive(u)}
-                                                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
-                                                                    u.isActive 
-                                                                        ? 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/20' 
-                                                                        : 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'
-                                                                }`}
-                                                                title={u.isActive ? "Suspend User" : "Activate User"}
-                                                                aria-label={u.isActive ? "Suspend User" : "Activate User"}
-                                                            >
-                                                                <span className="material-symbols-outlined text-[18px]">
-                                                                    {u.isActive ? 'person_off' : 'person_check'}
-                                                                </span>
-                                                            </button>
-                                                            {/* Delete User button removed per security policy
-                                                                <button
-                                                                    onClick={() => {}}
-                                                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-500/10 text-red-600 hover:bg-red-600 hover:text-white transition-colors cursor-pointer"
-                                                                    title="Delete User"
-                                                                    aria-label="Delete User"
-                                                                >
-                                                                    <span className="material-symbols-outlined text-[17px]">delete</span>
-                                                                </button>
-                                                            */}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -5628,9 +5783,310 @@ export default function AdminConsole() {
                                     )}
                                 </tbody>
                             </table>
+                            <ScrollLoadingIndicator isVisible={visibleReportCount < sortedReports.length} text="Loading more moderation reports on scroll..." />
                         </div>
-                        <ScrollLoadingIndicator isVisible={visibleUserCount < filteredUsers.length} text="Loading more users on scroll..." />
                     </div>
+                </div>
+            )}
+
+            {/* ─── TAB 2: USER GOVERNANCE ─── */}
+            {activeTab === 'users' && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+                    {/* Executive Header Bar */}
+                    <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs">
+                                <span className="material-symbols-outlined text-[22px]">manage_accounts</span>
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2.5 flex-wrap">
+                                    <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+                                        User Governance & Identity Directory
+                                    </h2>
+                                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                        {filteredUsers.length} {filteredUsers.length === 1 ? 'Record' : 'Records'}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Role assignment, security compliance, privilege controls and employee lifecycle governance
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={fetchUsers}
+                                disabled={isLoadingUsers}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                                title="Sync User Directory from Backend"
+                            >
+                                <span className={`material-symbols-outlined text-[16px] text-indigo-500 ${isLoadingUsers ? 'animate-spin' : ''}`}>sync</span>
+                                <span>Sync Directory</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Filter Bar & Controls */}
+                    <div className="px-4 sm:px-5 py-3 bg-slate-50/70 dark:bg-slate-800/40 border-b border-slate-200/70 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+                        {/* Search Input */}
+                        <div className="relative flex-1 min-w-[240px] max-w-md">
+                            <span className="material-symbols-outlined text-[17px] text-slate-400 absolute left-3 top-1/2 -translate-y-1/2">
+                                search
+                            </span>
+                            <input
+                                type="text"
+                                value={userSearchTerm}
+                                onChange={e => setUserSearchTerm(e.target.value)}
+                                placeholder="Search employee, email, role, dept..."
+                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs transition-all"
+                            />
+                            {userSearchTerm && (
+                                <button
+                                    type="button"
+                                    onClick={() => setUserSearchTerm('')}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                                    title="Clear search"
+                                >
+                                    <span className="material-symbols-outlined text-[15px]">close</span>
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Right: Role Dropdown */}
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Filter Role:</label>
+                            <div className="relative">
+                                <select
+                                    value={selectedRoleFilter}
+                                    onChange={e => setSelectedRoleFilter(e.target.value)}
+                                    className="appearance-none pl-3 pr-8 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-xs"
+                                >
+                                    <option value="All" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">All Roles</option>
+                                    <option value="System Admin" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">System Admin</option>
+                                    <option value="HR Admin" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">HR Admin</option>
+                                    <option value="Moderator" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Moderator</option>
+                                    <option value="Employee" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Employee</option>
+                                </select>
+                                <span className="material-symbols-outlined text-[16px] text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                                    expand_more
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Table Container */}
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                            <thead className="bg-slate-50/90 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200/80 dark:border-slate-800">
+                                <tr>
+                                    <th className="px-5 py-3.5">User #</th>
+                                    <th className="px-4 py-3.5">Employee Name & Email</th>
+                                    <th className="px-4 py-3.5">Designation & Dept</th>
+                                    <th className="px-4 py-3.5">Assigned Role</th>
+                                    <th className="px-4 py-3.5">Karma Score</th>
+                                    <th className="px-4 py-3.5">Status</th>
+                                    <th className="px-5 py-3.5 text-right">Governance Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {isLoadingUsers ? (
+                                    <tr>
+                                        <td colSpan="7" className="text-center py-12">
+                                            <div className="flex flex-col items-center justify-center gap-2">
+                                                <span className="material-symbols-outlined text-3xl text-indigo-500 animate-spin">progress_activity</span>
+                                                <p className="text-xs font-semibold text-slate-500">Loading user directory...</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : filteredUsers.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="7" className="text-center py-12 text-slate-500">
+                                            <div className="flex flex-col items-center justify-center gap-2">
+                                                <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                                                    <span className="material-symbols-outlined text-2xl">search_off</span>
+                                                </div>
+                                                <p className="font-bold text-sm text-slate-700 dark:text-slate-300">No matching employees found</p>
+                                                <p className="text-xs text-slate-400 max-w-sm">No accounts match the current filter query. Try resetting filters.</p>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => { setUserSearchTerm(''); setSelectedRoleFilter('All'); }} 
+                                                    className="mt-2 px-3.5 py-1.5 bg-indigo-600 text-white rounded-xl font-bold text-xs shadow-xs hover:bg-indigo-700 transition-colors cursor-pointer"
+                                                >
+                                                    Clear All Filters
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredUsers.slice(0, visibleUserCount).map(u => {
+                                        const assignedRole = getUserAssignedRole(u);
+                                        const uEmail = u.email || `${(u.fullName || u.name || 'user').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`;
+                                        const uAvatar = u.avatar || u.profilePhotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName || u.name || 'U')}&background=6366f1&color=fff&bold=true`;
+
+                                        return (
+                                            <tr key={u.userId || u.id} className="hover:bg-slate-50/90 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100/80 dark:border-slate-800/60">
+                                                <td className="px-5 py-3.5">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-slate-800 dark:text-slate-200 font-mono text-xs font-bold">#{u.userId || u.id}</span>
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full w-fit mt-1 border ${
+                                                            assignedRole.toLowerCase().includes('admin') || assignedRole.toLowerCase().includes('adm')
+                                                                ? 'text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 border-purple-200/60 dark:border-purple-800/60'
+                                                                : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border-slate-200/60 dark:border-slate-700/60'
+                                                        }`}>
+                                                            {assignedRole.toLowerCase().includes('admin') || assignedRole.toLowerCase().includes('adm') ? 'Admin' : 'Member'}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="relative shrink-0">
+                                                            <img 
+                                                                src={uAvatar} 
+                                                                alt={u.fullName || u.name} 
+                                                                className="w-9 h-9 rounded-xl object-cover ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-xs" 
+                                                            />
+                                                            <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 ${u.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p 
+                                                                onClick={() => {
+                                                                    setSelectedUserDetailsUser(u);
+                                                                    setIsUserDetailsModalOpen(true);
+                                                                }}
+                                                                className="font-bold text-xs text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer transition-colors truncate"
+                                                            >
+                                                                {u.fullName || u.name}
+                                                            </p>
+                                                            <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[200px] mt-0.5">{uEmail}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    <div className="min-w-0">
+                                                        <p className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">{u.designation || 'Staff Member'}</p>
+                                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                                                            <span className="material-symbols-outlined text-[13px] text-slate-400">apartment</span>
+                                                            <span>{u.department || u.departmentName || 'MPOnline Limited'}</span>
+                                                        </p>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    <div className="flex items-center">
+                                                        {(() => {
+                                                            const role = getUserAssignedRole(u);
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (isSysAdmin || isHrAdmin) {
+                                                                            setRoleUserId(String(u.userId || u.id));
+                                                                            setRoleUserName(u.fullName || u.name);
+                                                                            setSelectedRoles([role]);
+                                                                            setIsRoleModalOpen(true);
+                                                                        }
+                                                                    }}
+                                                                    className={`px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 shadow-xs transition-all ${getRoleBadgeStyle(role)} ${(isSysAdmin || isHrAdmin) ? 'cursor-pointer hover:shadow-xs hover:scale-[1.02] active:scale-95' : ''}`}
+                                                                    title={isSysAdmin || isHrAdmin ? "Click to configure role & privileges" : role}
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[14px]">
+                                                                        {role.toLowerCase().includes('system') ? 'shield_person' :
+                                                                         role.toLowerCase().includes('hr') ? 'badge' :
+                                                                         role.toLowerCase().includes('community') ? 'groups' :
+                                                                         role.toLowerCase().includes('mod') ? 'shield' : 'person'}
+                                                                    </span>
+                                                                    <span>{role}</span>
+                                                                    {(isSysAdmin || isHrAdmin) && (
+                                                                        <span className="material-symbols-outlined text-[12px] opacity-60">edit</span>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    {(() => {
+                                                        const singleRole = getUserAssignedRole(u).toLowerCase();
+                                                        const isUserSysAdmin = singleRole.includes('system') || singleRole.includes('sysadm');
+                                                        if (isUserSysAdmin) {
+                                                            return <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 italic" title="System Admin is exempt from Karma">— (Exempt)</span>;
+                                                        }
+                                                        return (
+                                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/80 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/40 text-xs font-black">
+                                                                <span className="material-symbols-outlined text-[15px] text-amber-500">stars</span>
+                                                                <span>{typeof u.karmaPoints === 'number' ? u.karmaPoints : 0} pts</span>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    {(() => {
+                                                        const statusCfg = getUserStatusConfig(u);
+                                                        return (
+                                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border shadow-xs ${statusCfg.badgeClass}`}>
+                                                                <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dotClass} ${u.isActive ? 'animate-pulse' : ''}`}></span>
+                                                                <span>{statusCfg.label}</span>
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </td>
+                                                <td className="px-5 py-3.5 text-right">
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedUserDetailsUser(u);
+                                                                setIsUserDetailsModalOpen(true);
+                                                            }}
+                                                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/50 dark:hover:text-indigo-400 border border-slate-200/60 dark:border-slate-700 transition-all cursor-pointer shadow-xs"
+                                                            title="View User Details"
+                                                            aria-label="View User Details"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[17px]">visibility</span>
+                                                        </button>
+                                                        {(isSysAdmin || isHrAdmin) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const userRole = getUserAssignedRole(u);
+                                                                    setRoleUserId(String(u.userId || u.id));
+                                                                    setRoleUserName(u.fullName || u.name);
+                                                                    setSelectedRoles([userRole]);
+                                                                    setIsRoleModalOpen(true);
+                                                                }}
+                                                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200/60 dark:border-indigo-800/60 transition-all cursor-pointer shadow-xs"
+                                                                title="Edit Role & Privileges"
+                                                                aria-label="Edit Role & Privileges"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleToggleUserActive(u)}
+                                                            className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all cursor-pointer shadow-xs ${
+                                                                u.isActive 
+                                                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 border-rose-200/60 dark:border-rose-800/60' 
+                                                                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border-emerald-200/60 dark:border-emerald-800/60'
+                                                            }`}
+                                                            title={u.isActive ? "Suspend User" : "Activate User"}
+                                                            aria-label={u.isActive ? "Suspend User" : "Activate User"}
+                                                        >
+                                                            <span className="material-symbols-outlined text-[17px]">
+                                                                {u.isActive ? 'person_off' : 'how_to_reg'}
+                                                            </span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    <ScrollLoadingIndicator isVisible={visibleUserCount < filteredUsers.length} text="Loading more users on scroll..." />
+                </div>
             )}
 
             {/* ─── TAB 3: COMMUNITY MODERATION ─── */}
@@ -5858,7 +6314,7 @@ export default function AdminConsole() {
                                             <span className="material-symbols-outlined text-[20px]">{c.icon || 'forum'}</span>
                                             <span className="font-black text-xs text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{c.name}</span>
                                         </div>
-                                        <span className={`px-2 py-0.5 font-bold text-[10px] rounded ${c.status === 'Strict' ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' : (c.status === 'Standard' ? 'bg-indigo-500/10 text-indigo-600 border border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20')}`}>
+                                        <span className={`px-2 py-0.5 font-bold text-[10px] rounded ${c.status === 'Strict' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20' : (c.status === 'Standard' ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20')}`}>
                                             {c.status}
                                         </span>
                                     </div>
@@ -5878,7 +6334,7 @@ export default function AdminConsole() {
                                     </p>
                                 </div>
                                 <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-[11px] gap-2">
-                                    <span className="text-slate-500 truncate">Mod: <strong className="text-slate-800 dark:text-slate-200">{c.mod}</strong></span>
+                                    <span className="text-slate-500 dark:text-slate-400 truncate">Mod: <strong className="text-slate-800 dark:text-slate-200">{c.mod}</strong></span>
                                     <div className="flex items-center gap-1.5 shrink-0">
                                         <button 
                                             onClick={(e) => {
@@ -6172,7 +6628,7 @@ export default function AdminConsole() {
                                     if (aiSelectedPreset) setAiSelectedPreset(null);
                                 }}
                                 placeholder="Type or paste sample post content, comment, or employee submission here to test..."
-                                className="w-full text-xs p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                                className="w-full text-xs p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
                             />
                             <div className="flex items-center justify-between mt-1">
                                 <span className="text-[10px] text-slate-400">
@@ -6385,7 +6841,7 @@ export default function AdminConsole() {
                             value={auditSearch}
                             onChange={e => setAuditSearch(e.target.value)}
                             placeholder="Filter audit logs..."
-                            className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs outline-none w-64"
+                            className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 rounded-lg px-3 py-1.5 text-xs outline-none w-64"
                         />
                     </div>
 
@@ -6520,9 +6976,10 @@ export default function AdminConsole() {
                                             <optgroup
                                                 key={group.date}
                                                 label={`📅 ${group.dateDisplay} — ${group.fileCount} ${group.fileCount === 1 ? 'file' : 'files'} (${(group.totalSizeBytes / (1024 * 1024)).toFixed(1)} MB)`}
+                                                className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
                                             >
                                                 {group.files.map(f => (
-                                                    <option key={f.relativePath || f.fileName} value={f.relativePath || f.fileName}>
+                                                    <option key={f.relativePath || f.fileName} value={f.relativePath || f.fileName} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
                                                         {f.isActive ? '🟢 Active: ' : '📄 '} {f.fileName} ({(f.sizeBytes / (1024 * 1024)).toFixed(1)} MB)
                                                     </option>
                                                 ))}
@@ -6530,7 +6987,7 @@ export default function AdminConsole() {
                                         ))
                                     ) : (
                                         systemLogFiles.map(f => (
-                                            <option key={f.fileName} value={f.fileName}>
+                                            <option key={f.fileName} value={f.fileName} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
                                                 📄 {f.fileName} ({(f.sizeBytes / (1024 * 1024)).toFixed(1)} MB){f.isActive ? ' - Active' : ''}
                                             </option>
                                         ))
@@ -6543,11 +7000,11 @@ export default function AdminConsole() {
                                     onChange={e => setLogLinesCount(Number(e.target.value))}
                                     className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-bold rounded-xl px-2 py-2 outline-none cursor-pointer"
                                 >
-                                    <option value={50}>50 Lines</option>
-                                    <option value={100}>100 Lines</option>
-                                    <option value={200}>200 Lines</option>
-                                    <option value={500}>500 Lines</option>
-                                    <option value={1000}>1000 Lines</option>
+                                    <option value={50} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">50 Lines</option>
+                                    <option value={100} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">100 Lines</option>
+                                    <option value={200} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">200 Lines</option>
+                                    <option value={500} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">500 Lines</option>
+                                    <option value={1000} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">1000 Lines</option>
                                 </select>
 
                                 {/* Auto-Refresh Toggle */}
@@ -6635,11 +7092,11 @@ export default function AdminConsole() {
                                 className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
                                     logLevelFilter === 'ALL'
                                         ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-500/30'
-                                        : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-slate-400'
+                                        : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-slate-400'
                                 }`}
                             >
                                 <span className="text-[10px] font-bold uppercase tracking-wider block opacity-75">Total Log Events</span>
-                                <span className="text-lg font-black">{systemLogCounts.total || systemLogs.length}</span>
+                                <span className={`text-lg font-black ${logLevelFilter === 'ALL' ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{systemLogCounts.total || systemLogs.length}</span>
                             </div>
 
                             <div
@@ -6651,7 +7108,7 @@ export default function AdminConsole() {
                                 }`}
                             >
                                 <span className="text-[10px] font-bold uppercase tracking-wider block opacity-75">Errors & Fatal</span>
-                                <span className="text-lg font-black">{systemLogCounts.errors || 0}</span>
+                                <span className={`text-lg font-black ${logLevelFilter === 'ERR' ? 'text-white' : 'text-rose-600 dark:text-rose-400'}`}>{systemLogCounts.errors || 0}</span>
                             </div>
 
                             <div
@@ -6663,7 +7120,7 @@ export default function AdminConsole() {
                                 }`}
                             >
                                 <span className="text-[10px] font-bold uppercase tracking-wider block opacity-75">Warnings</span>
-                                <span className="text-lg font-black">{systemLogCounts.warnings || 0}</span>
+                                <span className={`text-lg font-black ${logLevelFilter === 'WRN' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`}>{systemLogCounts.warnings || 0}</span>
                             </div>
 
                             <div
@@ -6675,7 +7132,7 @@ export default function AdminConsole() {
                                 }`}
                             >
                                 <span className="text-[10px] font-bold uppercase tracking-wider block opacity-75">Information</span>
-                                <span className="text-lg font-black">{systemLogCounts.info || 0}</span>
+                                <span className={`text-lg font-black ${logLevelFilter === 'INF' ? 'text-white' : 'text-sky-600 dark:text-sky-400'}`}>{systemLogCounts.info || 0}</span>
                             </div>
 
                             <div className="p-2.5 rounded-xl border bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 flex flex-col justify-center">
@@ -7373,7 +7830,7 @@ export default function AdminConsole() {
                                     <span className="text-xl font-black text-slate-900 dark:text-white">{reports.length}</span>
                                     <span className="text-[9px] font-bold uppercase text-slate-400">Total</span>
                                 </div>
-                                <div className="space-y-2 text-xs font-bold">
+                                <div className="space-y-2 text-xs font-bold text-slate-800 dark:text-slate-200">
                                     <div className="flex items-center gap-2">
                                         <span className="w-3 h-3 rounded-full bg-amber-500"></span>
                                         <span>Pending Reports ({pendingCount})</span>
@@ -7396,27 +7853,27 @@ export default function AdminConsole() {
                         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
                             <h4 className="font-bold text-slate-900 dark:text-white mb-3">Top Reported Communities</h4>
                             <div className="space-y-2">
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">HR & People Ops</span><span className="font-bold text-indigo-600">5 Reports</span></div>
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Engineering & Tech</span><span className="font-bold text-indigo-600">4 Reports</span></div>
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Product Design</span><span className="font-bold text-indigo-600">2 Reports</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">HR & People Ops</span><span className="font-bold text-indigo-600 dark:text-indigo-400">5 Reports</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Engineering & Tech</span><span className="font-bold text-indigo-600 dark:text-indigo-400">4 Reports</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Product Design</span><span className="font-bold text-indigo-600 dark:text-indigo-400">2 Reports</span></div>
                             </div>
                         </div>
 
                         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
                             <h4 className="font-bold text-slate-900 dark:text-white mb-3">Top Reported Users</h4>
                             <div className="space-y-2">
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Sourabh Sahu (#3)</span><span className="font-bold text-rose-500">3 Violations</span></div>
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Priya Verma (#2)</span><span className="font-bold text-rose-500">3 Violations</span></div>
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Rishikesh Ugle (#4)</span><span className="font-bold text-rose-500">2 Violations</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Sourabh Sahu (#3)</span><span className="font-bold text-rose-600 dark:text-rose-400">3 Violations</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Priya Verma (#2)</span><span className="font-bold text-rose-600 dark:text-rose-400">3 Violations</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Rishikesh Ugle (#4)</span><span className="font-bold text-rose-600 dark:text-rose-400">2 Violations</span></div>
                             </div>
                         </div>
 
                         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
                             <h4 className="font-bold text-slate-900 dark:text-white mb-3">AI Detection Accuracy</h4>
                             <div className="space-y-2">
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Precision Score</span><span className="font-bold text-emerald-500">94.2%</span></div>
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">False Positive Rate</span><span className="font-bold text-amber-500">3.8%</span></div>
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Auto-Quarantined</span><span className="font-bold text-purple-500">14 Items</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Precision Score</span><span className="font-bold text-emerald-600 dark:text-emerald-400">94.2%</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">False Positive Rate</span><span className="font-bold text-amber-600 dark:text-amber-400">3.8%</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Auto-Quarantined</span><span className="font-bold text-purple-600 dark:text-purple-400">14 Items</span></div>
                             </div>
                         </div>
                     </div>
@@ -7633,11 +8090,11 @@ export default function AdminConsole() {
                                 </p>
 
                                 <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireCommunityApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireCommunityApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                         <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
                                         <span>Community stays Pending until admin approval.</span>
                                     </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireCommunityApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireCommunityApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                         <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
                                         <span>Community is created and live immediately.</span>
                                     </div>
@@ -7696,11 +8153,11 @@ export default function AdminConsole() {
                                 </p>
 
                                 <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireVideoApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireVideoApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                         <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
                                         <span>Video routes to Media Approvals queue.</span>
                                     </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireVideoApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireVideoApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                         <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
                                         <span>Video publishes live immediately upon upload.</span>
                                     </div>
@@ -7759,11 +8216,11 @@ export default function AdminConsole() {
                                 </p>
 
                                 <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.requirePodcastApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                    <div className={`p-2.5 rounded-xl border ${configState.requirePodcastApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                         <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
                                         <span>Podcast routes to Media Approvals queue.</span>
                                     </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.requirePodcastApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                    <div className={`p-2.5 rounded-xl border ${configState.requirePodcastApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                         <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
                                         <span>Podcast publishes live immediately upon upload.</span>
                                     </div>
@@ -7822,11 +8279,11 @@ export default function AdminConsole() {
                                 </p>
 
                                 <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.enableMessaging !== false ? 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-900 dark:text-blue-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                    <div className={`p-2.5 rounded-xl border ${configState.enableMessaging !== false ? 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-900 dark:text-blue-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                         <div className="font-bold mb-0.5 text-blue-600 dark:text-blue-400">When ON:</div>
                                         <span>Employees can send DMs, files & reactions freely.</span>
                                     </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.enableMessaging === false ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                    <div className={`p-2.5 rounded-xl border ${configState.enableMessaging === false ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                         <div className="font-bold mb-0.5 text-amber-600 dark:text-amber-400">When OFF:</div>
                                         <span>Messaging locked; displays admin maintenance alert.</span>
                                     </div>
@@ -7885,11 +8342,11 @@ export default function AdminConsole() {
                                 </p>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.enableEmail !== false ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                    <div className={`p-2.5 rounded-xl border ${configState.enableEmail !== false ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                         <div className="font-bold mb-0.5 text-amber-600 dark:text-amber-400">When ON:</div>
                                         <span>SMTP server dispatches transactional notifications and employee alerts.</span>
                                     </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.enableEmail === false ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                    <div className={`p-2.5 rounded-xl border ${configState.enableEmail === false ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                         <div className="font-bold mb-0.5 text-slate-600 dark:text-slate-400">When OFF:</div>
                                         <span>Outgoing email dispatch is safely paused without generating failures.</span>
                                     </div>
@@ -8107,11 +8564,11 @@ export default function AdminConsole() {
                                     </p>
 
                                     <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enablePosts !== false ? 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-900 dark:text-blue-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enablePosts !== false ? 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-900 dark:text-blue-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-blue-600 dark:text-blue-400">When ON:</div>
                                             <span>Full feed, composer, reactions, and post APIs enabled.</span>
                                         </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enablePosts === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enablePosts === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
                                             <span>Posts hidden in UI, composer locked, APIs return 403.</span>
                                         </div>
@@ -8170,11 +8627,11 @@ export default function AdminConsole() {
                                     </p>
 
                                     <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableArticles !== false ? 'bg-sky-50/70 dark:bg-sky-950/20 border-sky-200 dark:border-sky-900/50 text-sky-900 dark:text-sky-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableArticles !== false ? 'bg-sky-50/70 dark:bg-sky-950/20 border-sky-200 dark:border-sky-900/50 text-sky-900 dark:text-sky-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-sky-600 dark:text-sky-400">When ON:</div>
                                             <span>Articles portal, reading view, editor, and search active.</span>
                                         </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableArticles === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableArticles === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
                                             <span>Articles hidden in nav, route guarded, APIs return 403.</span>
                                         </div>
@@ -8233,11 +8690,11 @@ export default function AdminConsole() {
                                     </p>
 
                                     <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableClips !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableClips !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
                                             <span>Clips feed, reels player, creator uploads, and APIs live.</span>
                                         </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableClips === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableClips === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
                                             <span>Clips hidden in nav, route guarded, APIs return 403.</span>
                                         </div>
@@ -8296,11 +8753,11 @@ export default function AdminConsole() {
                                     </p>
 
                                     <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableWiki !== false ? 'bg-indigo-50/70 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/50 text-indigo-900 dark:text-indigo-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableWiki !== false ? 'bg-indigo-50/70 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/50 text-indigo-900 dark:text-indigo-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-indigo-600 dark:text-indigo-400">When ON:</div>
                                             <span>Wiki catalog, hierarchical editor, reader, and APIs live.</span>
                                         </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableWiki === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableWiki === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
                                             <span>Wiki hidden in nav, route guarded, APIs return 403.</span>
                                         </div>
@@ -8359,11 +8816,11 @@ export default function AdminConsole() {
                                     </p>
 
                                     <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableVideos !== false ? 'bg-red-50/70 dark:bg-red-950/20 border-red-200 dark:border-red-900/50 text-red-900 dark:text-red-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableVideos !== false ? 'bg-red-50/70 dark:bg-red-950/20 border-red-200 dark:border-red-900/50 text-red-900 dark:text-red-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-red-600 dark:text-red-400">When ON:</div>
                                             <span>Video hub, streaming playback, uploads, and APIs live.</span>
                                         </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableVideos === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enableVideos === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
                                             <span>Videos hidden in nav, route guarded, APIs return 403.</span>
                                         </div>
@@ -8422,11 +8879,11 @@ export default function AdminConsole() {
                                     </p>
 
                                     <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enablePodcasts !== false ? 'bg-fuchsia-50/70 dark:bg-fuchsia-950/20 border-fuchsia-200 dark:border-fuchsia-900/50 text-fuchsia-900 dark:text-fuchsia-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enablePodcasts !== false ? 'bg-fuchsia-50/70 dark:bg-fuchsia-950/20 border-fuchsia-200 dark:border-fuchsia-900/50 text-fuchsia-900 dark:text-fuchsia-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-fuchsia-600 dark:text-fuchsia-400">When ON:</div>
                                             <span>Podcast series, episodes, audio player, and APIs live.</span>
                                         </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enablePodcasts === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border ${configState.enablePodcasts === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
                                             <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
                                             <span>Podcasts hidden in nav, route guarded, APIs return 403.</span>
                                         </div>
@@ -8509,24 +8966,7 @@ export default function AdminConsole() {
 
             {/* ─── TAB: MEDIA APPROVALS (VIDEOS & PODCASTS) ─── */}
             {activeTab === 'media_approvals' && (
-                (isSysAdmin && !isModerator) ? (
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center max-w-xl mx-auto my-8 shadow-xs">
-                        <div className="w-14 h-14 bg-amber-500/15 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                            <span className="material-symbols-outlined text-3xl">video_library</span>
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">Media Approvals Transferred</h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                            Media Approvals rights have been transferred to the <strong>Moderator</strong> role. System Administrators no longer have media approval rights.
-                        </p>
-                        <button
-                            onClick={() => { setActivePillar('governance'); setActiveTab('approval_policy'); }}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
-                        >
-                            Return to Approval Policy
-                        </button>
-                    </div>
-                ) : (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs p-6 space-y-6">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs p-5 md:p-6 space-y-6">
                     {/* Content & Community Approval Policy Banner directly in Media Approvals */}
                     <div className="p-3.5 bg-gradient-to-r from-rose-50 to-orange-50 dark:from-rose-950/30 dark:to-orange-950/20 rounded-xl border border-rose-200 dark:border-rose-900/50 flex flex-wrap items-center justify-between gap-3 shadow-xs">
                         <div className="flex items-center gap-3 min-w-0">
@@ -8649,12 +9089,11 @@ export default function AdminConsole() {
                         </div>
                     )}
                 </div>
-                )
             )}
 
             {/* ─── TAB: COMMUNITY APPROVALS QUEUE (EMPLOYEE SUBMISSIONS AWAITING ADMIN CLEARANCE) ─── */}
             {activeTab === 'community_approvals' && (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs p-5 md:p-6 space-y-6">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs p-5 md:p-6 space-y-6">
                     {/* Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
                         <div>
@@ -8681,7 +9120,7 @@ export default function AdminConsole() {
                                 value={communityApprovalSearchTerm}
                                 onChange={(e) => setCommunityApprovalSearchTerm(e.target.value)}
                                 placeholder="Search by community name, description, or creator..."
-                                className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                                className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                             />
                             {communityApprovalSearchTerm && (
                                 <button
@@ -8914,7 +9353,7 @@ export default function AdminConsole() {
                                 value={roleRequestSearchTerm}
                                 onChange={e => setRoleRequestSearchTerm(e.target.value)}
                                 placeholder="Search by name, employee ID, email..."
-                                className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs outline-none focus:border-indigo-500 text-slate-900 dark:text-white"
+                                className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs outline-none focus:border-indigo-500 text-slate-900 dark:text-white placeholder:text-slate-400"
                             />
                         </div>
                     </div>
@@ -9013,12 +9452,12 @@ export default function AdminConsole() {
                                                         <select
                                                             value={targetRole}
                                                             onChange={e => setRequestTargetRoles(prev => ({ ...prev, [req.requestId]: e.target.value }))}
-                                                            className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg px-2 py-1 text-xs outline-none font-bold flex-1"
+                                                            className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-2 py-1 text-xs outline-none font-bold flex-1"
                                                         >
-                                                            <option value="Employee">Employee</option>
-                                                            <option value="Community Admin">Community Admin</option>
-                                                            <option value="HR Admin">HR Admin</option>
-                                                            <option value="System Admin">System Admin</option>
+                                                            <option value="Employee" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Employee</option>
+                                                            <option value="Community Admin" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Community Admin</option>
+                                                            <option value="HR Admin" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">HR Admin</option>
+                                                            <option value="System Admin" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">System Admin</option>
                                                         </select>
                                                     </div>
 
@@ -9134,13 +9573,6 @@ export default function AdminConsole() {
                                             desc: 'Create posts, articles, videos, join communities, earn karma, and network.'
                                         },
                                         {
-                                            name: 'Community Admin',
-                                            icon: 'groups',
-                                            badge: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-                                            title: 'Community Admin (Moderation)',
-                                            desc: 'Moderate community posts, manage community members, rules, and categories.'
-                                        },
-                                        {
                                             name: 'HR Admin',
                                             icon: 'badge',
                                             badge: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
@@ -9165,7 +9597,6 @@ export default function AdminConsole() {
                                         const rawRole = selectedRoles[0] || 'Employee';
                                         const currentNormalized = (rawRole === 'HR Administrator' || rawRole === 'HR Admin' || rawRole === 'HRAdmin') ? 'HR Admin'
                                             : (rawRole === 'System Administrator' || rawRole === 'System Admin' || rawRole === 'SystemAdmin') ? 'System Admin'
-                                            : (rawRole === 'Community Administrator' || rawRole === 'Community Admin' || rawRole === 'CommunityAdmin') ? 'Community Admin'
                                             : (rawRole === 'Moderator' || rawRole === 'MOD') ? 'Moderator'
                                             : 'Employee';
                                         const isSelected = currentNormalized === roleItem.name;
@@ -9284,9 +9715,26 @@ export default function AdminConsole() {
                             {/* Report Details Card */}
                             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                                 <div>
-                                    <p className="text-slate-400 font-semibold text-[11px]">Reporter</p>
+                                    <div className="flex items-center gap-1.5">
+                                        <p className="text-slate-400 font-semibold text-[11px]">Reporter</p>
+                                        {previewReport.reportCount > 1 && (
+                                            <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25">
+                                                {previewReport.reportCount}x ({previewReport.reportCount} reports)
+                                            </span>
+                                        )}
+                                    </div>
                                     <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{previewReport.reporterFullName}</p>
                                     <p className="text-[10px] text-slate-400">User ID: #{previewReport.reporterUserId}</p>
+                                    {previewReport.reporters && previewReport.reporters.length > 1 && (
+                                        <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700/60 pt-1 space-y-0.5 max-h-20 overflow-y-auto custom-scrollbar">
+                                            <p className="font-semibold text-slate-600 dark:text-slate-300">All Reporters ({previewReport.reporters.length}):</p>
+                                            {previewReport.reporters.map((rep, idx) => (
+                                                <p key={idx} className="truncate">
+                                                    • {rep.fullName} (#{rep.userId}) - <span className="font-medium text-slate-400">{rep.reasonCode}</span>
+                                                </p>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <p className="text-slate-400 font-semibold text-[11px]">Reason Flagged</p>
@@ -9912,9 +10360,9 @@ export default function AdminConsole() {
                                     }}
                                     className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 font-bold outline-none text-slate-900 dark:text-white"
                                 >
-                                    <option value="Strict">Strict (Auto-Quarantine Toxic Posts)</option>
-                                    <option value="Standard">Standard (Flag & Hold Pending Review)</option>
-                                    <option value="Relaxed">Relaxed (Post First, Flag Later)</option>
+                                    <option value="Strict" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Strict (Auto-Quarantine Toxic Posts)</option>
+                                    <option value="Standard" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Standard (Flag & Hold Pending Review)</option>
+                                    <option value="Relaxed" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Relaxed (Post First, Flag Later)</option>
                                 </select>
                             </div>
 
@@ -9965,7 +10413,7 @@ export default function AdminConsole() {
                                         });
 
                                         return sortedOptions.map(opt => (
-                                            <option key={opt.value} value={opt.value}>
+                                            <option key={opt.value} value={opt.value} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
                                                 {opt.label}
                                             </option>
                                         ));
@@ -10443,9 +10891,9 @@ export default function AdminConsole() {
                         <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
                             {pendingChanges.length > 0 ? (
                                 <>
-                                    <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
+                                    <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300 px-1">
                                 <span>Settings to be Updated ({pendingChanges.length})</span>
-                                <span className="text-[11px] font-medium text-slate-400">Previous → New</span>
+                                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Previous → New</span>
                             </div>
 
                             <div className="space-y-2.5">
@@ -10462,7 +10910,7 @@ export default function AdminConsole() {
                                                 <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
                                                     {change.name}
                                                 </h4>
-                                                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                                <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate">
                                                     {change.description}
                                                 </p>
                                             </div>
@@ -10475,7 +10923,7 @@ export default function AdminConsole() {
                                                     ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50'
                                                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                                             }`}>
-                                                <span className="text-[10px] text-slate-400 uppercase font-semibold">Prev:</span>
+                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold">Prev:</span>
                                                 <span className={`w-1.5 h-1.5 rounded-full ${change.prev === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
                                                 <span className="font-black">{change.prev}</span>
                                             </div>
@@ -10515,37 +10963,37 @@ export default function AdminConsole() {
                                     </div>
                                     <div className="grid grid-cols-2 gap-2 text-xs">
                                         <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Posts</span>
+                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Posts</span>
                                             <span className={`font-black ${configState.enablePosts !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
                                                 {configState.enablePosts !== false ? '● ACTIVE' : '○ DISABLED'}
                                             </span>
                                         </div>
                                         <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Articles</span>
+                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Articles</span>
                                             <span className={`font-black ${configState.enableArticles !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
                                                 {configState.enableArticles !== false ? '● ACTIVE' : '○ DISABLED'}
                                             </span>
                                         </div>
                                         <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Clips</span>
+                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Clips</span>
                                             <span className={`font-black ${configState.enableClips !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
                                                 {configState.enableClips !== false ? '● ACTIVE' : '○ DISABLED'}
                                             </span>
                                         </div>
                                         <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Wiki</span>
+                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Wiki</span>
                                             <span className={`font-black ${configState.enableWiki !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
                                                 {configState.enableWiki !== false ? '● ACTIVE' : '○ DISABLED'}
                                             </span>
                                         </div>
                                         <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Videos</span>
+                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Videos</span>
                                             <span className={`font-black ${configState.enableVideos !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
                                                 {configState.enableVideos !== false ? '● ACTIVE' : '○ DISABLED'}
                                             </span>
                                         </div>
                                         <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Podcasts</span>
+                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Podcasts</span>
                                             <span className={`font-black ${configState.enablePodcasts !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
                                                 {configState.enablePodcasts !== false ? '● ACTIVE' : '○ DISABLED'}
                                             </span>
