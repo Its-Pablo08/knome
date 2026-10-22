@@ -3618,6 +3618,12 @@ export default function AdminConsole() {
                 const hasAdminRole = assigned.includes('admin') || assigned.includes('adm') || rolesList.some(r => r.includes('admin') || r.includes('adm'));
                 const isPureEmployee = rolesList.length === 1 && rolesList[0] === 'employee';
                 if (!hasAdminRole || isPureEmployee) return false;
+            } else if (filterNorm === 'moderator' || filterNorm === 'moderators') {
+                if (!assigned.includes('mod')) return false;
+            } else if (filterNorm === 'hr admin' || filterNorm === 'hradmin') {
+                if (!assigned.includes('hr')) return false;
+            } else if (filterNorm === 'system admin' || filterNorm === 'sysadmin') {
+                if (!assigned.includes('system') && !assigned.includes('sysadm')) return false;
             } else if (!assigned.includes(filterNorm)) {
                 return false;
             }
@@ -3628,6 +3634,20 @@ export default function AdminConsole() {
         if (activeUserSearchTerm === 'inactive') return (u.isActive === false && !u.isSuspended && !u.isPermanentlySuspended) || (u.status || '').toLowerCase() === 'inactive';
         if (activeUserSearchTerm === 'active') return (u.isActive === true && !u.isSuspended && !u.isPermanentlySuspended) || (u.status || '').toLowerCase() === 'active';
         
+        // When filtering specifically by specific role cards
+        if (activeUserSearchTerm === 'moderator' || activeUserSearchTerm === 'moderators') {
+            const assigned = (u.roleName || getUserAssignedRole(u) || '').toLowerCase();
+            return assigned.includes('mod');
+        }
+        if (activeUserSearchTerm === 'hr admin' || activeUserSearchTerm === 'hradmin') {
+            const assigned = (u.roleName || getUserAssignedRole(u) || '').toLowerCase();
+            return assigned.includes('hr');
+        }
+        if (activeUserSearchTerm === 'system admin' || activeUserSearchTerm === 'sysadmin') {
+            const assigned = (u.roleName || getUserAssignedRole(u) || '').toLowerCase();
+            return assigned.includes('system') || assigned.includes('sysadm');
+        }
+
         // When filtering specifically by 'admin' (e.g. clicking the Admins stat card)
         if (activeUserSearchTerm === 'admin') {
             const assigned = (u.roleName || getUserAssignedRole(u) || '').toLowerCase();
@@ -3683,14 +3703,19 @@ export default function AdminConsole() {
     const reviewedCount = actionTakenCount + dismissedCount;
     const highPriorityCount = reports.filter(r => r.reasonCode === 'Harassment' || r.reasonCode === 'Copyright' || r.severity === 'Critical' || r.severity === 'High').length;
     const suspendedUsersCount = usersList.filter(u => !u.isActive).length;
-    const activeModeratorsCount = usersList.filter(u => {
+    const moderatorsCount = usersList.filter(u => {
         const assigned = (u.roleName || getUserAssignedRole(u) || '').toLowerCase();
-        const rolesList = getUserRolesList(u).map(r => String(r).toLowerCase());
-        const hasAdminRole = assigned.includes('admin') || assigned.includes('adm') || 
-                             rolesList.some(r => r.includes('admin') || r.includes('adm'));
-        const isPureEmployee = rolesList.length === 1 && rolesList[0] === 'employee';
-        return hasAdminRole && !isPureEmployee;
+        return assigned.includes('mod');
     }).length;
+    const hrAdminsCount = usersList.filter(u => {
+        const assigned = (u.roleName || getUserAssignedRole(u) || '').toLowerCase();
+        return assigned.includes('hr');
+    }).length;
+    const systemAdminsCount = usersList.filter(u => {
+        const assigned = (u.roleName || getUserAssignedRole(u) || '').toLowerCase();
+        return assigned.includes('system') || assigned.includes('sysadm');
+    }).length;
+    const activeModeratorsCount = moderatorsCount + hrAdminsCount + systemAdminsCount;
     const aiFlaggedCount = reports.filter(r => r.reasonCode === 'Spam' || r.reasonCode === 'Inappropriate' || (r.aiScore && parseInt(r.aiScore) > 70)).length;
     const communitiesCount = communityChannels.length;
     const activeUsersCount = usersList.filter(u => u.isActive).length || usersList.length;
@@ -4191,18 +4216,26 @@ export default function AdminConsole() {
                     </div>
 
                     {/* Executive Metric Capsules on Right */}
-                    <div className="flex items-center gap-2.5 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800">
-                        <div className="px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-center min-w-[90px] shadow-2xs">
-                            <span className="text-lg font-black text-white block leading-none">{usersList.length}</span>
+                    <div className="flex items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800 flex-wrap">
+                        <div className="px-3 py-2 rounded-xl bg-slate-800/80 border border-slate-700/80 text-center min-w-[70px] shadow-2xs">
+                            <span className="text-base font-black text-white block leading-none">{usersList.length}</span>
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight mt-1 block">Employees</span>
                         </div>
-                        <div className="px-4 py-2.5 rounded-xl bg-indigo-950/70 border border-indigo-700/60 text-center min-w-[90px] shadow-2xs">
-                            <span className="text-lg font-black text-indigo-300 block leading-none">{activeModeratorsCount}</span>
-                            <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tight mt-1 block">Privileged</span>
+                        <div className="px-3 py-2 rounded-xl bg-amber-950/60 border border-amber-700/50 text-center min-w-[70px] shadow-2xs">
+                            <span className="text-base font-black text-amber-300 block leading-none">{moderatorsCount}</span>
+                            <span className="text-[9px] font-bold text-amber-400 uppercase tracking-tight mt-1 block">Moderators</span>
                         </div>
-                        <div className="px-4 py-2.5 rounded-xl bg-emerald-950/60 border border-emerald-700/50 text-center min-w-[90px] shadow-2xs">
-                            <span className="text-lg font-black text-emerald-400 block leading-none">100%</span>
-                            <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-tight mt-1 block">Account Health</span>
+                        <div className="px-3 py-2 rounded-xl bg-blue-950/60 border border-blue-700/50 text-center min-w-[70px] shadow-2xs">
+                            <span className="text-base font-black text-blue-300 block leading-none">{hrAdminsCount}</span>
+                            <span className="text-[9px] font-bold text-blue-400 uppercase tracking-tight mt-1 block">HR Admin</span>
+                        </div>
+                        <div className="px-3 py-2 rounded-xl bg-purple-950/60 border border-purple-700/50 text-center min-w-[70px] shadow-2xs">
+                            <span className="text-base font-black text-purple-300 block leading-none">{systemAdminsCount}</span>
+                            <span className="text-[9px] font-bold text-purple-400 uppercase tracking-tight mt-1 block">Sys Admin</span>
+                        </div>
+                        <div className="px-3 py-2 rounded-xl bg-emerald-950/60 border border-emerald-700/50 text-center min-w-[70px] shadow-2xs">
+                            <span className="text-base font-black text-emerald-400 block leading-none">100%</span>
+                            <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-tight mt-1 block">Health</span>
                         </div>
                     </div>
                 </div>
@@ -5070,46 +5103,21 @@ export default function AdminConsole() {
 
             {/* TAB 5: USER DIRECTORY FILTERS */}
             {activeTab === 'users' && (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-5">
-                    {/* 1. All Employees / Total Directory */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-5">
+                    {/* 1. Active Accounts */}
                     <div 
                         onClick={() => { 
-                            setUserSearchTerm(''); 
-                            setSelectedRoleFilter('All'); 
-                            showToast(`Showing all ${usersList.length} registered employees`); 
-                        }}
-                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
-                            !userSearchTerm && selectedRoleFilter === 'All'
-                                ? 'bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/30 dark:from-indigo-950/40 dark:via-slate-900 dark:to-slate-900 border-indigo-500/60 ring-2 ring-indigo-500/20 shadow-md scale-[1.01]' 
-                                : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
-                    >
-                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-indigo-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="flex items-center justify-between mb-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center">
-                                <span className="material-symbols-outlined text-[19px]">badge</span>
-                            </div>
-                            <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                                Directory
-                            </span>
-                        </div>
-                        <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{usersList.length}</p>
-                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">Total Directory</p>
-                    </div>
-
-                    {/* 2. Active Accounts */}
-                    <div 
-                        onClick={() => { 
-                            if (userSearchTerm.toLowerCase() === 'active') { 
+                            if (userSearchTerm.toLowerCase() === 'active' && selectedRoleFilter === 'All') { 
                                 setUserSearchTerm(''); 
                                 showToast(`Showing all ${usersList.length} registered employees`); 
                             } else { 
                                 setUserSearchTerm('Active'); 
+                                setSelectedRoleFilter('All');
                                 showToast(`Filtered: Showing ${activeUsersCount} active employee accounts`); 
                             } 
                         }}
                         className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
-                            userSearchTerm.toLowerCase() === 'active'
+                            userSearchTerm.toLowerCase() === 'active' && selectedRoleFilter === 'All'
                                 ? 'bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/30 dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900 border-emerald-500/60 ring-2 ring-emerald-500/20 shadow-md scale-[1.01]' 
                                 : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
                         }`}
@@ -5127,19 +5135,85 @@ export default function AdminConsole() {
                         <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">Active Accounts</p>
                     </div>
 
-                    {/* 3. Privileged Roles */}
+                    {/* 2. Moderators */}
                     <div 
                         onClick={() => { 
-                            if (userSearchTerm.toLowerCase() === 'admin') { 
-                                setUserSearchTerm(''); 
+                            if (selectedRoleFilter === 'Moderator') { 
+                                setSelectedRoleFilter('All'); 
+                                setUserSearchTerm('');
                                 showToast(`Showing all ${usersList.length} registered employees`); 
                             } else { 
-                                setUserSearchTerm('Admin'); 
-                                showToast(`Filtered: Showing ${activeModeratorsCount} administrators`); 
+                                setSelectedRoleFilter('Moderator'); 
+                                setUserSearchTerm('');
+                                showToast(`Filtered: Showing ${moderatorsCount} Content Moderators`); 
                             } 
                         }}
                         className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
-                            userSearchTerm.toLowerCase() === 'admin'
+                            selectedRoleFilter === 'Moderator'
+                                ? 'bg-gradient-to-br from-amber-50/70 via-white to-amber-50/30 dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 border-amber-500/60 ring-2 ring-amber-500/20 shadow-md scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
+                        }`}
+                    >
+                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="flex items-center justify-between mb-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50 flex items-center justify-center">
+                                <span className="material-symbols-outlined text-[19px]">gavel</span>
+                            </div>
+                            <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
+                                Moderation
+                            </span>
+                        </div>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{moderatorsCount}</p>
+                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">Moderators</p>
+                    </div>
+
+                    {/* 3. HR Admin */}
+                    <div 
+                        onClick={() => { 
+                            if (selectedRoleFilter === 'HR Admin') { 
+                                setSelectedRoleFilter('All'); 
+                                setUserSearchTerm('');
+                                showToast(`Showing all ${usersList.length} registered employees`); 
+                            } else { 
+                                setSelectedRoleFilter('HR Admin'); 
+                                setUserSearchTerm('');
+                                showToast(`Filtered: Showing ${hrAdminsCount} HR Administrators`); 
+                            } 
+                        }}
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
+                            selectedRoleFilter === 'HR Admin'
+                                ? 'bg-gradient-to-br from-blue-50/70 via-white to-blue-50/30 dark:from-blue-950/40 dark:via-slate-900 dark:to-slate-900 border-blue-500/60 ring-2 ring-blue-500/20 shadow-md scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
+                        }`}
+                    >
+                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="flex items-center justify-between mb-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center">
+                                <span className="material-symbols-outlined text-[19px]">badge</span>
+                            </div>
+                            <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60">
+                                Management
+                            </span>
+                        </div>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{hrAdminsCount}</p>
+                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">HR Admin</p>
+                    </div>
+
+                    {/* 4. System Admin */}
+                    <div 
+                        onClick={() => { 
+                            if (selectedRoleFilter === 'System Admin') { 
+                                setSelectedRoleFilter('All'); 
+                                setUserSearchTerm('');
+                                showToast(`Showing all ${usersList.length} registered employees`); 
+                            } else { 
+                                setSelectedRoleFilter('System Admin'); 
+                                setUserSearchTerm('');
+                                showToast(`Filtered: Showing ${systemAdminsCount} System Administrators`); 
+                            } 
+                        }}
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
+                            selectedRoleFilter === 'System Admin'
                                 ? 'bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 dark:from-purple-950/40 dark:via-slate-900 dark:to-slate-900 border-purple-500/60 ring-2 ring-purple-500/20 shadow-md scale-[1.01]' 
                                 : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
                         }`}
@@ -5153,18 +5227,20 @@ export default function AdminConsole() {
                                 Governance
                             </span>
                         </div>
-                        <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{activeModeratorsCount}</p>
-                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">Privileged Roles</p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{systemAdminsCount}</p>
+                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">System Admin</p>
                     </div>
 
-                    {/* 4. Suspended Accounts */}
+                    {/* 5. Suspended Accounts */}
                     <div 
                         onClick={() => { 
                             if (userSearchTerm.toLowerCase() === 'suspended') { 
                                 setUserSearchTerm(''); 
+                                setSelectedRoleFilter('All');
                                 showToast(`Showing all ${usersList.length} registered employees`); 
                             } else { 
                                 setUserSearchTerm('Suspended'); 
+                                setSelectedRoleFilter('All');
                                 showToast(`Filtered: Showing ${suspendedUsersCount} suspended accounts`); 
                             } 
                         }}

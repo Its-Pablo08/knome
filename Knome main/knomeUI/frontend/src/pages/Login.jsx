@@ -57,7 +57,6 @@ export default function Login() {
         // Check if there are SSO tokens or credentials present in the URL query or hash
         const hashString = window.location.hash.startsWith('#') ? window.location.hash.substring(1) : window.location.hash;
         const hashParams = new URLSearchParams(hashString);
-        const searchParams = new URLSearchParams(window.location.search);
 
         const token = searchParams.get('token') ||
                       searchParams.get('access_token') ||

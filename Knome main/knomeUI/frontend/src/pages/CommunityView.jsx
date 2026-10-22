@@ -3199,10 +3199,10 @@ export default function CommunityView() {
 
         if (desiredRole === 'Member') {
             const adminsCount = getAdminCount();
-            if (!isSysAdmin && isCurrentlyAdmin && adminsCount <= 1) {
+            if (isCurrentlyAdmin && adminsCount <= 1) {
                 setAdminProtectionWarning({
-                    title: 'Cannot Change Role',
-                    message: `"${memberName}" is currently the only Community Admin for this community. A community must always have at least one active Community Admin.\n\nPlease assign another member as Community Admin before changing this role.`
+                    title: 'Solo Admin Community Rule',
+                    message: `Solo Admin Community Rule: You cannot make a solo admin an employee until there are multiple admins.\n\n"${memberName}" is currently the solo Community Admin for this community. Please assign another member as Community Admin using "Make Admin" first.`
                 });
                 return;
             }
@@ -3210,7 +3210,7 @@ export default function CommunityView() {
             try {
                 await communitiesApi.removeAdmin(targetId, memberId);
             } catch (err) {
-                const msg = err?.response?.data?.message || err?.message || 'Cannot remove sole Community Admin.';
+                const msg = err?.response?.data?.message || err?.message || 'Solo Admin Community Rule: Cannot remove or demote a solo admin.';
                 showToast(msg, 'warning');
                 return;
             }
@@ -3254,30 +3254,22 @@ export default function CommunityView() {
     };
 
     const getAdminCount = () => {
-        return membersList.filter(m => 
-            m.memberType === 'Admin' || 
-            m.memberType === 'Moderator' || 
-            m.memberType === 'Community Administrator' ||
-            m.memberType === 'Community Admin' ||
-            m.roleName === 'Admin' ||
-            m.isCommAdmin === true
-        ).length;
+        const dedupedAll = deduplicateMembers(membersList, contextUsers);
+        return dedupedAll.filter(m => {
+            const norm = normalizeMemberData(m, contextUsers);
+            return norm?.isCommAdmin;
+        }).length;
     };
 
     const handleInitiateRemoveMember = (member) => {
-        const isCommAdmin = member.memberType === 'Admin' || 
-                            member.memberType === 'Moderator' || 
-                            member.memberType === 'Community Administrator' || 
-                            member.memberType === 'Community Admin' || 
-                            member.roleName === 'Admin' || 
-                            member.isCommAdmin === true;
+        const norm = normalizeMemberData(member, contextUsers);
+        const isCommAdmin = norm?.isCommAdmin;
         const adminsCount = getAdminCount();
 
-        // System Admin has system-wide override to remove any member or admin
-        if (!isSysAdmin && isCommAdmin && adminsCount <= 1) {
+        if (isCommAdmin && adminsCount <= 1) {
             setAdminProtectionWarning({
-                title: 'Cannot Remove Community Admin',
-                message: `"${member.fullName || member.name || 'This user'}" is currently the only Community Admin for this community. A community must always have at least one active Community Admin.\n\nPlease assign another member as Community Admin using "Make Admin" before removing this admin.`
+                title: 'Solo Admin Community Rule',
+                message: `Solo Admin Community Rule: You cannot remove a solo admin until there are multiple admins.\n\n"${norm.displayName || member.fullName || member.name || 'This user'}" is currently the solo Community Admin for this community. Please assign another member as Community Admin using "Make Admin" first.`
             });
             return;
         }
@@ -3291,12 +3283,16 @@ export default function CommunityView() {
         const member = removeModalMember;
         const memberId = member.userId || member.id;
         const memberName = member.fullName || member.name || 'Member';
-        const isTargetAdmin = member.memberType === 'Admin' || 
-                              member.memberType === 'Moderator' || 
-                              member.memberType === 'Community Administrator' || 
-                              member.memberType === 'Community Admin' || 
-                              member.roleName === 'Admin' || 
-                              member.isCommAdmin === true;
+        const norm = normalizeMemberData(member, contextUsers);
+        const isTargetAdmin = norm?.isCommAdmin;
+        const adminsCount = getAdminCount();
+        if (isTargetAdmin && adminsCount <= 1) {
+            showToast('Solo Admin Community Rule: You cannot remove a solo admin until there are multiple admins.', 'warning');
+            setIsRemovingMember(false);
+            setRemoveModalMember(null);
+            return;
+        }
+
         const targetId = communityId || community?.id || 101;
 
         // 1. Call Backend API to remove member from SQL database
@@ -3550,8 +3546,8 @@ export default function CommunityView() {
         const adminsCount = getAdminCount();
         if (isCommAdmin && adminsCount <= 1 && membersList.length > 1) {
             setAdminProtectionWarning({
-                title: 'Cannot Leave as Sole Community Admin',
-                message: `You are currently the only Community Admin for "${community?.name}". A community with multiple members must always have at least one active Community Admin.\n\nPlease assign another member as Community Admin using "Make Admin" before leaving.`
+                title: 'Solo Admin Community Rule',
+                message: `Solo Admin Community Rule: You cannot leave the community as a solo admin until there are multiple admins.\n\nPlease assign another member as Community Admin using "Make Admin" before leaving.`
             });
             return;
         }
@@ -3819,13 +3815,14 @@ export default function CommunityView() {
             return;
         }
 
-        const isCommAdmin = member.memberType === 'Admin' || member.memberType === 'Moderator' || member.memberType === 'Community Administrator' || member.memberType === 'Community Admin';
+        const norm = normalizeMemberData(member, contextUsers);
+        const isCommAdmin = norm?.isCommAdmin;
         const adminsCount = getAdminCount();
 
         if (isCommAdmin && adminsCount <= 1) {
             setAdminProtectionWarning({
-                title: 'Cannot Suspend Community Admin',
-                message: `"${member.fullName || member.name || 'This user'}" is currently the only Community Admin for this community. Suspending them would leave the community without an admin.\n\nPlease assign another member as Community Admin using "Make Admin" before suspending this admin.`
+                title: 'Solo Admin Community Rule',
+                message: `Solo Admin Community Rule: You cannot suspend a solo admin until there are multiple admins.\n\n"${norm.displayName || member.fullName || member.name || 'This user'}" is currently the solo Community Admin for this community. Please assign another member as Community Admin using "Make Admin" first.`
             });
             return;
         }
@@ -5946,6 +5943,18 @@ export default function CommunityView() {
                                     )}
                                 </div>
 
+                                {getAdminCount() <= 1 && (
+                                    <div className="mx-4 sm:mx-6 mt-4 p-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700/60 flex items-center gap-3 text-xs text-amber-900 dark:text-amber-200">
+                                        <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined text-[20px]">policy</span>
+                                        </div>
+                                        <div className="flex-1 leading-relaxed">
+                                            <span className="font-extrabold text-amber-800 dark:text-amber-300">Solo Admin Community Rule:</span>{' '}
+                                            <span>You cannot make a solo admin an employee or remove them until there are multiple admins.</span>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {community.type === 'Private' && membershipStatus !== 'joined' && !isAdmin ? (
                                     <div className="p-12 text-center text-slate-500 dark:text-slate-400 space-y-2">
                                         <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 flex items-center justify-center mx-auto mb-3">
@@ -5959,6 +5968,7 @@ export default function CommunityView() {
                                         {filteredMembers
                                             .slice(0, visibleMemberCount)
                                             .map(m => {
+                                            const isSoloAdmin = m.isCommAdmin && getAdminCount() <= 1;
                                             const badgeBg = m.isCommAdmin 
                                                 ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800' 
                                                 : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800';
@@ -5997,9 +6007,9 @@ export default function CommunityView() {
                                                                         <HighlightText text={m.displayEmpId} query={memberSearchQuery} />
                                                                     </span>
                                                                 )}
-                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 flex items-center gap-0.5 ${badgeBg}`}>
-                                                                    {m.isCommAdmin && <span className="material-symbols-outlined text-[11px]">shield_person</span>}
-                                                                    {m.roleName}
+                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 flex items-center gap-0.5 ${badgeBg}`} title={isSoloAdmin ? "Solo Admin • Protected by Solo Admin Community Rule" : m.roleName}>
+                                                                    {m.isCommAdmin && <span className="material-symbols-outlined text-[11px]">{isSoloAdmin ? 'shield' : 'shield_person'}</span>}
+                                                                    {isSoloAdmin ? 'Solo Admin' : m.roleName}
                                                                 </span>
                                                             </div>
                                                             {/* Designation & Department */}
@@ -6030,26 +6040,41 @@ export default function CommunityView() {
                                                                      </button>
                                                                  ) : (
                                                                      <button 
-                                                                         onClick={() => handleToggleRole(m.userId || m.id, m.memberType, 'Employee')}
-                                                                         className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
-                                                                         title="Change role to Employee / Member"
+                                                                         disabled={isSoloAdmin}
+                                                                         onClick={() => !isSoloAdmin && handleToggleRole(m.userId || m.id, m.memberType, 'Employee')}
+                                                                         className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap shadow-2xs ${
+                                                                             isSoloAdmin 
+                                                                                 ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-800 pointer-events-auto' 
+                                                                                 : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 cursor-pointer'
+                                                                         }`}
+                                                                         title={isSoloAdmin ? "Solo Admin Community Rule: You cannot make a solo admin an employee until there are multiple admins." : "Change role to Employee / Member"}
                                                                      >
                                                                          <span className="material-symbols-outlined text-[14px]">badge</span>
                                                                          <span>Make Employee</span>
                                                                      </button>
                                                                  )}
                                                                  <button 
-                                                                     onClick={() => handleInitiateRemoveMember(m)}
-                                                                     className="px-2 py-1 rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
-                                                                     title={m.isCommAdmin && getAdminCount() <= 1 ? "Cannot remove sole Community Admin" : "Remove Member from Community"}
+                                                                     disabled={isSoloAdmin}
+                                                                     onClick={() => !isSoloAdmin && handleInitiateRemoveMember(m)}
+                                                                     className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap shadow-2xs ${
+                                                                         isSoloAdmin 
+                                                                             ? 'opacity-40 cursor-not-allowed bg-red-50/40 dark:bg-red-950/20 text-red-300 dark:text-red-900/50 border-red-200/50 dark:border-red-900/30 pointer-events-auto' 
+                                                                             : 'border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer'
+                                                                     }`}
+                                                                     title={isSoloAdmin ? "Solo Admin Community Rule: You cannot remove a solo admin until there are multiple admins." : "Remove Member from Community"}
                                                                  >
                                                                      <span className="material-symbols-outlined text-[14px]">person_remove</span>
                                                                      <span>Remove</span>
                                                                  </button>
                                                                  <button 
-                                                                     onClick={() => handleInitiateSuspendMember(m)}
-                                                                     className="px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
-                                                                     title={m.isCommAdmin && getAdminCount() <= 1 ? "Cannot suspend sole Community Admin" : "Suspend Member"}
+                                                                     disabled={isSoloAdmin}
+                                                                     onClick={() => !isSoloAdmin && handleInitiateSuspendMember(m)}
+                                                                     className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap shadow-2xs ${
+                                                                         isSoloAdmin 
+                                                                             ? 'opacity-40 cursor-not-allowed bg-amber-50/40 dark:bg-amber-950/20 text-amber-300 dark:text-amber-900/50 border-amber-200/50 dark:border-amber-900/30 pointer-events-auto' 
+                                                                             : 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer'
+                                                                     }`}
+                                                                     title={isSoloAdmin ? "Solo Admin Community Rule: You cannot suspend a solo admin until there are multiple admins." : "Suspend Member"}
                                                                  >
                                                                      <span className="material-symbols-outlined text-[14px]">person_off</span>
                                                                      <span>Suspend</span>
