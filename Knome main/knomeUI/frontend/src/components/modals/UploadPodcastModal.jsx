@@ -12,10 +12,17 @@ const ALLOWED_EXTENSIONS = ['.mp3', '.wav', '.aac', '.ogg', '.m4a', '.webm', '.f
 export default function UploadPodcastModal({ isOpen, onClose }) {
     const { currentUser } = useUser();
     const { addToast } = useToast();
-    const isCurrentUserAdmin = ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+    const isModerator = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['Moderator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    // Moderators cannot publish directly; only System Admin can bypass approval
+    const isCurrentUserAdmin = !isModerator && (
+        ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
         currentUser?.roleCode === 'SYSADM' ||
         ['System Administrator', 'System Admin', 'HR Administrator', 'Community Administrator'].includes(currentUser?.roleName) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r || '').toUpperCase())));
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())))
+    );
 
     const [tab, setTab] = useState('upload');
     const [isRecording, setIsRecording] = useState(false);
@@ -344,7 +351,8 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
             };
 
             const approvalRequired = isPodcastApprovalRequired();
-            const shouldPublishImmediately = isCurrentUserAdmin || !approvalRequired;
+            // Moderators and employees cannot publish directly; their podcasts must always be sent for approval
+            const shouldPublishImmediately = !isModerator && (isCurrentUserAdmin || !approvalRequired);
 
             if (shouldPublishImmediately) {
                 const createdRes = await podcastsApi.create(podcastData);
@@ -410,7 +418,7 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
                 const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
                 localStorage.setItem('knome_notifications', JSON.stringify([adminNotif, ...existingNotifs]));
 
-                addToast(`Podcast "${title.trim()}" submitted successfully! It has been sent to the Admin for approval before going live.`, 'success');
+                addToast(`Podcast "${title.trim()}" submitted successfully! It has been sent for approval before going live.`, 'success');
             }
             
             setIsUploading(false);

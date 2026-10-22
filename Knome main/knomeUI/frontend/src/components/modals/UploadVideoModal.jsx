@@ -28,9 +28,16 @@ const dataUrlToFile = (dataUrl, filename = 'thumbnail.jpg') => {
 export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
     const { currentUser } = useUser();
     const { addToast } = useToast();
-    const isCurrentUserAdmin = ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+    const isModerator = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['Moderator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    // Moderators cannot publish directly; only System Admin can bypass approval
+    const isCurrentUserAdmin = !isModerator && (
+        ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
         ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin'].includes(currentUser?.roleName) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r || '').toUpperCase())));
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())))
+    );
 
     const [sourceTab, setSourceTab] = useState('direct');
     const [title, setTitle] = useState('');
@@ -459,7 +466,8 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
             };
 
             const approvalRequired = isVideoApprovalRequired();
-            const shouldPublishImmediately = isCurrentUserAdmin || !approvalRequired;
+            // Moderators and employees cannot publish directly; their videos must always be sent for approval
+            const shouldPublishImmediately = !isModerator && (isCurrentUserAdmin || !approvalRequired);
 
             if (shouldPublishImmediately) {
                 await apiClient.post('/videos', dto);
@@ -515,7 +523,7 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
                 const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
                 localStorage.setItem('knome_notifications', JSON.stringify([adminNotif, ...existingNotifs]));
 
-                addToast(`Video "${safeTitle}" submitted successfully! It has been sent to the Admin for approval before going live.`, 'success');
+                addToast(`Video "${safeTitle}" submitted successfully! It has been sent for approval before going live.`, 'success');
             }
             
             // Success

@@ -173,6 +173,8 @@ public class MediaController : KnomeControllerBase
             {
                 var enableVideos = await _settingService.GetEnableVideosAsync();
                 var enablePodcasts = await _settingService.GetEnablePodcastsAsync();
+                var enableArticles = await _settingService.GetEnableArticlesAsync();
+                var enableWiki = await _settingService.GetEnableWikiAsync();
                 list = list.Where(item => {
                     var mediaType = "video";
                     if (item.TryGetProperty("mediaType", out var mtProp))
@@ -181,7 +183,9 @@ public class MediaController : KnomeControllerBase
                         mediaType = tProp.GetString()?.ToLower() ?? "video";
 
                     if ((mediaType == "podcast" || mediaType == "audio") && !enablePodcasts) return false;
-                    if (mediaType != "podcast" && mediaType != "audio" && !enableVideos) return false;
+                    if (mediaType == "video" && !enableVideos) return false;
+                    if (mediaType == "article" && !enableArticles) return false;
+                    if (mediaType == "wiki" && !enableWiki) return false;
                     return true;
                 }).ToList();
             }
@@ -212,6 +216,16 @@ public class MediaController : KnomeControllerBase
             {
                 await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnablePodcastsKey, "Podcasts");
                 requireApproval = await _settingService.GetRequirePodcastApprovalAsync();
+            }
+            else if (mediaType == "article")
+            {
+                await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnableArticlesKey, "Articles");
+                requireApproval = await _settingService.GetRequireContentAndCommunityApprovalAsync();
+            }
+            else if (mediaType == "wiki")
+            {
+                await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnableWikiKey, "Wiki");
+                requireApproval = await _settingService.GetRequireContentAndCommunityApprovalAsync();
             }
             else
             {
@@ -269,7 +283,12 @@ public class MediaController : KnomeControllerBase
                     var filtered = new List<JsonElement>();
                     foreach (var el in doc.RootElement.EnumerateArray())
                     {
-                        if (el.TryGetProperty("id", out var idProp) && idProp.GetString() == id)
+                        string? elId = null;
+                        if (el.TryGetProperty("id", out var idProp))
+                        {
+                            elId = idProp.ValueKind == JsonValueKind.String ? idProp.GetString() : idProp.ToString();
+                        }
+                        if (string.Equals(elId, id, StringComparison.OrdinalIgnoreCase))
                             continue;
                         filtered.Add(el.Clone());
                     }

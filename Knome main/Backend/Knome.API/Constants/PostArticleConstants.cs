@@ -37,13 +37,15 @@ public static class ArticleStatuses
     public const string Scheduled = "Scheduled";
     public const string Draft = "Draft";
     public const string Archived = "Archived";
+    public const string PendingApproval = "PendingApproval";
+    public const string Rejected = "Rejected";
 
-    public static readonly string[] All = { Published, Scheduled, Draft, Archived };
+    public static readonly string[] All = { Published, Scheduled, Draft, Archived, PendingApproval, Rejected };
 
     public static bool IsValid(string? status)
     {
         if (string.IsNullOrWhiteSpace(status)) return false;
-        return status == Published || status == Scheduled || status == Draft || status == Archived;
+        return status == Published || status == Scheduled || status == Draft || status == Archived || status == PendingApproval || status == Rejected;
     }
 }
 

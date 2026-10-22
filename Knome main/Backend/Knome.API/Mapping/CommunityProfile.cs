@@ -1,5 +1,6 @@
 using System.Linq;
 using AutoMapper;
+using Knome.API.Constants;
 using Knome.API.DTOs.Communities;
 using Knome.API.Models;
 

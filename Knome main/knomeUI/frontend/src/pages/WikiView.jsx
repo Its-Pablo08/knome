@@ -182,6 +182,14 @@ export default function WikiView() {
     const [isCollaboratorsModalOpen, setIsCollaboratorsModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [isVersionModalOpen, setIsVersionModalOpen] = useState(false);
+    const isModerator = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['Moderator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['System Administrator', 'System Admin'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
     const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
 
     const loadWikiData = async (forceFresh = false) => {
@@ -189,6 +197,11 @@ export default function WikiView() {
         setIsLoading(true);
         try {
             const data = await wikiApi.getWiki(wikiId);
+            if (data?.status === 'PendingApproval' && !isModerator && !isSysAdmin) {
+                addToast('This wiki documentation is currently awaiting approval.', 'warning');
+                navigate('/wiki');
+                return null;
+            }
             setWiki(data);
             // Record view count once and update state with authoritative unique count
             if (!forceFresh) {

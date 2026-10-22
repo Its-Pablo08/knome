@@ -18,8 +18,8 @@ public class UpdateWikiValidator : AbstractValidator<UpdateWikiDto>
             .NotEmpty().WithMessage("Wiki overview content is required.");
 
         RuleFor(x => x.Status)
-            .Must(s => s == "Draft" || s == "Published" || s == "Archived")
-            .WithMessage("Status must be 'Draft', 'Published', or 'Archived'.");
+            .Must(s => s == "Draft" || s == "Published" || s == "Archived" || s == "PendingApproval" || s == "Rejected")
+            .WithMessage("Status must be 'Draft', 'Published', 'Archived', 'PendingApproval', or 'Rejected'.");
 
         RuleFor(x => x.CategoryId)
             .GreaterThan(0)
