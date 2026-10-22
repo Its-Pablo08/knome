@@ -4,7 +4,7 @@ import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-do
 import { useUser, getUserStatusConfig, deduplicateMembers, roleNameToCode } from '../components/contexts/UserContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
 import { useToast } from '../components/contexts/ToastContext';
-import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, videosApi, communitiesApi, mediaApi, clipsApi, settingsApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
+import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, videosApi, communitiesApi, mediaApi, clipsApi, settingsApi, wikiApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
 import * as XLSX from 'xlsx';
 import useScrollLoading from '../hooks/useScrollLoading';
@@ -723,6 +723,13 @@ export default function AdminConsole() {
     // Pending Media Approvals & Preview State
     const [previewingMedia, setPreviewingMedia] = useState(null);
 
+    // ── Approval Logs Modal State (Scoped to selected section) ──
+    const [isApprovalLogsModalOpen, setIsApprovalLogsModalOpen] = useState(false);
+    const [approvalLogsSectionFilter, setApprovalLogsSectionFilter] = useState('all'); // 'all' | 'media' | 'community' | 'moderation' | 'roles'
+    const [approvalLogsMediaSubFilter, setApprovalLogsMediaSubFilter] = useState('All'); // 'All' | 'Article' | 'Wiki' | 'Video' | 'Podcast'
+    const [approvalLogsActionFilter, setApprovalLogsActionFilter] = useState('All'); // 'All' | 'Approved' | 'Rejected'
+    const [approvalLogsSearchTerm, setApprovalLogsSearchTerm] = useState('');
+
     const DEFAULT_SEED_PENDING_MEDIA = [
         {
             id: 'seed_pending_video_1',
@@ -1029,6 +1036,26 @@ export default function AdminConsole() {
         window.dispatchEvent(new CustomEvent('community-joined-change'));
         window.dispatchEvent(new CustomEvent('knome_notification_received', { detail: approvalNotif }));
 
+        const commLog = {
+            id: `log_comm_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+            timestamp: new Date().toISOString(),
+            moderator: currentUser?.name || 'Admin',
+            moderatorRole: isModerator ? 'Moderator' : 'System Admin',
+            action: 'CommunityApproved',
+            section: 'community',
+            outcome: 'Approved',
+            target: `Approved new community "${comm.name}" (${comm.category || 'General'}) created by ${comm.creatorName || 'Employee'}`,
+            title: comm.name,
+            authorName: comm.creatorName || 'Employee',
+            color: 'text-emerald-500 font-bold'
+        };
+        setAuditTrail(prev => [commLog, ...prev]);
+        try {
+            const existing = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
+            localStorage.setItem('knome_audit_trail', JSON.stringify([commLog, ...existing]));
+        } catch (e) {}
+
         showToast(`✨ Community "${comm.name}" has been approved and published live!`);
         refreshPendingCommunityApprovals();
     };
@@ -1086,6 +1113,26 @@ export default function AdminConsole() {
         window.dispatchEvent(new CustomEvent('community-joined-change'));
         window.dispatchEvent(new CustomEvent('knome_notification_received', { detail: rejectNotif }));
 
+        const commRejectLog = {
+            id: `log_comm_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+            timestamp: new Date().toISOString(),
+            moderator: currentUser?.name || 'Admin',
+            moderatorRole: isModerator ? 'Moderator' : 'System Admin',
+            action: 'CommunityRejected',
+            section: 'community',
+            outcome: 'Rejected',
+            target: `Rejected community creation request for "${comm.name}" submitted by ${comm.creatorName || 'Employee'}`,
+            title: comm.name,
+            authorName: comm.creatorName || 'Employee',
+            color: 'text-rose-500 font-bold'
+        };
+        setAuditTrail(prev => [commRejectLog, ...prev]);
+        try {
+            const existing = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
+            localStorage.setItem('knome_audit_trail', JSON.stringify([commRejectLog, ...existing]));
+        } catch (e) {}
+
         showToast(`Community request for "${comm.name}" was rejected.`);
         refreshPendingCommunityApprovals();
     };
@@ -1138,6 +1185,39 @@ export default function AdminConsole() {
                     console.error("Failed to approve and publish podcast:", err);
                 });
                 window.dispatchEvent(new CustomEvent('podcast-published'));
+            } else if (mediaItem.mediaType === 'Article') {
+                const articleId = mediaItem.articleId || mediaItem.dto?.articleId || (typeof mediaItem.id === 'string' ? mediaItem.id.replace('pending_article_', '') : mediaItem.id);
+                const updateDto = {
+                    title: mediaItem.title,
+                    description: mediaItem.description || null,
+                    contentHtml: mediaItem.contentHtml || mediaItem.dto?.contentHtml || `<p>${mediaItem.title}</p>`,
+                    categoryId: mediaItem.dto?.categoryId || 7,
+                    status: 'Published',
+                    scheduledDate: null,
+                    tags: mediaItem.tags || mediaItem.dto?.tags || [],
+                    attachmentUrls: mediaItem.dto?.attachmentUrls || []
+                };
+                await apiClient.put(`/articles/${articleId}`, updateDto).catch((err) => {
+                    console.error("Failed to approve and publish article:", err);
+                });
+                window.dispatchEvent(new CustomEvent('article-published'));
+                window.dispatchEvent(new CustomEvent('article-created'));
+            } else if (mediaItem.mediaType === 'Wiki') {
+                const wikiId = mediaItem.wikiId || mediaItem.dto?.wikiId || (typeof mediaItem.id === 'string' ? mediaItem.id.replace('pending_wiki_', '') : mediaItem.id);
+                const updatePayload = {
+                    title: mediaItem.title,
+                    description: mediaItem.description || null,
+                    contentHtml: mediaItem.contentHtml || mediaItem.dto?.contentHtml || `<p>${mediaItem.title}</p>`,
+                    status: 'Published',
+                    coverImageUrl: mediaItem.thumbnail || mediaItem.dto?.coverImageUrl || null,
+                    tags: mediaItem.tags || mediaItem.dto?.tags || [],
+                    changeSummary: 'Approved and published by Moderator'
+                };
+                await wikiApi.updateWiki(wikiId, updatePayload).catch((err) => {
+                    console.error("Failed to approve and publish wiki:", err);
+                });
+                window.dispatchEvent(new CustomEvent('wiki-published'));
+                window.dispatchEvent(new CustomEvent('wiki-created'));
             } else if (mediaItem.mediaType === 'Series' && mediaItem.seriesData) {
                 if (Array.isArray(mediaItem.customVideos)) {
                     try {
@@ -1163,10 +1243,10 @@ export default function AdminConsole() {
             const updated = pendingMediaApprovals.filter(m => m.id !== mediaItem.id);
             setPendingMediaApprovals(updated);
             localStorage.setItem('knome_pending_media_approvals', JSON.stringify(updated));
-            const ruleKey = mediaItem.mediaType === 'Video' ? 'VIDEO' : 'PODCAST';
-            const defaultPoints = 8; // Official Karma rule: +8 pts per approved Video/Podcast (Max 24 pts/day)
+            const ruleKey = mediaItem.mediaType === 'Video' ? 'VIDEO' : mediaItem.mediaType === 'Podcast' ? 'PODCAST' : mediaItem.mediaType === 'Article' ? 'ARTICLE' : 'WIKI';
+            const defaultPoints = 8; // Official Karma rule: +8 pts per approved submission (Max 24 pts/day)
 
-            // 1. Award Karma Points ONLY to the user who uploaded the video or podcast
+            // 1. Award Karma Points ONLY to the user who submitted
             let pointsAwarded = 8;
             if (targetAuthorId && awardRuleKarma) {
                 const res = awardRuleKarma(targetAuthorId, ruleKey, { customTitle: `Approved ${mediaItem.mediaType}: "${mediaItem.title}"` });
@@ -1181,31 +1261,41 @@ export default function AdminConsole() {
                     id: `approved_notif_${Date.now()}`,
                     type: 'media_approved',
                     category: 'Karma',
-                    text: `🎉 Your ${mediaItem.mediaType} "${mediaItem.title}" was approved by Admin! You earned +${pointsAwarded} Karma Points!`,
+                    text: `🎉 Your ${mediaItem.mediaType} "${mediaItem.title}" was approved by Moderator! You earned +${pointsAwarded} Karma Points!`,
                     senderName: 'System Admin',
                     senderUserId: currentUser?.userId || currentUser?.id || 'admin',
                     createdDate: new Date().toISOString(),
                     createdAt: new Date().toISOString(),
                     targetUserId: targetAuthorId,
-                    targetUrl: mediaItem.mediaType === 'Video' ? '/videos' : '/podcasts',
+                    targetUrl: mediaItem.mediaType === 'Video' ? '/videos' : mediaItem.mediaType === 'Podcast' ? '/podcasts' : mediaItem.mediaType === 'Article' ? '/articles' : '/wiki',
                     unread: true
                 };
                 const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
                 localStorage.setItem('knome_notifications', JSON.stringify([authorNotif, ...existingNotifs]));
             }
 
-            // 3. Log into Governance Audit Trail
-            setAuditTrail(prev => [
-                {
-                    id: Date.now(),
-                    time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
-                    moderator: currentUser?.name || 'System Admin',
-                    action: 'MediaApproved',
-                    target: `Approved ${mediaItem.mediaType} "${mediaItem.title}" by ${mediaItem.authorName || 'Author'} (+${pointsAwarded} Karma awarded to Author ID #${targetAuthorId})`,
-                    color: 'text-emerald-500'
-                },
-                ...prev
-            ]);
+            // 3. Log into Governance Audit Trail & Persistent Storage
+            const approvedLog = {
+                id: `log_media_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+                timestamp: new Date().toISOString(),
+                moderator: currentUser?.name || 'Moderator',
+                moderatorRole: isModerator ? 'Moderator' : 'System Admin',
+                action: 'MediaApproved',
+                section: 'media',
+                mediaType: mediaItem.mediaType,
+                outcome: 'Approved',
+                title: mediaItem.title,
+                authorName: mediaItem.authorName || 'Author',
+                target: `Approved ${mediaItem.mediaType} "${mediaItem.title}" by ${mediaItem.authorName || 'Author'} (+${pointsAwarded} Karma awarded to Author ID #${targetAuthorId})`,
+                color: 'text-emerald-500 font-bold'
+            };
+
+            setAuditTrail(prev => [approvedLog, ...prev]);
+            try {
+                const existing = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
+                localStorage.setItem('knome_audit_trail', JSON.stringify([approvedLog, ...existing]));
+            } catch (e) {}
 
             showToast(`✅ ${mediaItem.mediaType} "${mediaItem.title}" approved & published! +${pointsAwarded} Karma awarded to ${mediaItem.authorName || 'Author'}.`);
         } catch (err) {
@@ -1216,6 +1306,35 @@ export default function AdminConsole() {
 
     const handleRejectMedia = async (mediaItem) => {
         try {
+            if (mediaItem.mediaType === 'Article') {
+                const articleId = mediaItem.articleId || mediaItem.dto?.articleId || (typeof mediaItem.id === 'string' ? mediaItem.id.replace('pending_article_', '') : mediaItem.id);
+                const updateDto = {
+                    title: mediaItem.title,
+                    description: mediaItem.description || null,
+                    contentHtml: mediaItem.contentHtml || mediaItem.dto?.contentHtml || `<p>${mediaItem.title}</p>`,
+                    categoryId: mediaItem.dto?.categoryId || 7,
+                    status: 'Rejected',
+                    scheduledDate: null,
+                    tags: mediaItem.tags || mediaItem.dto?.tags || [],
+                    attachmentUrls: mediaItem.dto?.attachmentUrls || []
+                };
+                await apiClient.put(`/articles/${articleId}`, updateDto).catch(() => {});
+                window.dispatchEvent(new CustomEvent('article-rejected'));
+            } else if (mediaItem.mediaType === 'Wiki') {
+                const wikiId = mediaItem.wikiId || mediaItem.dto?.wikiId || (typeof mediaItem.id === 'string' ? mediaItem.id.replace('pending_wiki_', '') : mediaItem.id);
+                const updatePayload = {
+                    title: mediaItem.title,
+                    description: mediaItem.description || null,
+                    contentHtml: mediaItem.contentHtml || mediaItem.dto?.contentHtml || `<p>${mediaItem.title}</p>`,
+                    status: 'Rejected',
+                    coverImageUrl: mediaItem.thumbnail || mediaItem.dto?.coverImageUrl || null,
+                    tags: mediaItem.tags || mediaItem.dto?.tags || [],
+                    changeSummary: 'Rejected by Moderator'
+                };
+                await wikiApi.updateWiki(wikiId, updatePayload).catch(() => {});
+                window.dispatchEvent(new CustomEvent('wiki-rejected'));
+            }
+
             await mediaApi.removePendingApproval(mediaItem.id);
         } catch (errRem) {
             console.warn("Failed removing rejected media from backend queue:", errRem);
@@ -1230,18 +1349,40 @@ export default function AdminConsole() {
                 id: `rejected_notif_${Date.now()}`,
                 type: 'media_rejected',
                 category: 'System',
-                text: `⚠️ Your ${mediaItem.mediaType} "${mediaItem.title}" was reviewed and not approved by Admin.`,
+                text: `⚠️ Your ${mediaItem.mediaType} "${mediaItem.title}" was reviewed and not approved by Moderator.`,
                 senderName: 'System Admin',
                 senderUserId: currentUser?.userId || currentUser?.id || 'admin',
                 createdDate: new Date().toISOString(),
                 createdAt: new Date().toISOString(),
                 targetUserId: mediaItem.authorId,
-                targetUrl: mediaItem.mediaType === 'Video' ? '/videos' : '/podcasts',
+                targetUrl: mediaItem.mediaType === 'Video' ? '/videos' : mediaItem.mediaType === 'Podcast' ? '/podcasts' : mediaItem.mediaType === 'Article' ? '/articles' : '/wiki',
                 unread: true
             };
             const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
             localStorage.setItem('knome_notifications', JSON.stringify([authorNotif, ...existingNotifs]));
         }
+
+        const rejectedLog = {
+            id: `log_media_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+            timestamp: new Date().toISOString(),
+            moderator: currentUser?.name || 'Moderator',
+            moderatorRole: isModerator ? 'Moderator' : 'System Admin',
+            action: 'MediaRejected',
+            section: 'media',
+            mediaType: mediaItem.mediaType,
+            outcome: 'Rejected',
+            title: mediaItem.title,
+            authorName: mediaItem.authorName || 'Author',
+            target: `Rejected ${mediaItem.mediaType} "${mediaItem.title}" submitted by ${mediaItem.authorName || 'Author'}`,
+            color: 'text-rose-500 font-bold'
+        };
+
+        setAuditTrail(prev => [rejectedLog, ...prev]);
+        try {
+            const existing = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
+            localStorage.setItem('knome_audit_trail', JSON.stringify([rejectedLog, ...existing]));
+        } catch (e) {}
 
         showToast(`Rejected ${mediaItem.mediaType} "${mediaItem.title}"`);
     };
@@ -1255,7 +1396,7 @@ export default function AdminConsole() {
 
         const isConfirmed = await confirm({
             title: 'Approve All Media Submissions?',
-            message: `Are you sure you want to approve all ${count} pending media submission${count === 1 ? '' : 's'}? All approved videos and podcasts will be released and published to the enterprise hub.`,
+            message: `Are you sure you want to approve all ${count} pending submission${count === 1 ? '' : 's'}? All approved videos, podcasts, articles, and wikis will be released and published to the enterprise platform.`,
             confirmText: 'Yes, Approve All',
             cancelText: 'Cancel',
             variant: 'success'
@@ -1290,26 +1431,355 @@ export default function AdminConsole() {
                     await podcastsApi.create(postPodcast).catch((err) => {
                         console.error("Failed to batch approve podcast:", err);
                     });
+                } else if (m.mediaType === 'Article') {
+                    const articleId = m.articleId || m.dto?.articleId || (typeof m.id === 'string' ? m.id.replace('pending_article_', '') : m.id);
+                    const updateDto = {
+                        title: m.title,
+                        description: m.description || null,
+                        contentHtml: m.contentHtml || m.dto?.contentHtml || `<p>${m.title}</p>`,
+                        categoryId: m.dto?.categoryId || 7,
+                        status: 'Published',
+                        scheduledDate: null,
+                        tags: m.tags || m.dto?.tags || [],
+                        attachmentUrls: m.dto?.attachmentUrls || []
+                    };
+                    await apiClient.put(`/articles/${articleId}`, updateDto).catch(() => {});
+                } else if (m.mediaType === 'Wiki') {
+                    const wikiId = m.wikiId || m.dto?.wikiId || (typeof m.id === 'string' ? m.id.replace('pending_wiki_', '') : m.id);
+                    const updatePayload = {
+                        title: m.title,
+                        description: m.description || null,
+                        contentHtml: m.contentHtml || m.dto?.contentHtml || `<p>${m.title}</p>`,
+                        status: 'Published',
+                        coverImageUrl: m.thumbnail || m.dto?.coverImageUrl || null,
+                        tags: m.tags || m.dto?.tags || [],
+                        changeSummary: 'Approved and published by Moderator'
+                    };
+                    await wikiApi.updateWiki(wikiId, updatePayload).catch(() => {});
                 }
                 await mediaApi.removePendingApproval(m.id).catch(() => {});
             } catch (e) {}
         }
         window.dispatchEvent(new CustomEvent('video-published'));
         window.dispatchEvent(new CustomEvent('podcast-published'));
+        window.dispatchEvent(new CustomEvent('article-published'));
+        window.dispatchEvent(new CustomEvent('wiki-published'));
 
-        showToast(`Successfully batch-approved all ${count} pending media submission${count === 1 ? '' : 's'}.`);
-        setAuditTrail(prev => [
-            {
-                id: Date.now(),
-                time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
-                moderator: currentUser?.name || 'System Admin',
-                action: 'MediaBatchApprove',
-                target: `Batch approved all ${count} video & podcast submissions`,
-                color: 'text-emerald-500'
-            },
-            ...prev
-        ]);
+        showToast(`Successfully batch-approved all ${count} pending submission${count === 1 ? '' : 's'}.`);
+        const batchLog = {
+            id: `log_batch_${Date.now()}`,
+            time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+            timestamp: new Date().toISOString(),
+            moderator: currentUser?.name || 'Moderator',
+            moderatorRole: isModerator ? 'Moderator' : 'System Admin',
+            action: 'MediaBatchApprove',
+            section: 'media',
+            mediaType: 'All',
+            outcome: 'Approved',
+            title: `Batch (${count} items)`,
+            authorName: 'Various Authors',
+            target: `Batch approved all ${count} media submissions (videos, podcasts, articles, wikis)`,
+            color: 'text-emerald-500 font-bold'
+        };
+
+        setAuditTrail(prev => [batchLog, ...prev]);
+        try {
+            const existing = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
+            localStorage.setItem('knome_audit_trail', JSON.stringify([batchLog, ...existing]));
+        } catch (e) {}
     };
+
+    // ─── APPROVAL LOGS HELPERS & SELECTORS (SCOPED TO SELECTED SECTION) ───
+    const getCurrentSectionKey = () => {
+        if (activeTab === 'media_approvals') return 'media';
+        if (activeTab === 'community_approvals') return 'community';
+        if (activeTab === 'moderation') return 'moderation';
+        if (activeTab === 'role_requests' || activeTab === 'users') return 'roles';
+        return 'all';
+    };
+
+    const getCurrentSectionLabel = () => {
+        if (activeTab === 'media_approvals') return 'Media Approvals';
+        if (activeTab === 'community_approvals') return 'Community Approvals';
+        if (activeTab === 'moderation') return 'Content Moderation';
+        if (activeTab === 'role_requests' || activeTab === 'users') return 'Role Approvals';
+        return 'All Approvals';
+    };
+
+    const getStructuredApprovalLogs = () => {
+        const defaultApprovalLogs = [
+            {
+                id: 'seed_log_wiki_1',
+                time: 'Oct 22, 2026, 06:15 PM',
+                timestamp: '2026-10-22T12:45:00.000Z',
+                moderator: 'Deepak Simrodia',
+                moderatorRole: 'Moderator',
+                action: 'WikiApproved',
+                section: 'media',
+                mediaType: 'Wiki',
+                outcome: 'Approved',
+                title: 'Enterprise Architecture & Microservice Standards',
+                authorName: 'Loveneesh Sharma',
+                target: 'Approved Wiki "Enterprise Architecture & Microservice Standards" by Loveneesh Sharma (+8 Karma awarded)',
+                color: 'text-emerald-500 font-bold'
+            },
+            {
+                id: 'seed_log_article_1',
+                time: 'Oct 22, 2026, 05:40 PM',
+                timestamp: '2026-10-22T12:10:00.000Z',
+                moderator: 'Deepak Simrodia',
+                moderatorRole: 'Moderator',
+                action: 'ArticleApproved',
+                section: 'media',
+                mediaType: 'Article',
+                outcome: 'Approved',
+                title: 'High-Concurrency ASP.NET Core Architecture',
+                authorName: 'Rajesh Kumar',
+                target: 'Approved Article "High-Concurrency ASP.NET Core Architecture" by Rajesh Kumar (+8 Karma awarded to Author ID #3)',
+                color: 'text-emerald-500 font-bold'
+            },
+            {
+                id: 'seed_log_video_1',
+                time: 'Oct 22, 2026, 04:30 PM',
+                timestamp: '2026-10-22T11:00:00.000Z',
+                moderator: 'Deepak Simrodia',
+                moderatorRole: 'Moderator',
+                action: 'VideoApproved',
+                section: 'media',
+                mediaType: 'Video',
+                outcome: 'Approved',
+                title: 'Q3 Enterprise AI Strategy & Architecture Townhall',
+                authorName: 'Rahul Verma',
+                target: 'Approved Video "Q3 Enterprise AI Strategy & Architecture Townhall" by Rahul Verma (+8 Karma awarded)',
+                color: 'text-emerald-500 font-bold'
+            },
+            {
+                id: 'seed_log_podcast_1',
+                time: 'Oct 22, 2026, 03:50 PM',
+                timestamp: '2026-10-22T10:20:00.000Z',
+                moderator: 'Deepak Simrodia',
+                moderatorRole: 'Moderator',
+                action: 'PodcastApproved',
+                section: 'media',
+                mediaType: 'Podcast',
+                outcome: 'Approved',
+                title: 'Episode 14: Modern Cloud Architecture & Microservices',
+                authorName: 'Deepak Simrodia',
+                target: 'Approved Podcast "Episode 14: Modern Cloud Architecture & Microservices" (+8 Karma awarded)',
+                color: 'text-emerald-500 font-bold'
+            },
+            {
+                id: 'seed_log_comm_1',
+                time: 'Oct 22, 2026, 03:10 PM',
+                timestamp: '2026-10-22T09:40:00.000Z',
+                moderator: 'System Admin',
+                moderatorRole: 'System Admin',
+                action: 'CommunityApproved',
+                section: 'community',
+                outcome: 'Approved',
+                title: 'Cloud DevOps & Infrastructure',
+                authorName: 'Raman Kumar',
+                target: 'Approved new community "Cloud DevOps & Infrastructure" (Technology) created by Raman Kumar',
+                color: 'text-emerald-500 font-bold'
+            },
+            {
+                id: 'seed_log_comm_2',
+                time: 'Oct 21, 2026, 06:12 PM',
+                timestamp: '2026-10-21T12:42:00.000Z',
+                moderator: 'System Admin',
+                moderatorRole: 'System Admin',
+                action: 'CommunityRejected',
+                section: 'community',
+                outcome: 'Rejected',
+                title: 'Off-Topic Social Club',
+                authorName: 'Satendra Singh',
+                target: 'Rejected community creation request for "Off-Topic Social Club" submitted by Satendra Singh',
+                color: 'text-rose-500 font-bold'
+            },
+            {
+                id: 'seed_log_mod_1',
+                time: 'Oct 21, 2026, 04:22 PM',
+                timestamp: '2026-10-21T10:52:00.000Z',
+                moderator: 'Deepak Simrodia',
+                moderatorRole: 'Moderator',
+                action: 'RemoveContent',
+                section: 'moderation',
+                outcome: 'Action Taken',
+                title: 'Post #10072',
+                authorName: 'Reported User',
+                target: 'Report #10 (Post #10072) -> Removed Content: Inappropriate language violation',
+                color: 'text-rose-500 font-bold'
+            },
+            {
+                id: 'seed_log_mod_2',
+                time: 'Oct 20, 2026, 11:30 AM',
+                timestamp: '2026-10-20T06:00:00.000Z',
+                moderator: 'Deepak Simrodia',
+                moderatorRole: 'Moderator',
+                action: 'DismissReport',
+                section: 'moderation',
+                outcome: 'Dismissed',
+                title: 'Clip #104',
+                authorName: 'Reporter',
+                target: 'Report #12 (Clip #104) -> Dismissed: Verified educational enterprise content',
+                color: 'text-slate-500'
+            }
+        ];
+
+        let localSaved = [];
+        try {
+            localSaved = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
+        } catch (e) {}
+
+        const sourceList = Array.isArray(auditTrail) && auditTrail.length > 0
+            ? auditTrail
+            : (Array.isArray(localSaved) && localSaved.length > 0 ? localSaved : defaultApprovalLogs);
+
+        const seenIds = new Set();
+        const combined = [...sourceList, ...defaultApprovalLogs].filter(item => {
+            const idKey = String(item.id || item.target || '');
+            if (!idKey || seenIds.has(idKey)) return false;
+            seenIds.add(idKey);
+            return true;
+        });
+
+        return combined.map(item => {
+            const act = item.action || '';
+            const tgt = item.target || '';
+            const tgtLower = tgt.toLowerCase();
+            const actLower = act.toLowerCase();
+
+            // Infer section
+            let section = item.section;
+            if (!section) {
+                if (actLower.includes('media') || /article|wiki|video|podcast|clip/i.test(tgt)) {
+                    section = 'media';
+                } else if (actLower.includes('community') || /community/i.test(tgt)) {
+                    section = 'community';
+                } else if (actLower.includes('report') || actLower.includes('dismiss') || actLower.includes('remove') || actLower.includes('reinstate') || /report/i.test(tgt)) {
+                    section = 'moderation';
+                } else if (actLower.includes('role') || /role/i.test(tgt)) {
+                    section = 'roles';
+                } else {
+                    section = 'media';
+                }
+            }
+
+            // Infer mediaType
+            let mediaType = item.mediaType;
+            if (!mediaType) {
+                if (/wiki/i.test(tgt) || actLower.includes('wiki')) mediaType = 'Wiki';
+                else if (/article/i.test(tgt) || actLower.includes('article')) mediaType = 'Article';
+                else if (/video/i.test(tgt) || actLower.includes('video')) mediaType = 'Video';
+                else if (/podcast/i.test(tgt) || actLower.includes('podcast')) mediaType = 'Podcast';
+                else if (/clip/i.test(tgt) || actLower.includes('clip')) mediaType = 'Clip';
+            }
+
+            // Infer outcome
+            let outcome = item.outcome;
+            if (!outcome) {
+                if (actLower.includes('reject') || tgtLower.includes('reject')) {
+                    outcome = 'Rejected';
+                } else if (actLower.includes('approve') || tgtLower.includes('approve') || actLower.includes('activate')) {
+                    outcome = 'Approved';
+                } else if (actLower.includes('dismiss') || tgtLower.includes('dismiss')) {
+                    outcome = 'Dismissed';
+                } else if (actLower.includes('remove') || tgtLower.includes('remove') || actLower.includes('suspend')) {
+                    outcome = 'Action Taken';
+                } else {
+                    outcome = 'Approved';
+                }
+            }
+
+            return {
+                id: item.id || `log_${Math.random()}`,
+                time: item.time || new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+                timestamp: item.timestamp || new Date().toISOString(),
+                moderator: item.moderator || 'System Admin',
+                moderatorRole: item.moderatorRole || (item.moderator?.toLowerCase().includes('mod') ? 'Moderator' : 'Administrator'),
+                action: act,
+                target: tgt,
+                section: section,
+                mediaType: mediaType,
+                outcome: outcome,
+                title: item.title || '',
+                authorName: item.authorName || '',
+                color: item.color || (outcome === 'Approved' ? 'text-emerald-500 font-bold' : outcome === 'Rejected' ? 'text-rose-500 font-bold' : 'text-slate-600')
+            };
+        });
+    };
+
+    const getCurrentSectionLogsCount = () => {
+        const sec = getCurrentSectionKey();
+        const logs = getStructuredApprovalLogs();
+        if (sec === 'all') return logs.length;
+        return logs.filter(l => l.section === sec).length;
+    };
+
+    const handleOpenApprovalLogsModal = () => {
+        const activeSec = getCurrentSectionKey();
+        setApprovalLogsSectionFilter(activeSec !== 'all' ? activeSec : 'media');
+        setApprovalLogsMediaSubFilter('All');
+        setApprovalLogsActionFilter('All');
+        setApprovalLogsSearchTerm('');
+        setIsApprovalLogsModalOpen(true);
+    };
+
+    const modalFilteredLogs = useMemo(() => {
+        let list = getStructuredApprovalLogs();
+
+        // 1. Section Filter
+        if (approvalLogsSectionFilter && approvalLogsSectionFilter !== 'all') {
+            list = list.filter(l => l.section === approvalLogsSectionFilter);
+        }
+
+        // 2. Media Sub-Filter
+        if (approvalLogsMediaSubFilter !== 'All') {
+            list = list.filter(l => l.mediaType === approvalLogsMediaSubFilter);
+        }
+
+        // 3. Action / Outcome Filter
+        if (approvalLogsActionFilter === 'Approved') {
+            list = list.filter(l => l.outcome === 'Approved');
+        } else if (approvalLogsActionFilter === 'Rejected') {
+            list = list.filter(l => l.outcome === 'Rejected' || l.outcome === 'Action Taken');
+        }
+
+        // 4. Search Filter
+        if (approvalLogsSearchTerm.trim()) {
+            const q = approvalLogsSearchTerm.trim().toLowerCase();
+            list = list.filter(l => 
+                (l.target && l.target.toLowerCase().includes(q)) ||
+                (l.moderator && l.moderator.toLowerCase().includes(q)) ||
+                (l.action && l.action.toLowerCase().includes(q)) ||
+                (l.mediaType && l.mediaType.toLowerCase().includes(q)) ||
+                (l.title && l.title.toLowerCase().includes(q)) ||
+                (l.authorName && l.authorName.toLowerCase().includes(q))
+            );
+        }
+
+        return list;
+    }, [auditTrail, approvalLogsSectionFilter, approvalLogsMediaSubFilter, approvalLogsActionFilter, approvalLogsSearchTerm]);
+
+    const handleExportFilteredApprovalLogsCSV = () => {
+        const BOM = '\uFEFF';
+        const headers = ['LogId', 'Timestamp', 'Moderator', 'Section', 'MediaType', 'Outcome', 'TargetDetails'];
+        const rows = modalFilteredLogs.map(a => [
+            a.id, a.time, a.moderator, a.section, a.mediaType || 'N/A', a.outcome, a.target
+        ]);
+        const csvContent = BOM + [headers.join(','), ...rows.map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ApprovalLogs_${approvalLogsSectionFilter}_${Date.now()}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Exported Approval Logs to CSV.');
+    };
+
 
     // Refresh Handler
     const handleRefreshAll = async () => {
@@ -4591,37 +5061,32 @@ export default function AdminConsole() {
                     )}
                 </div>
 
-                {/* Live Content & Community Approval Policy Switch (Refined Enterprise Toggle) */}
+                {/* Approval Logs Toolbar Action Button (Scoped to Active Section) */}
                 <div className="flex items-center gap-3 pl-3 sm:border-l border-slate-200 dark:border-slate-800 shrink-0">
-                    <div className="text-right hidden sm:block">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white block leading-tight">Content & Community Approval</span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">Require admin approval before publish</span>
-                    </div>
-                    <div 
-                        onClick={handleToggleApprovalPolicy}
-                        className={`flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border cursor-pointer select-none transition-all shadow-xs ${
-                            configState.requireContentAndCommunityApproval !== false
-                                ? 'bg-[#0c1838] text-white border-slate-700 ring-1 ring-slate-700/50 hover:border-blue-400'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200'
-                        }`}
-                        title="Click to toggle Content & Community Approval ON/OFF"
+                    <button
+                        type="button"
+                        onClick={handleOpenApprovalLogsModal}
+                        className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-100 shadow-xs hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-indigo-500/10 transition-all cursor-pointer group"
+                        title={`View Approval Logs for ${getCurrentSectionLabel()}`}
                     >
-                        <span className={`material-symbols-outlined text-[16px] ${
-                            configState.requireContentAndCommunityApproval !== false ? 'text-blue-400' : 'text-slate-400'
-                        }`}>
-                            {configState.requireContentAndCommunityApproval !== false ? 'lock' : 'lock_open'}
-                        </span>
-                        <span className="text-xs font-black uppercase tracking-wider text-white">
-                            {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
-                        </span>
-                        <div className={`w-9 h-4.5 rounded-full p-0.5 transition-colors ${
-                            configState.requireContentAndCommunityApproval !== false ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
-                        }`}>
-                            <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
-                                configState.requireContentAndCommunityApproval !== false ? 'translate-x-4.5' : 'translate-x-0'
-                            }`}></div>
+                        <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200/60 dark:border-indigo-800/60 group-hover:scale-105 transition-transform shrink-0">
+                            <span className="material-symbols-outlined text-[17px]">receipt_long</span>
                         </div>
-                    </div>
+                        <div className="text-left hidden sm:block">
+                            <div className="flex items-center gap-1.5 leading-tight">
+                                <span className="text-xs font-bold text-slate-900 dark:text-white">Approval Logs</span>
+                                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                    {getCurrentSectionLogsCount()}
+                                </span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5 truncate max-w-[130px]">
+                                {getCurrentSectionLabel()}
+                            </span>
+                        </div>
+                        <span className="material-symbols-outlined text-slate-400 group-hover:text-indigo-500 text-[18px] transition-colors ml-0.5">
+                            open_in_new
+                        </span>
+                    </button>
                 </div>
             </div>
 
@@ -4747,7 +5212,7 @@ export default function AdminConsole() {
 
             {/* TAB 2: MEDIA APPROVALS CONTROLS & FILTERS */}
             {activeTab === 'media_approvals' && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-3.5">
                     {/* 1. All Pending Media */}
                     <div 
                         onClick={() => { setMediaTypeFilter('All'); showToast('Showing all pending media submissions'); }}
@@ -4805,7 +5270,45 @@ export default function AdminConsole() {
                         <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">PODCASTS ONLY</p>
                     </div>
 
-                    {/* 4. Batch Approve All */}
+                    {/* 4. Article Submissions */}
+                    <div 
+                        onClick={() => { setMediaTypeFilter('Article'); showToast('Filtered: Showing Article Submissions'); }}
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
+                            mediaTypeFilter === 'Article'
+                                ? 'bg-violet-50/60 dark:bg-violet-950/20 border-violet-400 dark:border-violet-700 ring-2 ring-violet-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="w-8 h-8 rounded-xl bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400 border border-violet-200/80 dark:border-violet-800/60 flex items-center justify-center shrink-0 shadow-2xs">
+                                <span className="material-symbols-outlined text-[18px]">article</span>
+                            </div>
+                            <span className="text-[10px] font-black text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/50 border border-violet-200/80 dark:border-violet-800/60 px-2 py-0.5 rounded-full shadow-2xs">Text</span>
+                        </div>
+                        <p className="text-xl font-black text-violet-600 dark:text-violet-400 leading-none">{pendingMediaApprovals.filter(m => m.mediaType === 'Article').length}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">ARTICLES ONLY</p>
+                    </div>
+
+                    {/* 5. Wiki Submissions */}
+                    <div 
+                        onClick={() => { setMediaTypeFilter('Wiki'); showToast('Filtered: Showing Wiki Submissions'); }}
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
+                            mediaTypeFilter === 'Wiki'
+                                ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-400 dark:border-amber-700 ring-2 ring-amber-500/40 shadow-sm scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200/80 dark:border-amber-800/60 flex items-center justify-center shrink-0 shadow-2xs">
+                                <span className="material-symbols-outlined text-[18px]">auto_stories</span>
+                            </div>
+                            <span className="text-[10px] font-black text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200/80 dark:border-amber-800/60 px-2 py-0.5 rounded-full shadow-2xs">Docs</span>
+                        </div>
+                        <p className="text-xl font-black text-amber-600 dark:text-amber-400 leading-none">{pendingMediaApprovals.filter(m => m.mediaType === 'Wiki').length}</p>
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">WIKIS ONLY</p>
+                    </div>
+
+                    {/* 6. Batch Approve All */}
                     <div 
                         onClick={handleBatchApproveMedia}
                         className="p-3.5 rounded-2xl border transition-all cursor-pointer group bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500 hover:bg-emerald-500/15 shadow-xs"
@@ -9085,10 +9588,10 @@ export default function AdminConsole() {
                         <div>
                             <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                                 <span className="material-symbols-outlined text-rose-500">verified</span>
-                                Media Approvals Queue (Videos & Podcasts)
+                                Media Approvals Queue (Videos, Podcasts, Articles & Wikis)
                             </h2>
                             <p className="text-xs text-slate-500 mt-0.5">
-                                Review video and podcast submissions uploaded by employees before publishing them to the enterprise platform.
+                                Review video, podcast, article, and wiki submissions uploaded by employees before publishing them to the enterprise platform.
                             </p>
                         </div>
                         <span className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 dark:border-indigo-800">
@@ -9103,7 +9606,12 @@ export default function AdminConsole() {
                                 .map((item) => (
                                 <div key={item.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3 shadow-xs hover:border-indigo-200 dark:hover:border-indigo-800/50 transition-all">
                                     <div className="flex items-center justify-between">
-                                        <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${item.mediaType === 'Video' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20' : 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20'}`}>
+                                        <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                                            item.mediaType === 'Video' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20' : 
+                                            item.mediaType === 'Podcast' ? 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20' :
+                                            item.mediaType === 'Article' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20' :
+                                            'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                        }`}>
                                             {item.mediaType} Submission
                                         </span>
                                         <span className="text-[11px] font-medium text-slate-400">
@@ -9112,19 +9620,45 @@ export default function AdminConsole() {
                                     </div>
 
                                     <div className="flex items-start gap-3">
-                                        {/* Thumbnail with overlay Play button */}
-                                        <div 
-                                            className="relative group shrink-0 cursor-pointer"
-                                            onClick={() => setPreviewingMedia(item)}
-                                            title="Click to play preview"
-                                        >
-                                            <img src={resolveMediaUrl(item.thumbnail) || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=1200'} className="w-20 h-20 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs" alt={item.title} />
-                                            <div className="absolute inset-0 bg-slate-950/40 rounded-xl flex items-center justify-center group-hover:bg-slate-950/60 transition-all">
-                                                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110 ${item.mediaType === 'Video' ? 'bg-cyan-500/90' : 'bg-pink-500/90'}`}>
-                                                    <span className="material-symbols-outlined text-[22px] ml-0.5">play_arrow</span>
+                                        {/* Media thumbnail / visual preview */}
+                                        {item.mediaType === 'Video' || item.mediaType === 'Podcast' ? (
+                                            <div 
+                                                className="relative group shrink-0 cursor-pointer"
+                                                onClick={() => setPreviewingMedia(item)}
+                                                title="Click to play preview"
+                                            >
+                                                <img src={resolveMediaUrl(item.thumbnail) || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=1200'} className="w-20 h-20 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs" alt={item.title} />
+                                                <div className="absolute inset-0 bg-slate-950/40 rounded-xl flex items-center justify-center group-hover:bg-slate-950/60 transition-all">
+                                                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110 ${item.mediaType === 'Video' ? 'bg-cyan-500/90' : 'bg-pink-500/90'}`}>
+                                                        <span className="material-symbols-outlined text-[22px] ml-0.5">play_arrow</span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        ) : (
+                                            <div 
+                                                className="relative group shrink-0 cursor-pointer"
+                                                onClick={() => setPreviewingMedia(item)}
+                                                title="Click to preview content"
+                                            >
+                                                {item.thumbnail ? (
+                                                    <img src={resolveMediaUrl(item.thumbnail)} className="w-20 h-20 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs" alt={item.title} />
+                                                ) : (
+                                                    <div className={`w-20 h-20 rounded-xl flex flex-col items-center justify-center border shadow-xs transition-all ${
+                                                        item.mediaType === 'Article' 
+                                                            ? 'bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800/50 text-violet-600 dark:text-violet-400' 
+                                                            : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400'
+                                                    }`}>
+                                                        <span className="material-symbols-outlined text-[28px]">{item.mediaType === 'Article' ? 'article' : 'auto_stories'}</span>
+                                                        <span className="text-[9px] font-black uppercase mt-1 tracking-wider">{item.mediaType}</span>
+                                                    </div>
+                                                )}
+                                                <div className="absolute inset-0 bg-slate-950/30 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                                                    <div className="w-8 h-8 rounded-full bg-white/90 text-slate-800 flex items-center justify-center shadow">
+                                                        <span className="material-symbols-outlined text-[18px]">visibility</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <div className="min-w-0 flex-1">
                                             <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">{item.title}</h4>
@@ -9161,7 +9695,7 @@ export default function AdminConsole() {
                                 <span className="material-symbols-outlined text-[32px]">task_alt</span>
                             </div>
                             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">No {mediaTypeFilter !== 'All' ? mediaTypeFilter : 'Pending'} Media Approvals</h3>
-                            <p className="text-xs text-slate-400 max-w-sm mt-1">All {mediaTypeFilter !== 'All' ? mediaTypeFilter.toLowerCase() : 'submitted podcast and video'} submissions have been reviewed and processed by moderators.</p>
+                            <p className="text-xs text-slate-400 max-w-sm mt-1">All {mediaTypeFilter !== 'All' ? mediaTypeFilter.toLowerCase() : 'submitted video, podcast, article, and wiki'} submissions have been reviewed and processed by moderators.</p>
                         </div>
                     )}
                 </div>
@@ -10577,7 +11111,12 @@ export default function AdminConsole() {
                         {/* Modal Header */}
                         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${previewingMedia.mediaType === 'Video' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20' : 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20'}`}>
+                                <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                                    previewingMedia.mediaType === 'Video' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20' : 
+                                    previewingMedia.mediaType === 'Podcast' ? 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20' :
+                                    previewingMedia.mediaType === 'Article' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20' :
+                                    'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                }`}>
                                     {previewingMedia.mediaType} Preview
                                 </span>
                                 <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-md">{previewingMedia.title}</h3>
@@ -10610,7 +11149,7 @@ export default function AdminConsole() {
                                         </video>
                                     )}
                                 </div>
-                            ) : (
+                            ) : previewingMedia.mediaType === 'Podcast' ? (
                                 /* Podcast Audio Player */
                                 <div className="bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-slate-900/40 p-6 rounded-2xl border border-pink-500/20 space-y-4">
                                     <div className="flex items-center gap-4">
@@ -10633,6 +11172,57 @@ export default function AdminConsole() {
                                     >
                                         Your browser does not support audio playback.
                                     </audio>
+                                </div>
+                            ) : previewingMedia.mediaType === 'Article' ? (
+                                <div className="space-y-4">
+                                    <div className="bg-gradient-to-br from-violet-500/10 via-indigo-500/5 to-slate-900/40 p-5 rounded-2xl border border-violet-500/20">
+                                        <h4 className="text-lg font-black text-slate-900 dark:text-white">{previewingMedia.title}</h4>
+                                        <div className="flex items-center gap-3 mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                            <span className="flex items-center gap-1 font-semibold text-violet-600 dark:text-violet-400">
+                                                <span className="material-symbols-outlined text-[16px]">article</span>
+                                                Article • {previewingMedia.category || 'General'}
+                                            </span>
+                                            <span>•</span>
+                                            <span>By: <strong className="text-slate-700 dark:text-slate-200">{previewingMedia.authorName}</strong></span>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 max-h-72 overflow-y-auto">
+                                        {previewingMedia.contentHtml ? (
+                                            <div 
+                                                className="text-xs text-slate-700 dark:text-slate-300 space-y-2 leading-relaxed"
+                                                dangerouslySetInnerHTML={{ __html: previewingMedia.contentHtml }} 
+                                            />
+                                        ) : (
+                                            <p className="text-xs text-slate-600 dark:text-slate-400">{previewingMedia.description || 'No content provided.'}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="bg-gradient-to-br from-amber-500/10 via-yellow-500/5 to-slate-900/40 p-5 rounded-2xl border border-amber-500/20">
+                                        <h4 className="text-lg font-black text-slate-900 dark:text-white">{previewingMedia.title}</h4>
+                                        <div className="flex items-center gap-3 mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                            <span className="flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
+                                                <span className="material-symbols-outlined text-[16px]">auto_stories</span>
+                                                Wiki • {previewingMedia.category || 'Documentation'}
+                                            </span>
+                                            <span>•</span>
+                                            <span>By: <strong className="text-slate-700 dark:text-slate-200">{previewingMedia.authorName}</strong></span>
+                                        </div>
+                                        {previewingMedia.description && (
+                                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 italic">{previewingMedia.description}</p>
+                                        )}
+                                    </div>
+                                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 max-h-72 overflow-y-auto">
+                                        {previewingMedia.contentHtml ? (
+                                            <div 
+                                                className="text-xs text-slate-700 dark:text-slate-300 space-y-2 leading-relaxed"
+                                                dangerouslySetInnerHTML={{ __html: previewingMedia.contentHtml }} 
+                                            />
+                                        ) : (
+                                            <p className="text-xs text-slate-600 dark:text-slate-400">{previewingMedia.description || 'No content provided.'}</p>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
@@ -11110,6 +11700,309 @@ export default function AdminConsole() {
                         </div>
                             </>
                         )}
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* ─── GOVERNANCE APPROVAL LOGS MODAL (SECTION-SCOPED & FILTERABLE) ─── */}
+            {isApprovalLogsModalOpen && createPortal(
+                <div 
+                    className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+                    onClick={() => setIsApprovalLogsModalOpen(false)}
+                >
+                    <div 
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-50 via-indigo-50/20 to-slate-50 dark:from-slate-900 dark:via-indigo-950/20 dark:to-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30">
+                                    <span className="material-symbols-outlined text-[24px]">receipt_long</span>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                                            Governance Approval Logs
+                                        </h2>
+                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                            {approvalLogsSectionFilter === 'all' ? 'All Sections' : getCurrentSectionLabel()}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Audit log and permanent decision history of all employee submissions, moderation reviews, and community approvals.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsApprovalLogsModalOpen(false)}
+                                className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
+                                title="Close"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">close</span>
+                            </button>
+                        </div>
+
+                        {/* Modal Tier 1: Section Navigation Tabs */}
+                        <div className="px-5 sm:px-6 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/50">
+                            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                                {[
+                                    { id: 'all', label: 'All Sections', icon: 'hub' },
+                                    { id: 'media', label: 'Media Approvals', icon: 'perm_media' },
+                                    { id: 'community', label: 'Community Approvals', icon: 'groups' },
+                                    { id: 'moderation', label: 'Content Moderation', icon: 'shield' },
+                                    { id: 'roles', label: 'Role Approvals', icon: 'badge' }
+                                ].map(tab => {
+                                    const allLogs = getStructuredApprovalLogs();
+                                    const tabCount = tab.id === 'all' ? allLogs.length : allLogs.filter(l => l.section === tab.id).length;
+                                    const isSelected = approvalLogsSectionFilter === tab.id;
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setApprovalLogsSectionFilter(tab.id);
+                                                setApprovalLogsMediaSubFilter('All');
+                                            }}
+                                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border shrink-0 cursor-pointer ${
+                                                isSelected
+                                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
+                                                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+                                            }`}
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+                                            <span>{tab.label}</span>
+                                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                                                isSelected ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                                            }`}>
+                                                {tabCount}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Tier 2: Sub-Filters Strip (Media Sub-chips + Outcome Filter + Search + Export) */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800/60">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {/* Media Type Sub-Filter Chips */}
+                                    {(approvalLogsSectionFilter === 'media' || approvalLogsSectionFilter === 'all') && (
+                                        <div className="flex items-center bg-white dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                                            {[
+                                                { id: 'All', label: 'All Media' },
+                                                { id: 'Article', label: 'Articles' },
+                                                { id: 'Wiki', label: 'Wikis' },
+                                                { id: 'Video', label: 'Videos' },
+                                                { id: 'Podcast', label: 'Podcasts' }
+                                            ].map(sub => (
+                                                <button
+                                                    key={sub.id}
+                                                    type="button"
+                                                    onClick={() => setApprovalLogsMediaSubFilter(sub.id)}
+                                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                                        approvalLogsMediaSubFilter === sub.id
+                                                            ? 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                                                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                                    }`}
+                                                >
+                                                    {sub.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Outcome Filter Buttons */}
+                                    <div className="flex items-center bg-white dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                                        {[
+                                            { id: 'All', label: 'All Outcomes' },
+                                            { id: 'Approved', label: 'Approved' },
+                                            { id: 'Rejected', label: 'Rejected' }
+                                        ].map(out => (
+                                            <button
+                                                key={out.id}
+                                                type="button"
+                                                onClick={() => setApprovalLogsActionFilter(out.id)}
+                                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                                    approvalLogsActionFilter === out.id
+                                                        ? out.id === 'Approved'
+                                                            ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                                            : out.id === 'Rejected'
+                                                                ? 'bg-rose-50 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                                                                : 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                                                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                                }`}
+                                            >
+                                                {out.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 grow sm:grow-0 justify-end">
+                                    {/* Search Input */}
+                                    <div className="relative min-w-[200px] sm:w-64">
+                                        <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-slate-400">search</span>
+                                        <input
+                                            type="text"
+                                            value={approvalLogsSearchTerm}
+                                            onChange={e => setApprovalLogsSearchTerm(e.target.value)}
+                                            placeholder="Search title, moderator..."
+                                            className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                                        />
+                                        {approvalLogsSearchTerm && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setApprovalLogsSearchTerm('')}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">close</span>
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Export CSV Button */}
+                                    <button
+                                        type="button"
+                                        onClick={handleExportFilteredApprovalLogsCSV}
+                                        className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                                        title="Export Filtered Logs to CSV"
+                                    >
+                                        <span className="material-symbols-outlined text-[15px] text-emerald-600">download</span>
+                                        <span className="hidden sm:inline">Export CSV</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Content: Scrollable Approval Records List */}
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 divide-y divide-slate-100 dark:divide-slate-800/80">
+                            {modalFilteredLogs.length === 0 ? (
+                                <div className="py-14 text-center flex flex-col items-center justify-center space-y-3">
+                                    <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200 dark:border-indigo-800">
+                                        <span className="material-symbols-outlined text-[28px]">receipt_long</span>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">No Approval Records Found</h4>
+                                        <p className="text-xs text-slate-400 max-w-sm mt-1">
+                                            No approval actions match the current section or filters. Try switching sections or clearing filters.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setApprovalLogsSectionFilter('all');
+                                            setApprovalLogsMediaSubFilter('All');
+                                            setApprovalLogsActionFilter('All');
+                                            setApprovalLogsSearchTerm('');
+                                        }}
+                                        className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all cursor-pointer shadow-md shadow-indigo-600/20"
+                                    >
+                                        Clear All Filters
+                                    </button>
+                                </div>
+                            ) : (
+                                modalFilteredLogs.map(log => {
+                                    const isApproved = log.outcome === 'Approved';
+                                    const isRejected = log.outcome === 'Rejected';
+
+                                    let sectionIcon = 'perm_media';
+                                    let sectionColor = 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800';
+
+                                    if (log.section === 'community') {
+                                        sectionIcon = 'groups';
+                                        sectionColor = 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
+                                    } else if (log.section === 'moderation') {
+                                        sectionIcon = 'shield';
+                                        sectionColor = 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800';
+                                    } else if (log.section === 'roles') {
+                                        sectionIcon = 'badge';
+                                        sectionColor = 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800';
+                                    } else if (log.mediaType === 'Wiki') {
+                                        sectionIcon = 'menu_book';
+                                        sectionColor = 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800';
+                                    } else if (log.mediaType === 'Article') {
+                                        sectionIcon = 'article';
+                                        sectionColor = 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800';
+                                    } else if (log.mediaType === 'Video') {
+                                        sectionIcon = 'videocam';
+                                        sectionColor = 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800';
+                                    } else if (log.mediaType === 'Podcast') {
+                                        sectionIcon = 'podcasts';
+                                        sectionColor = 'bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800';
+                                    }
+
+                                    return (
+                                        <div 
+                                            key={log.id}
+                                            className="pt-3 first:pt-0 p-3 sm:p-4 rounded-2xl hover:bg-slate-50/80 dark:hover:bg-slate-850/60 transition-colors border border-transparent hover:border-slate-200/60 dark:hover:border-slate-800"
+                                        >
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                                {/* Meta Badges */}
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    {/* Timestamp */}
+                                                    <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                                                        <span className="material-symbols-outlined text-[14px]">schedule</span>
+                                                        <span>{log.time}</span>
+                                                    </div>
+
+                                                    {/* Section / Media Badge */}
+                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${sectionColor}`}>
+                                                        <span className="material-symbols-outlined text-[13px]">{sectionIcon}</span>
+                                                        <span>{log.section === 'media' && log.mediaType ? `${log.mediaType}` : log.section}</span>
+                                                    </span>
+
+                                                    {/* Outcome Badge */}
+                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                                                        isApproved
+                                                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                                            : isRejected
+                                                                ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                                                                : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                                                    }`}>
+                                                        <span className="material-symbols-outlined text-[13px]">
+                                                            {isApproved ? 'check_circle' : isRejected ? 'cancel' : 'gavel'}
+                                                        </span>
+                                                        <span>{log.outcome}</span>
+                                                    </span>
+                                                </div>
+
+                                                {/* Moderator Badge */}
+                                                <div className="flex items-center gap-2 text-xs">
+                                                    <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black flex items-center justify-center uppercase">
+                                                        {log.moderator?.charAt(0) || 'M'}
+                                                    </div>
+                                                    <span className="font-bold text-slate-800 dark:text-slate-200">{log.moderator}</span>
+                                                    <span className="px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                        {log.moderatorRole || 'Moderator'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Log Content Description */}
+                                            <div className="mt-2 text-xs sm:text-[13px] text-slate-800 dark:text-slate-200 font-medium leading-relaxed pl-1">
+                                                {log.target}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-850 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                            <span className="text-xs text-slate-500 dark:text-slate-400">
+                                Showing <strong className="text-slate-800 dark:text-slate-200">{modalFilteredLogs.length}</strong> approval records • Enterprise Compliance History
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setIsApprovalLogsModalOpen(false)}
+                                className="px-5 py-2 rounded-xl bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 font-bold text-xs transition cursor-pointer shadow-sm"
+                            >
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>,
                 document.body

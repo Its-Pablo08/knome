@@ -5,7 +5,7 @@ import { useUser } from '../contexts/UserContext';
 import { useToast } from '../contexts/ToastContext';
 import { checkRestrictedContent } from '../../utils/restrictedWords';
 import { apiClient } from '../../utils/apiClient';
-import { resolveMediaUrl } from '../../utils/apiService';
+import { resolveMediaUrl, mediaApi } from '../../utils/apiService';
 
 export const PRESET_COVER_BANNERS = [
     {
@@ -78,6 +78,16 @@ export const PRESET_COVERS = PRESET_COVER_BANNERS.map(p => p.url);
 export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData = null }) {
     const { currentUser } = useUser();
     const { addToast } = useToast();
+    const isModerator = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['Moderator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    // Moderators and employees cannot directly publish; only System Admin can bypass approval
+    const canDirectPublish = !isModerator && (
+        ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['System Administrator', 'System Admin'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())))
+    );
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -437,19 +447,54 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
 
         setIsSaving(true);
         try {
+            let finalStatus = status;
+            if (finalStatus !== 'Draft' && !canDirectPublish) {
+                finalStatus = 'PendingApproval';
+            }
+
             if (isEditMode) {
                 const payload = {
                     title: trimmedTitle,
                     description: description.trim(),
                     contentHtml,
-                    status,
+                    status: finalStatus,
                     coverImageUrl,
                     tags,
                     changeSummary: changeSummary.trim() || 'Updated Wiki overview',
                     expectedUpdatedDate: initialData.updatedDate
                 };
                 const updated = await wikiApi.updateWiki(initialData.wikiId, payload);
-                addToast('Wiki updated successfully!', 'success');
+                if (finalStatus === 'PendingApproval') {
+                    const pendingItem = {
+                        id: `pending_wiki_${initialData.wikiId}`,
+                        wikiId: initialData.wikiId,
+                        mediaType: 'Wiki',
+                        title: trimmedTitle,
+                        description: description.trim() || 'Wiki documentation submission',
+                        category: 'Knowledge Base',
+                        tags: tags || [],
+                        thumbnail: coverImageUrl || null,
+                        authorName: currentUser?.name || currentUser?.fullName || 'Employee',
+                        authorId: currentUser?.userId || currentUser?.id,
+                        authorAvatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
+                        submittedDate: new Date().toISOString(),
+                        status: 'PendingApproval',
+                        contentHtml: contentHtml,
+                        dto: { ...payload, wikiId: initialData.wikiId }
+                    };
+                    try {
+                        await mediaApi.addPendingApproval(pendingItem);
+                    } catch (apiErr) {
+                        console.warn("Backend media pending submission fallback:", apiErr);
+                    }
+                    const existingPending = JSON.parse(localStorage.getItem('knome_pending_media_approvals') || '[]');
+                    localStorage.setItem('knome_pending_media_approvals', JSON.stringify([pendingItem, ...existingPending]));
+                    window.dispatchEvent(new CustomEvent('pending-media-updated', { detail: pendingItem }));
+
+                    addToast('Wiki submitted successfully! It has been sent for approval before going live. 📝', 'success');
+                } else {
+                    addToast('Wiki updated successfully!', 'success');
+                }
                 onSaved && onSaved(updated);
                 onClose();
             } else {
@@ -457,13 +502,64 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     title: trimmedTitle,
                     description: description.trim(),
                     contentHtml,
-                    status,
+                    status: finalStatus,
                     coverImageUrl,
                     tags
                 };
                 const created = await wikiApi.createWiki(payload);
                 localStorage.removeItem('wiki_draft_create');
-                addToast('Wiki created successfully!', 'success');
+
+                if (finalStatus === 'PendingApproval') {
+                    const wikiId = created?.wikiId || Date.now();
+                    const pendingItem = {
+                        id: `pending_wiki_${wikiId}`,
+                        wikiId: wikiId,
+                        mediaType: 'Wiki',
+                        title: trimmedTitle,
+                        description: description.trim() || 'Wiki documentation submission',
+                        category: 'Knowledge Base',
+                        tags: tags || [],
+                        thumbnail: coverImageUrl || null,
+                        authorName: currentUser?.name || currentUser?.fullName || 'Employee',
+                        authorId: currentUser?.userId || currentUser?.id,
+                        authorAvatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
+                        submittedDate: new Date().toISOString(),
+                        status: 'PendingApproval',
+                        contentHtml: contentHtml,
+                        dto: { ...payload, wikiId }
+                    };
+                    try {
+                        await mediaApi.addPendingApproval(pendingItem);
+                    } catch (apiErr) {
+                        console.warn("Backend media pending submission fallback:", apiErr);
+                    }
+                    const existingPending = JSON.parse(localStorage.getItem('knome_pending_media_approvals') || '[]');
+                    localStorage.setItem('knome_pending_media_approvals', JSON.stringify([pendingItem, ...existingPending]));
+                    window.dispatchEvent(new CustomEvent('pending-media-updated', { detail: pendingItem }));
+
+                    const modNotif = {
+                        id: `notif_approval_${Date.now()}`,
+                        type: 'media_approval',
+                        category: 'System',
+                        text: `${currentUser?.name || 'Employee'} submitted wiki "${trimmedTitle}" awaiting moderator approval.`,
+                        senderName: currentUser?.name || 'Employee',
+                        senderAvatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
+                        senderUserId: currentUser?.userId || currentUser?.id,
+                        createdDate: new Date().toISOString(),
+                        createdAt: new Date().toISOString(),
+                        targetUserId: 'admin',
+                        targetUrl: '/admin-console',
+                        unread: true,
+                        mediaType: 'Wiki',
+                        pendingId: pendingItem.id
+                    };
+                    const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
+                    localStorage.setItem('knome_notifications', JSON.stringify([modNotif, ...existingNotifs]));
+
+                    addToast('Wiki submitted successfully! It has been sent for approval before going live. 📝', 'success');
+                } else {
+                    addToast('Wiki created successfully!', 'success');
+                }
                 onSaved && onSaved(created);
                 onClose();
             }

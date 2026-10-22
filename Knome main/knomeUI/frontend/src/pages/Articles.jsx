@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from '../components/contexts/UserContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { getArticles, saveArticle, deleteArticle, getArticleCategories, createArticleCategory, publishScheduledArticleNow } from '../utils/articleService';
-import { savedContentApi, getPersonalizedRecommendations, resolveMediaUrl, formatToDDMMYYYY } from '../utils/apiService';
+import { savedContentApi, getPersonalizedRecommendations, resolveMediaUrl, formatToDDMMYYYY, mediaApi } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
 import { checkRestrictedContent } from '../utils/restrictedWords';
 import ReportModal from '../components/modals/ReportModal';
@@ -20,6 +20,16 @@ export default function Articles() {
     const navigate = useNavigate();
     const { addToast } = useToast();
     const confirm = useConfirm();
+    const isModerator = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['Moderator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    // Moderators and employees cannot directly publish; only System Admin can bypass approval
+    const canDirectPublish = !isModerator && (
+        ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['System Administrator', 'System Admin'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())))
+    );
     
     // Page view mode: 'list' or 'create'
     const [viewMode, setViewMode] = useState('list');
@@ -575,6 +585,11 @@ export default function Articles() {
             isoScheduledDate = parsed.toISOString();
         }
 
+        // If submitted by employee or moderator (not sysadmin) and not saving draft, route to approval
+        if (finalStatus !== 'Draft' && !canDirectPublish) {
+            finalStatus = 'PendingApproval';
+        }
+
         setIsPublishing(true);
         
         let finalTags = [...tags];
@@ -606,7 +621,9 @@ export default function Articles() {
         };
         
         try {
-            await saveArticle(dto);
+            const savedRes = await saveArticle(dto);
+            const savedArticle = savedRes?.data || savedRes;
+            const articleId = savedArticle?.articleId || Date.now();
 
             // Invalidate cached articles so fresh list is displayed
             try {
@@ -615,7 +632,59 @@ export default function Articles() {
 
             await loadData(true);
             
-            if (finalStatus === 'Scheduled') {
+            if (finalStatus === 'PendingApproval') {
+                const catObj = availableCategories.find(c => String(c.categoryId) === String(category));
+                const categoryLabel = catObj?.name || 'General';
+
+                const pendingItem = {
+                    id: `pending_article_${articleId}`,
+                    articleId: articleId,
+                    mediaType: 'Article',
+                    title: title.trim(),
+                    description: (editorText.length > 200 ? editorText.slice(0, 200) + '...' : editorText) || 'Article submission',
+                    category: categoryLabel,
+                    tags: finalTags,
+                    thumbnail: resolvedAttachments.find(u => u && u.match(/\.(jpeg|jpg|gif|png|webp)$/i)) || null,
+                    authorName: currentUser?.name || currentUser?.fullName || 'Employee',
+                    authorId: currentUser?.userId || currentUser?.id,
+                    authorAvatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
+                    submittedDate: new Date().toISOString(),
+                    status: 'PendingApproval',
+                    contentHtml: finalContentHtml,
+                    dto: { ...dto, articleId }
+                };
+
+                try {
+                    await mediaApi.addPendingApproval(pendingItem);
+                } catch (apiErr) {
+                    console.warn("Backend media pending submission fallback:", apiErr);
+                }
+
+                const existingPending = JSON.parse(localStorage.getItem('knome_pending_media_approvals') || '[]');
+                localStorage.setItem('knome_pending_media_approvals', JSON.stringify([pendingItem, ...existingPending]));
+                window.dispatchEvent(new CustomEvent('pending-media-updated', { detail: pendingItem }));
+
+                const modNotif = {
+                    id: `notif_approval_${Date.now()}`,
+                    type: 'media_approval',
+                    category: 'System',
+                    text: `${currentUser?.name || 'Employee'} submitted article "${title.trim()}" awaiting moderator approval.`,
+                    senderName: currentUser?.name || 'Employee',
+                    senderAvatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
+                    senderUserId: currentUser?.userId || currentUser?.id,
+                    createdDate: new Date().toISOString(),
+                    createdAt: new Date().toISOString(),
+                    targetUserId: 'admin',
+                    targetUrl: '/admin-console',
+                    unread: true,
+                    mediaType: 'Article',
+                    pendingId: pendingItem.id
+                };
+                const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
+                localStorage.setItem('knome_notifications', JSON.stringify([modNotif, ...existingNotifs]));
+
+                addToast('Article submitted successfully! It has been sent for approval before going live. 📝', 'success');
+            } else if (finalStatus === 'Scheduled') {
                 addToast(`Article scheduled for publication on ${formatToDDMMYYYY(scheduledTime)}! ⏰`, 'success');
             } else {
                 setShowToast(true);

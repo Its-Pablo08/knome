@@ -75,7 +75,8 @@ export default function Wiki() {
         try {
             if (activeTab === 'recent') {
                 const list = await wikiApi.getRecentlyUpdatedWikis(18);
-                const items = Array.isArray(list) ? list : (list?.data || []);
+                const rawItems = Array.isArray(list) ? list : (list?.data || []);
+                const items = rawItems.filter(w => w.status !== 'PendingApproval' && w.status !== 'Rejected');
                 setWikis(items);
                 setTotalCount(items.length);
             } else {
@@ -88,9 +89,11 @@ export default function Wiki() {
                     pageSize
                 });
 
-                const items = res?.items || res?.data || (Array.isArray(res) ? res : []);
-                setWikis(Array.isArray(items) ? items : []);
-                setTotalCount(res?.totalCount || (Array.isArray(items) ? items.length : 0));
+                const rawItems = res?.items || res?.data || (Array.isArray(res) ? res : []);
+                // Strictly exclude unapproved submissions from the public wiki library
+                const items = (Array.isArray(rawItems) ? rawItems : []).filter(w => w.status !== 'PendingApproval' && w.status !== 'Rejected');
+                setWikis(items);
+                setTotalCount(items.length);
             }
         } catch (err) {
             console.error('Failed to load wikis:', err);

@@ -77,7 +77,7 @@ public class WikiRepository : IWikiRepository
             .Include(w => w.WikiCollaborators)
             .Include(w => w.WikiShares)
             .Include(w => w.WikiSections)
-            .Where(w => !w.IsDeleted)
+            .Where(w => !w.IsDeleted && w.Status != "PendingApproval" && w.Status != "Rejected")
             .AsQueryable();
 
         // Status filter
@@ -133,19 +133,8 @@ public class WikiRepository : IWikiRepository
         }
         else
         {
-            // "all" or general list: regular users see Published/Archived wikis OR their own Drafts/Shared items
-            if (!isAdministrator)
-            {
-                query = query.Where(w =>
-                    w.Status == "Published" ||
-                    w.Status == "Archived" ||
-                    w.CreatedByUserId == currentUserId ||
-                    w.WikiCollaborators.Any(c => c.UserId == currentUserId) ||
-                    w.WikiShares.Any(s =>
-                        (s.ShareType == "User" && s.TargetId == currentUserId) ||
-                        (s.ShareType == "Community" && userCommunityIds.Contains(s.TargetId)) ||
-                        (s.ShareType == "Group" && userDeptId != null && s.TargetId == userDeptId.Value)));
-            }
+            // "all" or general list: only Published wikis appear in the public library
+            query = query.Where(w => w.Status == "Published");
         }
 
         var totalCount = await query.CountAsync();
@@ -178,20 +167,8 @@ public class WikiRepository : IWikiRepository
             .Include(w => w.WikiCollaborators)
             .Include(w => w.WikiShares)
             .Include(w => w.WikiSections)
-            .Where(w => !w.IsDeleted)
+            .Where(w => !w.IsDeleted && w.Status == "Published")
             .AsQueryable();
-
-        if (!isAdministrator)
-        {
-            query = query.Where(w =>
-                w.Status == "Published" ||
-                w.CreatedByUserId == currentUserId ||
-                w.WikiCollaborators.Any(c => c.UserId == currentUserId) ||
-                w.WikiShares.Any(s =>
-                    (s.ShareType == "User" && s.TargetId == currentUserId) ||
-                    (s.ShareType == "Community" && userCommunityIds.Contains(s.TargetId)) ||
-                    (s.ShareType == "Group" && userDeptId != null && s.TargetId == userDeptId.Value)));
-        }
 
         return await query
             .OrderByDescending(w => w.UpdatedDate)
