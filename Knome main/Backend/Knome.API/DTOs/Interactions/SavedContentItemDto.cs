@@ -46,4 +46,6 @@ public class SavedContentCountDto
     public int VideosCount { get; set; }
     public int PodcastsCount { get; set; }
     public int DocumentsCount { get; set; }
+    public int ClipsCount { get; set; }
+    public int WikiCount { get; set; }
 }

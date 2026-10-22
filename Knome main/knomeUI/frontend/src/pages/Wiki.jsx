@@ -4,7 +4,7 @@ import { wikiApi } from '../utils/wikiService';
 import { useUser } from '../components/contexts/UserContext';
 import { useToast } from '../components/contexts/ToastContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
-import { resolveMediaUrl } from '../utils/apiService';
+import { resolveMediaUrl, savedContentApi } from '../utils/apiService';
 import HighlightText from '../components/ui/HighlightText';
 import CreateWikiModal from '../components/modals/CreateWikiModal';
 import WikiShareModal from '../components/modals/WikiShareModal';
@@ -45,6 +45,21 @@ export default function Wiki() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [editingWiki, setEditingWiki] = useState(null);
     const [sharingWiki, setSharingWiki] = useState(null);
+
+    // Bookmarking state
+    const [savedWikiIds, setSavedWikiIds] = useState(() => {
+        try {
+            const localSaved = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]');
+            const customSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
+            const ids = new Set([
+                ...localSaved.map(w => String(w.wikiId || w.id)),
+                ...customSaved.filter(i => (i.contentType || '').toLowerCase() === 'wiki').map(i => String(i.contentId || i.id))
+            ]);
+            return Array.from(ids);
+        } catch {
+            return [];
+        }
+    });
 
     // Sync URL when tab/tag/search changes
     useEffect(() => {
@@ -168,6 +183,65 @@ export default function Wiki() {
     const handleOpenShare = (wiki, e) => {
         e.stopPropagation();
         setSharingWiki(wiki);
+    };
+
+    const handleToggleBookmark = async (wiki, e) => {
+        e.stopPropagation();
+        const idStr = String(wiki.wikiId);
+        const isCurrentlySaved = savedWikiIds.includes(idStr);
+        const nextSaved = !isCurrentlySaved;
+
+        const nextIds = nextSaved
+            ? [...savedWikiIds, idStr]
+            : savedWikiIds.filter(id => id !== idStr);
+        setSavedWikiIds(nextIds);
+
+        try {
+            const existingWikis = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]');
+            let updatedWikis;
+            if (nextSaved) {
+                const wikiObj = {
+                    wikiId: wiki.wikiId,
+                    id: wiki.wikiId,
+                    title: wiki.title,
+                    description: wiki.description,
+                    coverImageUrl: wiki.coverImageUrl,
+                    createdByUserName: wiki.createdByUserName,
+                    authorName: wiki.createdByUserName,
+                    savedAt: new Date().toISOString()
+                };
+                updatedWikis = [wikiObj, ...existingWikis.filter(w => String(w.wikiId || w.id) !== idStr)];
+            } else {
+                updatedWikis = existingWikis.filter(w => String(w.wikiId || w.id) !== idStr);
+            }
+            localStorage.setItem('knome_saved_wikis', JSON.stringify(updatedWikis));
+
+            const customSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
+            const nonWiki = customSaved.filter(i => (i.contentType || '').toLowerCase() !== 'wiki' || String(i.contentId || i.id) !== idStr);
+            if (nextSaved) {
+                nonWiki.unshift({
+                    id: `wiki_${wiki.wikiId}`,
+                    contentId: wiki.wikiId,
+                    contentType: 'Wiki',
+                    type: 'wiki',
+                    title: wiki.title,
+                    content: wiki.description || 'Enterprise Wiki Document',
+                    summary: wiki.description || 'Enterprise Wiki Document',
+                    author: wiki.createdByUserName || 'Wiki Author',
+                    thumbnailUrl: wiki.coverImageUrl,
+                    savedAt: new Date().toISOString()
+                });
+            }
+            localStorage.setItem('knome_saved_items_custom', JSON.stringify(nonWiki));
+            window.dispatchEvent(new StorageEvent('storage', { key: 'knome_saved_items_custom' }));
+            window.dispatchEvent(new CustomEvent('knome-bookmark-saved', { detail: { contentType: 'Wiki', id: wiki.wikiId, removed: !nextSaved } }));
+
+            addToast(nextSaved ? 'Wiki saved to your personal library.' : 'Wiki removed from saved library.', 'success');
+
+            await savedContentApi.toggleBookmark('Wiki', wiki.wikiId);
+        } catch (err) {
+            console.warn('Backend toggle bookmark notice:', err?.message || err);
+        }
     };
 
     const handleCardClick = (wikiId) => {
@@ -452,6 +526,19 @@ export default function Wiki() {
 
                                         {/* Action icons */}
                                         <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => handleToggleBookmark(wiki, e)}
+                                                className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                                                    savedWikiIds.includes(String(wiki.wikiId))
+                                                        ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/40'
+                                                        : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                                }`}
+                                                title={savedWikiIds.includes(String(wiki.wikiId)) ? "Remove from Saved" : "Save Wiki"}
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: savedWikiIds.includes(String(wiki.wikiId)) ? "'FILL' 1" : "'FILL' 0" }}>bookmark</span>
+                                            </button>
+
                                             {wiki.canEdit && (
                                                 <button
                                                     type="button"
@@ -593,6 +680,19 @@ export default function Wiki() {
                                         </div>
 
                                         <div className="flex items-center gap-1 shrink-0 ml-auto">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => handleToggleBookmark(wiki, e)}
+                                                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                                    savedWikiIds.includes(String(wiki.wikiId))
+                                                        ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/40'
+                                                        : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                                }`}
+                                                title={savedWikiIds.includes(String(wiki.wikiId)) ? "Remove from Saved" : "Save Wiki"}
+                                            >
+                                                <span className="material-symbols-outlined text-[17px]" style={{ fontVariationSettings: savedWikiIds.includes(String(wiki.wikiId)) ? "'FILL' 1" : "'FILL' 0" }}>bookmark</span>
+                                            </button>
+
                                             {wiki.canEdit && (
                                                 <button
                                                     type="button"

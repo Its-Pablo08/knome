@@ -1022,7 +1022,6 @@ export default function Clips() {
                     <div className="flex items-center p-1 rounded-2xl bg-slate-100 border border-slate-200 text-xs font-bold">
                         {[
                             { id: 'ForYou', label: 'For You', icon: 'local_fire_department' },
-                            { id: 'Saved', label: 'Saved', icon: 'bookmark' },
                             { id: 'MyClips', label: 'My Clips', icon: 'person' }
                         ].map(tab => (
                             <button

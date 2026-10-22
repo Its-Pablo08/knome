@@ -4,7 +4,7 @@ import { wikiApi } from '../utils/wikiService';
 import { useUser } from '../components/contexts/UserContext';
 import { useToast } from '../components/contexts/ToastContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
-import { resolveMediaUrl } from '../utils/apiService';
+import { resolveMediaUrl, savedContentApi } from '../utils/apiService';
 import CreateWikiModal from '../components/modals/CreateWikiModal';
 import WikiSectionModal from '../components/modals/WikiSectionModal';
 import WikiCollaboratorsModal from '../components/modals/WikiCollaboratorsModal';
@@ -175,6 +175,83 @@ export default function WikiView() {
     const [activeSectionId, setActiveSectionId] = useState(parsedInitialSectionId);
     const [isLoading, setIsLoading] = useState(true);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+    // Bookmarking State
+    const [isBookmarked, setIsBookmarked] = useState(() => {
+        try {
+            if (!wikiId) return false;
+            const localSaved = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]');
+            const customSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
+            return localSaved.some(w => String(w.wikiId || w.id) === String(wikiId)) ||
+                   customSaved.some(i => (i.contentType || '').toLowerCase() === 'wiki' && String(i.contentId || i.id) === String(wikiId));
+        } catch {
+            return false;
+        }
+    });
+
+    useEffect(() => {
+        if (!wikiId) return;
+        savedContentApi.getBookmarkStatus('Wiki', wikiId)
+            .then(res => {
+                const b = res?.data?.isBookmarked ?? res?.isBookmarked;
+                if (typeof b === 'boolean') setIsBookmarked(b);
+            })
+            .catch(() => {});
+    }, [wikiId]);
+
+    const handleToggleBookmark = async () => {
+        if (!wiki) return;
+        const nextState = !isBookmarked;
+        setIsBookmarked(nextState);
+
+        try {
+            const idStr = String(wiki.wikiId);
+            const existingWikis = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]');
+            let updatedWikis;
+            if (nextState) {
+                const wikiObj = {
+                    wikiId: wiki.wikiId,
+                    id: wiki.wikiId,
+                    title: wiki.title,
+                    description: wiki.description,
+                    coverImageUrl: wiki.coverImageUrl,
+                    createdByUserName: wiki.createdByUser?.fullName || wiki.createdByUserName,
+                    authorName: wiki.createdByUser?.fullName || wiki.createdByUserName,
+                    savedAt: new Date().toISOString()
+                };
+                updatedWikis = [wikiObj, ...existingWikis.filter(w => String(w.wikiId || w.id) !== idStr)];
+            } else {
+                updatedWikis = existingWikis.filter(w => String(w.wikiId || w.id) !== idStr);
+            }
+            localStorage.setItem('knome_saved_wikis', JSON.stringify(updatedWikis));
+
+            const customSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
+            const nonWiki = customSaved.filter(i => (i.contentType || '').toLowerCase() !== 'wiki' || String(i.contentId || i.id) !== idStr);
+            if (nextState) {
+                nonWiki.unshift({
+                    id: `wiki_${wiki.wikiId}`,
+                    contentId: wiki.wikiId,
+                    contentType: 'Wiki',
+                    type: 'wiki',
+                    title: wiki.title,
+                    content: wiki.description || 'Enterprise Wiki Document',
+                    summary: wiki.description || 'Enterprise Wiki Document',
+                    author: wiki.createdByUser?.fullName || wiki.createdByUserName || 'Wiki Author',
+                    thumbnailUrl: wiki.coverImageUrl,
+                    savedAt: new Date().toISOString()
+                });
+            }
+            localStorage.setItem('knome_saved_items_custom', JSON.stringify(nonWiki));
+            window.dispatchEvent(new StorageEvent('storage', { key: 'knome_saved_items_custom' }));
+            window.dispatchEvent(new CustomEvent('knome-bookmark-saved', { detail: { contentType: 'Wiki', id: wiki.wikiId, removed: !nextState } }));
+
+            addToast(nextState ? 'Wiki saved to library.' : 'Wiki removed from library.', 'success');
+
+            await savedContentApi.toggleBookmark('Wiki', wiki.wikiId);
+        } catch (err) {
+            console.warn('Backend toggle bookmark notice:', err?.message || err);
+        }
+    };
 
     // Modals
     const [isEditWikiModalOpen, setIsEditWikiModalOpen] = useState(false);
@@ -618,6 +695,21 @@ export default function WikiView() {
                     >
                         <span className="material-symbols-outlined text-[16px] text-cyan-500">share</span>
                         <span className="hidden sm:inline">Share</span>
+                    </button>
+
+                    {/* Bookmark / Save Button */}
+                    <button
+                        type="button"
+                        onClick={handleToggleBookmark}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                            isBookmarked
+                                ? 'bg-amber-500 text-white shadow-sm'
+                                : 'text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                        title={isBookmarked ? "Remove from Saved" : "Save Wiki to Library"}
+                    >
+                        <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: isBookmarked ? "'FILL' 1" : "'FILL' 0" }}>bookmark</span>
+                        <span className="hidden sm:inline">{isBookmarked ? 'Saved' : 'Save'}</span>
                     </button>
 
                     {/* Activity Trail Button */}

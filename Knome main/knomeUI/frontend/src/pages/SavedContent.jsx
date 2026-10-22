@@ -30,6 +30,10 @@ export const getDefaultThumbnail = (contentType = '', category = '') => {
         } else {
             bg1 = '#2563eb'; bg2 = '#38bdf8'; label = 'ARTICLE'; symbol = '&#9998;';
         }
+    } else if (typeLower === 'clip') {
+        bg1 = '#ec4899'; bg2 = '#f43f5e'; label = 'CLIP'; symbol = '&#127916;';
+    } else if (typeLower === 'wiki') {
+        bg1 = '#0ea5e9'; bg2 = '#6366f1'; label = 'WIKI'; symbol = '&#128214;';
     } else if (typeLower === 'document' || typeLower === 'job') {
         bg1 = '#059669'; bg2 = '#10b981'; label = 'DOCUMENT'; symbol = '&#128196;';
     }
@@ -60,8 +64,11 @@ const getDestinationUrl = (item) => {
     if (type === 'video') {
         return `/videos?id=${id}&title=${encodeURIComponent(item.title || '')}`;
     }
-    if (type === 'clip') {
+    if (type === 'clip' || type === 'clips') {
         return `/clips?id=${id}`;
+    }
+    if (type === 'wiki' || type === 'wikis') {
+        return `/wiki/view?id=${id}`;
     }
     if (type === 'job' || type === 'document') {
         return `/jobs?id=${id}`;
@@ -69,7 +76,7 @@ const getDestinationUrl = (item) => {
     if (type === 'post') {
         return `/posts?id=${id}`;
     }
-    if (item.targetUrl && !['/podcasts', '/videos', '/posts', '/article-view', '/clips', '/jobs', '/'].includes(item.targetUrl) && !item.targetUrl.startsWith('/?')) {
+    if (item.targetUrl && !['/podcasts', '/videos', '/posts', '/article-view', '/clips', '/jobs', '/wiki', '/wiki/view', '/'].includes(item.targetUrl) && !item.targetUrl.startsWith('/?')) {
         return item.targetUrl;
     }
     return `/posts?id=${id}`;
@@ -106,6 +113,19 @@ export default function SavedContent() {
         try {
             // Overwrite and sanitize localStorage to remove any custom folders (e.g. ghgffd)
             localStorage.setItem('knome_saved_categories', JSON.stringify(DEFAULT_CATEGORIES));
+
+            // Clean cached deleted clips from knome_saved_items_custom
+            const rawCustom = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
+            const cleanedCustom = rawCustom.filter(i => {
+                const t = (i.contentType || '').toLowerCase();
+                if ((t === 'clip' || t === 'clips') && (i.isAvailable === false || i.IsAvailable === false || i.isDeleted || (i.title && i.title.toLowerCase().includes('deleted clip')))) {
+                    return false;
+                }
+                return true;
+            });
+            if (cleanedCustom.length !== rawCustom.length) {
+                localStorage.setItem('knome_saved_items_custom', JSON.stringify(cleanedCustom));
+            }
         } catch (e) {}
         return DEFAULT_CATEGORIES;
     });
@@ -146,6 +166,8 @@ export default function SavedContent() {
         { id: 'Articles', label: 'Articles', countKey: 'articlesCount', enabled: isArticlesEnabled },
         { id: 'Videos', label: 'Videos', countKey: 'videosCount', enabled: isVideosEnabled },
         { id: 'Podcasts', label: 'Audio', countKey: 'podcastsCount', enabled: isPodcastsEnabled },
+        { id: 'Clips', label: 'Clips', countKey: 'clipsCount' },
+        { id: 'Wiki', label: 'Wiki', countKey: 'wikiCount' },
     ];
     const tabs = allTabs.filter(t => t.id === 'All' || t.enabled !== false);
 
@@ -161,23 +183,38 @@ export default function SavedContent() {
                 videosCount: payload.videosCount || 0,
                 podcastsCount: payload.podcastsCount || 0,
                 documentsCount: payload.documentsCount || 0,
-            } : { totalCount: 0, postsCount: 0, articlesCount: 0, videosCount: 0, podcastsCount: 0, documentsCount: 0 };
+                clipsCount: payload.clipsCount || 0,
+                wikiCount: payload.wikiCount || 0,
+            } : { totalCount: 0, postsCount: 0, articlesCount: 0, videosCount: 0, podcastsCount: 0, documentsCount: 0, clipsCount: 0, wikiCount: 0 };
 
             const localCustomSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
-            let localPosts = 0, localArticles = 0, localVideos = 0, localPodcasts = 0;
+            let localPosts = 0, localArticles = 0, localVideos = 0, localPodcasts = 0, localClips = 0, localWikis = 0;
             localCustomSaved.forEach(item => {
                 const t = (item.contentType || 'Post').toLowerCase();
+                // Exclude deleted clips from counts until reinstated
+                if ((t === 'clip' || t === 'clips') && (item.isAvailable === false || item.IsAvailable === false || item.isDeleted || item.IsDeleted || (item.title && item.title.toLowerCase().includes('deleted clip')))) return;
                 if (t === 'post') localPosts++;
                 else if (t === 'article') localArticles++;
                 else if (t === 'video') localVideos++;
-                else if (t === 'podcast') localPodcasts++;
+                else if (t === 'podcast' || t === 'audio') localPodcasts++;
+                else if (t === 'clip' || t === 'clips') localClips++;
+                else if (t === 'wiki' || t === 'wikis') localWikis++;
             });
+
+            // Also check direct clip and wiki local storage
+            const localSavedClips = JSON.parse(localStorage.getItem('knome_saved_clips') || '[]')
+                .filter(c => !c.isDeleted && !c.IsDeleted && !(c.title && c.title.toLowerCase().includes('deleted clip')));
+            const localSavedWikis = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]');
+            const cClips = Math.max(localClips, localSavedClips.length);
+            const cWikis = Math.max(localWikis, localSavedWikis.length);
 
             const pCount = isPostsEnabled ? Math.max(apiCounts.postsCount || 0, localPosts) : 0;
             const aCount = isArticlesEnabled ? Math.max(apiCounts.articlesCount || 0, localArticles) : 0;
             const vCount = isVideosEnabled ? Math.max(apiCounts.videosCount || 0, localVideos) : 0;
             const podCount = isPodcastsEnabled ? Math.max(apiCounts.podcastsCount || 0, localPodcasts) : 0;
-            const sumTypes = pCount + aCount + vCount + podCount;
+            const clipCount = Math.max(apiCounts.clipsCount || 0, cClips);
+            const wikiCount = Math.max(apiCounts.wikiCount || 0, cWikis);
+            const sumTypes = pCount + aCount + vCount + podCount + clipCount + wikiCount;
             const calculatedTotal = sumTypes + (apiCounts.documentsCount || 0);
 
             setCounts(prev => {
@@ -186,6 +223,8 @@ export default function SavedContent() {
                     prev.articlesCount === aCount &&
                     prev.videosCount === vCount &&
                     prev.podcastsCount === podCount &&
+                    prev.clipsCount === clipCount &&
+                    prev.wikiCount === wikiCount &&
                     prev.documentsCount === (apiCounts.documentsCount || 0)) {
                     return prev;
                 }
@@ -195,6 +234,8 @@ export default function SavedContent() {
                     articlesCount: aCount,
                     videosCount: vCount,
                     podcastsCount: podCount,
+                    clipsCount: clipCount,
+                    wikiCount: wikiCount,
                     documentsCount: apiCounts.documentsCount || 0,
                 };
             });
@@ -219,17 +260,54 @@ export default function SavedContent() {
             const payload = res?.data ?? res;
             const items = payload ? (Array.isArray(payload.items) ? payload.items : (Array.isArray(payload) ? payload : [])) : [];
 
-            // Merge local custom category bookmarks from SaveToCategoryModal
+            // Merge local custom category bookmarks from SaveToCategoryModal and direct clips/wiki storage
             const localCustomSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
-            const formattedLocal = localCustomSaved
+            const localSavedClips = JSON.parse(localStorage.getItem('knome_saved_clips') || '[]')
+                .filter(c => !c.isDeleted && !c.IsDeleted && !(c.title && c.title.toLowerCase().includes('deleted clip')))
+                .map(c => ({
+                id: `clip_${c.clipId || c.id}`,
+                contentId: c.clipId || c.id,
+                contentType: 'Clip',
+                title: extractText(c.title || 'Short Clip'),
+                summary: extractText(c.description || c.hashtags || ''),
+                contentText: extractText(c.description || c.hashtags || ''),
+                thumbnailUrl: c.thumbnailUrl || c.videoUrl,
+                authorFullName: extractText(c.authorName || c.creatorName || 'Creator'),
+                authorName: extractText(c.authorName || c.creatorName || 'Creator'),
+                savedAt: c.savedAt || c.createdAt || new Date().toISOString(),
+                savedDate: c.savedAt || c.createdAt || new Date().toISOString(),
+                targetUrl: `/clips?id=${c.clipId || c.id}`
+            }));
+
+            const localSavedWikis = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]').map(w => ({
+                id: `wiki_${w.wikiId || w.id}`,
+                contentId: w.wikiId || w.id,
+                contentType: 'Wiki',
+                title: extractText(w.title || 'Wiki Document'),
+                summary: extractText(w.description || ''),
+                contentText: extractText(w.description || ''),
+                thumbnailUrl: w.coverImageUrl,
+                authorFullName: extractText(w.createdByUser?.fullName || w.createdByUserName || 'Wiki Author'),
+                authorName: extractText(w.createdByUser?.fullName || w.createdByUserName || 'Wiki Author'),
+                savedAt: w.savedAt || w.savedDate || new Date().toISOString(),
+                savedDate: w.savedAt || w.savedDate || new Date().toISOString(),
+                targetUrl: `/wiki/view?id=${w.wikiId || w.id}`
+            }));
+
+            const allLocalPool = [...localCustomSaved, ...localSavedClips, ...localSavedWikis];
+            const formattedLocal = allLocalPool
                 .filter(s => {
-                    if (activeTab === 'All') return true;
                     const type = (s.contentType || 'Post').toLowerCase();
+                    // Do not show deleted clips until they are reinstated
+                    if ((type === 'clip' || type === 'clips') && (s.isAvailable === false || s.IsAvailable === false || s.isDeleted || s.IsDeleted || (s.title && s.title.toLowerCase().includes('deleted clip')))) return false;
+                    if (activeTab === 'All') return true;
                     const tab = activeTab.toLowerCase();
                     if (tab === 'posts') return type === 'post';
                     if (tab === 'articles') return type === 'article';
                     if (tab === 'videos') return type === 'video';
                     if (tab === 'podcasts') return type === 'podcast' || type === 'audio';
+                    if (tab === 'clips') return type === 'clip' || type === 'clips';
+                    if (tab === 'wiki' || tab === 'wikis') return type === 'wiki' || type === 'wikis';
                     return true;
                 })
                 .map(s => ({
@@ -237,14 +315,14 @@ export default function SavedContent() {
                     contentId: s.contentId || s.id,
                     contentType: s.contentType || 'Post',
                     title: extractText(s.title),
-                    summary: extractText(s.content),
-                    contentText: extractText(s.content),
+                    summary: extractText(s.content || s.summary),
+                    contentText: extractText(s.content || s.contentText || s.summary),
                     thumbnailUrl: s.thumbnailUrl || s.image || s.thumbnail || s.coverImage || s.mediaUrl || (Array.isArray(s.mediaUrls) ? s.mediaUrls[0] : null) || (Array.isArray(s.attachmentUrls) ? s.attachmentUrls[0] : null),
-                    authorFullName: extractText(s.author),
+                    authorFullName: extractText(s.author || s.authorFullName || s.authorName),
                     savedAt: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
                     savedDate: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
-                    userCategory: s.category,
-                    categoryName: s.category,
+                    userCategory: s.category || s.userCategory,
+                    categoryName: s.category || s.categoryName,
                     targetUrl: getDestinationUrl(s)
                 }));
 
@@ -266,10 +344,20 @@ export default function SavedContent() {
 
             const filteredDeduped = deduped.filter(item => {
                 const t = (item.contentType || 'Post').toLowerCase();
+                // Do not show deleted clips until they are reinstated
+                if ((t === 'clip' || t === 'clips') && (item.isAvailable === false || item.IsAvailable === false || item.isDeleted || item.IsDeleted || (item.title && item.title.toLowerCase().includes('deleted clip')))) return false;
                 if (t === 'post' && !isPostsEnabled) return false;
                 if (t === 'article' && !isArticlesEnabled) return false;
                 if (t === 'video' && !isVideosEnabled) return false;
                 if (t === 'podcast' && !isPodcastsEnabled) return false;
+                if (activeTab === 'All') return true;
+                const tab = activeTab.toLowerCase();
+                if (tab === 'posts') return t === 'post';
+                if (tab === 'articles') return t === 'article';
+                if (tab === 'videos') return t === 'video';
+                if (tab === 'podcasts') return t === 'podcast' || t === 'audio';
+                if (tab === 'clips') return t === 'clip' || t === 'clips';
+                if (tab === 'wiki' || tab === 'wikis') return t === 'wiki' || t === 'wikis';
                 return true;
             });
 
@@ -279,9 +367,36 @@ export default function SavedContent() {
             console.error('Failed to load saved content', e);
             // Fall back to local saved items if API fails
             const localCustomSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
-            const formattedLocal = localCustomSaved
+            const localSavedClips = JSON.parse(localStorage.getItem('knome_saved_clips') || '[]')
+                .filter(c => !c.isDeleted && !c.IsDeleted && !(c.title && c.title.toLowerCase().includes('deleted clip')))
+                .map(c => ({
+                id: `clip_${c.clipId || c.id}`,
+                contentId: c.clipId || c.id,
+                contentType: 'Clip',
+                title: extractText(c.title || 'Short Clip'),
+                summary: extractText(c.description || c.hashtags || ''),
+                thumbnailUrl: c.thumbnailUrl || c.videoUrl,
+                authorFullName: extractText(c.authorName || c.creatorName || 'Creator'),
+                savedAt: c.savedAt || c.createdAt || new Date().toISOString(),
+                targetUrl: `/clips?id=${c.clipId || c.id}`
+            }));
+            const localSavedWikis = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]').map(w => ({
+                id: `wiki_${w.wikiId || w.id}`,
+                contentId: w.wikiId || w.id,
+                contentType: 'Wiki',
+                title: extractText(w.title || 'Wiki Document'),
+                summary: extractText(w.description || ''),
+                thumbnailUrl: w.coverImageUrl,
+                authorFullName: extractText(w.createdByUser?.fullName || w.createdByUserName || 'Wiki Author'),
+                savedAt: w.savedAt || w.savedDate || new Date().toISOString(),
+                targetUrl: `/wiki/view?id=${w.wikiId || w.id}`
+            }));
+            const allLocalPool = [...localCustomSaved, ...localSavedClips, ...localSavedWikis];
+            const formattedLocal = allLocalPool
                 .filter(s => {
                     const type = (s.contentType || 'Post').toLowerCase();
+                    // Do not show deleted clips until they are reinstated
+                    if ((type === 'clip' || type === 'clips') && (s.isAvailable === false || s.IsAvailable === false || s.isDeleted || s.IsDeleted || (s.title && s.title.toLowerCase().includes('deleted clip')))) return false;
                     if (type === 'post' && !isPostsEnabled) return false;
                     if (type === 'article' && !isArticlesEnabled) return false;
                     if (type === 'video' && !isVideosEnabled) return false;
@@ -292,6 +407,8 @@ export default function SavedContent() {
                     if (tab === 'articles') return type === 'article';
                     if (tab === 'videos') return type === 'video';
                     if (tab === 'podcasts') return type === 'podcast' || type === 'audio';
+                    if (tab === 'clips') return type === 'clip' || type === 'clips';
+                    if (tab === 'wiki' || tab === 'wikis') return type === 'wiki' || type === 'wikis';
                     return true;
                 })
                 .map(s => ({
@@ -299,25 +416,26 @@ export default function SavedContent() {
                     contentId: s.contentId || s.id,
                     contentType: s.contentType || 'Post',
                     title: extractText(s.title),
-                    summary: extractText(s.content),
-                    contentText: extractText(s.content),
+                    summary: extractText(s.content || s.summary),
+                    contentText: extractText(s.content || s.contentText || s.summary),
                     thumbnailUrl: s.thumbnailUrl || s.image || s.thumbnail || s.coverImage || s.mediaUrl || (Array.isArray(s.mediaUrls) ? s.mediaUrls[0] : null) || (Array.isArray(s.attachmentUrls) ? s.attachmentUrls[0] : null),
-                    authorFullName: extractText(s.author),
+                    authorFullName: extractText(s.author || s.authorFullName || s.authorName),
                     savedAt: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
                     savedDate: s.savedAt || s.savedDate || s.createdAt || new Date().toISOString(),
-                    userCategory: s.category,
-                    categoryName: s.category,
+                    userCategory: s.category || s.userCategory,
+                    categoryName: s.category || s.categoryName,
                     targetUrl: getDestinationUrl(s)
                 }));
 
-            formattedLocal.sort((a, b) => {
+            const dedupedLocal = Array.from(new Map(formattedLocal.map(i => [String(i.contentId || i.id), i])).values());
+            dedupedLocal.sort((a, b) => {
                 const dateA = new Date(a.savedDate || a.savedAt || a.createdAt || 0).getTime() || 0;
                 const dateB = new Date(b.savedDate || b.savedAt || b.createdAt || 0).getTime() || 0;
                 return sortBy === 'OldestSaved' ? dateA - dateB : dateB - dateA;
             });
 
-            setSavedItems(formattedLocal);
-            setTotalCount(formattedLocal.length);
+            setSavedItems(dedupedLocal);
+            setTotalCount(dedupedLocal.length);
         } finally {
             setIsLoading(false);
         }
@@ -381,6 +499,8 @@ export default function SavedContent() {
                 articlesCount: type === 'article' ? Math.max(0, prev.articlesCount - 1) : prev.articlesCount,
                 videosCount: type === 'video' ? Math.max(0, prev.videosCount - 1) : prev.videosCount,
                 podcastsCount: (type === 'podcast' || type === 'audio') ? Math.max(0, prev.podcastsCount - 1) : prev.podcastsCount,
+                clipsCount: (type === 'clip' || type === 'clips') ? Math.max(0, (prev.clipsCount || 0) - 1) : (prev.clipsCount || 0),
+                wikiCount: (type === 'wiki' || type === 'wikis') ? Math.max(0, (prev.wikiCount || 0) - 1) : (prev.wikiCount || 0),
             };
         });
         setTotalCount((prev) => Math.max(0, prev - 1));
@@ -397,6 +517,18 @@ export default function SavedContent() {
                 return !isMatch;
             });
             localStorage.setItem('knome_saved_items_custom', JSON.stringify(updatedCustom));
+
+            const typeLower = (targetType || '').toLowerCase();
+            if (typeLower === 'clip' || typeLower === 'clips') {
+                const existingClips = JSON.parse(localStorage.getItem('knome_saved_clips') || '[]');
+                const filteredClips = existingClips.filter(c => String(c.clipId || c.id) !== String(targetId));
+                localStorage.setItem('knome_saved_clips', JSON.stringify(filteredClips));
+            }
+            if (typeLower === 'wiki' || typeLower === 'wikis') {
+                const existingWikis = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]');
+                const filteredWikis = existingWikis.filter(w => String(w.wikiId || w.id) !== String(targetId));
+                localStorage.setItem('knome_saved_wikis', JSON.stringify(filteredWikis));
+            }
 
             const existingBookmarked = JSON.parse(localStorage.getItem('knome_bookmarked_ids') || '[]');
             const updatedBookmarked = existingBookmarked.filter((id) => String(id) !== String(targetId));
@@ -464,6 +596,10 @@ export default function SavedContent() {
             case 'video': return 'bg-rose-500/10 text-rose-500 border-rose-500/20';
             case 'audio':
             case 'podcast': return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
+            case 'clip':
+            case 'clips': return 'bg-pink-500/10 text-pink-500 border-pink-500/20';
+            case 'wiki':
+            case 'wikis': return 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20';
             case 'job':
             case 'document': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
             default: return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
@@ -476,6 +612,10 @@ export default function SavedContent() {
             case 'video': return 'play_circle';
             case 'audio':
             case 'podcast': return 'audiotrack';
+            case 'clip':
+            case 'clips': return 'movie';
+            case 'wiki':
+            case 'wikis': return 'menu_book';
             case 'job':
             case 'document': return 'description';
             default: return 'dynamic_feed';
@@ -566,8 +706,9 @@ export default function SavedContent() {
         return sum + savedItems.filter(item => getItemCategoryId(item) === cat.id).length;
     }, 0);
 
-    const totalTypeCount = (counts.postsCount || 0) + (counts.articlesCount || 0) + (counts.videosCount || 0) + (counts.podcastsCount || 0);
-    const unifiedTotalCount = activeTab === 'All' ? Math.max(folderCountsSum, savedItems.length) : (counts.totalCount || savedItems.length);
+    const totalTypeCount = (counts.postsCount || 0) + (counts.articlesCount || 0) + (counts.videosCount || 0) + (counts.podcastsCount || 0) + (counts.clipsCount || 0) + (counts.wikiCount || 0);
+    const activeTabObj = tabs.find(t => t.id === activeTab);
+    const unifiedTotalCount = activeTab === 'All' ? (counts.totalCount || totalTypeCount || savedItems.length) : (counts[activeTabObj?.countKey] || savedItems.length);
 
     return (
         <main className="flex-1 flex flex-col gap-5 pb-6 min-w-0 text-slate-800 dark:text-slate-100 font-sans">
@@ -588,7 +729,7 @@ export default function SavedContent() {
                         </span>
                     </h1>
                     <p className="text-slate-600 dark:text-slate-400 text-xs md:text-sm font-medium leading-relaxed max-w-2xl">
-                        Organize your bookmarked posts, technical articles, videos, and podcasts into custom category folders.
+                        Organize your bookmarked posts, technical articles, videos, podcasts, clips, and wikis into custom category folders.
                     </p>
                 </div>
             </div>
@@ -598,7 +739,7 @@ export default function SavedContent() {
                 {/* Content Type Tabs */}
                 <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar whitespace-nowrap">
                     {tabs.map((tab) => {
-                        const count = tab.id === 'All' ? unifiedTotalCount : (counts[tab.countKey] || 0);
+                        const count = tab.id === 'All' ? (counts.totalCount || totalTypeCount) : (counts[tab.countKey] || 0);
                         const isActive = activeTab === tab.id;
                         return (
                             <button

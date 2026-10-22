@@ -206,6 +206,8 @@ public class ContentInteractionRepository : IContentInteractionRepository
             else if (targetType.Equals("Videos", StringComparison.OrdinalIgnoreCase)) targetType = "Video";
             else if (targetType.Equals("Podcasts", StringComparison.OrdinalIgnoreCase)) targetType = "Podcast";
             else if (targetType.Equals("Documents", StringComparison.OrdinalIgnoreCase)) targetType = "Document";
+            else if (targetType.Equals("Clips", StringComparison.OrdinalIgnoreCase)) targetType = "Clip";
+            else if (targetType.Equals("Wikis", StringComparison.OrdinalIgnoreCase) || targetType.Equals("Wiki", StringComparison.OrdinalIgnoreCase)) targetType = "Wiki";
 
             bookmarksQuery = bookmarksQuery.Where(b => b.ContentType.ToLower() == targetType.ToLower());
         }
@@ -346,9 +348,8 @@ public class ContentInteractionRepository : IContentInteractionRepository
                 var clip = await _db.Clips.Include(c => c.CreatedByUser).FirstOrDefaultAsync(c => c.ClipId == b.ContentId);
                 if (clip == null || clip.IsDeleted)
                 {
-                    item.IsAvailable = false;
-                    item.UnavailabilityReason = "Clip has been deleted or is unavailable.";
-                    item.Title = "Deleted Clip";
+                    // Do not show deleted clips until they are reinstated
+                    continue;
                 }
                 else
                 {
@@ -363,6 +364,31 @@ public class ContentInteractionRepository : IContentInteractionRepository
                     item.TargetUrl = $"/clips?id={clip.ClipId}";
                     item.LikesCount = clip.LikesCount;
                     item.CommentsCount = clip.CommentsCount;
+                }
+            }
+            else if (normalizedType.Equals("Wiki", StringComparison.OrdinalIgnoreCase))
+            {
+                var wiki = await _db.Wikis.Include(w => w.CreatedByUser).FirstOrDefaultAsync(w => w.WikiId == b.ContentId);
+                if (wiki == null || wiki.IsDeleted)
+                {
+                    item.IsAvailable = false;
+                    item.UnavailabilityReason = "Wiki document has been deleted or is unavailable.";
+                    item.Title = "Deleted Wiki";
+                }
+                else
+                {
+                    item.Title = wiki.Title;
+                    item.Summary = wiki.Description ?? string.Empty;
+                    item.ThumbnailUrl = wiki.CoverImageUrl;
+                    item.AuthorId = wiki.CreatedByUserId;
+                    item.AuthorName = wiki.CreatedByUser?.FullName ?? string.Empty;
+                    item.AuthorAvatar = wiki.CreatedByUser?.ProfilePhotoUrl;
+                    item.AuthorRole = wiki.CreatedByUser?.Designation;
+                    item.CreatedAt = wiki.CreatedDate;
+                    item.UpdatedAt = wiki.UpdatedDate;
+                    item.TargetUrl = $"/wiki/view?id={wiki.WikiId}";
+                    item.LikesCount = await _db.Reactions.CountAsync(r => r.ContentType == "Wiki" && r.ContentId == wiki.WikiId);
+                    item.CommentsCount = await _db.Comments.CountAsync(c => c.ContentType == "Wiki" && c.ContentId == wiki.WikiId);
                 }
             }
 
@@ -400,14 +426,26 @@ public class ContentInteractionRepository : IContentInteractionRepository
     public async Task<SavedContentCountDto> GetSavedContentCountsAsync(int userId)
     {
         var bookmarks = await _db.Bookmarks.Where(b => b.UserId == userId).ToListAsync();
+        var posts = bookmarks.Count(b => b.ContentType.Equals("Post", StringComparison.OrdinalIgnoreCase));
+        var articles = bookmarks.Count(b => b.ContentType.Equals("Article", StringComparison.OrdinalIgnoreCase));
+        var videos = bookmarks.Count(b => b.ContentType.Equals("Video", StringComparison.OrdinalIgnoreCase));
+        var podcasts = bookmarks.Count(b => b.ContentType.Equals("Podcast", StringComparison.OrdinalIgnoreCase));
+        var docs = bookmarks.Count(b => b.ContentType.Equals("Document", StringComparison.OrdinalIgnoreCase) || b.ContentType.Equals("Job", StringComparison.OrdinalIgnoreCase));
+        var activeClipIds = await _db.Clips.Where(c => !c.IsDeleted).Select(c => c.ClipId).ToListAsync();
+        var activeClipSet = new HashSet<long>(activeClipIds);
+        var clips = bookmarks.Count(b => (b.ContentType.Equals("Clip", StringComparison.OrdinalIgnoreCase) || b.ContentType.Equals("Clips", StringComparison.OrdinalIgnoreCase)) && activeClipSet.Contains(b.ContentId));
+        var wikis = bookmarks.Count(b => b.ContentType.Equals("Wiki", StringComparison.OrdinalIgnoreCase) || b.ContentType.Equals("Wikis", StringComparison.OrdinalIgnoreCase));
+
         return new SavedContentCountDto
         {
-            TotalCount = bookmarks.Count,
-            PostsCount = bookmarks.Count(b => b.ContentType.Equals("Post", StringComparison.OrdinalIgnoreCase)),
-            ArticlesCount = bookmarks.Count(b => b.ContentType.Equals("Article", StringComparison.OrdinalIgnoreCase)),
-            VideosCount = bookmarks.Count(b => b.ContentType.Equals("Video", StringComparison.OrdinalIgnoreCase)),
-            PodcastsCount = bookmarks.Count(b => b.ContentType.Equals("Podcast", StringComparison.OrdinalIgnoreCase)),
-            DocumentsCount = bookmarks.Count(b => b.ContentType.Equals("Document", StringComparison.OrdinalIgnoreCase) || b.ContentType.Equals("Job", StringComparison.OrdinalIgnoreCase))
+            TotalCount = posts + articles + videos + podcasts + docs + clips + wikis,
+            PostsCount = posts,
+            ArticlesCount = articles,
+            VideosCount = videos,
+            PodcastsCount = podcasts,
+            DocumentsCount = docs,
+            ClipsCount = clips,
+            WikiCount = wikis
         };
     }
 

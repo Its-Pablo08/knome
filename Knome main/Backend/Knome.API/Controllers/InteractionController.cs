@@ -238,6 +238,8 @@ public class InteractionController : KnomeControllerBase
             counts.PodcastsCount = 0;
         }
 
+        counts.TotalCount = counts.PostsCount + counts.ArticlesCount + counts.VideosCount + counts.PodcastsCount + counts.ClipsCount + counts.WikiCount;
+
         return Ok(ApiResponse<SavedContentCountDto>.SuccessResponse(200, "Saved content counts retrieved successfully.", counts));
     }
 
