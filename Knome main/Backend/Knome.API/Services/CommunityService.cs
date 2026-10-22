@@ -779,7 +779,7 @@ public class CommunityService : ICommunityService
         {
             var adminsCount = await _repo.GetCommunityAdminsCountAsync(communityId);
             if (adminsCount <= 1)
-                throw new BadRequestException("Cannot leave community as you are the sole remaining Community Admin. Assign another admin first.");
+                throw new BadRequestException("Solo Admin Community Rule: You cannot leave the community as a solo admin until there are multiple admins.");
 
             await _repo.RemoveCommunityAdminAsync(communityId, currentUserId);
         }
@@ -906,7 +906,7 @@ public class CommunityService : ICommunityService
             {
                 var adminsCount = await _repo.GetCommunityAdminsCountAsync(communityId);
                 if (adminsCount <= 1)
-                    throw new BadRequestException("Cannot remove or suspend the sole remaining Community Admin. Promote another member to Community Administrator first.");
+                    throw new BadRequestException("Solo Admin Community Rule: You cannot remove or suspend a solo admin until there are multiple admins.");
             }
 
             await _repo.RemoveCommunityAdminAsync(communityId, targetUserId);
@@ -995,8 +995,8 @@ public class CommunityService : ICommunityService
         if (isTargetAdmin)
         {
             var adminsCount = await _repo.GetCommunityAdminsCountAsync(communityId);
-            if (adminsCount <= 1 && !isSysAdminCaller)
-                throw new BadRequestException("Cannot remove the sole remaining Community Admin. Assign another admin first.");
+            if (adminsCount <= 1)
+                throw new BadRequestException("Solo Admin Community Rule: You cannot remove a solo admin until there are multiple admins.");
 
             await _repo.RemoveCommunityAdminAsync(communityId, targetUserId);
         }
@@ -1218,6 +1218,13 @@ public class CommunityService : ICommunityService
             }
             else
             {
+                var wasAdmin = await _repo.IsCommunityAdminAsync(communityId, targetUser.UserId);
+                if (wasAdmin)
+                {
+                    var adminsCount = await _repo.GetCommunityAdminsCountAsync(communityId);
+                    if (adminsCount <= 1)
+                        throw new BadRequestException("Solo Admin Community Rule: You cannot make a solo admin an employee until there are multiple admins.");
+                }
                 await _repo.RemoveCommunityAdminAsync(communityId, targetUser.UserId);
             }
 
@@ -1375,8 +1382,8 @@ public class CommunityService : ICommunityService
             throw new BadRequestException("Cannot demote or remove the original creator of this community.");
 
         var adminsCount = await _repo.GetCommunityAdminsCountAsync(communityId);
-        if (adminsCount <= 1 && await _repo.IsCommunityAdminAsync(communityId, targetUserId) && !isSysAdminCaller)
-            throw new BadRequestException("Cannot remove the sole remaining Community Admin.");
+        if (adminsCount <= 1 && await _repo.IsCommunityAdminAsync(communityId, targetUserId))
+            throw new BadRequestException("Solo Admin Community Rule: You cannot make a solo admin an employee until there are multiple admins.");
 
         await _repo.RemoveCommunityAdminAsync(communityId, targetUserId);
 
