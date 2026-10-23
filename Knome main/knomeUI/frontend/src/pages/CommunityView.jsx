@@ -1830,7 +1830,8 @@ export default function CommunityView() {
                     approvalStatus: commData.approvalStatus || (commData.isActive ? 'Approved' : 'Pending'),
                     createdByUserId: commData.createdByUserId,
                     createdDate: commData.createdDate,
-                    invitedUserIds: localMatch?.invitedUserIds || commData.invitedUserIds || []
+                    invitedUserIds: localMatch?.invitedUserIds || commData.invitedUserIds || [],
+                    isCurrentUserAdmin: Boolean(commData.isCurrentUserAdmin)
                 });
 
                 const isDefaultOrg = (commData.communityType || '').toLowerCase().includes('default') || (commData.communityType || '').toLowerCase().includes('org');
@@ -1855,7 +1856,7 @@ export default function CommunityView() {
                 const isPlatformAdminCaller = ['SYSADM', 'CADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'MODERATOR', 'MOD'].includes(String(currentUser?.role || '').toUpperCase()) ||
                     ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'Admin', 'Moderator'].includes(currentUser?.roleName) ||
                     (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['System Administrator', 'HR Administrator', 'Community Administrator', 'System Admin', 'HR Admin', 'Community Admin', 'SYSADM', 'HRADM', 'CADM', 'Admin', 'Moderator', 'MODERATOR', 'MOD'].includes(r)));
-                const isCommAdmin = Boolean(commData.isCurrentUserAdmin) || isMemberAdmin || isPlatformAdminCaller;
+                const isCommAdmin = Boolean(commData.isCurrentUserAdmin) || isMemberAdmin;
 
                 const isCurrentRemoved = removedSet.has(currentUid.toLowerCase()) || 
                                          (currentEmpId && removedSet.has(currentEmpId.toLowerCase())) || 
@@ -2681,10 +2682,13 @@ export default function CommunityView() {
             const myUid = String(currentUser?.userId || currentUser?.id || '').toLowerCase();
             const myEmpId = String(currentUser?.employeeId || '').toUpperCase();
             const myName = String(currentUser?.fullName || currentUser?.name || '').toLowerCase();
-            const removedUserId = e?.detail?.removedUserId;
+            const removedUserId = e?.detail?.removedUserId || e?.detail?.removedMemberId;
+            const removedEmpId = (e?.detail?.removedEmpId || '').toUpperCase();
 
             // 1. Immediately check if current user was removed
-            if (removedUserId && (String(removedUserId).toLowerCase() === myUid || String(removedUserId) === String(currentUser?.id))) {
+            const isMeRemoved = (removedUserId && (String(removedUserId).toLowerCase() === myUid || String(removedUserId) === String(currentUser?.id))) ||
+                                (removedEmpId && myEmpId && removedEmpId === myEmpId);
+            if (isMeRemoved) {
                 setMembershipStatus('none');
                 const selfUserKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
                 try {
@@ -3376,8 +3380,8 @@ export default function CommunityView() {
 
             // 6. Update community object members count & dispatch events
             setCommunity(prev => ({ ...prev, membersCount: Math.max(1, (prev.membersCount || 1) - 1) }));
-            window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId } }));
-            window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId, removedMemberId: memberId } }));
+            window.dispatchEvent(new CustomEvent('community-members-updated', { detail: { communityId: targetId, removedUserId: memberId, removedMemberId: memberId, removedEmpId: memberEmpId } }));
+            window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId, removedMemberId: memberId, removedEmpId: memberEmpId } }));
             window.dispatchEvent(new Event('storage'));
 
             showToast(`${memberName} has been removed from this community.`, 'info');
@@ -3395,7 +3399,7 @@ export default function CommunityView() {
     const handleJoinAction = async () => {
         const isPrivate = (community?.type || '').toLowerCase() === 'private';
         const newStatus = isPrivate ? 'requested' : 'joined';
-        const targetId = Number(community?.id || commData?.communityId || communityId || 101);
+        const targetId = Number(community?.id || communityId || 101);
 
         // Clear any previous removed tombstone for current user
         try {
@@ -3535,16 +3539,17 @@ export default function CommunityView() {
         }
 
         // Sole Admin check: protect communities from being abandoned without an administrator
-        const isCommAdmin = isAdmin || membersList.some(m => {
+        const currentUidStr = String(currentUser?.userId || currentUser?.id || '');
+        const currentEmpStr = String(currentUser?.employeeId || '').toUpperCase();
+        const isUserCommunityAdmin = membersList.some(m => {
             const mUid = String(m.userId || m.id || '');
             const mEmp = String(m.employeeId || m.empId || '').toUpperCase();
-            const isMatch = (currentUser?.id && mUid === String(currentUser.id)) ||
-                            (currentUser?.userId && mUid === String(currentUser.userId)) ||
-                            (currentUser?.employeeId && mEmp && mEmp === String(currentUser.employeeId).toUpperCase());
-            return isMatch && (m.memberType === 'Admin' || m.memberType === 'Moderator');
-        });
+            return ((currentUidStr && mUid === currentUidStr) || (currentEmpStr && mEmp && mEmp === currentEmpStr)) &&
+                   (m.memberType === 'Admin' || m.memberType === 'Moderator' || m.isCommAdmin);
+        }) || Boolean(community?.isCurrentUserAdmin);
+
         const adminsCount = getAdminCount();
-        if (isCommAdmin && adminsCount <= 1 && membersList.length > 1) {
+        if (isUserCommunityAdmin && adminsCount <= 1) {
             setAdminProtectionWarning({
                 title: 'Solo Admin Community Rule',
                 message: `Solo Admin Community Rule: You cannot leave the community as a solo admin until there are multiple admins.\n\nPlease assign another member as Community Admin using "Make Admin" before leaving.`
@@ -4066,7 +4071,7 @@ export default function CommunityView() {
         });
         if (!ok) return;
 
-        const targetId = Number(community?.id || commData?.communityId || communityId || 101);
+        const targetId = Number(community?.id || communityId || 101);
         try { await communitiesApi.leave(targetId).catch(() => null); } catch (e) { /* ignore */ }
         const currentUid = String(currentUser?.userId || currentUser?.id || '');
         const currentEmpId = String(currentUser?.employeeId || '').toUpperCase();
@@ -4107,7 +4112,7 @@ export default function CommunityView() {
     // FR-CM-03: Approve a join request (Admin)
     // ─────────────────────────────────────────
     const handleApprove = async (requestId, requestName) => {
-        const targetId = Number(community?.id || commData?.communityId || communityId || 101);
+        const targetId = Number(community?.id || communityId || 101);
         const request = joinRequests.find(r => String(r.id || r.userId) === String(requestId));
         const reqUserId = request?.userId || requestId;
         const reqEmpId = request?.employeeId;
@@ -4227,7 +4232,7 @@ export default function CommunityView() {
     // FR-CM-03: Reject a join request (Admin)
     // ─────────────────────────────────────────
     const handleReject = async (requestId, requestName) => {
-        const targetId = Number(community?.id || commData?.communityId || communityId || 101);
+        const targetId = Number(community?.id || communityId || 101);
         const request = joinRequests.find(r => String(r.id || r.userId) === String(requestId));
         const reqUserId = request?.userId || requestId;
         const reqEmpId = request?.employeeId;
@@ -4897,62 +4902,90 @@ export default function CommunityView() {
                                         <span className="font-bold">Official Org Space (Mandatory)</span>
                                     </div>
                                 ) : membershipStatus === 'joined' ? (
-                            <button 
-                                onClick={handleLeaveAction} 
-                                className="w-44 h-10 px-3 bg-slate-900/90 hover:bg-red-600/90 text-white font-bold rounded-xl transition-all backdrop-blur-md border border-slate-700/60 flex items-center justify-center gap-2 text-xs group cursor-pointer shrink-0 shadow-lg"
-                            >
-                                <span className="material-symbols-outlined text-[18px] group-hover:hidden shrink-0">check_circle</span>
-                                <span className="material-symbols-outlined text-[18px] hidden group-hover:block shrink-0">logout</span>
-                                <span className="group-hover:hidden truncate font-bold">Joined Member</span>
-                                <span className="hidden group-hover:block truncate font-bold">Leave Community</span>
-                            </button>
-                        ) : membershipStatus === 'subscribed' ? (
-                            <div className="flex gap-2 shrink-0">
-                                <button 
-                                    onClick={handleJoinAction} 
-                                    className="w-44 h-10 px-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
-                                >
-                                    <span className="material-symbols-outlined text-[16px] shrink-0">upgrade</span>
-                                    <span className="truncate">Upgrade to Member</span>
-                                </button>
-                                <button 
-                                    onClick={handleUnsubscribeAction} 
-                                    className="h-10 px-3.5 bg-white/10 hover:bg-red-500/80 text-white font-bold rounded-xl transition-colors backdrop-blur-md border border-white/20 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
-                                >
-                                    <span className="truncate">Unsubscribe</span>
-                                </button>
-                            </div>
-                        ) : membershipStatus === 'requested' ? (
-                            <button 
-                                onClick={handleCancelRequest} 
-                                className="w-44 h-10 px-3 bg-white/10 text-white font-bold rounded-xl transition-colors backdrop-blur-md border border-white/20 flex items-center justify-center gap-2 opacity-80 hover:bg-red-500/80 hover:opacity-100 group cursor-pointer shrink-0"
-                            >
-                                <span className="material-symbols-outlined text-[18px] group-hover:hidden shrink-0">schedule</span>
-                                <span className="material-symbols-outlined text-[18px] hidden group-hover:block shrink-0">close</span>
-                                <span className="group-hover:hidden font-black text-amber-400 truncate">Join Requested</span>
-                                <span className="hidden group-hover:block font-bold truncate">Cancel Request</span>
-                            </button>
-                        ) : (
-                            <div className="flex items-center gap-2 shrink-0">
-                                {community.type !== 'Private' && (
+                                    (() => {
+                                        const currentUidStr = String(currentUser?.userId || currentUser?.id || '');
+                                        const currentEmpStr = String(currentUser?.employeeId || '').toUpperCase();
+                                        const isCurrentUserCommAdmin = membersList.some(m => {
+                                            const mUid = String(m.userId || m.id || '');
+                                            const mEmp = String(m.employeeId || m.empId || '').toUpperCase();
+                                            return ((currentUidStr && mUid === currentUidStr) || (currentEmpStr && mEmp && mEmp === currentEmpStr)) &&
+                                                   (m.memberType === 'Admin' || m.memberType === 'Moderator' || m.isCommAdmin);
+                                        }) || Boolean(community?.isCurrentUserAdmin);
+                                        const adminsCount = getAdminCount();
+                                        const isSoloAdmin = isCurrentUserCommAdmin && adminsCount <= 1;
+
+                                        if (isSoloAdmin) {
+                                            return (
+                                                <button 
+                                                    onClick={handleLeaveAction} 
+                                                    className="h-10 px-4 bg-slate-900/90 text-amber-300 font-bold rounded-xl transition-all backdrop-blur-md border border-amber-500/40 flex items-center justify-center gap-2 text-xs cursor-pointer shrink-0 shadow-lg"
+                                                    title="Solo Admin Community Rule: You cannot leave the community as a solo admin until there are multiple admins. Assign another member as Community Admin first."
+                                                >
+                                                    <span className="material-symbols-outlined text-[18px] text-amber-400 shrink-0">shield_person</span>
+                                                    <span className="truncate font-bold">Community Admin</span>
+                                                </button>
+                                            );
+                                        }
+
+                                        return (
+                                            <button 
+                                                onClick={handleLeaveAction} 
+                                                className="h-10 px-4 bg-slate-900/90 hover:bg-red-600/90 text-white font-bold rounded-xl transition-all backdrop-blur-md border border-slate-700/60 hover:border-red-500/60 flex items-center justify-center gap-2 text-xs cursor-pointer shrink-0 shadow-lg group"
+                                                title="Leave Community"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px] text-red-400 group-hover:text-white shrink-0">logout</span>
+                                                <span className="truncate font-bold">Leave Community</span>
+                                            </button>
+                                        );
+                                    })()
+                                ) : membershipStatus === 'subscribed' ? (
+                                    <div className="flex gap-2 shrink-0">
+                                        <button 
+                                            onClick={handleJoinAction} 
+                                            className="w-44 h-10 px-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px] shrink-0">upgrade</span>
+                                            <span className="truncate">Upgrade to Member</span>
+                                        </button>
+                                        <button 
+                                            onClick={handleUnsubscribeAction} 
+                                            className="h-10 px-3.5 bg-white/10 hover:bg-red-500/80 text-white font-bold rounded-xl transition-colors backdrop-blur-md border border-white/20 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
+                                        >
+                                            <span className="truncate">Unsubscribe</span>
+                                        </button>
+                                    </div>
+                                ) : membershipStatus === 'requested' ? (
                                     <button 
-                                        onClick={handleSubscribeAction} 
-                                        className="h-10 px-3.5 bg-white/20 hover:bg-white/30 text-white font-bold rounded-xl transition-colors backdrop-blur-md border border-white/20 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
-                                        title="Subscribe as View-Only (FR-CM-06)"
+                                        onClick={handleCancelRequest} 
+                                        className="w-44 h-10 px-3 bg-white/10 text-white font-bold rounded-xl transition-colors backdrop-blur-md border border-white/20 flex items-center justify-center gap-2 opacity-80 hover:bg-red-500/80 hover:opacity-100 group cursor-pointer shrink-0"
                                     >
-                                        <span className="material-symbols-outlined text-[18px] shrink-0">visibility</span>
-                                        <span className="truncate">Subscribe (View Only)</span>
+                                        <span className="material-symbols-outlined text-[18px] group-hover:hidden shrink-0">schedule</span>
+                                        <span className="material-symbols-outlined text-[18px] hidden group-hover:block shrink-0">close</span>
+                                        <span className="group-hover:hidden font-black text-amber-400 truncate">Join Requested</span>
+                                        <span className="hidden group-hover:block font-bold truncate">Cancel Request</span>
                                     </button>
+                                ) : (
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        {community.type !== 'Private' && (
+                                            <button 
+                                                onClick={handleSubscribeAction} 
+                                                className="h-10 px-3.5 bg-white/20 hover:bg-white/30 text-white font-bold rounded-xl transition-colors backdrop-blur-md border border-white/20 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
+                                                title="Subscribe as View-Only (FR-CM-06)"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px] shrink-0">visibility</span>
+                                                <span className="truncate">Subscribe (View Only)</span>
+                                            </button>
+                                        )}
+                                        <button 
+                                            onClick={handleJoinAction} 
+                                            className="w-44 h-10 px-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
+                                        >
+                                            <span className="material-symbols-outlined text-[18px] shrink-0">group_add</span>
+                                            <span className="truncate font-bold">{community.type === 'Private' ? 'Request to Join' : 'Join Community'}</span>
+                                        </button>
+                                    </div>
                                 )}
-                                <button 
-                                    onClick={handleJoinAction} 
-                                    className="w-44 h-10 px-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
-                                >
-                                    <span className="material-symbols-outlined text-[18px] shrink-0">group_add</span>
-                                    <span className="truncate">{community.type === 'Private' ? 'Request to Join' : 'Join as Member'}</span>
-                                </button>
-                            </div>
-                        )}
+
 
                         {/* Share Button (FR-CM-09) */}
                         <button
