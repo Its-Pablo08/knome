@@ -163,12 +163,26 @@ export default function SaveToCategoryModal({ isOpen, onClose, item, onSaved }) 
 
             // Map item to category ID for SavedContent filters
             const existingMap = JSON.parse(localStorage.getItem('knome_item_category_map') || '{}');
-            existingMap[`${savedItem.contentType}_${savedItem.id}`] = categoryId;
-            existingMap[`${savedItem.contentType}_${savedItem.contentId}`] = categoryId;
-            existingMap[`Article_${savedItem.id}`] = categoryId;
-            existingMap[`Video_${savedItem.id}`] = categoryId;
-            existingMap[`Post_${savedItem.id}`] = categoryId;
-            existingMap[savedItem.id] = categoryId;
+            const sid = String(savedItem.id);
+            const cid = String(savedItem.contentId || savedItem.id);
+            const type = String(savedItem.contentType || '');
+            existingMap[`${type}_${sid}`] = categoryId;
+            existingMap[`${type}_${cid}`] = categoryId;
+            existingMap[`${type.toLowerCase()}_${sid}`] = categoryId;
+            existingMap[`${type.toLowerCase()}_${cid}`] = categoryId;
+            existingMap[`Article_${sid}`] = categoryId;
+            existingMap[`Video_${sid}`] = categoryId;
+            existingMap[`Post_${sid}`] = categoryId;
+            existingMap[`Clip_${sid}`] = categoryId;
+            existingMap[`Clip_${cid}`] = categoryId;
+            existingMap[`clip_${sid}`] = categoryId;
+            existingMap[`clip_${cid}`] = categoryId;
+            existingMap[`Wiki_${sid}`] = categoryId;
+            existingMap[`Wiki_${cid}`] = categoryId;
+            existingMap[`wiki_${sid}`] = categoryId;
+            existingMap[`wiki_${cid}`] = categoryId;
+            existingMap[sid] = categoryId;
+            existingMap[cid] = categoryId;
             localStorage.setItem('knome_item_category_map', JSON.stringify(existingMap));
 
             // Track bookmarked IDs for persistence
@@ -214,7 +228,7 @@ export default function SaveToCategoryModal({ isOpen, onClose, item, onSaved }) 
                         </div>
                         <div>
                             <h3 className="font-extrabold text-slate-900 dark:text-white text-base leading-tight">Save & Categorize</h3>
-                            <p className="text-xs text-slate-500">Choose a category folder to organize your saved post</p>
+                            <p className="text-xs text-slate-500">Choose a category folder to organize your saved {item?.contentType?.toLowerCase() || 'content'}</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer">
