@@ -4,7 +4,7 @@ import { saveArticle, getArticleCategories, createArticleCategory } from '../../
 import { useUser } from '../contexts/UserContext';
 import { useToast } from '../contexts/ToastContext';
 import { checkRestrictedContent } from '../../utils/restrictedWords';
-import { formatToDDMMYYYY, mediaApi } from '../../utils/apiService';
+import { formatToDDMMYYYY, mediaApi, resolveMediaUrl } from '../../utils/apiService';
 import CustomDateTimePicker from '../widgets/CustomDateTimePicker';
 import { isArticleApprovalRequired } from '../../utils/systemConfig';
 
@@ -29,6 +29,23 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
     const [content, setContent] = useState('');
     const [isPublishing, setIsPublishing] = useState(false);
     const editorRef = useRef(null);
+    const savedRangeRef = useRef(null);
+
+    // Link Dialog State
+    const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+    const [linkUrl, setLinkUrl] = useState('https://');
+    const [linkText, setLinkText] = useState('');
+    const [linkOpenInNewTab, setLinkOpenInNewTab] = useState(true);
+
+    // Image / Media Dialog State
+    const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+    const [imageTab, setImageTab] = useState('upload'); // 'upload' | 'url'
+    const [imageUrl, setImageUrl] = useState('');
+    const [imageCaption, setImageCaption] = useState('');
+    const [imageFile, setImageFile] = useState(null);
+    const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
     const [activeFormats, setActiveFormats] = useState({
         bold: false,
         italic: false,
@@ -52,6 +69,112 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
                 quote: block === 'blockquote'
             });
         } catch (e) {}
+    };
+
+    const saveEditorSelection = () => {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && editorRef.current && editorRef.current.contains(sel.anchorNode)) {
+            savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+            return sel.toString();
+        }
+        return '';
+    };
+
+    const openLinkDialog = () => {
+        const selected = saveEditorSelection();
+        setLinkText(selected || '');
+        setLinkUrl('https://');
+        setLinkOpenInNewTab(true);
+        setIsLinkModalOpen(true);
+    };
+
+    const openImageDialog = () => {
+        saveEditorSelection();
+        setImageTab('upload');
+        setImageUrl('');
+        setImageCaption('');
+        setImageFile(null);
+        setImagePreviewUrl(null);
+        setUploadProgress(0);
+        setIsImageModalOpen(true);
+    };
+
+    const insertHtmlAtSelection = (html) => {
+        if (!editorRef.current) return;
+        editorRef.current.focus();
+        const sel = window.getSelection();
+        if (savedRangeRef.current && sel) {
+            sel.removeAllRanges();
+            sel.addRange(savedRangeRef.current);
+        }
+        try {
+            document.execCommand('insertHTML', false, html);
+        } catch {
+            editorRef.current.innerHTML += html;
+        }
+        setContent(editorRef.current.innerText || '');
+        updateActiveFormats();
+        savedRangeRef.current = null;
+    };
+
+    const handleInsertLink = (e) => {
+        e?.preventDefault();
+        const cleanUrl = (linkUrl || '').trim();
+        if (!cleanUrl || cleanUrl === 'https://' || cleanUrl === 'http://') {
+            addToast('Please enter a valid website URL', 'error');
+            return;
+        }
+        const validUrl = /^https?:\/\//i.test(cleanUrl) ? cleanUrl : `https://${cleanUrl}`;
+        const displayText = (linkText || '').trim() || validUrl;
+        const targetAttr = linkOpenInNewTab ? ' target="_blank" rel="noopener noreferrer"' : '';
+        const linkHtml = `<a href="${validUrl}"${targetAttr} class="text-indigo-600 dark:text-indigo-400 font-semibold underline hover:text-indigo-700">${displayText}</a>&nbsp;`;
+        
+        insertHtmlAtSelection(linkHtml);
+        setIsLinkModalOpen(false);
+        addToast('Link inserted into article', 'success');
+    };
+
+    const handleInsertImage = async (e) => {
+        e?.preventDefault();
+        let finalUrl = '';
+        if (imageTab === 'upload') {
+            if (!imageFile) {
+                addToast('Please choose an image file to upload', 'error');
+                return;
+            }
+            setIsUploadingImage(true);
+            try {
+                const res = await mediaApi.uploadFile(imageFile, 'image', (progress) => {
+                    setUploadProgress(progress);
+                });
+                const uploadedUrl = res.fileUrl || res.url || res.data?.fileUrl || res.data?.url;
+                if (!uploadedUrl) {
+                    throw new Error('Upload response did not contain a valid URL');
+                }
+                finalUrl = resolveMediaUrl(uploadedUrl) || uploadedUrl;
+            } catch (err) {
+                console.error('Image upload failed:', err);
+                addToast('Failed to upload image: ' + (err.message || 'Server error'), 'error');
+                setIsUploadingImage(false);
+                return;
+            } finally {
+                setIsUploadingImage(false);
+            }
+        } else {
+            const cleanUrl = (imageUrl || '').trim();
+            if (!cleanUrl || cleanUrl === 'https://' || cleanUrl === 'http://') {
+                addToast('Please enter a valid image URL', 'error');
+                return;
+            }
+            finalUrl = cleanUrl;
+        }
+
+        const captionText = (imageCaption || '').trim();
+        const imgHtml = `<figure class="my-4 text-center"><img src="${finalUrl}" alt="${captionText || 'Article illustration'}" class="rounded-xl max-w-full h-auto mx-auto shadow-md border border-slate-200 dark:border-slate-800" />${captionText ? `<figcaption class="text-xs text-slate-500 dark:text-slate-400 mt-2 italic text-center">${captionText}</figcaption>` : ''}</figure><p><br></p>`;
+        
+        insertHtmlAtSelection(imgHtml);
+        setIsImageModalOpen(false);
+        addToast('Image added to article', 'success');
     };
 
     const toggleFormat = (format) => {
@@ -96,18 +219,8 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
         } else if (format === 'divider') {
             document.execCommand('insertHTML', false, '<hr class="my-6 border-t border-slate-300 dark:border-slate-700" /><p><br></p>');
         } else if (format === 'link') {
-            const selection = window.getSelection();
-            const selectedText = selection ? selection.toString() : '';
-            const url = window.prompt('Enter website or reference URL (e.g. https://example.com):', 'https://');
-            if (url && url.trim() && url.trim() !== 'https://') {
-                if (selectedText) {
-                    document.execCommand('createLink', false, url.trim());
-                } else {
-                    const linkText = window.prompt('Enter link text to display:', url.trim()) || url.trim();
-                    const linkHtml = `<a href="${url.trim()}" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 underline font-semibold hover:text-blue-700">${linkText}</a>&nbsp;`;
-                    document.execCommand('insertHTML', false, linkHtml);
-                }
-            }
+            openLinkDialog();
+            return;
         } else if (format === 'code') {
             const selection = window.getSelection();
             const selectedText = selection ? selection.toString() : '';
@@ -125,11 +238,8 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
                 document.execCommand('insertHTML', false, blockHtml);
             }
         } else if (format === 'image') {
-            const imgUrl = window.prompt('Enter image URL:');
-            if (imgUrl && imgUrl.trim()) {
-                const imgHtml = `<figure class="my-4"><img src="${imgUrl.trim()}" alt="Article illustration" class="rounded-xl max-w-full h-auto shadow-md border border-slate-200 dark:border-slate-800" /><figcaption class="text-xs text-slate-400 mt-1.5 text-center italic">Image</figcaption></figure><p><br></p>`;
-                document.execCommand('insertHTML', false, imgHtml);
-            }
+            openImageDialog();
+            return;
         }
 
         updateActiveFormats();
@@ -436,8 +546,121 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
         }
     };
 
+    const modalFooter = (
+        <div className="flex flex-wrap justify-between items-center gap-3 w-full">
+            <div className="flex items-center gap-2">
+                {/* Active Scheduled Pill Chip */}
+                {scheduledTime && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/50 border border-amber-300/80 dark:border-amber-700/60 rounded-xl text-amber-900 dark:text-amber-200 text-xs font-semibold shadow-xs">
+                        <span className="material-symbols-outlined text-[16px] text-amber-600 dark:text-amber-400 animate-pulse">schedule</span>
+                        <button
+                            type="button"
+                            onClick={() => setIsScheduling(true)}
+                            className="hover:underline flex items-center gap-1.5 cursor-pointer text-left"
+                            title="Click to edit schedule"
+                        >
+                            <span className="font-mono font-bold">{formatToDDMMYYYY(scheduledTime)}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-200/80 dark:bg-amber-800/80 text-amber-950 dark:text-amber-100 font-extrabold">
+                                {getRelativeScheduleText(scheduledTime)}
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setScheduledTime(''); setIsScheduling(false); }}
+                            className="ml-0.5 text-amber-600 hover:text-amber-950 dark:hover:text-amber-100 hover:bg-amber-200/60 dark:hover:bg-amber-800/60 p-0.5 rounded-full cursor-pointer transition-colors"
+                            title="Remove schedule (publish immediately)"
+                        >
+                            <span className="material-symbols-outlined text-[15px]">close</span>
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto">
+                {(() => {
+                    const textToScan = `${title} ${tags} ${content}`;
+                    const restrictedWord = checkRestrictedContent(textToScan);
+                    if (restrictedWord) {
+                        return (
+                            <div className="flex items-center gap-1.5 text-rose-500 text-xs font-semibold px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-lg">
+                                <span className="material-symbols-outlined text-[16px]">warning</span>
+                                <span>Restricted word ("{restrictedWord}") detected! Remove it to publish.</span>
+                            </div>
+                        );
+                    }
+                    return (
+                        <>
+                            <button 
+                                type="button"
+                                onClick={() => handlePublish('Draft')}
+                                disabled={isPublishing}
+                                className="px-4 py-2 border border-border-subtle text-primary font-label-md hover:bg-surface-container rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                            >
+                                Save Draft
+                            </button>
+
+                            <button 
+                                data-schedule-trigger="true"
+                                type="button"
+                                onClick={() => {
+                                    setTempScheduleTime(scheduledTime || '');
+                                    setIsScheduling(!isScheduling);
+                                }}
+                                disabled={isPublishing}
+                                className={`px-3 py-2 border rounded-lg font-label-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                                    scheduledTime 
+                                        ? 'bg-amber-100 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 font-bold' 
+                                        : (isScheduling 
+                                            ? 'bg-indigo-100 dark:bg-indigo-900/50 border-indigo-200 text-indigo-600' 
+                                            : 'border-border-subtle text-primary hover:bg-surface-container'
+                                          )
+                                }`}
+                                title={scheduledTime ? "Schedule active - click to edit" : (isScheduling ? "Close scheduler" : "Schedule publication")}
+                            >
+                                <span className="material-symbols-outlined text-[16px]">
+                                    {scheduledTime ? 'alarm_on' : 'schedule'}
+                                </span>
+                                <span>{scheduledTime ? 'Scheduled' : 'Schedule'}</span>
+                                {scheduledTime && (
+                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping ml-0.5" />
+                                )}
+                            </button>
+
+                            <button 
+                                type="button"
+                                onClick={() => handlePublish(scheduledTime ? 'Scheduled' : 'Published')} 
+                                disabled={isPublishing}
+                                className={`px-5 py-2 font-label-md rounded-lg transition-all shadow-sm disabled:opacity-50 flex items-center gap-2 cursor-pointer ${
+                                    scheduledTime 
+                                        ? 'bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white font-bold shadow-md hover:scale-105' 
+                                        : 'bg-electric-blue text-white hover:opacity-90'
+                                }`}
+                            >
+                                {isPublishing ? (
+                                    <>
+                                        <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                        <span>{scheduledTime ? 'Scheduling...' : 'Publishing...'}</span>
+                                    </>
+                                ) : (
+                                    scheduledTime ? (
+                                        <>
+                                            <span className="material-symbols-outlined text-[17px]">event_available</span>
+                                            Schedule Article
+                                        </>
+                                    ) : (
+                                        'Publish Article'
+                                    )
+                                )}
+                            </button>
+                        </>
+                    );
+                })()}
+            </div>
+        </div>
+    );
+
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Create New Article" maxWidth="max-w-4xl">
+        <Modal isOpen={isOpen} onClose={onClose} title="Create New Article" maxWidth="max-w-4xl" footer={modalFooter}>
             <div className="flex flex-col gap-4 relative">
                 
                 {/* Meta details */}
@@ -604,25 +827,29 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
                         {/* Link */}
                         <button 
                             type="button" 
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => toggleFormat('link')}
-                            className="w-7 h-7 rounded transition-colors cursor-pointer flex items-center justify-center shrink-0 text-slate-gray hover:bg-surface-container-high"
-                            title="Add Link"
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                saveEditorSelection();
+                            }}
+                            onClick={openLinkDialog}
+                            className={`w-7 h-7 rounded transition-colors cursor-pointer flex items-center justify-center shrink-0 ${isLinkModalOpen ? 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-bold shadow-xs' : 'text-slate-gray hover:bg-surface-container-high'}`}
+                            title="Insert Link"
                         >
                             <span className="material-symbols-outlined text-[17px]">link</span>
                         </button>
 
-
-
-                        {/* Image */}
+                        {/* Image / Media */}
                         <button 
                             type="button" 
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => toggleFormat('image')}
-                            className="w-7 h-7 rounded transition-colors cursor-pointer flex items-center justify-center shrink-0 text-slate-gray hover:bg-surface-container-high"
-                            title="Insert Image"
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                saveEditorSelection();
+                            }}
+                            onClick={openImageDialog}
+                            className={`w-7 h-7 rounded transition-colors cursor-pointer flex items-center justify-center shrink-0 ${isImageModalOpen ? 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-bold shadow-xs' : 'text-slate-gray hover:bg-surface-container-high'}`}
+                            title="Insert Image or Media"
                         >
-                            <span className="material-symbols-outlined text-[17px]">image</span>
+                            <span className="material-symbols-outlined text-[17px]">add_photo_alternate</span>
                         </button>
                     </div>
 
@@ -631,7 +858,7 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
                             ref={editorRef}
                             contentEditable="true"
                             suppressContentEditableWarning={true}
-                            className="rich-editor-content w-full h-64 overflow-y-auto p-4 bg-surface-container-lowest focus:outline-none font-body-md text-primary"
+                            className="rich-editor-content w-full min-h-[160px] h-48 sm:h-56 max-h-[320px] overflow-y-auto p-4 bg-surface-container-lowest focus:outline-none font-body-md text-primary"
                             onKeyUp={updateActiveFormats}
                             onMouseUp={updateActiveFormats}
                             onSelect={updateActiveFormats}
@@ -662,123 +889,9 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
                     </div>
                 </div>
 
-
-                <div className="bg-surface-container-low text-slate-gray p-3 rounded-lg text-xs flex items-start gap-2 mt-2">
-                    <span className="material-symbols-outlined text-[16px]">info</span>
+                <div className="bg-surface-container-low text-slate-gray p-2.5 rounded-lg text-xs flex items-start gap-2">
+                    <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">info</span>
                     <p>Articles are subject to Knome's community guidelines and moderation (FR-SM-06). Scheduled articles remain private until the scheduled date, then publish automatically.</p>
-                </div>
-
-                {/* Actions */}
-                <div className="flex flex-wrap justify-between items-center gap-3 mt-4 border-t border-border-subtle pt-4">
-                    <div className="flex items-center gap-2">
-                        {/* Active Scheduled Pill Chip */}
-                        {scheduledTime && (
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/50 border border-amber-300/80 dark:border-amber-700/60 rounded-xl text-amber-900 dark:text-amber-200 text-xs font-semibold shadow-xs">
-                                <span className="material-symbols-outlined text-[16px] text-amber-600 dark:text-amber-400 animate-pulse">schedule</span>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsScheduling(true)}
-                                    className="hover:underline flex items-center gap-1.5 cursor-pointer text-left"
-                                    title="Click to edit schedule"
-                                >
-                                    <span className="font-mono font-bold">{formatToDDMMYYYY(scheduledTime)}</span>
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-200/80 dark:bg-amber-800/80 text-amber-950 dark:text-amber-100 font-extrabold">
-                                        {getRelativeScheduleText(scheduledTime)}
-                                    </span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { setScheduledTime(''); setIsScheduling(false); }}
-                                    className="ml-0.5 text-amber-600 hover:text-amber-950 dark:hover:text-amber-100 hover:bg-amber-200/60 dark:hover:bg-amber-800/60 p-0.5 rounded-full cursor-pointer transition-colors"
-                                    title="Remove schedule (publish immediately)"
-                                >
-                                    <span className="material-symbols-outlined text-[15px]">close</span>
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-2 ml-auto">
-
-                        {(() => {
-                            const textToScan = `${title} ${tags} ${content}`;
-                            const restrictedWord = checkRestrictedContent(textToScan);
-                            if (restrictedWord) {
-                                return (
-                                    <div className="flex items-center gap-1.5 text-rose-500 text-xs font-semibold px-3 py-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-lg">
-                                        <span className="material-symbols-outlined text-[16px]">warning</span>
-                                        <span>Restricted word ("{restrictedWord}") detected! Remove it to publish.</span>
-                                    </div>
-                                );
-                            }
-                            return (
-                                <>
-                                    <button 
-                                        type="button"
-                                        onClick={() => handlePublish('Draft')}
-                                        disabled={isPublishing}
-                                        className="px-4 py-2 border border-border-subtle text-primary font-label-md hover:bg-surface-container rounded-lg transition-all cursor-pointer disabled:opacity-50"
-                                    >
-                                        Save Draft
-                                    </button>
-
-                                    <button 
-                                        data-schedule-trigger="true"
-                                        type="button"
-                                        onClick={() => {
-                                            setTempScheduleTime(scheduledTime || '');
-                                            setIsScheduling(!isScheduling);
-                                        }}
-                                        disabled={isPublishing}
-                                        className={`px-3 py-2 border rounded-lg font-label-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-                                            scheduledTime 
-                                                ? 'bg-amber-100 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 font-bold' 
-                                                : (isScheduling 
-                                                    ? 'bg-indigo-100 dark:bg-indigo-900/50 border-indigo-200 text-indigo-600' 
-                                                    : 'border-border-subtle text-primary hover:bg-surface-container'
-                                                  )
-                                        }`}
-                                        title={scheduledTime ? "Schedule active - click to edit" : (isScheduling ? "Close scheduler" : "Schedule publication")}
-                                    >
-                                        <span className="material-symbols-outlined text-[16px]">
-                                            {scheduledTime ? 'alarm_on' : 'schedule'}
-                                        </span>
-                                        <span>{scheduledTime ? 'Scheduled' : 'Schedule'}</span>
-                                        {scheduledTime && (
-                                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping ml-0.5" />
-                                        )}
-                                    </button>
-
-                                    <button 
-                                        type="button"
-                                        onClick={() => handlePublish(scheduledTime ? 'Scheduled' : 'Published')} 
-                                        disabled={isPublishing}
-                                        className={`px-5 py-2 font-label-md rounded-lg transition-all shadow-sm disabled:opacity-50 flex items-center gap-2 cursor-pointer ${
-                                            scheduledTime 
-                                                ? 'bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white font-bold shadow-md hover:scale-105' 
-                                                : 'bg-electric-blue text-white hover:opacity-90'
-                                        }`}
-                                    >
-                                        {isPublishing ? (
-                                            <>
-                                                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                                                <span>{scheduledTime ? 'Scheduling...' : 'Publishing...'}</span>
-                                            </>
-                                        ) : (
-                                            scheduledTime ? (
-                                                <>
-                                                    <span className="material-symbols-outlined text-[17px]">event_available</span>
-                                                    Schedule Article
-                                                </>
-                                            ) : (
-                                                'Publish Article'
-                                            )
-                                        )}
-                                    </button>
-                                </>
-                            );
-                        })()}
-                    </div>
                 </div>
 
                 {/* Centered Scheduling Modal with Custom Date & Time Picker */}
@@ -883,6 +996,335 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
                                     }}
                                 />
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Knome Custom Hyperlink Dialog */}
+                {isLinkModalOpen && (
+                    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+                        <div 
+                            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden text-slate-800 dark:text-slate-100 animate-in zoom-in-95 duration-150"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700/60 bg-slate-50/80 dark:bg-slate-800/80">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-sm">
+                                        <span className="material-symbols-outlined text-[18px]">link</span>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                                            Insert Link
+                                        </h4>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                            Add a web reference or document link
+                                        </p>
+                                    </div>
+                                </div>
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsLinkModalOpen(false)}
+                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                                    title="Close"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">close</span>
+                                </button>
+                            </div>
+
+                            {/* Form */}
+                            <form onSubmit={handleInsertLink} className="p-5 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                                        Link URL <span className="text-rose-500">*</span>
+                                    </label>
+                                    <div className="relative">
+                                        <span className="material-symbols-outlined absolute left-3 top-2.5 text-slate-400 text-[18px]">
+                                            public
+                                        </span>
+                                        <input
+                                            type="text"
+                                            autoFocus
+                                            placeholder="https://example.com"
+                                            value={linkUrl}
+                                            onChange={(e) => setLinkUrl(e.target.value)}
+                                            className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                                        Text to Display
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Knome Documentation"
+                                        value={linkText}
+                                        onChange={(e) => setLinkText(e.target.value)}
+                                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 dark:text-white"
+                                    />
+                                    <p className="text-[10.5px] text-slate-400 mt-1">
+                                        Leave blank to display the URL directly
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-1">
+                                    <input
+                                        id="openInNewTabCheckbox"
+                                        type="checkbox"
+                                        checked={linkOpenInNewTab}
+                                        onChange={(e) => setLinkOpenInNewTab(e.target.checked)}
+                                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900 cursor-pointer"
+                                    />
+                                    <label htmlFor="openInNewTabCheckbox" className="text-xs text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                                        Open link in a new tab
+                                    </label>
+                                </div>
+
+                                {/* Footer Buttons */}
+                                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-700/60">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsLinkModalOpen(false)}
+                                        className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={!linkUrl.trim() || linkUrl.trim() === 'https://'}
+                                        className="px-5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">add_link</span>
+                                        <span>Insert Link</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Knome Custom Media & Image Dialog */}
+                {isImageModalOpen && (
+                    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+                        <div 
+                            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden text-slate-800 dark:text-slate-100 animate-in zoom-in-95 duration-150"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700/60 bg-slate-50/80 dark:bg-slate-800/80 shrink-0">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-sm">
+                                        <span className="material-symbols-outlined text-[18px]">add_photo_alternate</span>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                                            Insert Media & Images
+                                        </h4>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                            Upload an image from your computer or link an online image
+                                        </p>
+                                    </div>
+                                </div>
+                                <button 
+                                    type="button"
+                                    onClick={() => { if (!isUploadingImage) setIsImageModalOpen(false); }}
+                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                                    title="Close"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">close</span>
+                                </button>
+                            </div>
+
+                            {/* Tab switchers: Upload file vs Image URL */}
+                            <div className="px-5 pt-3 shrink-0">
+                                <div className="flex p-1 bg-slate-100 dark:bg-slate-900 rounded-xl">
+                                    <button
+                                        type="button"
+                                        onClick={() => setImageTab('upload')}
+                                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                            imageTab === 'upload' 
+                                                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs' 
+                                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">upload_file</span>
+                                        <span>Upload File</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setImageTab('url')}
+                                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                            imageTab === 'url' 
+                                                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs' 
+                                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">link</span>
+                                        <span>Image Web URL</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Body */}
+                            <form onSubmit={handleInsertImage} className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+                                {imageTab === 'upload' ? (
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                                            Select Image File
+                                        </label>
+                                        {!imagePreviewUrl ? (
+                                            <label className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer bg-slate-50/50 dark:bg-slate-900/40 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 transition-all group">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            if (file.size > 25 * 1024 * 1024) {
+                                                                addToast('Image size exceeds 25MB limit', 'error');
+                                                                return;
+                                                            }
+                                                            setImageFile(file);
+                                                            setImagePreviewUrl(URL.createObjectURL(file));
+                                                            if (!imageCaption) {
+                                                                setImageCaption(file.name.replace(/\.[^/.]+$/, ''));
+                                                            }
+                                                        }
+                                                    }}
+                                                />
+                                                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform">
+                                                    <span className="material-symbols-outlined text-[26px]">cloud_upload</span>
+                                                </div>
+                                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                                                    Click to browse or drop image here
+                                                </p>
+                                                <p className="text-[11px] text-slate-400 mt-1">
+                                                    Supports PNG, JPG, JPEG, GIF, WebP (Max 25MB)
+                                                </p>
+                                            </label>
+                                        ) : (
+                                            <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 p-2.5">
+                                                <div className="max-h-44 overflow-hidden rounded-xl flex items-center justify-center bg-black/5 dark:bg-black/20">
+                                                    <img
+                                                        src={imagePreviewUrl}
+                                                        alt="Preview"
+                                                        className="max-h-44 w-auto object-contain rounded-lg shadow-sm"
+                                                    />
+                                                </div>
+                                                <div className="flex items-center justify-between pt-2.5 px-1">
+                                                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium truncate max-w-[220px]">
+                                                        {imageFile?.name} ({(imageFile?.size / 1024 / 1024).toFixed(2)} MB)
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setImageFile(null);
+                                                            setImagePreviewUrl(null);
+                                                        }}
+                                                        className="text-xs font-bold text-rose-500 hover:text-rose-600 flex items-center gap-1 cursor-pointer"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[15px]">delete</span>
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                                            Image Web URL <span className="text-rose-500">*</span>
+                                        </label>
+                                        <div className="relative">
+                                            <span className="material-symbols-outlined absolute left-3 top-2.5 text-slate-400 text-[18px]">
+                                                image
+                                            </span>
+                                            <input
+                                                type="text"
+                                                autoFocus
+                                                placeholder="https://example.com/photo.jpg"
+                                                value={imageUrl}
+                                                onChange={(e) => setImageUrl(e.target.value)}
+                                                className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 dark:text-white"
+                                            />
+                                        </div>
+
+                                        {imageUrl && imageUrl.trim().length > 10 && (
+                                            <div className="mt-2.5 p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col items-center">
+                                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 self-start">
+                                                    Image Preview:
+                                                </span>
+                                                <img
+                                                    src={imageUrl.trim()}
+                                                    alt="Live Preview"
+                                                    className="max-h-36 rounded-lg object-contain shadow-xs"
+                                                    onError={(e) => {
+                                                        e.target.style.display = 'none';
+                                                    }}
+                                                    onLoad={(e) => {
+                                                        e.target.style.display = 'block';
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Caption / Alt text */}
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                                        Image Caption / Description (Optional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Figure 1: Architecture diagram"
+                                        value={imageCaption}
+                                        onChange={(e) => setImageCaption(e.target.value)}
+                                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 dark:text-white"
+                                    />
+                                </div>
+
+                                {isUploadingImage && (
+                                    <div className="p-3 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center gap-3">
+                                        <span className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></span>
+                                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                                            Uploading image to Knome media storage... {uploadProgress > 0 ? `${uploadProgress}%` : ''}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* Footer Buttons */}
+                                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-700/60 shrink-0">
+                                    <button
+                                        type="button"
+                                        disabled={isUploadingImage}
+                                        onClick={() => setIsImageModalOpen(false)}
+                                        className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isUploadingImage || (imageTab === 'upload' ? !imageFile : (!imageUrl || !imageUrl.trim()))}
+                                        className="px-5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                                    >
+                                        {isUploadingImage ? (
+                                            <>
+                                                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                                <span>Uploading...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="material-symbols-outlined text-[16px]">add_photo_alternate</span>
+                                                <span>Insert Image</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 )}
