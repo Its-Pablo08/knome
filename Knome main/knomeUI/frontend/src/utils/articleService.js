@@ -123,12 +123,13 @@ export function mapArticle(art) {
     };
 }
 
-export async function getArticles(categoryId = null, tag = null, search = null, pageNumber = 1, pageSize = 20, forceFresh = false) {
+export async function getArticles(categoryId = null, tag = null, search = null, pageNumber = 1, pageSize = 50, forceFresh = false, status = null) {
     try {
         let endpoint = `/Articles?pageNumber=${pageNumber}&pageSize=${pageSize}`;
         if (categoryId) endpoint += `&categoryId=${categoryId}`;
         if (tag) endpoint += `&tag=${encodeURIComponent(tag)}`;
         if (search) endpoint += `&search=${encodeURIComponent(search)}`;
+        if (status) endpoint += `&status=${encodeURIComponent(status)}`;
 
         const data = await apiClient.get(endpoint, forceFresh ? { noCache: true } : {});
         return (data || []).map(art => mapArticle(art));

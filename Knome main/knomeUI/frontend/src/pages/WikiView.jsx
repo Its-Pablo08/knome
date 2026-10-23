@@ -11,6 +11,7 @@ import WikiCollaboratorsModal from '../components/modals/WikiCollaboratorsModal'
 import WikiShareModal from '../components/modals/WikiShareModal';
 import WikiVersionHistoryModal from '../components/modals/WikiVersionHistoryModal';
 import WikiActivityModal from '../components/modals/WikiActivityModal';
+import SaveToCategoryModal from '../components/modals/SaveToCategoryModal';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 function OutlineSectionItem({
@@ -199,58 +200,82 @@ export default function WikiView() {
             .catch(() => {});
     }, [wikiId]);
 
+    const [savingWikiModal, setSavingWikiModal] = useState(null);
+
     const handleToggleBookmark = async () => {
         if (!wiki) return;
-        const nextState = !isBookmarked;
-        setIsBookmarked(nextState);
+        const idStr = String(wiki.wikiId);
 
-        try {
-            const idStr = String(wiki.wikiId);
+        if (isBookmarked) {
+            // Un-bookmark directly
+            setIsBookmarked(false);
+
             const existingWikis = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]');
-            let updatedWikis;
-            if (nextState) {
-                const wikiObj = {
-                    wikiId: wiki.wikiId,
-                    id: wiki.wikiId,
-                    title: wiki.title,
-                    description: wiki.description,
-                    coverImageUrl: wiki.coverImageUrl,
-                    createdByUserName: wiki.createdByUser?.fullName || wiki.createdByUserName,
-                    authorName: wiki.createdByUser?.fullName || wiki.createdByUserName,
-                    savedAt: new Date().toISOString()
-                };
-                updatedWikis = [wikiObj, ...existingWikis.filter(w => String(w.wikiId || w.id) !== idStr)];
-            } else {
-                updatedWikis = existingWikis.filter(w => String(w.wikiId || w.id) !== idStr);
-            }
+            const updatedWikis = existingWikis.filter(w => String(w.wikiId || w.id) !== idStr);
             localStorage.setItem('knome_saved_wikis', JSON.stringify(updatedWikis));
 
             const customSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
             const nonWiki = customSaved.filter(i => (i.contentType || '').toLowerCase() !== 'wiki' || String(i.contentId || i.id) !== idStr);
-            if (nextState) {
-                nonWiki.unshift({
-                    id: `wiki_${wiki.wikiId}`,
-                    contentId: wiki.wikiId,
-                    contentType: 'Wiki',
-                    type: 'wiki',
-                    title: wiki.title,
-                    content: wiki.description || 'Enterprise Wiki Document',
-                    summary: wiki.description || 'Enterprise Wiki Document',
-                    author: wiki.createdByUser?.fullName || wiki.createdByUserName || 'Wiki Author',
-                    thumbnailUrl: wiki.coverImageUrl,
-                    savedAt: new Date().toISOString()
-                });
-            }
             localStorage.setItem('knome_saved_items_custom', JSON.stringify(nonWiki));
+
+            const map = JSON.parse(localStorage.getItem('knome_item_category_map') || '{}');
+            delete map[`Wiki_${idStr}`];
+            delete map[`wiki_${idStr}`];
+            delete map[idStr];
+            localStorage.setItem('knome_item_category_map', JSON.stringify(map));
+
             window.dispatchEvent(new StorageEvent('storage', { key: 'knome_saved_items_custom' }));
-            window.dispatchEvent(new CustomEvent('knome-bookmark-saved', { detail: { contentType: 'Wiki', id: wiki.wikiId, removed: !nextState } }));
+            window.dispatchEvent(new CustomEvent('knome-bookmark-saved', { detail: { contentType: 'Wiki', id: wiki.wikiId, removed: true } }));
 
-            addToast(nextState ? 'Wiki saved to library.' : 'Wiki removed from library.', 'success');
+            addToast('Wiki removed from library.', 'info');
 
-            await savedContentApi.toggleBookmark('Wiki', wiki.wikiId);
-        } catch (err) {
-            console.warn('Backend toggle bookmark notice:', err?.message || err);
+            try {
+                await savedContentApi.toggleBookmark('Wiki', wiki.wikiId);
+            } catch (err) {
+                console.warn('Backend toggle bookmark notice:', err?.message || err);
+            }
+        } else {
+            // Open SaveToCategoryModal to ask for category!
+            setSavingWikiModal({
+                id: wiki.wikiId,
+                contentId: wiki.wikiId,
+                wikiId: wiki.wikiId,
+                contentType: 'Wiki',
+                title: wiki.title || 'Wiki Document',
+                text: wiki.description || 'Enterprise Wiki Document',
+                content: wiki.description || 'Enterprise Wiki Document',
+                description: wiki.description || '',
+                image: wiki.coverImageUrl,
+                thumbnailUrl: wiki.coverImageUrl,
+                author: wiki.createdByUser?.fullName || wiki.createdByUserName || 'Wiki Author',
+                tags: wiki.tags || ['Wiki']
+            });
         }
+    };
+
+    const handleWikiSaved = (savedItem) => {
+        if (!wiki) return;
+        const idStr = String(wiki.wikiId);
+        setIsBookmarked(true);
+
+        const existingWikis = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]');
+        const wikiObj = {
+            wikiId: wiki.wikiId,
+            id: wiki.wikiId,
+            title: wiki.title,
+            description: wiki.description,
+            coverImageUrl: wiki.coverImageUrl,
+            createdByUserName: wiki.createdByUser?.fullName || wiki.createdByUserName,
+            authorName: wiki.createdByUser?.fullName || wiki.createdByUserName,
+            category: savedItem?.category,
+            categoryId: savedItem?.categoryId,
+            savedAt: new Date().toISOString()
+        };
+        const updatedWikis = [wikiObj, ...existingWikis.filter(w => String(w.wikiId || w.id) !== idStr)];
+        localStorage.setItem('knome_saved_wikis', JSON.stringify(updatedWikis));
+
+        addToast('Wiki saved to library.', 'success');
+        setSavingWikiModal(null);
     };
 
     // Modals
@@ -1099,6 +1124,13 @@ export default function WikiView() {
                 onClose={() => setIsActivityModalOpen(false)}
                 wikiId={wikiId}
                 wikiTitle={wiki.title}
+            />
+
+            <SaveToCategoryModal
+                isOpen={!!savingWikiModal}
+                onClose={() => setSavingWikiModal(null)}
+                item={savingWikiModal}
+                onSaved={handleWikiSaved}
             />
         </div>
     );

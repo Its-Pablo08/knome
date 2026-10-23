@@ -9,6 +9,7 @@ import CreateClipModal from '../components/modals/CreateClipModal';
 import ClipCommentsDrawer from '../components/modals/ClipCommentsDrawer';
 import ClipShareModal from '../components/modals/ClipShareModal';
 import ReportClipModal from '../components/modals/ReportClipModal';
+import SaveToCategoryModal from '../components/modals/SaveToCategoryModal';
 
 // Seed demo clips matching database clip IDs (1, 2, 3)
 const FALLBACK_CLIPS = [
@@ -141,6 +142,7 @@ export default function Clips() {
     const [isShareOpen, setIsShareOpen] = useState(false);
     const [isReportOpen, setIsReportOpen] = useState(false);
     const [selectedClipForModal, setSelectedClipForModal] = useState(null);
+    const [savingClipModal, setSavingClipModal] = useState(null);
 
     // Refs for synchronization and zero-jitter scrolling
     const activeIndexRef = useRef(0);
@@ -224,8 +226,11 @@ export default function Clips() {
                     title: c.title,
                     content: c.description || c.title,
                     thumbnailUrl: c.thumbnailUrl || c.videoUrl,
-                    author: c.creatorName || 'Employee',
-                    savedAt: new Date().toISOString()
+                    author: c.creatorName || c.authorName || 'Employee',
+                    category: c.category,
+                    userCategory: c.category,
+                    categoryId: c.categoryId,
+                    savedAt: c.savedAt || new Date().toISOString()
                 }));
                 localStorage.setItem('knome_saved_items_custom', JSON.stringify([...nonClipItems, ...clipItems]));
                 window.dispatchEvent(new StorageEvent('storage', { key: 'knome_saved_items_custom' }));
@@ -925,50 +930,97 @@ export default function Clips() {
         }
     };
 
-    // Bookmark / Save Action — Updates both local cache and SQL backend
+    // Bookmark / Save Action — Opens SaveToCategoryModal to ask for category folder on save
     const handleBookmark = async (clip) => {
         if (!clip) return;
         const clipId = clip.clipId;
         const idStr = String(clipId);
         const currentSaved = Boolean(clip.isBookmarkedByCurrentUser);
-        const nextSaved = !currentSaved;
 
-        // 1. Update local cache immediately
-        const existingSaved = getSavedClipsLocal();
-        let updatedSaved;
-        if (nextSaved) {
-            const clipToSave = { ...clip, isBookmarkedByCurrentUser: true };
-            updatedSaved = [clipToSave, ...existingSaved.filter(c => String(c.clipId) !== idStr)];
+        if (currentSaved) {
+            // Un-bookmark directly
+            const existingSaved = getSavedClipsLocal();
+            const updatedSaved = existingSaved.filter(c => String(c.clipId || c.id) !== idStr);
+            setSavedClipsLocal(updatedSaved);
+
+            try {
+                const customSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
+                const filtered = customSaved.filter(i => !(i.contentType?.toLowerCase() === 'clip' && String(i.contentId || i.id) === idStr) && String(i.id) !== `clip_${idStr}` && String(i.id) !== `Clip_${idStr}` && String(i.id) !== idStr);
+                localStorage.setItem('knome_saved_items_custom', JSON.stringify(filtered));
+
+                const map = JSON.parse(localStorage.getItem('knome_item_category_map') || '{}');
+                delete map[`Clip_${idStr}`];
+                delete map[`clip_${idStr}`];
+                delete map[idStr];
+                localStorage.setItem('knome_item_category_map', JSON.stringify(map));
+            } catch (e) {}
+
+            setClips(prev => {
+                if (feedTab === 'Saved') {
+                    return prev.filter(c => String(c.clipId || c.id) !== idStr);
+                }
+                return prev.map(c => {
+                    if (String(c.clipId || c.id) === idStr) {
+                        return { ...c, isBookmarkedByCurrentUser: false };
+                    }
+                    return c;
+                });
+            });
+
+            addToast('Clip removed from saved.', 'info');
+            window.dispatchEvent(new CustomEvent('knome-bookmark-saved', { detail: { contentType: 'Clip', id: clipId, removed: true } }));
+            window.dispatchEvent(new StorageEvent('storage', { key: 'knome_saved_items_custom' }));
+
+            try {
+                await clipsApi.bookmark(clipId);
+            } catch (err) {
+                try {
+                    await apiClient.post(`/interactions/Clip/${clipId}/bookmark`, {});
+                } catch (err2) {
+                    console.warn('Backend bookmark sync notice:', err2);
+                }
+            }
         } else {
-            updatedSaved = existingSaved.filter(c => String(c.clipId) !== idStr);
+            // Open SaveToCategoryModal to ask for category!
+            setSavingClipModal({
+                id: clip.clipId,
+                contentId: clip.clipId,
+                clipId: clip.clipId,
+                contentType: 'Clip',
+                title: clip.title || 'Short Clip',
+                text: clip.description || clip.hashtags || clip.title || '',
+                content: clip.description || clip.hashtags || clip.title || '',
+                description: clip.description || '',
+                image: clip.thumbnailUrl || clip.videoUrl,
+                thumbnailUrl: clip.thumbnailUrl || clip.videoUrl,
+                author: clip.creatorName || clip.authorName || 'MPOnline Creator',
+                tags: clip.hashtags ? (typeof clip.hashtags === 'string' ? clip.hashtags.split(/\s+/).filter(Boolean) : clip.hashtags) : ['Clip'],
+                sourceUrl: clip.videoUrl
+            });
         }
+    };
+
+    const handleClipSaved = (savedItem) => {
+        if (!savingClipModal) return;
+        const clipId = savingClipModal.clipId || savingClipModal.id;
+        const idStr = String(clipId);
+
+        // Update local clips cache with assigned category
+        const existingSaved = getSavedClipsLocal();
+        const clipToSave = { ...savingClipModal, isBookmarkedByCurrentUser: true, category: savedItem?.category, categoryId: savedItem?.categoryId };
+        const updatedSaved = [clipToSave, ...existingSaved.filter(c => String(c.clipId || c.id) !== idStr)];
         setSavedClipsLocal(updatedSaved);
 
-        // 2. Optimistic UI update for currently displayed list
-        setClips(prev => {
-            if (feedTab === 'Saved' && !nextSaved) {
-                return prev.filter(c => String(c.clipId) !== idStr);
+        // Update UI state
+        setClips(prev => prev.map(c => {
+            if (String(c.clipId || c.id) === idStr) {
+                return { ...c, isBookmarkedByCurrentUser: true };
             }
-            return prev.map(c => {
-                if (String(c.clipId) === idStr) {
-                    return { ...c, isBookmarkedByCurrentUser: nextSaved };
-                }
-                return c;
-            });
-        });
+            return c;
+        }));
 
-        addToast(nextSaved ? 'Clip saved to your collection!' : 'Clip removed from saved.', 'info');
-
-        // 3. Persist to backend database (dual endpoints)
-        try {
-            await clipsApi.bookmark(clipId);
-        } catch (err) {
-            try {
-                await apiClient.post(`/interactions/Clip/${clipId}/bookmark`, {});
-            } catch (err2) {
-                console.warn('Backend bookmark sync notice:', err2);
-            }
-        }
+        addToast('Clip saved to your collection!', 'success');
+        setSavingClipModal(null);
     };
 
     // Delete Clip Action
@@ -1668,6 +1720,13 @@ export default function Clips() {
                 isOpen={isReportOpen}
                 onClose={() => setIsReportOpen(false)}
                 clip={selectedClipForModal}
+            />
+
+            <SaveToCategoryModal
+                isOpen={!!savingClipModal}
+                onClose={() => setSavingClipModal(null)}
+                item={savingClipModal}
+                onSaved={handleClipSaved}
             />
 
         </div>
