@@ -274,6 +274,9 @@ export default function SavedContent() {
                 thumbnailUrl: c.thumbnailUrl || c.videoUrl,
                 authorFullName: extractText(c.authorName || c.creatorName || 'Creator'),
                 authorName: extractText(c.authorName || c.creatorName || 'Creator'),
+                category: c.category,
+                userCategory: c.category || c.userCategory,
+                categoryId: c.categoryId,
                 savedAt: c.savedAt || c.createdAt || new Date().toISOString(),
                 savedDate: c.savedAt || c.createdAt || new Date().toISOString(),
                 targetUrl: `/clips?id=${c.clipId || c.id}`
@@ -289,6 +292,9 @@ export default function SavedContent() {
                 thumbnailUrl: w.coverImageUrl,
                 authorFullName: extractText(w.createdByUser?.fullName || w.createdByUserName || 'Wiki Author'),
                 authorName: extractText(w.createdByUser?.fullName || w.createdByUserName || 'Wiki Author'),
+                category: w.category,
+                userCategory: w.category || w.userCategory,
+                categoryId: w.categoryId,
                 savedAt: w.savedAt || w.savedDate || new Date().toISOString(),
                 savedDate: w.savedAt || w.savedDate || new Date().toISOString(),
                 targetUrl: `/wiki/view?id=${w.wikiId || w.id}`
@@ -377,6 +383,9 @@ export default function SavedContent() {
                 summary: extractText(c.description || c.hashtags || ''),
                 thumbnailUrl: c.thumbnailUrl || c.videoUrl,
                 authorFullName: extractText(c.authorName || c.creatorName || 'Creator'),
+                category: c.category,
+                userCategory: c.category || c.userCategory,
+                categoryId: c.categoryId,
                 savedAt: c.savedAt || c.createdAt || new Date().toISOString(),
                 targetUrl: `/clips?id=${c.clipId || c.id}`
             }));
@@ -388,6 +397,9 @@ export default function SavedContent() {
                 summary: extractText(w.description || ''),
                 thumbnailUrl: w.coverImageUrl,
                 authorFullName: extractText(w.createdByUser?.fullName || w.createdByUserName || 'Wiki Author'),
+                category: w.category,
+                userCategory: w.category || w.userCategory,
+                categoryId: w.categoryId,
                 savedAt: w.savedAt || w.savedDate || new Date().toISOString(),
                 targetUrl: `/wiki/view?id=${w.wikiId || w.id}`
             }));

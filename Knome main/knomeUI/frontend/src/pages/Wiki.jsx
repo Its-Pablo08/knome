@@ -8,6 +8,7 @@ import { resolveMediaUrl, savedContentApi } from '../utils/apiService';
 import HighlightText from '../components/ui/HighlightText';
 import CreateWikiModal from '../components/modals/CreateWikiModal';
 import WikiShareModal from '../components/modals/WikiShareModal';
+import SaveToCategoryModal from '../components/modals/SaveToCategoryModal';
 
 export default function Wiki() {
     const { currentUser } = useUser();
@@ -45,6 +46,7 @@ export default function Wiki() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [editingWiki, setEditingWiki] = useState(null);
     const [sharingWiki, setSharingWiki] = useState(null);
+    const [savingWikiModal, setSavingWikiModal] = useState(null);
 
     // Bookmarking state
     const [savedWikiIds, setSavedWikiIds] = useState(() => {
@@ -189,62 +191,83 @@ export default function Wiki() {
     };
 
     const handleToggleBookmark = async (wiki, e) => {
-        e.stopPropagation();
+        if (e && e.stopPropagation) e.stopPropagation();
         const idStr = String(wiki.wikiId);
         const isCurrentlySaved = savedWikiIds.includes(idStr);
-        const nextSaved = !isCurrentlySaved;
 
-        const nextIds = nextSaved
-            ? [...savedWikiIds, idStr]
-            : savedWikiIds.filter(id => id !== idStr);
-        setSavedWikiIds(nextIds);
+        if (isCurrentlySaved) {
+            // Un-save directly
+            const nextIds = savedWikiIds.filter(id => id !== idStr);
+            setSavedWikiIds(nextIds);
 
-        try {
             const existingWikis = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]');
-            let updatedWikis;
-            if (nextSaved) {
-                const wikiObj = {
-                    wikiId: wiki.wikiId,
-                    id: wiki.wikiId,
-                    title: wiki.title,
-                    description: wiki.description,
-                    coverImageUrl: wiki.coverImageUrl,
-                    createdByUserName: wiki.createdByUserName,
-                    authorName: wiki.createdByUserName,
-                    savedAt: new Date().toISOString()
-                };
-                updatedWikis = [wikiObj, ...existingWikis.filter(w => String(w.wikiId || w.id) !== idStr)];
-            } else {
-                updatedWikis = existingWikis.filter(w => String(w.wikiId || w.id) !== idStr);
-            }
+            const updatedWikis = existingWikis.filter(w => String(w.wikiId || w.id) !== idStr);
             localStorage.setItem('knome_saved_wikis', JSON.stringify(updatedWikis));
 
             const customSaved = JSON.parse(localStorage.getItem('knome_saved_items_custom') || '[]');
             const nonWiki = customSaved.filter(i => (i.contentType || '').toLowerCase() !== 'wiki' || String(i.contentId || i.id) !== idStr);
-            if (nextSaved) {
-                nonWiki.unshift({
-                    id: `wiki_${wiki.wikiId}`,
-                    contentId: wiki.wikiId,
-                    contentType: 'Wiki',
-                    type: 'wiki',
-                    title: wiki.title,
-                    content: wiki.description || 'Enterprise Wiki Document',
-                    summary: wiki.description || 'Enterprise Wiki Document',
-                    author: wiki.createdByUserName || 'Wiki Author',
-                    thumbnailUrl: wiki.coverImageUrl,
-                    savedAt: new Date().toISOString()
-                });
-            }
             localStorage.setItem('knome_saved_items_custom', JSON.stringify(nonWiki));
+
+            const map = JSON.parse(localStorage.getItem('knome_item_category_map') || '{}');
+            delete map[`Wiki_${idStr}`];
+            delete map[`wiki_${idStr}`];
+            delete map[idStr];
+            localStorage.setItem('knome_item_category_map', JSON.stringify(map));
+
             window.dispatchEvent(new StorageEvent('storage', { key: 'knome_saved_items_custom' }));
-            window.dispatchEvent(new CustomEvent('knome-bookmark-saved', { detail: { contentType: 'Wiki', id: wiki.wikiId, removed: !nextSaved } }));
+            window.dispatchEvent(new CustomEvent('knome-bookmark-saved', { detail: { contentType: 'Wiki', id: wiki.wikiId, removed: true } }));
 
-            addToast(nextSaved ? 'Wiki saved to your personal library.' : 'Wiki removed from saved library.', 'success');
+            addToast('Wiki removed from saved library.', 'info');
 
-            await savedContentApi.toggleBookmark('Wiki', wiki.wikiId);
-        } catch (err) {
-            console.warn('Backend toggle bookmark notice:', err?.message || err);
+            try {
+                await savedContentApi.toggleBookmark('Wiki', wiki.wikiId);
+            } catch (err) {
+                console.warn('Backend toggle bookmark notice:', err?.message || err);
+            }
+        } else {
+            // Open SaveToCategoryModal to ask for category!
+            setSavingWikiModal({
+                id: wiki.wikiId,
+                contentId: wiki.wikiId,
+                wikiId: wiki.wikiId,
+                contentType: 'Wiki',
+                title: wiki.title || 'Wiki Document',
+                text: wiki.description || 'Enterprise Wiki Document',
+                content: wiki.description || 'Enterprise Wiki Document',
+                description: wiki.description || '',
+                image: wiki.coverImageUrl,
+                thumbnailUrl: wiki.coverImageUrl,
+                author: wiki.createdByUserName || 'Wiki Author',
+                tags: wiki.tags || ['Wiki']
+            });
         }
+    };
+
+    const handleWikiSaved = (savedItem) => {
+        if (!savingWikiModal) return;
+        const idStr = String(savingWikiModal.wikiId || savingWikiModal.id);
+        const nextIds = [...savedWikiIds.filter(id => id !== idStr), idStr];
+        setSavedWikiIds(nextIds);
+
+        // Update knome_saved_wikis with category
+        const existingWikis = JSON.parse(localStorage.getItem('knome_saved_wikis') || '[]');
+        const wikiObj = {
+            wikiId: savingWikiModal.wikiId || savingWikiModal.id,
+            id: savingWikiModal.wikiId || savingWikiModal.id,
+            title: savingWikiModal.title,
+            description: savingWikiModal.description,
+            coverImageUrl: savingWikiModal.image || savingWikiModal.thumbnailUrl,
+            createdByUserName: savingWikiModal.author,
+            authorName: savingWikiModal.author,
+            category: savedItem?.category,
+            categoryId: savedItem?.categoryId,
+            savedAt: new Date().toISOString()
+        };
+        const updatedWikis = [wikiObj, ...existingWikis.filter(w => String(w.wikiId || w.id) !== idStr)];
+        localStorage.setItem('knome_saved_wikis', JSON.stringify(updatedWikis));
+
+        addToast('Wiki saved to your personal library.', 'success');
+        setSavingWikiModal(null);
     };
 
     const handleCardClick = (wikiId) => {
@@ -810,6 +833,13 @@ export default function Wiki() {
                     onSharesUpdated={() => loadWikis()}
                 />
             )}
+
+            <SaveToCategoryModal
+                isOpen={!!savingWikiModal}
+                onClose={() => setSavingWikiModal(null)}
+                item={savingWikiModal}
+                onSaved={handleWikiSaved}
+            />
         </div>
     );
 }
