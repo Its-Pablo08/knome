@@ -17,6 +17,8 @@ export const DEFAULT_SYSTEM_CONFIG = {
     enableEmail: true,
     requireContentAndCommunityApproval: true,
     requireCommunityApproval: true,
+    requireArticleApproval: false,
+    requireWikiApproval: false,
     requireVideoApproval: true,
     requirePodcastApproval: true,
     enablePosts: true,
@@ -124,6 +126,40 @@ export function isCommunityApprovalRequired() {
 }
 
 /**
+ * Fast synchronous check whether Article Approval is required (ON).
+ */
+export function isArticleApprovalRequired() {
+    const config = getSystemConfig();
+    if (typeof config.requireArticleApproval === 'boolean') {
+        return config.requireArticleApproval;
+    }
+    if (config.requireArticleApproval === 'false' || config.requireArticleApproval === 'False') {
+        return false;
+    }
+    if (config.requireArticleApproval === 'true' || config.requireArticleApproval === 'True') {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Fast synchronous check whether Wiki Approval is required (ON).
+ */
+export function isWikiApprovalRequired() {
+    const config = getSystemConfig();
+    if (typeof config.requireWikiApproval === 'boolean') {
+        return config.requireWikiApproval;
+    }
+    if (config.requireWikiApproval === 'false' || config.requireWikiApproval === 'False') {
+        return false;
+    }
+    if (config.requireWikiApproval === 'true' || config.requireWikiApproval === 'True') {
+        return true;
+    }
+    return false;
+}
+
+/**
  * Fast synchronous check whether Video Approval is required (ON).
  */
 export function isVideoApprovalRequired() {
@@ -217,6 +253,12 @@ export async function loadSystemApprovalSettingFromBackend(forceRefresh = false)
 
                 const reqComm = parseBool('requireCommunityApproval', 'RequireCommunityApproval');
                 if (reqComm !== undefined) patch.requireCommunityApproval = reqComm;
+
+                const reqArt = parseBool('requireArticleApproval', 'RequireArticleApproval');
+                if (reqArt !== undefined) patch.requireArticleApproval = reqArt;
+
+                const reqWiki = parseBool('requireWikiApproval', 'RequireWikiApproval');
+                if (reqWiki !== undefined) patch.requireWikiApproval = reqWiki;
 
                 const reqVid = parseBool('requireVideoApproval', 'RequireVideoApproval');
                 if (reqVid !== undefined) patch.requireVideoApproval = reqVid;
@@ -354,6 +396,8 @@ export function useSystemConfig() {
         isEmailEnabled: config.enableEmail !== false,
         isApprovalRequired: config.requireContentAndCommunityApproval !== false,
         isCommunityApprovalRequired: config.requireCommunityApproval !== false,
+        isArticleApprovalRequired: config.requireArticleApproval !== false,
+        isWikiApprovalRequired: config.requireWikiApproval !== false,
         isVideoApprovalRequired: config.requireVideoApproval !== false,
         isPodcastApprovalRequired: config.requirePodcastApproval !== false,
         isPostsEnabled: config.enablePosts !== false,

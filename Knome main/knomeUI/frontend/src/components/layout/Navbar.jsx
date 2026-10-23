@@ -1190,6 +1190,12 @@ export default function Navbar() {
                 const reqComm = parseBool('requireCommunityApproval', 'RequireCommunityApproval');
                 if (reqComm !== undefined) patch.requireCommunityApproval = reqComm;
 
+                const reqArt = parseBool('requireArticleApproval', 'RequireArticleApproval');
+                if (reqArt !== undefined) patch.requireArticleApproval = reqArt;
+
+                const reqWiki = parseBool('requireWikiApproval', 'RequireWikiApproval');
+                if (reqWiki !== undefined) patch.requireWikiApproval = reqWiki;
+
                 const reqVid = parseBool('requireVideoApproval', 'RequireVideoApproval');
                 if (reqVid !== undefined) patch.requireVideoApproval = reqVid;
 

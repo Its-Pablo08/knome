@@ -25,6 +25,7 @@ public class WikiService : IWikiService
     private readonly IAuditLogService _auditLog;
     private readonly INotificationService _notificationService;
     private readonly IHubContext<NotificationHub> _hubContext;
+    private readonly ISystemSettingService? _systemSettingService;
 
     public WikiService(
         IWikiRepository repo,
@@ -33,7 +34,8 @@ public class WikiService : IWikiService
         ISuspensionGuard suspensionGuard,
         IAuditLogService auditLog,
         INotificationService notificationService,
-        IHubContext<NotificationHub> hubContext)
+        IHubContext<NotificationHub> hubContext,
+        ISystemSettingService? systemSettingService = null)
     {
         _repo = repo;
         _db = db;
@@ -42,6 +44,7 @@ public class WikiService : IWikiService
         _auditLog = auditLog;
         _notificationService = notificationService;
         _hubContext = hubContext;
+        _systemSettingService = systemSettingService;
     }
 
     private async Task<bool> IsAdministratorAsync(int userId)
@@ -362,12 +365,27 @@ public class WikiService : IWikiService
         var strategy = _db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
+            var requestedStatus = string.IsNullOrWhiteSpace(dto.Status) ? "Published" : dto.Status;
+            var finalStatus = requestedStatus;
+            if (requestedStatus != "Draft")
+            {
+                var isUserAdmin = await IsAdministratorAsync(currentUserId);
+                var requireApproval = _systemSettingService != null
+                    ? await _systemSettingService.GetRequireWikiApprovalAsync()
+                    : false;
+
+                if (requireApproval && !isUserAdmin)
+                {
+                    finalStatus = "PendingApproval";
+                }
+            }
+
             var wiki = new Wiki
             {
                 Title = dto.Title.Trim(),
                 Description = dto.Description?.Trim(),
                 ContentHtml = sanitizedContent,
-                Status = string.IsNullOrWhiteSpace(dto.Status) ? "Published" : dto.Status,
+                Status = finalStatus,
                 CreatedByUserId = currentUserId,
                 CategoryId = dto.CategoryId > 0 ? dto.CategoryId : null,
                 CoverImageUrl = dto.CoverImageUrl,

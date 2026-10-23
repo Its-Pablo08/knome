@@ -1026,20 +1026,13 @@ export const formatToDDMMYYYY = (dateInput) => {
 
 export const KNOWN_ROSTER_NAMES = {
     'MP0108': 'Loveneesh Sharma',
-    'MPO101': 'Loveneesh Sharma',
     'MP0664': 'Vishendra Sharma',
-    'MPO102': 'Vishendra Sharma',
     'EMP052': 'Sourabh Sahu',
-    'MPO103': 'Sourabh Sahu',
-    'EMP101': 'Meghna',
     'Emp101': 'Meghna',
-    'MPO105': 'Meghna',
-    'MPO116': 'Meghna',
-    'MPO089': 'Vilash Deshmukh',
+    'EMP101': 'Meghna',
     'EMP100': 'Mayur Bansal',
-    'MPO111': 'Mayur Bansal',
-    'MPO652': 'Deepak Simrodia',
-    'mpo652': 'Deepak Simrodia'
+    'MPO089': 'Vilash Deshmukh',
+    'MPO652': 'Deepak Simrodia'
 };
 
 export const resolveEmployeeName = (rawName, empId) => {

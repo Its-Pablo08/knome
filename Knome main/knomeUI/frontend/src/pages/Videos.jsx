@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useUser } from '../components/contexts/UserContext';
+import { useUser, INITIAL_USERS, isPlatformActiveUser } from '../components/contexts/UserContext';
 import UploadVideoModal from '../components/modals/UploadVideoModal';
 import ReportModal from '../components/modals/ReportModal';
 import SaveToCategoryModal from '../components/modals/SaveToCategoryModal';
@@ -1381,17 +1381,13 @@ export default function Videos() {
         ? videos.filter(v => v.id !== activeVideo.id)
         : filteredVideos;
 
-    const activeUsersList = (users || [
-        { id: 2, name: 'Priya Verma', roleName: 'Product Lead', department: 'UI/UX' },
-        { id: 3, name: 'Sourabh Sahu', roleName: 'Community Admin', department: 'HR' },
-        { id: 4, name: 'Vishendra Sharma', roleName: 'AI Engineer', department: 'AI Lab' },
-        { id: 5, name: 'Mayur Verma', roleName: 'UX Researcher', department: 'Product' },
-    ]).filter(u => {
+    const activeUsersList = (users && users.length > 0 ? users : (INITIAL_USERS || [])).filter(u => {
+        if (!isPlatformActiveUser(u)) return false;
         const uId = u.id || u.userId;
-        if (String(uId) === String(currentUser?.id)) return false;
+        if (String(uId) === String(currentUser?.id || currentUser?.userId)) return false;
         if (!userSearchQuery) return true;
         const q = userSearchQuery.toLowerCase();
-        return (u.name || '').toLowerCase().includes(q) || (u.department || '').toLowerCase().includes(q);
+        return (u.name || u.fullName || '').toLowerCase().includes(q) || (u.department || '').toLowerCase().includes(q);
     });
 
     return (

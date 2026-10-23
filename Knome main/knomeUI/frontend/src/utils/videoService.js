@@ -107,13 +107,13 @@ function resolveVideoAuthor(rawAuthor = '', title = '', category = '', rawUserId
         };
     }
 
-    // 4. Product / Strategy -> Priya Verma
+    // 4. Product / Strategy -> Meghna Tiwari
     if (c.includes('product') || t.includes('product') || t.includes('strategy') || t.includes('management')) {
         return {
-            author: 'Priya Verma',
-            authorId: 2,
+            author: 'Meghna Tiwari',
+            authorId: 5,
             authorAvatar: null,
-            authorDesignation: 'Product Lead'
+            authorDesignation: 'Product Designer'
         };
     }
 

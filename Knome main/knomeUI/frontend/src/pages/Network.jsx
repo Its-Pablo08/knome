@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useUser } from '../components/contexts/UserContext';
+import { useUser, isPlatformActiveUser } from '../components/contexts/UserContext';
 import { useToast } from '../components/contexts/ToastContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
 import { userApi, searchApi, resolveMediaUrl } from '../utils/apiService';
@@ -11,39 +11,25 @@ import { useSystemConfig } from '../utils/systemConfig';
 
 const KNOWN_ROSTER_NAMES = {
     'MP0108': 'Loveneesh Sharma',
-    'MPO101': 'Loveneesh Sharma',
     'MP0664': 'Vishendra Sharma',
-    'MPO102': 'Vishendra Sharma',
     'EMP052': 'Sourabh Sahu',
-    'MPO103': 'Sourabh Sahu',
-    'EMP101': 'Meghna',
     'Emp101': 'Meghna',
-    'MPO105': 'Meghna',
-    'MPO116': 'Meghna',
-    'MPO089': 'Vilash Deshmukh',
+    'EMP101': 'Meghna',
     'EMP100': 'Mayur Bansal',
-    'MPO111': 'Mayur Bansal',
-    'MPO652': 'Deepak Simrodia',
-    'mpo652': 'Deepak Simrodia'
+    'MPO089': 'Vilash Deshmukh',
+    'MPO652': 'Deepak Simrodia'
 };
 
 
 const KNOWN_ROSTER_ROLES = {
     'MP0108': { role: 'System Admin', designation: 'TPM' },
-    'MPO101': { role: 'System Admin', designation: 'TPM' },
     'MP0664': { role: 'Community Admin', designation: 'Track Lead' },
-    'MPO102': { role: 'Community Admin', designation: 'Track Lead' },
     'EMP052': { role: 'HR Admin', designation: 'Talent Acquisition Manager' },
-    'MPO103': { role: 'HR Admin', designation: 'Talent Acquisition Manager' },
-    'EMP101': { role: 'HR Admin', designation: 'Business Analyst' },
     'Emp101': { role: 'HR Admin', designation: 'Business Analyst' },
-    'MPO105': { role: 'HR Admin', designation: 'Business Analyst' },
-    'MPO116': { role: 'HR Admin', designation: 'Business Analyst' },
-    'MPO089': { role: 'System Admin', designation: 'Associate Consultant' },
+    'EMP101': { role: 'HR Admin', designation: 'Business Analyst' },
     'EMP100': { role: 'Employee', designation: 'Software Developer' },
-    'MPO111': { role: 'Employee', designation: 'Software Developer' },
-    'MPO652': { role: 'Employee', designation: 'Software Developer' },
-    'mpo652': { role: 'Employee', designation: 'Software Developer' }
+    'MPO089': { role: 'System Admin', designation: 'Associate Consultant' },
+    'MPO652': { role: 'Employee', designation: 'Software Developer' }
 };
 
 function getRoleBadgeStyle(roleName) {
@@ -126,7 +112,7 @@ export default function Network() {
         let rawName = item.name || item.fullName || item.title || '';
         const empCode = String(item.employeeId || item.authorEmployeeId || '').toUpperCase().trim();
         
-        // 1. Resolve Name: If rawName matches an Employee ID pattern (e.g. EMP004, MPO101) or is empty
+        // 1. Resolve Name: If rawName matches an Employee ID pattern (e.g. MP0108, EMP052) or is empty
         const isEmpIdPattern = /^(EMP|MPO)\d+$/i.test(rawName.trim()) || rawName.toUpperCase().startsWith('NON_EXISTENT');
         if (!rawName || isEmpIdPattern) {
             const codeKey = (rawName.trim() || empCode).toUpperCase();
@@ -268,6 +254,7 @@ export default function Network() {
         for (const item of list) {
             if (!item) continue;
             if (isCurrentUser(item)) continue; // Strictly exclude current user!
+            if (!isPlatformActiveUser(item)) continue; // Strictly exclude any phantom users outside the 7 active users!
             
             const id = String(item.id || item.userId || '');
             const empId = String(item.employeeId || item.authorEmployeeId || '').trim().toUpperCase();
@@ -336,48 +323,40 @@ export default function Network() {
             const connKeys = new Set();
             mappedConn.forEach(u => {
                 if (u.id) connKeys.add(String(u.id));
-                const n = (u.name || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase().replace(/[^a-z]/g, '');
+                if (u.userId) connKeys.add(String(u.userId));
+                if (u.employeeId) connKeys.add(String(u.employeeId).toUpperCase().trim());
+                const n = (u.name || u.fullName || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase().replace(/[^a-z]/g, '');
                 if (n) connKeys.add(n);
             });
 
             const sentKeys = new Set();
             mappedSent.forEach(u => {
                 if (u.id) sentKeys.add(String(u.id));
-                const n = (u.name || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase().replace(/[^a-z]/g, '');
+                if (u.userId) sentKeys.add(String(u.userId));
+                if (u.employeeId) sentKeys.add(String(u.employeeId).toUpperCase().trim());
+                const n = (u.name || u.fullName || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase().replace(/[^a-z]/g, '');
                 if (n) sentKeys.add(n);
             });
 
             const recKeys = new Set();
             mappedRec.forEach(u => {
                 if (u.id) recKeys.add(String(u.id));
-                const n = (u.name || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase().replace(/[^a-z]/g, '');
+                if (u.userId) recKeys.add(String(u.userId));
+                if (u.employeeId) recKeys.add(String(u.employeeId).toUpperCase().trim());
+                const n = (u.name || u.fullName || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase().replace(/[^a-z]/g, '');
                 if (n) recKeys.add(n);
             });
 
             const deriveStatus = (item) => {
                 const id = String(item.id || item.userId || '');
+                const uId = item.userId ? String(item.userId) : '';
+                const empId = item.employeeId ? String(item.employeeId).toUpperCase().trim() : '';
                 const nameKey = (item.name || item.fullName || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase().replace(/[^a-z]/g, '');
-                if (connKeys.has(id) || connKeys.has(nameKey)) return 'Connected';
-                if (sentKeys.has(id) || sentKeys.has(nameKey)) return 'PendingSent';
-                if (recKeys.has(id) || recKeys.has(nameKey)) return 'PendingReceived';
+                if (connKeys.has(id) || (uId && connKeys.has(uId)) || (empId && connKeys.has(empId)) || connKeys.has(nameKey)) return 'Connected';
+                if (sentKeys.has(id) || (uId && sentKeys.has(uId)) || (empId && sentKeys.has(empId)) || sentKeys.has(nameKey)) return 'PendingSent';
+                if (recKeys.has(id) || (uId && recKeys.has(uId)) || (empId && recKeys.has(empId)) || recKeys.has(nameKey)) return 'PendingReceived';
                 return item.connectionStatus || 'NotConnected';
             };
-
-            // Suggestions: strictly exclude self, already connected, and pending sent/received requests
-            const mappedSug = deduplicateUsers(
-                sugArray
-                    .map(u => mapUserItem({ ...u, connectionStatus: deriveStatus(u) }))
-                    .filter(u => {
-                        if (isCurrentUser(u)) return false;
-                        const id = String(u.id || u.userId || '');
-                        const nameKey = (u.name || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase().replace(/[^a-z]/g, '');
-                        if (connKeys.has(id) || connKeys.has(nameKey)) return false;
-                        if (sentKeys.has(id) || sentKeys.has(nameKey)) return false;
-                        if (recKeys.has(id) || recKeys.has(nameKey)) return false;
-                        if (u.connectionStatus === 'Connected' || u.connectionStatus === 'PendingSent' || u.connectionStatus === 'PendingReceived') return false;
-                        return true;
-                    })
-            );
 
             // Directory: colleagues across platform excluding self
             const mappedDir = deduplicateUsers(
@@ -385,6 +364,31 @@ export default function Network() {
                     .filter(u => !isCurrentUser(u))
                     .map(u => mapUserItem({ ...u, connectionStatus: deriveStatus(u) }))
             );
+
+            // Suggestions: strictly exclude self, already connected, and pending sent/received requests
+            let mappedSug = deduplicateUsers(
+                sugArray
+                    .map(u => mapUserItem({ ...u, connectionStatus: deriveStatus(u) }))
+                    .filter(u => {
+                        if (isCurrentUser(u)) return false;
+                        const id = String(u.id || u.userId || '');
+                        const uId = u.userId ? String(u.userId) : '';
+                        const empId = u.employeeId ? String(u.employeeId).toUpperCase().trim() : '';
+                        const nameKey = (u.name || u.fullName || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase().replace(/[^a-z]/g, '');
+                        if (connKeys.has(id) || (uId && connKeys.has(uId)) || (empId && connKeys.has(empId)) || connKeys.has(nameKey)) return false;
+                        if (sentKeys.has(id) || (uId && sentKeys.has(uId)) || (empId && sentKeys.has(empId)) || sentKeys.has(nameKey)) return false;
+                        if (recKeys.has(id) || (uId && recKeys.has(uId)) || (empId && recKeys.has(empId)) || recKeys.has(nameKey)) return false;
+                        if (u.connectionStatus === 'Connected' || u.connectionStatus === 'PendingSent' || u.connectionStatus === 'PendingReceived') return false;
+                        return true;
+                    })
+            );
+
+            // If algorithmic suggestions is empty, supply non-connected colleagues from Directory
+            if (mappedSug.length === 0 && mappedDir.length > 0) {
+                mappedSug = mappedDir
+                    .filter(u => !isCurrentUser(u) && u.connectionStatus === 'NotConnected')
+                    .slice(0, 8);
+            }
 
             setSuggestions(mappedSug);
             setReceivedRequests(prev => {

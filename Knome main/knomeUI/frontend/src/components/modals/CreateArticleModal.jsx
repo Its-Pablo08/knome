@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext';
 import { checkRestrictedContent } from '../../utils/restrictedWords';
 import { formatToDDMMYYYY, mediaApi } from '../../utils/apiService';
 import CustomDateTimePicker from '../widgets/CustomDateTimePicker';
+import { isArticleApprovalRequired } from '../../utils/systemConfig';
 
 export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }) {
     const { currentUser, awardRuleKarma } = useUser();
@@ -322,8 +323,9 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
             isoScheduledDate = parsed.toISOString();
         }
 
-        // If submitted by employee or moderator (not sysadmin) and not saving draft, route to approval
-        if (finalStatus !== 'Draft' && !canDirectPublish) {
+        // If submitted by employee or moderator (not sysadmin) and not saving draft, route to approval if policy is ON
+        const articleApprovalRequired = isArticleApprovalRequired();
+        if (finalStatus !== 'Draft' && articleApprovalRequired && !canDirectPublish) {
             finalStatus = 'PendingApproval';
         }
         

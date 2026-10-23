@@ -14,6 +14,7 @@ import { useScrollLoading } from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
 import CustomDateTimePicker from '../components/widgets/CustomDateTimePicker';
+import { isArticleApprovalRequired } from '../utils/systemConfig';
 
 export default function Articles() {
     const { currentUser } = useUser();
@@ -585,8 +586,9 @@ export default function Articles() {
             isoScheduledDate = parsed.toISOString();
         }
 
-        // If submitted by employee or moderator (not sysadmin) and not saving draft, route to approval
-        if (finalStatus !== 'Draft' && !canDirectPublish) {
+        // If submitted by employee or moderator (not sysadmin) and not saving draft, route to approval if policy is ON
+        const articleApprovalRequired = isArticleApprovalRequired();
+        if (finalStatus !== 'Draft' && articleApprovalRequired && !canDirectPublish) {
             finalStatus = 'PendingApproval';
         }
 

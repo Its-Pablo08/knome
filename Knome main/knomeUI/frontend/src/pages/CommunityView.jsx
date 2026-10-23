@@ -44,7 +44,7 @@ const ENTERPRISE_CHANNELS_SEED = {
         name: 'Product Design & UX',
         type: 'Public',
         category: 'UI/UX & Design Systems',
-        adminContact: 'Mayur Verma (Design Lead)',
+        adminContact: 'Meghna Tiwari (Design Lead)',
         description: 'Design system specifications, user research findings, interactive prototypes, and UI/UX design reviews across enterprise portals.',
         rules: ['1. Share constructive design critique.', '2. Adhere to the Knome & MPOnline design system tokens.', '3. Credit design resources appropriately.'],
         faq: [
@@ -2402,7 +2402,7 @@ export default function CommunityView() {
                         { id: 1, name: 'System_Architecture_Overview.pdf', category: 'Document', extension: 'pdf', size: '3.4 MB', uploadedBy: 'Loveneesh Sharma', uploadedAt: '2026-07-25T10:30:00.000Z', url: SAMPLE_PDF_DATA_URL, downloadCount: 14 },
                         { id: 2, name: 'API_Integration_Guild_v2.docx', category: 'Document', extension: 'docx', size: '1.2 MB', uploadedBy: 'Vishendra Sharma', uploadedAt: '2026-07-26T14:15:00.000Z', url: 'https://filesamples.com/samples/document/docx/sample3.docx', downloadCount: 9 },
                         { id: 3, name: 'Database_Schema_Architecture.png', category: 'Image', extension: 'png', size: '850 KB', uploadedBy: 'Sourabh Sahu', uploadedAt: '2026-07-27T09:45:00.000Z', url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=1200&h=800', downloadCount: 22 },
-                        { id: 4, name: 'Project_Walkthrough_Demo.mp4', category: 'Video', extension: 'mp4', size: '14.8 MB', uploadedBy: 'Rishikesh Ugle', uploadedAt: '2026-07-28T08:00:00.000Z', url: '#', downloadCount: 7 }
+                        { id: 4, name: 'Project_Walkthrough_Demo.mp4', category: 'Video', extension: 'mp4', size: '14.8 MB', uploadedBy: 'Mayur Bansal', uploadedAt: '2026-07-28T08:00:00.000Z', url: '#', downloadCount: 7 }
                     ];
                     setFilesList(seedFiles);
                     safeSetStorage(savedFilesKey, seedFiles);

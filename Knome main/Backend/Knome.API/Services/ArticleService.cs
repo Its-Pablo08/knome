@@ -24,8 +24,9 @@ public class ArticleService : IArticleService
     private readonly KnomeDbContext _db;
     private readonly IMapper _mapper;
     private readonly ISuspensionGuard _suspensionGuard;
+    private readonly ISystemSettingService? _systemSettingService;
 
-    public ArticleService(IArticleRepository repo, IContentInteractionService interactionService, IKarmaService karmaService, KnomeDbContext db, IMapper mapper, ISuspensionGuard suspensionGuard)
+    public ArticleService(IArticleRepository repo, IContentInteractionService interactionService, IKarmaService karmaService, KnomeDbContext db, IMapper mapper, ISuspensionGuard suspensionGuard, ISystemSettingService? systemSettingService = null)
     {
         _repo = repo;
         _interactionService = interactionService;
@@ -33,6 +34,7 @@ public class ArticleService : IArticleService
         _db = db;
         _mapper = mapper;
         _suspensionGuard = suspensionGuard;
+        _systemSettingService = systemSettingService;
     }
 
     private async Task CheckIsAuthorOrAdminAsync(Article article, int currentUserId)
@@ -151,7 +153,26 @@ public class ArticleService : IArticleService
         }
 
         var isAlreadyDue = scheduledDate.HasValue && scheduledDate.Value <= KnomeTime.Now;
-        var finalStatus = isAlreadyDue ? ArticleStatuses.Published : (string.IsNullOrEmpty(dto.Status) ? ArticleStatuses.Published : dto.Status);
+        var requestedStatus = isAlreadyDue ? ArticleStatuses.Published : (string.IsNullOrEmpty(dto.Status) ? ArticleStatuses.Published : dto.Status);
+
+        var finalStatus = requestedStatus;
+        if (requestedStatus != ArticleStatuses.Draft)
+        {
+            var caller = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
+            var isCallerAdmin = caller != null && caller.Roles.Any(r => 
+                r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" || 
+                r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM");
+
+            var requireApproval = _systemSettingService != null
+                ? await _systemSettingService.GetRequireArticleApprovalAsync()
+                : false;
+
+            if (requireApproval && !isCallerAdmin)
+            {
+                finalStatus = ArticleStatuses.PendingApproval;
+            }
+        }
+
         var publishedDate = finalStatus == ArticleStatuses.Published ? (isAlreadyDue ? scheduledDate : KnomeTime.Now) : (DateTime?)null;
 
         var article = new Article

@@ -10,6 +10,8 @@ public class ApprovalSettingDto
 
     // Independent Toggles
     public bool RequireCommunityApproval { get; set; } = true;
+    public bool RequireArticleApproval { get; set; } = true;
+    public bool RequireWikiApproval { get; set; } = true;
     public bool RequireVideoApproval { get; set; } = true;
     public bool RequirePodcastApproval { get; set; } = true;
     public bool EnableMessaging { get; set; } = true;
@@ -31,6 +33,8 @@ public class UpdateApprovalSettingDto
 {
     public bool? RequireApproval { get; set; }
     public bool? RequireCommunityApproval { get; set; }
+    public bool? RequireArticleApproval { get; set; }
+    public bool? RequireWikiApproval { get; set; }
     public bool? RequireVideoApproval { get; set; }
     public bool? RequirePodcastApproval { get; set; }
     public bool? EnableMessaging { get; set; }

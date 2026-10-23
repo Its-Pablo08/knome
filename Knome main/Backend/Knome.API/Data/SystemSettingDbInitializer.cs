@@ -37,6 +37,18 @@ BEGIN
     VALUES ('RequireCommunityApproval', 'true', 'Require administrator approval before communities are published.', SYSUTCDATETIME());
 END
 
+IF NOT EXISTS (SELECT 1 FROM [dbo].[SystemSettings] WHERE [SettingKey] = 'RequireArticleApproval')
+BEGIN
+    INSERT INTO [dbo].[SystemSettings] ([SettingKey], [SettingValue], [Description], [UpdatedDate])
+    VALUES ('RequireArticleApproval', 'false', 'Require administrator approval before user articles are published.', SYSUTCDATETIME());
+END
+
+IF NOT EXISTS (SELECT 1 FROM [dbo].[SystemSettings] WHERE [SettingKey] = 'RequireWikiApproval')
+BEGIN
+    INSERT INTO [dbo].[SystemSettings] ([SettingKey], [SettingValue], [Description], [UpdatedDate])
+    VALUES ('RequireWikiApproval', 'false', 'Require administrator approval before user wikis are published.', SYSUTCDATETIME());
+END
+
 IF NOT EXISTS (SELECT 1 FROM [dbo].[SystemSettings] WHERE [SettingKey] = 'RequireVideoApproval')
 BEGIN
     INSERT INTO [dbo].[SystemSettings] ([SettingKey], [SettingValue], [Description], [UpdatedDate])
