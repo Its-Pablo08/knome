@@ -14,6 +14,8 @@ public static class NotificationTypes
     public const string Badge = "Badge";
     public const string Follower = "Follower";
     public const string HrAnnouncement = "HRAnnouncement";
+    public const string PostPublished = "PostPublished";
+    public const string ArticlePublished = "ArticlePublished";
     public const string Comment = "Comment";
     public const string CommunityInvite = "CommunityInvite";
     public const string CommunityJoin = "CommunityJoin";

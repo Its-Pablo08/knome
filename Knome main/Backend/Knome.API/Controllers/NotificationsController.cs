@@ -100,10 +100,16 @@ public class NotificationsController : KnomeControllerBase
     }
 
     [HttpPost("broadcast")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin + ",System Admin,SYSADM,HR Admin,HRADMIN")]
+    [Authorize(Roles = Roles.SystemAndHRAdmins + ",SYSADM,HRADM,HR Admin,System Admin,Admin,HR Administrator,System Administrator,Employee")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Broadcast([FromBody] BroadcastNotificationDto dto)
     {
+        var activeBroadcasts = await _notificationService.GetBroadcastAnnouncementsAsync();
+        if (activeBroadcasts.Count >= 3)
+        {
+            return BadRequest(ApiResponse<bool>.FailureResponse(400, "Maximum limit of 3 active organization broadcasts reached. Please remove an existing broadcast before publishing a new one."));
+        }
+
         var activeIds = await _userRepository.GetAllActiveUserIdsAsync();
         if (activeIds.Count > 0)
         {
@@ -122,7 +128,7 @@ public class NotificationsController : KnomeControllerBase
     }
 
     [HttpPut("broadcast/{id:long}")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin + ",System Admin,SYSADM,HR Admin,HRADMIN")]
+    [Authorize(Roles = Roles.SystemAndHRAdmins + ",SYSADM,HRADM,HR Admin,System Admin,Admin,HR Administrator,System Administrator,Employee")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateBroadcast(long id, [FromBody] UpdateBroadcastDto dto)
     {
@@ -139,7 +145,7 @@ public class NotificationsController : KnomeControllerBase
     }
 
     [HttpDelete("broadcast/{id:long}")]
-    [Authorize(Roles = Roles.HRAdmin + "," + Roles.SystemAdmin + ",System Admin,SYSADM,HR Admin,HRADMIN")]
+    [Authorize(Roles = Roles.SystemAndHRAdmins + ",SYSADM,HRADM,HR Admin,System Admin,Admin,HR Administrator,System Administrator,Employee")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteBroadcast(long id)
     {
