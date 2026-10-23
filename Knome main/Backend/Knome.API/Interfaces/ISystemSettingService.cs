@@ -14,6 +14,12 @@ public interface ISystemSettingService
     Task<bool> GetRequireCommunityApprovalAsync();
     Task<bool> SetRequireCommunityApprovalAsync(bool requireApproval, int actorUserId);
 
+    Task<bool> GetRequireArticleApprovalAsync();
+    Task<bool> SetRequireArticleApprovalAsync(bool requireApproval, int actorUserId);
+
+    Task<bool> GetRequireWikiApprovalAsync();
+    Task<bool> SetRequireWikiApprovalAsync(bool requireApproval, int actorUserId);
+
     Task<bool> GetRequireVideoApprovalAsync();
     Task<bool> SetRequireVideoApprovalAsync(bool requireApproval, int actorUserId);
 

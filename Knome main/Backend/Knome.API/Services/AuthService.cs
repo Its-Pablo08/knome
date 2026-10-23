@@ -54,8 +54,8 @@ public class AuthService : IAuthService
         var searchId = request.EmployeeId?.Trim() ?? string.Empty;
         var searchLower = searchId.ToLower();
         var altSearchLower = searchLower.StartsWith("mpo") ? "mp0" + searchLower.Substring(3) : (searchLower.StartsWith("mp0") ? "mpo" + searchLower.Substring(3) : searchLower);
-        var isMayur = searchLower == "emp100" || searchLower == "mpo111" || searchLower == "mayurbansal7089@gmail.com";
-        var isSourabh = searchLower == "emp052" || searchLower == "mpo103" || searchLower == "sourabhsahu45@gmail.com";
+        var isMayur = searchLower == "emp100" || searchLower == "mayurbansal7089@gmail.com";
+        var isSourabh = searchLower == "emp052" || searchLower == "sourabhsahu45@gmail.com";
 
         // 1. Load user with credential, department and roles
         var user = await _db.Users
@@ -63,8 +63,8 @@ public class AuthService : IAuthService
             .Include(u => u.Department)
             .Include(u => u.Roles)
             .Where(u => u.EmployeeId.ToLower() == searchLower || u.EmployeeId.ToLower() == altSearchLower || (u.Email != null && u.Email.ToLower() == searchLower) ||
-                        (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || u.EmployeeId.ToLower() == "mpo111" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
-                        (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052" || u.EmployeeId.ToLower() == "mpo103")))
+                        (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
+                        (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052")))
             .FirstOrDefaultAsync();
 
         // If user not yet in Knome, attempt auto-sync from EmployeeHubDb
@@ -76,8 +76,8 @@ public class AuthService : IAuthService
                 .Include(u => u.Department)
                 .Include(u => u.Roles)
                 .Where(u => u.EmployeeId.ToLower() == searchLower || u.EmployeeId.ToLower() == altSearchLower || (u.Email != null && u.Email.ToLower() == searchLower) ||
-                            (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || u.EmployeeId.ToLower() == "mpo111" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
-                            (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052" || u.EmployeeId.ToLower() == "mpo103")))
+                            (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
+                            (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052")))
                 .FirstOrDefaultAsync();
         }
 
@@ -291,15 +291,15 @@ public class AuthService : IAuthService
     public async Task<CurrentUserDto> GetCurrentUserByIdentifierAsync(string identifier)
     {
         var searchLower = identifier.Trim().ToLower();
-        var isMayur = searchLower == "emp100" || searchLower == "mpo111" || searchLower == "mayurbansal7089@gmail.com";
-        var isSourabh = searchLower == "emp052" || searchLower == "mpo103" || searchLower == "sourabhsahu45@gmail.com";
+        var isMayur = searchLower == "emp100" || searchLower == "mayurbansal7089@gmail.com";
+        var isSourabh = searchLower == "emp052" || searchLower == "sourabhsahu45@gmail.com";
 
         var user = await _db.Users
             .Include(u => u.Department)
             .Include(u => u.Roles)
             .Where(u => (u.EmployeeId.ToLower() == searchLower || (u.Email != null && u.Email.ToLower() == searchLower)) ||
-                        (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || u.EmployeeId.ToLower() == "mpo111" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
-                        (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052" || u.EmployeeId.ToLower() == "mpo103")))
+                        (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
+                        (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052")))
             .FirstOrDefaultAsync();
 
         if (user is null)
@@ -309,8 +309,8 @@ public class AuthService : IAuthService
                 .Include(u => u.Department)
                 .Include(u => u.Roles)
                 .Where(u => (u.EmployeeId.ToLower() == searchLower || (u.Email != null && u.Email.ToLower() == searchLower)) ||
-                            (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || u.EmployeeId.ToLower() == "mpo111" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
-                            (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052" || u.EmployeeId.ToLower() == "mpo103")))
+                            (isMayur && (u.UserId == 1036 || u.EmployeeId.ToLower() == "emp100" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
+                            (isSourabh && (u.UserId == 3 || u.EmployeeId.ToLower() == "emp052")))
                 .FirstOrDefaultAsync();
         }
 

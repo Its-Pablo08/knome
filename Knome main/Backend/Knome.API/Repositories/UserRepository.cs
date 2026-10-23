@@ -15,6 +15,20 @@ public class UserRepository : Repository<Models.User>, IUserRepository
 {
     private readonly KnomeDbContext _db;
 
+    private static readonly HashSet<string> AllowedEmployeeIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "MP0108",
+        "MP0664",
+        "EMP052",
+        "Emp101",
+        "EMP101",
+        "EMP100",
+        "MPO089",
+        "MPO652"
+    };
+
+    private static readonly HashSet<int> AllowedUserIds = new() { 1, 1076, 2, 3, 5, 1036, 1050, 1057 };
+
     public UserRepository(KnomeDbContext context) : base(context)
     {
         _db = context;
@@ -39,6 +53,7 @@ public class UserRepository : Repository<Models.User>, IUserRepository
             .Include(u => u.Department)
             .Include(u => u.Roles)
             .Include(u => u.KarmaBalance)
+            .Where(u => u.IsActive && (AllowedUserIds.Contains(u.UserId) || AllowedEmployeeIds.Contains(u.EmployeeId)))
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
@@ -252,18 +267,30 @@ public class UserRepository : Repository<Models.User>, IUserRepository
             .Select(f => f.FollowingUserId)
             .ToListAsync();
 
-        var pendingIds = await _db.ConnectionRequests
-            .Where(cr => (cr.SenderId == userId || cr.ReceiverId == userId) && (cr.Status == "Pending" || cr.Status == "PENDING"))
+        var followerIds = await _db.Followers
+            .Where(f => f.FollowingUserId == userId)
+            .Select(f => f.FollowerUserId)
+            .ToListAsync();
+
+        var connectionUserIds = await _db.ConnectionRequests
+            .Where(cr => (cr.SenderId == userId || cr.ReceiverId == userId) && 
+                         (cr.Status == "Pending" || cr.Status == "PENDING" || 
+                          cr.Status == "Connected" || cr.Status == "Accepted" || cr.Status == "ACCEPTED"))
             .Select(cr => cr.SenderId == userId ? cr.ReceiverId : cr.SenderId)
             .ToListAsync();
 
-        var excludedIds = followingIds.Concat(pendingIds).Distinct().ToList();
+        var excludedIds = followingIds
+            .Concat(followerIds)
+            .Concat(connectionUserIds)
+            .Distinct()
+            .ToList();
 
         var candidateUsers = await _db.Users
             .Include(u => u.Department)
             .Include(u => u.Roles)
             .Include(u => u.UserSkills)
-            .Where(u => u.IsActive && !u.IsPermanentlySuspended && u.UserId != userId && !excludedIds.Contains(u.UserId))
+            .Where(u => u.IsActive && !u.IsPermanentlySuspended && u.UserId != userId && !excludedIds.Contains(u.UserId) &&
+                        (AllowedUserIds.Contains(u.UserId) || AllowedEmployeeIds.Contains(u.EmployeeId)))
             .ToListAsync();
 
         var scored = candidateUsers.Select(u => {
@@ -290,7 +317,7 @@ public class UserRepository : Repository<Models.User>, IUserRepository
             .Include(f => f.FollowerUser)
             .ThenInclude(u => u.Department)
             .Include(f => f.FollowerUser.Roles)
-            .Where(f => f.FollowingUserId == userId)
+            .Where(f => f.FollowingUserId == userId && (AllowedUserIds.Contains(f.FollowerUserId) || AllowedEmployeeIds.Contains(f.FollowerUser.EmployeeId)))
             .Select(f => f.FollowerUser)
             .ToListAsync();
     }
@@ -301,7 +328,7 @@ public class UserRepository : Repository<Models.User>, IUserRepository
             .Include(f => f.FollowingUser)
             .ThenInclude(u => u.Department)
             .Include(f => f.FollowingUser.Roles)
-            .Where(f => f.FollowerUserId == userId)
+            .Where(f => f.FollowerUserId == userId && (AllowedUserIds.Contains(f.FollowingUserId) || AllowedEmployeeIds.Contains(f.FollowingUser.EmployeeId)))
             .Select(f => f.FollowingUser)
             .ToListAsync();
     }
@@ -389,7 +416,8 @@ public class UserRepository : Repository<Models.User>, IUserRepository
             .Include(cr => cr.Sender)
             .ThenInclude(u => u.Department)
             .Include(cr => cr.Sender.Roles)
-            .Where(cr => cr.ReceiverId == userId && (cr.Status == "Pending" || cr.Status == "PENDING"))
+            .Where(cr => cr.ReceiverId == userId && (cr.Status == "Pending" || cr.Status == "PENDING") &&
+                         (AllowedUserIds.Contains(cr.SenderId) || AllowedEmployeeIds.Contains(cr.Sender.EmployeeId)))
             .OrderByDescending(cr => cr.CreatedDate)
             .ToListAsync();
     }
@@ -400,7 +428,8 @@ public class UserRepository : Repository<Models.User>, IUserRepository
             .Include(cr => cr.Receiver)
             .ThenInclude(u => u.Department)
             .Include(cr => cr.Receiver.Roles)
-            .Where(cr => cr.SenderId == userId && (cr.Status == "Pending" || cr.Status == "PENDING"))
+            .Where(cr => cr.SenderId == userId && (cr.Status == "Pending" || cr.Status == "PENDING") &&
+                         (AllowedUserIds.Contains(cr.ReceiverId) || AllowedEmployeeIds.Contains(cr.Receiver.EmployeeId)))
             .OrderByDescending(cr => cr.CreatedDate)
             .ToListAsync();
     }
@@ -415,7 +444,8 @@ public class UserRepository : Repository<Models.User>, IUserRepository
         return await _db.Users
             .Include(u => u.Department)
             .Include(u => u.Roles)
-            .Where(u => connectedUserIds.Contains(u.UserId) && u.IsActive)
+            .Where(u => connectedUserIds.Contains(u.UserId) && u.IsActive &&
+                        (AllowedUserIds.Contains(u.UserId) || AllowedEmployeeIds.Contains(u.EmployeeId)))
             .OrderBy(u => u.FullName)
             .ToListAsync();
     }

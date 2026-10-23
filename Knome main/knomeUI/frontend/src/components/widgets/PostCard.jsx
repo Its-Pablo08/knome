@@ -1345,7 +1345,7 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
             return KNOWN_ROSTER_NAMES[empKey];
         }
 
-        // 6. Check candidates against KNOWN_ROSTER_NAMES (if name was stored as an empId like "MPO105")
+        // 6. Check candidates against KNOWN_ROSTER_NAMES (if name was stored as an empId like "Emp101")
         for (const c of candidates) {
             const cKey = String(c).trim().toUpperCase();
             if (KNOWN_ROSTER_NAMES[cKey]) {

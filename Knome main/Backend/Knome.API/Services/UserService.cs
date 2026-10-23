@@ -420,7 +420,10 @@ public class UserService : IUserService
     public async Task<System.Collections.Generic.List<NetworkUserDto>> GetNetworkSuggestionsAsync(int userId, int limit = 10)
     {
         var suggestions = await _userRepo.GetNetworkSuggestionsAsync(userId, limit);
-        return await MapToNetworkUsersAsync(userId, suggestions, true);
+        var mapped = await MapToNetworkUsersAsync(userId, suggestions, true);
+        return mapped
+            .Where(m => m.ConnectionStatus == "NotConnected" && !m.IsFollowing)
+            .ToList();
     }
 
     public async Task<System.Collections.Generic.List<NetworkUserDto>> GetFollowersAsync(int userId, int requestingUserId = 0)
@@ -573,6 +576,12 @@ public class UserService : IUserService
             {
                 connectionStatus = "PendingReceived";
                 requestId = reverseRequest.RequestId;
+            }
+            else if ((connectionRequest != null && (connectionRequest.Status == "Connected" || connectionRequest.Status.Equals("Accepted", StringComparison.OrdinalIgnoreCase))) ||
+                     (reverseRequest != null && (reverseRequest.Status == "Connected" || reverseRequest.Status.Equals("Accepted", StringComparison.OrdinalIgnoreCase))))
+            {
+                connectionStatus = "Connected";
+                isFollowing = true;
             }
 
             var reason = mutualCount > 0 ? $"{mutualCount} Mutual Connections" : 

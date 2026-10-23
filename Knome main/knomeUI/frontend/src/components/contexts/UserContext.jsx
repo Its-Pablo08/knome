@@ -65,86 +65,96 @@ export const expandRoles = (rolesList) => {
 };
 
 export const KNOWN_ROSTER_NAMES = {
+    // 1. Loveneesh Sharma
     'MP0108': 'Loveneesh Sharma',
-    'MPO101': 'Loveneesh Sharma',
-    'MP0664': 'Vishendra Sharma',
-    'MPO102': 'Vishendra Sharma',
-    'EMP052': 'Sourabh Sahu',
-    'MPO103': 'Sourabh Sahu',
-    'MPO104': 'Rishikesh Ugle',
-    'EMP101': 'Meghna Tiwari',
-    'Emp101': 'Meghna Tiwari',
-    'MPO105': 'Meghna Tiwari',
-    'MPO116': 'Meghna Tiwari',
-    'MPO106': 'Mayur Verma',
-    'MPO089': 'Vilash Deshmukh',
-    'MPO107': 'Vilash Deshmukh',
-    'EMP100': 'Mayur Bansal',
-    'MPO111': 'Mayur Bansal',
-    'MPO652': 'Deepak Simrodia',
-    'mpo652': 'Deepak Simrodia',
-    'MPO112': 'Rajesh Kumar',
-    'MPO108': 'Pooja Sharma',
-
-    // Numeric User IDs
     '1': 'Loveneesh Sharma',
-    '2': 'Vishendra Sharma',
-    '1076': 'Vishendra Sharma',
-    '3': 'Sourabh Sahu',
-    '4': 'Rishikesh Ugle',
-    '5': 'Meghna Tiwari',
-    '6': 'Mayur Verma',
-    '1036': 'Mayur Bansal',
-    '1050': 'Vilash Deshmukh',
-    '1057': 'Deepak Simrodia',
-    '1061': 'Vishendra Sharma',
-    '1067': 'Loveneesh Sharma',
-    '1071': 'Vilash Deshmukh',
-    '1073': 'Vishendra Sharma',
-    '1075': 'Loveneesh Sharma',
-    '1083': 'Meghna Tiwari',
-    '1085': 'Sourabh Sahu',
 
-    // Synthetic MPO+UserId
-    'MPO1': 'Loveneesh Sharma',
-    'MPO2': 'Vishendra Sharma',
-    'MPO3': 'Sourabh Sahu',
-    'MPO4': 'Rishikesh Ugle',
-    'MPO5': 'Meghna Tiwari',
-    'MPO6': 'Mayur Verma',
-    'MPO1036': 'Mayur Bansal',
-    'MPO1050': 'Vilash Deshmukh',
-    'MPO1057': 'Deepak Simrodia',
-    'MPO1076': 'Vishendra Sharma',
+    // 2. Vishendra Sharma
+    'MP0664': 'Vishendra Sharma',
+    '1076': 'Vishendra Sharma',
+    '2': 'Vishendra Sharma',
+
+    // 3. Sourabh Sahu
+    'EMP052': 'Sourabh Sahu',
+    '3': 'Sourabh Sahu',
+
+    // 4. Meghna Tiwari
+    'Emp101': 'Meghna Tiwari',
+    'EMP101': 'Meghna Tiwari',
+    '5': 'Meghna Tiwari',
+
+    // 5. Mayur Bansal
+    'EMP100': 'Mayur Bansal',
+    '1036': 'Mayur Bansal',
+
+    // 6. Vilash Deshmukh
+    'MPO089': 'Vilash Deshmukh',
+    '1050': 'Vilash Deshmukh',
+
+    // 7. Deepak Simrodia
+    'MPO652': 'Deepak Simrodia',
+    '1057': 'Deepak Simrodia'
 };
 
 export const KNOWN_ROSTER_DETAILS = {
     '1': { designation: 'TPM', roleName: 'System Admin', department: 'Higher Education' },
     'MP0108': { designation: 'TPM', roleName: 'System Admin', department: 'Higher Education' },
-    'MPO101': { designation: 'TPM', roleName: 'System Admin', department: 'Higher Education' },
     '1076': { designation: 'Track Lead', roleName: 'Community Admin', department: 'Higher Education' },
     'MP0664': { designation: 'Track Lead', roleName: 'Community Admin', department: 'Higher Education' },
-    'MPO102': { designation: 'Track Lead', roleName: 'Community Admin', department: 'Higher Education' },
     '3': { designation: 'Talent Acquisition Manager', roleName: 'HR Admin', department: 'Human Resources' },
     'EMP052': { designation: 'Talent Acquisition Manager', roleName: 'HR Admin', department: 'Human Resources' },
-    'MPO103': { designation: 'Talent Acquisition Manager', roleName: 'HR Admin', department: 'Human Resources' },
     '5': { designation: 'Business Analyst', roleName: 'HR Admin', department: 'CTO' },
-    'EMP101': { designation: 'Business Analyst', roleName: 'HR Admin', department: 'CTO' },
     'Emp101': { designation: 'Business Analyst', roleName: 'HR Admin', department: 'CTO' },
-    'MPO105': { designation: 'Business Analyst', roleName: 'HR Admin', department: 'CTO' },
+    'EMP101': { designation: 'Business Analyst', roleName: 'HR Admin', department: 'CTO' },
     '1036': { designation: 'Software Developer', roleName: 'Employee', department: 'Technology' },
     'EMP100': { designation: 'Software Developer', roleName: 'Employee', department: 'Technology' },
-    'MPO111': { designation: 'Software Developer', roleName: 'Employee', department: 'Technology' },
     '1050': { designation: 'Associate Consultant', roleName: 'System Admin', department: 'HR' },
     'MPO089': { designation: 'Associate Consultant', roleName: 'System Admin', department: 'HR' },
-    'MPO107': { designation: 'Associate Consultant', roleName: 'System Admin', department: 'HR' },
     '1057': { designation: 'Software Developer', roleName: 'Moderator', department: 'University' },
-    'MPO652': { designation: 'Software Developer', roleName: 'Moderator', department: 'University' },
-    '4': { designation: 'Software Engineer', roleName: 'Employee', department: 'Technology' },
-    'MPO104': { designation: 'Software Engineer', roleName: 'Employee', department: 'Technology' },
-    '6': { designation: 'UI Designer', roleName: 'Community Admin', department: 'Product Design' },
-    'MPO106': { designation: 'UI Designer', roleName: 'Community Admin', department: 'Product Design' },
+    'MPO652': { designation: 'Software Developer', roleName: 'Moderator', department: 'University' }
 };
+
+const ALLOWED_CANONICAL_NAMES = new Set([
+    'loveneeshsharma',
+    'vishendrasharma',
+    'sourabhsahu',
+    'meghnatiwari',
+    'meghna',
+    'mayurbansal',
+    'vilashdeshmukh',
+    'deepaksimrodia'
+]);
+
+const ALLOWED_CANONICAL_EMPS = new Set([
+    'MP0108',
+    'MP0664',
+    'EMP052',
+    'Emp101', 'EMP101',
+    'EMP100',
+    'MPO089',
+    'MPO652'
+]);
+
+const ALLOWED_CANONICAL_IDS = new Set([
+    '1', '1076', '2', '3', '5', '1036', '1050', '1057'
+]);
+
+/**
+ * Returns true ONLY if the given user is one of the 7 official active Knome platform users.
+ */
+export function isPlatformActiveUser(u) {
+    if (!u) return false;
+    const clean = String(u.name || u.fullName || u.title || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase().replace(/[^a-z]/g, '');
+    if (clean && ALLOWED_CANONICAL_NAMES.has(clean)) return true;
+
+    const emp = String(u.employeeId || u.authorEmployeeId || '').toUpperCase().trim();
+    if (emp && ALLOWED_CANONICAL_EMPS.has(emp)) return true;
+
+    const id = String(u.userId || u.id || '').trim();
+    if (id && ALLOWED_CANONICAL_IDS.has(id)) return true;
+
+    return false;
+}
 
 export const resolveEmployeeName = (rawName, empId, uId, dept) => {
     const cleaned = String(rawName || '').trim();
@@ -428,13 +438,11 @@ export const UserProvider = ({ children }) => {
 
     const initialUsersList = getInitialUsersList();
     // Default administrator user Loveneesh Sharma (MP0108) — ensures Knome opens directly without login barrier
-    const defaultAdminUser = initialUsersList.find(u => u.employeeId === 'MP0108' || u.employeeId === 'MPO101') || initialUsersList[0];
+    const defaultAdminUser = initialUsersList.find(u => u.employeeId === 'MP0108') || initialUsersList[0];
     const savedEmpId = typeof window !== 'undefined' ? localStorage.getItem('knome_employeeId') : null;
     const hasSavedSession = typeof window !== 'undefined' && Boolean(localStorage.getItem('knome_employeeId') || localStorage.getItem('knome_jwt'));
     const initialUser = (savedEmpId && initialUsersList.find(u => 
         u.employeeId?.toUpperCase() === savedEmpId.toUpperCase() ||
-        (savedEmpId.toUpperCase() === 'MPO103' && (u.employeeId === 'EMP052' || u.userId === 3)) ||
-        ((savedEmpId.toUpperCase() === 'MPO111' || savedEmpId.toUpperCase() === 'EMP100') && (u.employeeId === 'EMP100' || u.employeeId === 'MPO111' || u.userId === 1036)) ||
         (u.email && u.email.toLowerCase() === savedEmpId.toLowerCase()) ||
         String(u.userId) === String(savedEmpId) ||
         String(u.id) === String(savedEmpId)
@@ -727,7 +735,8 @@ export const UserProvider = ({ children }) => {
                     }
 
                     if (res) {
-                        const apiItems = Array.isArray(res) ? res : (res.items || res.data?.items || res.data || []);
+                        const rawApiItems = Array.isArray(res) ? res : (res.items || res.data?.items || res.data || []);
+                        const apiItems = rawApiItems.filter(isPlatformActiveUser);
                         if (apiItems.length > 0) {
                             const mappedApiUsers = apiItems.map(u => {
                                 const rawEmpId = u.employeeId || u.EmployeeId || u.authorEmployeeId || u.AuthorEmployeeId;
@@ -819,7 +828,7 @@ export const UserProvider = ({ children }) => {
                                 }
                             });
 
-                            setUsersList(mergedRoster);
+                            setUsersList(mergedRoster.filter(isPlatformActiveUser));
                         }
                     }
                 } catch (e) { /* ignore */ }
@@ -893,19 +902,10 @@ export const UserProvider = ({ children }) => {
 
                 // SSO token from Employee Hub: authenticate with Knome backend using resolved identity
                 if (ssoEmpId) {
-                    if (ssoEmpId.toUpperCase() === 'MPO101') {
-                        ssoEmpId = 'MP0108';
-                    }
-                    if (ssoEmpId.toUpperCase() === 'MPO664') {
-                        ssoEmpId = 'MP0664';
-                    }
-                    if (ssoEmpId.toUpperCase() === 'MPO111' || ssoEmpId.toUpperCase() === 'EMP100' || ssoEmpId.toLowerCase() === 'mayurbansal7089@gmail.com') {
-                        ssoEmpId = 'EMP100';
-                    }
                     let localUser = INITIAL_USERS.find(u => 
                         (u.employeeId && u.employeeId.toUpperCase() === ssoEmpId.toUpperCase()) ||
                         (u.email && u.email.toLowerCase() === ssoEmpId.toLowerCase()) ||
-                        ((ssoEmpId.toUpperCase() === 'EMP100' || ssoEmpId.toUpperCase() === 'MPO111') && (u.employeeId === 'EMP100' || u.employeeId === 'MPO111' || u.userId === 1036))
+                        String(u.userId || u.id) === String(ssoEmpId)
                     );
                     if (!localUser) {
                         localUser = {
@@ -1019,8 +1019,6 @@ export const UserProvider = ({ children }) => {
             if (savedEmployeeId) {
                 let localUser = usersList.find(u => 
                     (u.employeeId && u.employeeId.toUpperCase() === savedEmployeeId.toUpperCase()) ||
-                    (savedEmployeeId.toUpperCase() === 'MPO103' && (u.employeeId === 'EMP052' || u.userId === 3)) ||
-                    ((savedEmployeeId.toUpperCase() === 'MPO111' || savedEmployeeId.toUpperCase() === 'EMP100') && (u.employeeId === 'EMP100' || u.employeeId === 'MPO111' || u.userId === 1036)) ||
                     (u.email && u.email.toLowerCase() === savedEmployeeId.toLowerCase()) ||
                     String(u.userId) === String(savedEmployeeId) ||
                     String(u.id) === String(savedEmployeeId)
@@ -1075,7 +1073,6 @@ export const UserProvider = ({ children }) => {
                             profile.employeeId?.toUpperCase() === savedEmployeeId.toUpperCase() ||
                             (localUser?.email && profile.email && localUser.email.toLowerCase() === profile.email.toLowerCase()) ||
                             (localUser?.employeeId && profile.employeeId && localUser.employeeId.toUpperCase() === profile.employeeId.toUpperCase()) ||
-                            ((savedEmployeeId.toUpperCase() === 'EMP100' || savedEmployeeId.toUpperCase() === 'MPO111') && (profile.employeeId?.toUpperCase() === 'EMP100' || profile.employeeId?.toUpperCase() === 'MPO111' || profile.userId === 1036)) ||
                             String(profile.userId) === String(savedEmployeeId)
                         )) {
                             const isProfileSuspended = profile.isSuspended === true || profile.isPermanentlySuspended === true || profile.isActive === false || (profile.suspendedUntil && new Date(profile.suspendedUntil) > new Date());
@@ -1201,8 +1198,6 @@ export const UserProvider = ({ children }) => {
     const login = useCallback(async (employeeId) => {
         try { apiClient.clearCache(); } catch {}
         let normalizedId = employeeId?.trim()?.toUpperCase() || 'MP0108';
-        if (normalizedId === 'MPO101') normalizedId = 'MP0108';
-        if (normalizedId === 'MPO664') normalizedId = 'MP0664';
         if (normalizedId === 'EMP001') {
             sessionStorage.setItem('knome_intended_emp001', 'true');
         }

@@ -18,6 +18,8 @@ public class SystemSettingService : ISystemSettingService
 
     public const string RequireApprovalKey = "RequireContentAndCommunityApproval";
     public const string RequireCommunityApprovalKey = "RequireCommunityApproval";
+    public const string RequireArticleApprovalKey = "RequireArticleApproval";
+    public const string RequireWikiApprovalKey = "RequireWikiApproval";
     public const string RequireVideoApprovalKey = "RequireVideoApproval";
     public const string RequirePodcastApprovalKey = "RequirePodcastApproval";
     public const string EnableMessagingKey = "EnableMessaging";
@@ -56,7 +58,7 @@ public class SystemSettingService : ISystemSettingService
             if (setting == null)
             {
                 // If specific approval key not set, fallback to master approval setting
-                if (key == RequireCommunityApprovalKey || key == RequireVideoApprovalKey || key == RequirePodcastApprovalKey)
+                if (key == RequireCommunityApprovalKey || key == RequireArticleApprovalKey || key == RequireWikiApprovalKey || key == RequireVideoApprovalKey || key == RequirePodcastApprovalKey)
                 {
                     result = await GetRequireContentAndCommunityApprovalAsync();
                 }
@@ -157,6 +159,38 @@ public class SystemSettingService : ISystemSettingService
             requireApproval,
             actorUserId,
             "Require administrator approval before communities are published."
+        );
+    }
+
+    // ── Article Approval ──
+    public Task<bool> GetRequireArticleApprovalAsync()
+    {
+        return GetBooleanSettingAsync(RequireArticleApprovalKey, false);
+    }
+
+    public Task<bool> SetRequireArticleApprovalAsync(bool requireApproval, int actorUserId)
+    {
+        return SetBooleanSettingAsync(
+            RequireArticleApprovalKey,
+            requireApproval,
+            actorUserId,
+            "Require administrator approval before user articles are published."
+        );
+    }
+
+    // ── Wiki Approval ──
+    public Task<bool> GetRequireWikiApprovalAsync()
+    {
+        return GetBooleanSettingAsync(RequireWikiApprovalKey, false);
+    }
+
+    public Task<bool> SetRequireWikiApprovalAsync(bool requireApproval, int actorUserId)
+    {
+        return SetBooleanSettingAsync(
+            RequireWikiApprovalKey,
+            requireApproval,
+            actorUserId,
+            "Require administrator approval before user wikis are published."
         );
     }
 
@@ -277,6 +311,8 @@ public class SystemSettingService : ISystemSettingService
 
         var master = parseSetting(RequireApprovalKey, true);
         var comm = map.ContainsKey(RequireCommunityApprovalKey) ? parseSetting(RequireCommunityApprovalKey, true) : master;
+        var art = map.ContainsKey(RequireArticleApprovalKey) ? parseSetting(RequireArticleApprovalKey, false) : false;
+        var wiki = map.ContainsKey(RequireWikiApprovalKey) ? parseSetting(RequireWikiApprovalKey, false) : false;
         var video = map.ContainsKey(RequireVideoApprovalKey) ? parseSetting(RequireVideoApprovalKey, true) : master;
         var pod = map.ContainsKey(RequirePodcastApprovalKey) ? parseSetting(RequirePodcastApprovalKey, true) : master;
         var msg = parseSetting(EnableMessagingKey, true);
@@ -284,7 +320,7 @@ public class SystemSettingService : ISystemSettingService
         var posts = parseSetting(EnablePostsKey, true);
         var articles = parseSetting(EnableArticlesKey, true);
         var clips = parseSetting(EnableClipsKey, true);
-        var wiki = parseSetting(EnableWikiKey, true);
+        var wikiModule = parseSetting(EnableWikiKey, true);
         var videos = parseSetting(EnableVideosKey, true);
         var podcasts = parseSetting(EnablePodcastsKey, true);
 
@@ -295,6 +331,8 @@ public class SystemSettingService : ISystemSettingService
             SettingKey = RequireApprovalKey,
             RequireApproval = master,
             RequireCommunityApproval = comm,
+            RequireArticleApproval = art,
+            RequireWikiApproval = wiki,
             RequireVideoApproval = video,
             RequirePodcastApproval = pod,
             EnableMessaging = msg,
@@ -302,7 +340,7 @@ public class SystemSettingService : ISystemSettingService
             EnablePosts = posts,
             EnableArticles = articles,
             EnableClips = clips,
-            EnableWiki = wiki,
+            EnableWiki = wikiModule,
             EnableVideos = videos,
             EnablePodcasts = podcasts,
             Description = DefaultApprovalDescription,
@@ -320,6 +358,14 @@ public class SystemSettingService : ISystemSettingService
         if (updateDto.RequireCommunityApproval.HasValue)
         {
             await SetRequireCommunityApprovalAsync(updateDto.RequireCommunityApproval.Value, actorUserId);
+        }
+        if (updateDto.RequireArticleApproval.HasValue)
+        {
+            await SetRequireArticleApprovalAsync(updateDto.RequireArticleApproval.Value, actorUserId);
+        }
+        if (updateDto.RequireWikiApproval.HasValue)
+        {
+            await SetRequireWikiApprovalAsync(updateDto.RequireWikiApproval.Value, actorUserId);
         }
         if (updateDto.RequireVideoApproval.HasValue)
         {
@@ -404,6 +450,8 @@ public class SystemSettingService : ISystemSettingService
         var dict = list.ToDictionary(s => s.SettingKey, s => s.SettingValue);
         if (!dict.ContainsKey(RequireApprovalKey)) dict[RequireApprovalKey] = "true";
         if (!dict.ContainsKey(RequireCommunityApprovalKey)) dict[RequireCommunityApprovalKey] = "true";
+        if (!dict.ContainsKey(RequireArticleApprovalKey)) dict[RequireArticleApprovalKey] = "true";
+        if (!dict.ContainsKey(RequireWikiApprovalKey)) dict[RequireWikiApprovalKey] = "true";
         if (!dict.ContainsKey(RequireVideoApprovalKey)) dict[RequireVideoApprovalKey] = "true";
         if (!dict.ContainsKey(RequirePodcastApprovalKey)) dict[RequirePodcastApprovalKey] = "true";
         if (!dict.ContainsKey(EnableMessagingKey)) dict[EnableMessagingKey] = "true";

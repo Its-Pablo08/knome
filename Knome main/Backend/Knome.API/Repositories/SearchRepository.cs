@@ -202,10 +202,19 @@ public class SearchRepository : ISearchRepository
                 ))
             ));
         }
-        else
+        var allowedEmployeeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            query = query.Where(u => u.IsActive);
-        }
+            "MP0108",
+            "MP0664",
+            "EMP052",
+            "Emp101", "EMP101",
+            "EMP100",
+            "MPO089",
+            "MPO652"
+        };
+        var allowedUserIds = new HashSet<int> { 1, 1076, 2, 3, 5, 1036, 1050, 1057 };
+
+        query = query.Where(u => u.IsActive && (allowedUserIds.Contains(u.UserId) || allowedEmployeeIds.Contains(u.EmployeeId)));
 
         if (req.DepartmentId.HasValue)
             query = query.Where(u => u.DepartmentId == req.DepartmentId);

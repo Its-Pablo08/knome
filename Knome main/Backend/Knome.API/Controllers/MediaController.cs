@@ -220,12 +220,12 @@ public class MediaController : KnomeControllerBase
             else if (mediaType == "article")
             {
                 await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnableArticlesKey, "Articles");
-                requireApproval = await _settingService.GetRequireContentAndCommunityApprovalAsync();
+                requireApproval = await _settingService.GetRequireArticleApprovalAsync();
             }
             else if (mediaType == "wiki")
             {
                 await _settingService.EnsureFeatureEnabledAsync(SystemSettingService.EnableWikiKey, "Wiki");
-                requireApproval = await _settingService.GetRequireContentAndCommunityApprovalAsync();
+                requireApproval = await _settingService.GetRequireWikiApprovalAsync();
             }
             else
             {

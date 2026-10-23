@@ -342,12 +342,12 @@ public static class ServiceCollectionExtensions
         System.Security.Claims.ClaimsPrincipal? principal)
     {
         var isMayur = (!string.IsNullOrEmpty(email) && email.ToLower() == "mayurbansal7089@gmail.com") ||
-                      (!string.IsNullOrEmpty(empId) && (empId.ToUpper() == "EMP100" || empId.ToUpper() == "MPO111")) ||
-                      (!string.IsNullOrEmpty(sub) && (sub.ToUpper() == "EMP100" || sub.ToUpper() == "MPO111" || sub.ToLower() == "mayurbansal7089@gmail.com"));
+                      (!string.IsNullOrEmpty(empId) && empId.ToUpper() == "EMP100") ||
+                      (!string.IsNullOrEmpty(sub) && (sub.ToUpper() == "EMP100" || sub.ToLower() == "mayurbansal7089@gmail.com"));
 
         var isSourabh = (!string.IsNullOrEmpty(email) && email.ToLower() == "sourabhsahu45@gmail.com") ||
-                        (!string.IsNullOrEmpty(empId) && (empId.ToUpper() == "EMP052" || empId.ToUpper() == "MPO103")) ||
-                        (!string.IsNullOrEmpty(sub) && (sub.ToUpper() == "EMP052" || sub.ToUpper() == "MPO103"));
+                        (!string.IsNullOrEmpty(empId) && empId.ToUpper() == "EMP052") ||
+                        (!string.IsNullOrEmpty(sub) && sub.ToUpper() == "EMP052");
 
         var user = await dbContext.Users
             .Include(u => u.Roles)
@@ -356,8 +356,8 @@ public static class ServiceCollectionExtensions
                 (!string.IsNullOrEmpty(email) && u.Email.ToLower() == email.ToLower()) ||
                 (!string.IsNullOrEmpty(empId) && u.EmployeeId.ToLower() == empId.ToLower()) ||
                 (!string.IsNullOrEmpty(sub) && (u.EmployeeId.ToLower() == sub.ToLower() || (u.Email != null && u.Email.ToLower() == sub.ToLower()))) ||
-                (isMayur && (u.UserId == 1036 || u.EmployeeId == "EMP100" || u.EmployeeId == "MPO111" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
-                (isSourabh && (u.UserId == 3 || u.EmployeeId == "EMP052" || u.EmployeeId == "MPO103")));
+                (isMayur && (u.UserId == 1036 || u.EmployeeId == "EMP100" || (u.Email != null && u.Email.ToLower() == "mayurbansal7089@gmail.com"))) ||
+                (isSourabh && (u.UserId == 3 || u.EmployeeId == "EMP052")));
 
         if (user != null && isMayur && (user.EmployeeId != "EMP100" || user.FullName != "Mayur Bansal" || user.Email != "mayurbansal7089@gmail.com"))
         {

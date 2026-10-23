@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext';
 import { checkRestrictedContent } from '../../utils/restrictedWords';
 import { apiClient } from '../../utils/apiClient';
 import { resolveMediaUrl, mediaApi } from '../../utils/apiService';
+import { isWikiApprovalRequired } from '../../utils/systemConfig';
 
 export const PRESET_COVER_BANNERS = [
     {
@@ -448,7 +449,8 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
         setIsSaving(true);
         try {
             let finalStatus = status;
-            if (finalStatus !== 'Draft' && !canDirectPublish) {
+            const wikiApprovalRequired = isWikiApprovalRequired();
+            if (finalStatus !== 'Draft' && wikiApprovalRequired && !canDirectPublish) {
                 finalStatus = 'PendingApproval';
             }
 

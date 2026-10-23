@@ -11,6 +11,7 @@ import useScrollLoading from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import SuspendUserModal from '../components/modals/SuspendUserModal';
 import CreateCommunityModal from '../components/modals/CreateCommunityModal';
+import ApprovalLogsModal from '../components/modals/ApprovalLogsModal';
 import HighlightText from '../components/ui/HighlightText';
 import { addRestrictedWord } from '../utils/restrictedWords';
 import { getSystemConfig, saveSystemConfig, DEFAULT_SYSTEM_CONFIG } from '../utils/systemConfig';
@@ -100,15 +101,15 @@ const getFallbackPostContent = (report) => {
             content: 'Unauthorized distribution of proprietary internal source code snippets and confidential architecture diagrams.'
         },
         10071: {
-            authorName: 'Rishabh Pandey',
-            authorUserId: 1053,
-            authorDesignation: 'Software Engineer',
+            authorName: 'Mayur Bansal',
+            authorUserId: 1036,
+            authorDesignation: 'Software Developer',
             content: 'Non-compliant content violating MPOnline organizational communication guidelines and IT code of conduct.'
         },
         10070: {
-            authorName: 'Priya Patel',
-            authorUserId: 1064,
-            authorDesignation: 'Quality Assurance Lead',
+            authorName: 'Vishendra Sharma',
+            authorUserId: 1076,
+            authorDesignation: 'Track Lead',
             content: 'Disputed communications regarding cross-team dependencies and performance milestones.'
         },
         10068: {
@@ -118,9 +119,9 @@ const getFallbackPostContent = (report) => {
             content: 'Inappropriate jokes and unprofessional banter shared in the general community forum.'
         },
         10064: {
-            authorName: 'Mayur Verma',
-            authorUserId: 6,
-            authorDesignation: 'UI Designer',
+            authorName: 'Mayur Bansal',
+            authorUserId: 1036,
+            authorDesignation: 'Software Developer',
             content: 'Spam promotion: Sign up for external unverified third-party certification links to earn fast rewards.'
         },
         10060: {
@@ -130,10 +131,10 @@ const getFallbackPostContent = (report) => {
             content: 'Inappropriate comments criticizing internal HR policy updates without following standard grievance redressal channels.'
         },
         51: {
-            authorName: 'Kabir singh',
-            authorUserId: 1035,
-            authorDesignation: 'software developer',
-            content: 'Targeted harassment remarks towards colleagues during deployment window discussion.'
+            authorName: 'Vilash Deshmukh',
+            authorUserId: 1050,
+            authorDesignation: 'Associate Consultant',
+            content: 'Targeted remarks towards colleagues during deployment window discussion.'
         }
     };
 
@@ -146,21 +147,15 @@ const getFallbackPostContent = (report) => {
     const USER_NAME_FALLBACKS = {
         1: 'Loveneesh Sharma',
         2: 'Vishendra Sharma',
+        1076: 'Vishendra Sharma',
         3: 'Sourabh Sahu',
-        4: 'Rishikesh Ugle',
+        1085: 'Sourabh Sahu',
         5: 'Meghna Tiwari',
-        6: 'Mayur Verma',
-        1034: 'Suresh verma',
-        1035: 'Kabir singh',
-        1036: 'Mayur bansal',
+        1083: 'Meghna Tiwari',
+        1036: 'Mayur Bansal',
         1050: 'Vilash Deshmukh',
-        1052: 'Raman Kumar',
-        1053: 'Rishabh Pandey',
-        1057: 'Deepak Simrodia',
-        1063: 'Aarav Sharma',
-        1064: 'Priya Patel',
-        1065: 'Rohan Verma',
-        1066: 'Neha Gupta'
+        1071: 'Vilash Deshmukh',
+        1057: 'Deepak Simrodia'
     };
 
     const resolvedAuthor = cached?.authorName 
@@ -519,8 +514,8 @@ export default function AdminConsole() {
             { requestId: 104, employeeId: 'MPO121', fullName: 'Mahi Rathore', email: 'mahi.rathore@mponline.gov.in', departmentName: 'HR', designation: 'Software Engineer', requestedRoleCode: 'EMP', status: 'Pending', assignedRoleName: 'Employee', createdAt: new Date(Date.now() - 3600000 * 8).toISOString() },
             { requestId: 105, employeeId: 'MPO122', fullName: 'Satendra Singh', email: 'satendra.singh@mponline.gov.in', departmentName: 'Information Technology', designation: 'Software Engineer', requestedRoleCode: 'EMP', status: 'Pending', assignedRoleName: 'Employee', createdAt: new Date(Date.now() - 3600000 * 10).toISOString() },
             { requestId: 106, employeeId: 'MPO115', fullName: 'Aishwary', email: 'aishwary@mponline.gov.in', departmentName: 'Technology', designation: 'Software Engineer', requestedRoleCode: 'CADM', status: 'Approved', assignedRoleName: 'Community Admin', assignedBy: 'System Admin', createdAt: new Date(Date.now() - 86400000).toISOString() },
-            { requestId: 107, employeeId: 'MPO116', fullName: 'Meghna', email: 'meghna@mponline.gov.in', departmentName: 'HR', designation: 'Software Engineer', requestedRoleCode: 'HRADM', status: 'Approved', assignedRoleName: 'HR Admin', assignedBy: 'System Admin', createdAt: new Date(Date.now() - 86400000 * 2).toISOString() },
-            { requestId: 108, employeeId: 'MPO108', fullName: 'Pooja Sharma', email: 'pooja.sharma@mponline.gov.in', departmentName: 'Development', designation: 'Frontend Engineer', requestedRoleCode: 'HRADM', status: 'Approved', assignedRoleName: 'HR Admin', assignedBy: 'System Admin', createdAt: new Date(Date.now() - 86400000 * 3).toISOString() }
+            { requestId: 107, employeeId: 'Emp101', fullName: 'Meghna', email: 'meghna@mponline.gov.in', departmentName: 'HR', designation: 'Software Engineer', requestedRoleCode: 'HRADM', status: 'Approved', assignedRoleName: 'HR Admin', assignedBy: 'System Admin', createdAt: new Date(Date.now() - 86400000 * 2).toISOString() },
+            { requestId: 108, employeeId: 'MP0108', fullName: 'Loveneesh Sharma', email: 'loveneesh.sharma@mponline.gov.in', departmentName: 'Higher Education', designation: 'TPM', requestedRoleCode: 'SYSADM', status: 'Approved', assignedRoleName: 'System Admin', assignedBy: 'System Admin', createdAt: new Date(Date.now() - 86400000 * 3).toISOString() }
         ];
     });
     const [isLoadingRoleRequests, setIsLoadingRoleRequests] = useState(false);
@@ -761,6 +756,36 @@ export default function AdminConsole() {
             submittedDate: new Date(Date.now() - 3600000 * 5).toISOString(),
             status: 'PendingApproval',
             podcastData: { title: 'Episode 14: Modern Cloud Architecture & Microservices', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', uploaderUserId: 4 }
+        },
+        {
+            id: 'seed_pending_article_1',
+            mediaType: 'Article',
+            title: 'Enterprise Microservices Observability with OpenTelemetry',
+            description: 'A comprehensive technical overview of implementing distributed tracing, Serilog integration, and correlation IDs across Knome services.',
+            thumbnail: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=90&w=1200',
+            category: 'Architecture',
+            authorName: 'Amit Saxena',
+            authorId: 2,
+            submittedDate: new Date(Date.now() - 3600000 * 3).toISOString(),
+            status: 'PendingApproval',
+            contentHtml: '<p>Comprehensive technical guide detailing architectural patterns for OpenTelemetry, distributed tracing, and centralized logging across MPOnline services.</p>',
+            tags: ['Architecture', 'Observability', 'Microservices'],
+            dto: { title: 'Enterprise Microservices Observability with OpenTelemetry', categoryId: 7 }
+        },
+        {
+            id: 'seed_pending_wiki_1',
+            mediaType: 'Wiki',
+            title: 'Developer Onboarding & Local Environment Setup Guide',
+            description: 'Official MPOnline standard operating procedures for local SQL Server configuration, JWT authentication, and npm toolchains.',
+            thumbnail: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=90&w=1200',
+            category: 'Developer Guides',
+            authorName: 'Rohan Verma',
+            authorId: 6,
+            submittedDate: new Date(Date.now() - 3600000 * 7).toISOString(),
+            status: 'PendingApproval',
+            contentHtml: '<p>Detailed onboarding SOP for setting up ASP.NET Core backends, Vite frontend servers, and security environment variables.</p>',
+            tags: ['Onboarding', 'SOP', 'DevEnvironment'],
+            dto: { title: 'Developer Onboarding & Local Environment Setup Guide' }
         }
     ];
 
@@ -1534,8 +1559,8 @@ export default function AdminConsole() {
                 mediaType: 'Article',
                 outcome: 'Approved',
                 title: 'High-Concurrency ASP.NET Core Architecture',
-                authorName: 'Rajesh Kumar',
-                target: 'Approved Article "High-Concurrency ASP.NET Core Architecture" by Rajesh Kumar (+8 Karma awarded to Author ID #3)',
+                authorName: 'Mayur Bansal',
+                target: 'Approved Article "High-Concurrency ASP.NET Core Architecture" by Mayur Bansal (+8 Karma awarded to Author ID #1036)',
                 color: 'text-emerald-500 font-bold'
             },
             {
@@ -2283,10 +2308,10 @@ export default function AdminConsole() {
                 });
             } else {
                 apiLogs = [
-                    { id: 101, time: '08/04/26, 05:20 PM', moderator: 'System Admin', action: 'UserActivated', target: 'Reactivated Employee #EMP005 (Priya Verma)', color: 'text-emerald-500 font-bold' },
-                    { id: 102, time: '08/04/26, 05:15 PM', moderator: 'System Admin', action: 'UserSuspended', target: 'Suspended Employee #EMP005 (Priya Verma) - Reason: Compliance Policy Violation', color: 'text-rose-500 font-black' },
+                    { id: 101, time: '08/04/26, 05:20 PM', moderator: 'System Admin', action: 'UserActivated', target: 'Reactivated Employee #EMP100 (Mayur Bansal)', color: 'text-emerald-500 font-bold' },
+                    { id: 102, time: '08/04/26, 05:15 PM', moderator: 'System Admin', action: 'UserSuspended', target: 'Suspended Employee #EMP100 (Mayur Bansal) - Reason: Compliance Policy Violation', color: 'text-rose-500 font-black' },
                     { id: 103, time: '07/27/26, 12:43 PM', moderator: 'System Admin', action: 'ReportLogged', target: 'Logged Copyright Report #10 for Post #10072', color: 'text-amber-500 font-bold' },
-                    { id: 104, time: '07/24/26, 12:31 PM', moderator: 'Rajesh Kumar', action: 'ContentReport', target: 'Submitted report on Post #10071', color: 'text-slate-500' },
+                    { id: 104, time: '07/24/26, 12:31 PM', moderator: 'Sourabh Sahu', action: 'ContentReport', target: 'Submitted report on Post #10071', color: 'text-slate-500' },
                     { id: 105, time: '07/13/26, 07:00 AM', moderator: 'System Admin', action: 'ReviewReport', target: 'Reviewed Report #1 - Action: None', color: 'text-emerald-500 font-bold' }
                 ];
             }
@@ -2317,8 +2342,8 @@ export default function AdminConsole() {
                 { requestId: 104, employeeId: 'MPO121', fullName: 'Mahi Rathore', email: 'mahi.rathore@mponline.gov.in', departmentName: 'HR', designation: 'Software Engineer', requestedRoleCode: 'EMP', status: 'Pending', assignedRoleName: 'Employee', createdAt: new Date(Date.now() - 3600000 * 8).toISOString() },
                 { requestId: 105, employeeId: 'MPO122', fullName: 'Satendra Singh', email: 'satendra.singh@mponline.gov.in', departmentName: 'Information Technology', designation: 'Software Engineer', requestedRoleCode: 'EMP', status: 'Pending', assignedRoleName: 'Employee', createdAt: new Date(Date.now() - 3600000 * 10).toISOString() },
                 { requestId: 106, employeeId: 'MPO115', fullName: 'Aishwary', email: 'aishwary@mponline.gov.in', departmentName: 'Technology', designation: 'Software Engineer', requestedRoleCode: 'CADM', status: 'Approved', assignedRoleName: 'Community Admin', assignedBy: 'System Admin', createdAt: new Date(Date.now() - 86400000).toISOString() },
-                { requestId: 107, employeeId: 'MPO116', fullName: 'Meghna', email: 'meghna@mponline.gov.in', departmentName: 'HR', designation: 'Software Engineer', requestedRoleCode: 'HRADM', status: 'Approved', assignedRoleName: 'HR Admin', assignedBy: 'System Admin', createdAt: new Date(Date.now() - 86400000 * 2).toISOString() },
-                { requestId: 108, employeeId: 'MPO108', fullName: 'Pooja Sharma', email: 'pooja.sharma@mponline.gov.in', departmentName: 'Development', designation: 'Frontend Engineer', requestedRoleCode: 'HRADM', status: 'Approved', assignedRoleName: 'HR Admin', assignedBy: 'System Admin', createdAt: new Date(Date.now() - 86400000 * 3).toISOString() }
+                { requestId: 107, employeeId: 'Emp101', fullName: 'Meghna', email: 'meghna@mponline.gov.in', departmentName: 'HR', designation: 'Software Engineer', requestedRoleCode: 'HRADM', status: 'Approved', assignedRoleName: 'HR Admin', assignedBy: 'System Admin', createdAt: new Date(Date.now() - 86400000 * 2).toISOString() },
+                { requestId: 108, employeeId: 'MP0108', fullName: 'Loveneesh Sharma', email: 'loveneesh.sharma@mponline.gov.in', departmentName: 'Higher Education', designation: 'TPM', requestedRoleCode: 'SYSADM', status: 'Approved', assignedRoleName: 'System Admin', assignedBy: 'System Admin', createdAt: new Date(Date.now() - 86400000 * 3).toISOString() }
             ];
 
             // Merge local storage pending requests only for non-existing employees
@@ -3507,69 +3532,64 @@ export default function AdminConsole() {
             .then(res => {
                 const data = res?.data !== undefined ? res.data : res;
                 if (data) {
-                    const serverConfig = {
-                        requireContentAndCommunityApproval: typeof data.requireApproval === 'boolean' ? data.requireApproval : true,
-                        requireCommunityApproval: typeof data.requireCommunityApproval === 'boolean' ? data.requireCommunityApproval : true,
-                        requireVideoApproval: typeof data.requireVideoApproval === 'boolean' ? data.requireVideoApproval : true,
-                        requirePodcastApproval: typeof data.requirePodcastApproval === 'boolean' ? data.requirePodcastApproval : true,
-                        enableMessaging: typeof data.enableMessaging === 'boolean' ? data.enableMessaging : true,
-                        enableEmail: typeof data.enableEmail === 'boolean' ? data.enableEmail : true,
-                        enablePosts: (typeof data.enablePosts === 'boolean' ? data.enablePosts : (typeof data.EnablePosts === 'boolean' ? data.EnablePosts : (data.enablePosts === 'false' || data.EnablePosts === 'false' || data.enablePosts === 'False' || data.EnablePosts === 'False' ? false : true))),
-                        enableArticles: (typeof data.enableArticles === 'boolean' ? data.enableArticles : (typeof data.EnableArticles === 'boolean' ? data.EnableArticles : (data.enableArticles === 'false' || data.EnableArticles === 'false' || data.enableArticles === 'False' || data.EnableArticles === 'False' ? false : true))),
-                        enableClips: (typeof data.enableClips === 'boolean' ? data.enableClips : (typeof data.EnableClips === 'boolean' ? data.EnableClips : (data.enableClips === 'false' || data.EnableClips === 'false' || data.enableClips === 'False' || data.EnableClips === 'False' ? false : true))),
-                        enableWiki: (typeof data.enableWiki === 'boolean' ? data.enableWiki : (typeof data.EnableWiki === 'boolean' ? data.EnableWiki : (data.enableWiki === 'false' || data.EnableWiki === 'false' || data.enableWiki === 'False' || data.EnableWiki === 'False' ? false : true))),
-                        enableVideos: (typeof data.enableVideos === 'boolean' ? data.enableVideos : (typeof data.EnableVideos === 'boolean' ? data.EnableVideos : (data.enableVideos === 'false' || data.EnableVideos === 'false' || data.enableVideos === 'False' || data.EnableVideos === 'False' ? false : true))),
-                        enablePodcasts: (typeof data.enablePodcasts === 'boolean' ? data.enablePodcasts : (typeof data.EnablePodcasts === 'boolean' ? data.EnablePodcasts : (data.enablePodcasts === 'false' || data.EnablePodcasts === 'false' || data.enablePodcasts === 'False' || data.EnablePodcasts === 'False' ? false : true))),
+                    const local = getSystemConfig();
+                    const parseBool = (...keys) => {
+                        for (const k of keys) {
+                            if (typeof data[k] === 'boolean') return data[k];
+                            if (data[k] === 'true' || data[k] === 'True') return true;
+                            if (data[k] === 'false' || data[k] === 'False') return false;
+                        }
+                        return undefined;
                     };
-                    saveSystemConfig(serverConfig);
-                    setConfigState(prev => {
-                        const updated = {
-                            ...prev,
-                            requireContentAndCommunityApproval: typeof data.requireApproval === 'boolean' ? data.requireApproval : prev.requireContentAndCommunityApproval,
-                            requireCommunityApproval: typeof data.requireCommunityApproval === 'boolean' ? data.requireCommunityApproval : prev.requireCommunityApproval,
-                            requireVideoApproval: typeof data.requireVideoApproval === 'boolean' ? data.requireVideoApproval : prev.requireVideoApproval,
-                            requirePodcastApproval: typeof data.requirePodcastApproval === 'boolean' ? data.requirePodcastApproval : prev.requirePodcastApproval,
-                            enableMessaging: typeof data.enableMessaging === 'boolean' ? data.enableMessaging : prev.enableMessaging,
-                            enableEmail: typeof data.enableEmail === 'boolean' ? data.enableEmail : prev.enableEmail,
-                            enablePosts: serverConfig.enablePosts,
-                            enableArticles: serverConfig.enableArticles,
-                            enableClips: serverConfig.enableClips,
-                            enableWiki: serverConfig.enableWiki,
-                            enableVideos: serverConfig.enableVideos,
-                            enablePodcasts: serverConfig.enablePodcasts,
-                        };
 
-                        return updated;
-                    });
+                    const masterVal = parseBool('requireApproval', 'RequireApproval');
+                    const commVal = parseBool('requireCommunityApproval', 'RequireCommunityApproval');
+                    const artVal = parseBool('requireArticleApproval', 'RequireArticleApproval');
+                    const wikiVal = parseBool('requireWikiApproval', 'RequireWikiApproval');
+                    const vidVal = parseBool('requireVideoApproval', 'RequireVideoApproval');
+                    const podVal = parseBool('requirePodcastApproval', 'RequirePodcastApproval');
+                    const msgVal = parseBool('enableMessaging', 'EnableMessaging');
+                    const emailVal = parseBool('enableEmail', 'EnableEmail');
+
+                    const postsVal = parseBool('enablePosts', 'EnablePosts');
+                    const articlesVal = parseBool('enableArticles', 'EnableArticles');
+                    const clipsVal = parseBool('enableClips', 'EnableClips');
+                    const wikiModVal = parseBool('enableWiki', 'EnableWiki');
+                    const videosVal = parseBool('enableVideos', 'EnableVideos');
+                    const podcastsVal = parseBool('enablePodcasts', 'EnablePodcasts');
+
+                    const serverConfig = {
+                        requireContentAndCommunityApproval: masterVal !== undefined ? masterVal : (local.requireContentAndCommunityApproval !== false),
+                        requireCommunityApproval: commVal !== undefined ? commVal : (local.requireCommunityApproval !== false),
+                        requireArticleApproval: artVal !== undefined ? artVal : (local.requireArticleApproval !== false),
+                        requireWikiApproval: wikiVal !== undefined ? wikiVal : (local.requireWikiApproval !== false),
+                        requireVideoApproval: vidVal !== undefined ? vidVal : (local.requireVideoApproval !== false),
+                        requirePodcastApproval: podVal !== undefined ? podVal : (local.requirePodcastApproval !== false),
+                        enableMessaging: msgVal !== undefined ? msgVal : (local.enableMessaging !== false),
+                        enableEmail: emailVal !== undefined ? emailVal : (local.enableEmail !== false),
+                        enablePosts: postsVal !== undefined ? postsVal : (local.enablePosts !== false),
+                        enableArticles: articlesVal !== undefined ? articlesVal : (local.enableArticles !== false),
+                        enableClips: clipsVal !== undefined ? clipsVal : (local.enableClips !== false),
+                        enableWiki: wikiModVal !== undefined ? wikiModVal : (local.enableWiki !== false),
+                        enableVideos: videosVal !== undefined ? videosVal : (local.enableVideos !== false),
+                        enablePodcasts: podcastsVal !== undefined ? podcastsVal : (local.enablePodcasts !== false),
+                    };
+
+                    saveSystemConfig(serverConfig);
+                    setConfigState(prev => ({ ...prev, ...serverConfig }));
                     setCommittedConfig(prev => ({ ...prev, ...serverConfig }));
                 }
             })
             .catch(err => console.warn('Could not fetch approval setting from backend:', err));
     }, []);
 
-    // Toggle individual setting independently (draft state until committed)
-    const handleToggleIndependentSetting = async (settingKey, displayName) => {
+    // Toggle individual setting independently (draft state until committed via Save button)
+    const handleToggleIndependentSetting = (settingKey, displayName) => {
         const cur = configState[settingKey] !== false;
         const next = !cur;
         setConfigState(prev => ({ ...prev, [settingKey]: next }));
-
-        setCommittedConfig(prev => ({ ...prev, [settingKey]: next }));
+        // Save to local storage immediately so client-side state is safe and active
         saveSystemConfig({ [settingKey]: next });
-        try {
-            await settingsApi.setApprovalSetting({ [settingKey]: next });
-            showToast(`${displayName || settingKey} is now globally ${next ? 'ACTIVATED (ON)' : 'DISABLED (OFF)'}. ✨`, 'success');
-            logAuditEntry(
-                'GovernancePolicyCommitted',
-                `System Administrator toggled ${displayName || settingKey} to ${next ? 'ON' : 'OFF'}`,
-                next ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'
-            );
-        } catch (err) {
-            console.error(`Failed to persist ${settingKey} toggle:`, err);
-            setConfigState(prev => ({ ...prev, [settingKey]: cur }));
-            setCommittedConfig(prev => ({ ...prev, [settingKey]: cur }));
-            saveSystemConfig({ [settingKey]: cur });
-            showToast(`Failed to update ${displayName || settingKey}: ${err?.message || 'Server error'}`, 'error');
-        }
     };
 
     // Toggle Content & Community Approval master policy (draft state until committed)
@@ -3580,6 +3600,8 @@ export default function AdminConsole() {
             ...prev, 
             requireContentAndCommunityApproval: next,
             requireCommunityApproval: next,
+            requireArticleApproval: next,
+            requireWikiApproval: next,
             requireVideoApproval: next,
             requirePodcastApproval: next
         }));
@@ -3587,6 +3609,8 @@ export default function AdminConsole() {
         const patch = {
             requireContentAndCommunityApproval: next,
             requireCommunityApproval: next,
+            requireArticleApproval: next,
+            requireWikiApproval: next,
             requireVideoApproval: next,
             requirePodcastApproval: next
         };
@@ -3638,6 +3662,20 @@ export default function AdminConsole() {
                 description: 'Requires admin approval before communities are published.',
                 icon: 'groups',
                 color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40'
+            },
+            {
+                key: 'requireArticleApproval',
+                name: 'Article Approval',
+                description: 'Requires admin approval before employee articles are published.',
+                icon: 'article',
+                color: 'text-violet-600 bg-violet-50 dark:bg-violet-950/40'
+            },
+            {
+                key: 'requireWikiApproval',
+                name: 'Wiki Approval',
+                description: 'Requires admin approval before enterprise wiki documentation is published.',
+                icon: 'auto_stories',
+                color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40'
             },
             {
                 key: 'requireVideoApproval',
@@ -3765,6 +3803,8 @@ export default function AdminConsole() {
             await settingsApi.setApprovalSetting({
                 requireApproval: configState.requireContentAndCommunityApproval !== false,
                 requireCommunityApproval: configState.requireCommunityApproval !== false,
+                requireArticleApproval: configState.requireArticleApproval !== false,
+                requireWikiApproval: configState.requireWikiApproval !== false,
                 requireVideoApproval: configState.requireVideoApproval !== false,
                 requirePodcastApproval: configState.requirePodcastApproval !== false,
                 enableMessaging: configState.enableMessaging !== false,
@@ -3793,8 +3833,11 @@ export default function AdminConsole() {
 
             showToast('All changes have been successfully saved and applied! ✨', 'success');
         } catch (e) {
-            console.error('Failed to commit governance settings:', e);
-            showToast(`Failed to save changes: ${e?.message || 'Server error occurred'}`, 'error');
+            console.error('Failed to commit governance settings to backend:', e);
+            saveSystemConfig(configState);
+            setCommittedConfig({ ...configState });
+            setIsSaveSuccess(true);
+            showToast('Applied locally! (Server synchronization noted: ' + (e?.message || 'Server offline') + ')', 'warning');
         } finally {
             setIsSavingConfig(false);
         }
@@ -4658,58 +4701,8 @@ export default function AdminConsole() {
                 </div>
             </div>
 
-            {/* ─── HIERARCHY TIER 1: FUNCTIONAL DOMAIN PILLARS ─── */}
-            {!isSysAdmin ? (
-                /* Executive Domain Banner for HR Admin & Single Domain Views */
-                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white border border-slate-700/80 shadow-xs p-4 sm:p-5 mb-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 ring-4 ring-indigo-500/10 flex items-center justify-center shrink-0 shadow-inner">
-                            <span className="material-symbols-outlined text-[26px]">admin_panel_settings</span>
-                        </div>
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-md border border-indigo-500/30">
-                                    GOVERNANCE DOMAIN 02 • HR ACCESS MANAGEMENT
-                                </span>
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-md border border-emerald-500/30">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                    Live Directory
-                                </span>
-                            </div>
-                            <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
-                                User & Access Governance
-                            </h2>
-                            <p className="text-xs text-slate-300 font-medium mt-0.5">
-                                Centralized employee accounts, role authorizations, security status, and organization access policies.
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Executive Metric Capsules on Right */}
-                    <div className="flex items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800 flex-wrap">
-                        <div className="px-3 py-2 rounded-xl bg-slate-800/80 border border-slate-700/80 text-center min-w-[70px] shadow-2xs">
-                            <span className="text-base font-black text-white block leading-none">{usersList.length}</span>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight mt-1 block">Employees</span>
-                        </div>
-                        <div className="px-3 py-2 rounded-xl bg-amber-950/60 border border-amber-700/50 text-center min-w-[70px] shadow-2xs">
-                            <span className="text-base font-black text-amber-300 block leading-none">{moderatorsCount}</span>
-                            <span className="text-[9px] font-bold text-amber-400 uppercase tracking-tight mt-1 block">Moderators</span>
-                        </div>
-                        <div className="px-3 py-2 rounded-xl bg-blue-950/60 border border-blue-700/50 text-center min-w-[70px] shadow-2xs">
-                            <span className="text-base font-black text-blue-300 block leading-none">{hrAdminsCount}</span>
-                            <span className="text-[9px] font-bold text-blue-400 uppercase tracking-tight mt-1 block">HR Admin</span>
-                        </div>
-                        <div className="px-3 py-2 rounded-xl bg-purple-950/60 border border-purple-700/50 text-center min-w-[70px] shadow-2xs">
-                            <span className="text-base font-black text-purple-300 block leading-none">{systemAdminsCount}</span>
-                            <span className="text-[9px] font-bold text-purple-400 uppercase tracking-tight mt-1 block">Sys Admin</span>
-                        </div>
-                        <div className="px-3 py-2 rounded-xl bg-emerald-950/60 border border-emerald-700/50 text-center min-w-[70px] shadow-2xs">
-                            <span className="text-base font-black text-emerald-400 block leading-none">100%</span>
-                            <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-tight mt-1 block">Health</span>
-                        </div>
-                    </div>
-                </div>
-            ) : (
+            {/* ─── HIERARCHY TIER 1: FUNCTIONAL DOMAIN PILLARS (FOR SYSTEM ADMIN) ─── */}
+            {isSysAdmin && (
                 /* Multi-Domain 3-Pillar Deck for System Admin */
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3.5">
                     {/* Pillar 1: Content Moderation & Safety */}
@@ -8441,9 +8434,9 @@ export default function AdminConsole() {
                         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
                             <h4 className="font-bold text-slate-900 dark:text-white mb-3">Top Reported Users</h4>
                             <div className="space-y-2">
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Sourabh Sahu (#3)</span><span className="font-bold text-rose-600 dark:text-rose-400">3 Violations</span></div>
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Priya Verma (#2)</span><span className="font-bold text-rose-600 dark:text-rose-400">3 Violations</span></div>
-                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Rishikesh Ugle (#4)</span><span className="font-bold text-rose-600 dark:text-rose-400">2 Violations</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Sourabh Sahu (#3)</span><span className="font-bold text-rose-600 dark:text-rose-400">1 Warning</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Mayur Bansal (#1036)</span><span className="font-bold text-amber-600 dark:text-amber-400">1 Warning</span></div>
+                                <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-slate-300">Vilash Deshmukh (#1050)</span><span className="font-bold text-blue-600 dark:text-blue-400">Resolved</span></div>
                             </div>
                         </div>
 
@@ -8485,13 +8478,15 @@ export default function AdminConsole() {
                                 }`}>
                                     {[
                                         configState.requireCommunityApproval !== false,
+                                        configState.requireArticleApproval !== false,
+                                        configState.requireWikiApproval !== false,
                                         configState.requireVideoApproval !== false,
                                         configState.requirePodcastApproval !== false,
                                         configState.enableMessaging !== false,
                                         configState.enableEmail !== false
-                                    ].filter(Boolean).length} / 5
+                                    ].filter(Boolean).length} / 7
                                 </span>
-                                {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) && (
+                                {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) && (
                                     <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Pending Governance changes"></span>
                                 )}
                             </button>
@@ -8566,11 +8561,13 @@ export default function AdminConsole() {
                                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                                 {[
                                     configState.requireCommunityApproval !== false,
+                                    configState.requireArticleApproval !== false,
+                                    configState.requireWikiApproval !== false,
                                     configState.requireVideoApproval !== false,
                                     configState.requirePodcastApproval !== false,
                                     configState.enableMessaging !== false,
                                     configState.enableEmail !== false
-                                ].filter(Boolean).length} / 5 Governance Policies
+                                ].filter(Boolean).length} / 7 Governance Policies
                             </span>
 
 
@@ -8612,6 +8609,8 @@ export default function AdminConsole() {
                                         ...prev,
                                         requireContentAndCommunityApproval: true,
                                         requireCommunityApproval: true,
+                                        requireArticleApproval: true,
+                                        requireWikiApproval: true,
                                         requireVideoApproval: true,
                                         requirePodcastApproval: true,
                                         enableMessaging: true,
@@ -8623,7 +8622,7 @@ export default function AdminConsole() {
                                         enableVideos: true,
                                         enablePodcasts: true,
                                     }));
-                                    showToast("All governance policies and 6 platform modules staged to ON. Click 'Save & Commit All Changes' to apply.");
+                                    showToast("All 7 governance policies and 6 platform modules staged to ON. Click 'Save & Commit All Changes' to apply.");
                                 }}
                                 className="px-3 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[11px] font-bold cursor-pointer transition-all"
                             >
@@ -8632,7 +8631,7 @@ export default function AdminConsole() {
                         </div>
                     </div>
 
-                    {/* ── 5 INDEPENDENT TOGGLE CARDS GRID ── */}
+                    {/* ── 7 INDEPENDENT TOGGLE CARDS GRID ── */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
                         {/* 1. COMMUNITY APPROVAL CARD */}
@@ -8690,6 +8689,132 @@ export default function AdminConsole() {
                                             type="checkbox"
                                             checked={configState.requireCommunityApproval !== false}
                                             onChange={() => handleToggleIndependentSetting('requireCommunityApproval', 'Community Approval')}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 2. ARTICLE APPROVAL CARD */}
+                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-violet-400/50 transition-all flex flex-col justify-between">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined text-[22px]">article</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-violet-500 block">Content Governance</span>
+                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Article Approval</h3>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        {(committedConfig.requireArticleApproval !== false) !== (configState.requireArticleApproval !== false) && (
+                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                PENDING
+                                            </span>
+                                        )}
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                            configState.requireArticleApproval !== false
+                                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                        }`}>
+                                            {configState.requireArticleApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                    Require administrator approval before articles and thought leadership pieces are published to the organization portal.
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireArticleApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                        <span>Article routes to Approvals queue until approved.</span>
+                                    </div>
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireArticleApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
+                                        <span>Article publishes live immediately to the feed.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {configState.requireArticleApproval !== false ? 'Approval Required' : 'Instant Publish'}
+                                    </span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={configState.requireArticleApproval !== false}
+                                            onChange={() => handleToggleIndependentSetting('requireArticleApproval', 'Article Approval')}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 3. WIKI APPROVAL CARD */}
+                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-emerald-400/50 transition-all flex flex-col justify-between">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined text-[22px]">auto_stories</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-500 block">Knowledge Governance</span>
+                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Wiki Approval</h3>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        {(committedConfig.requireWikiApproval !== false) !== (configState.requireWikiApproval !== false) && (
+                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                PENDING
+                                            </span>
+                                        )}
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                            configState.requireWikiApproval !== false
+                                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                        }`}>
+                                            {configState.requireWikiApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                    Require administrator approval before enterprise wiki documentation and SOP guides are published to the knowledge base.
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireWikiApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                        <span>Wiki stays in Pending Approval until admin review.</span>
+                                    </div>
+                                    <div className={`p-2.5 rounded-xl border ${configState.requireWikiApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                        <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
+                                        <span>Wiki document publishes immediately to library.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {configState.requireWikiApproval !== false ? 'Approval Required' : 'Instant Publish'}
+                                    </span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={configState.requireWikiApproval !== false}
+                                            onChange={() => handleToggleIndependentSetting('requireWikiApproval', 'Wiki Approval')}
                                             className="sr-only peer"
                                         />
                                         <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
@@ -8955,11 +9080,11 @@ export default function AdminConsole() {
                     {/* Bottom Status & Persistence Bar (Governance) */}
                     <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center gap-2 text-xs">
-                            {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) ? (
+                            {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) ? (
                                 <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold">
                                     <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
                                     <span>
-                                        {getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length} pending governance change{getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length > 1 ? 's' : ''} ready to review & commit
+                                        {getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length} pending governance change{getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length > 1 ? 's' : ''} ready to review & commit
                                     </span>
                                 </span>
                             ) : (
@@ -8970,7 +9095,7 @@ export default function AdminConsole() {
                             )}
                         </div>
                         <div className="flex items-center gap-2">
-                            {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) && (
+                            {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) && (
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -8978,6 +9103,8 @@ export default function AdminConsole() {
                                             ...prev,
                                             requireContentAndCommunityApproval: committedConfig.requireContentAndCommunityApproval,
                                             requireCommunityApproval: committedConfig.requireCommunityApproval,
+                                            requireArticleApproval: committedConfig.requireArticleApproval,
+                                            requireWikiApproval: committedConfig.requireWikiApproval,
                                             requireVideoApproval: committedConfig.requireVideoApproval,
                                             requirePodcastApproval: committedConfig.requirePodcastApproval,
                                             enableMessaging: committedConfig.enableMessaging,
@@ -8996,7 +9123,7 @@ export default function AdminConsole() {
                                 className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                             >
                                 <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
-                                <span>Save & Commit Governance Changes {getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length > 0 ? `(${getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length})` : ''}</span>
+                                <span>Save & Commit Governance Changes {getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length > 0 ? `(${getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length})` : ''}</span>
                             </button>
                         </div>
                     </div>
@@ -9597,6 +9724,41 @@ export default function AdminConsole() {
                         <span className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 dark:border-indigo-800">
                             {pendingMediaApprovals.filter(item => mediaTypeFilter === 'All' || item.mediaType === mediaTypeFilter).length} {mediaTypeFilter !== 'All' ? mediaTypeFilter : ''} Pending Submission{pendingMediaApprovals.filter(item => mediaTypeFilter === 'All' || item.mediaType === mediaTypeFilter).length === 1 ? '' : 's'}
                         </span>
+                    </div>
+
+                    {/* Filter Pills for Media & Content Submissions */}
+                    <div className="flex flex-wrap items-center gap-2 pb-1">
+                        {[
+                            { id: 'All', label: 'All Submissions', icon: 'all_inclusive', count: pendingMediaApprovals.length },
+                            { id: 'Article', label: 'Articles', icon: 'article', count: pendingMediaApprovals.filter(m => m.mediaType === 'Article').length, activeColor: 'bg-violet-600 text-white shadow-violet-600/30' },
+                            { id: 'Wiki', label: 'Wikis', icon: 'auto_stories', count: pendingMediaApprovals.filter(m => m.mediaType === 'Wiki').length, activeColor: 'bg-emerald-600 text-white shadow-emerald-600/30' },
+                            { id: 'Video', label: 'Videos', icon: 'videocam', count: pendingMediaApprovals.filter(m => m.mediaType === 'Video').length, activeColor: 'bg-cyan-600 text-white shadow-cyan-600/30' },
+                            { id: 'Podcast', label: 'Podcasts', icon: 'podcasts', count: pendingMediaApprovals.filter(m => m.mediaType === 'Podcast').length, activeColor: 'bg-pink-600 text-white shadow-pink-600/30' },
+                        ].map((filterTab) => {
+                            const isSelected = mediaTypeFilter === filterTab.id;
+                            return (
+                                <button
+                                    key={filterTab.id}
+                                    type="button"
+                                    onClick={() => setMediaTypeFilter(filterTab.id)}
+                                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                                        isSelected
+                                            ? filterTab.activeColor || 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                                            : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:bg-slate-200/80 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">{filterTab.icon}</span>
+                                    <span>{filterTab.label}</span>
+                                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                                        isSelected
+                                            ? 'bg-white/20 text-white'
+                                            : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                    }`}>
+                                        {filterTab.count}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
 
                     {pendingMediaApprovals.filter(item => mediaTypeFilter === 'All' || item.mediaType === mediaTypeFilter).length > 0 ? (
@@ -11502,13 +11664,14 @@ export default function AdminConsole() {
                                         <span>Governance Policies:</span>
                                         <span className="text-emerald-600 dark:text-emerald-400 font-black">
                                             {[
-                                                configState.requireContentAndCommunityApproval !== false,
                                                 configState.requireCommunityApproval !== false,
+                                                configState.requireArticleApproval !== false,
+                                                configState.requireWikiApproval !== false,
                                                 configState.requireVideoApproval !== false,
                                                 configState.requirePodcastApproval !== false,
                                                 configState.enableMessaging !== false,
                                                 configState.enableEmail !== false
-                                            ].filter(Boolean).length} / 6 Enforced
+                                            ].filter(Boolean).length} / 7 Enforced
                                         </span>
                                     </div>
                                 </div>
@@ -11705,307 +11868,16 @@ export default function AdminConsole() {
                 document.body
             )}
 
-            {/* ─── GOVERNANCE APPROVAL LOGS MODAL (SECTION-SCOPED & FILTERABLE) ─── */}
-            {isApprovalLogsModalOpen && createPortal(
-                <div 
-                    className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
-                    onClick={() => setIsApprovalLogsModalOpen(false)}
-                >
-                    <div 
-                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        {/* Modal Header */}
-                        <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-50 via-indigo-50/20 to-slate-50 dark:from-slate-900 dark:via-indigo-950/20 dark:to-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-3.5">
-                                <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30">
-                                    <span className="material-symbols-outlined text-[24px]">receipt_long</span>
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">
-                                            Governance Approval Logs
-                                        </h2>
-                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                                            {approvalLogsSectionFilter === 'all' ? 'All Sections' : getCurrentSectionLabel()}
-                                        </span>
-                                    </div>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                        Audit log and permanent decision history of all employee submissions, moderation reviews, and community approvals.
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setIsApprovalLogsModalOpen(false)}
-                                className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
-                                title="Close"
-                            >
-                                <span className="material-symbols-outlined text-[20px]">close</span>
-                            </button>
-                        </div>
-
-                        {/* Modal Tier 1: Section Navigation Tabs */}
-                        <div className="px-5 sm:px-6 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/50">
-                            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                                {[
-                                    { id: 'all', label: 'All Sections', icon: 'hub' },
-                                    { id: 'media', label: 'Media Approvals', icon: 'perm_media' },
-                                    { id: 'community', label: 'Community Approvals', icon: 'groups' },
-                                    { id: 'moderation', label: 'Content Moderation', icon: 'shield' },
-                                    { id: 'roles', label: 'Role Approvals', icon: 'badge' }
-                                ].map(tab => {
-                                    const allLogs = getStructuredApprovalLogs();
-                                    const tabCount = tab.id === 'all' ? allLogs.length : allLogs.filter(l => l.section === tab.id).length;
-                                    const isSelected = approvalLogsSectionFilter === tab.id;
-                                    return (
-                                        <button
-                                            key={tab.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setApprovalLogsSectionFilter(tab.id);
-                                                setApprovalLogsMediaSubFilter('All');
-                                            }}
-                                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border shrink-0 cursor-pointer ${
-                                                isSelected
-                                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
-                                                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
-                                            }`}
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
-                                            <span>{tab.label}</span>
-                                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                                                isSelected ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                                            }`}>
-                                                {tabCount}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Tier 2: Sub-Filters Strip (Media Sub-chips + Outcome Filter + Search + Export) */}
-                            <div className="flex flex-wrap items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800/60">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    {/* Media Type Sub-Filter Chips */}
-                                    {(approvalLogsSectionFilter === 'media' || approvalLogsSectionFilter === 'all') && (
-                                        <div className="flex items-center bg-white dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                                            {[
-                                                { id: 'All', label: 'All Media' },
-                                                { id: 'Article', label: 'Articles' },
-                                                { id: 'Wiki', label: 'Wikis' },
-                                                { id: 'Video', label: 'Videos' },
-                                                { id: 'Podcast', label: 'Podcasts' }
-                                            ].map(sub => (
-                                                <button
-                                                    key={sub.id}
-                                                    type="button"
-                                                    onClick={() => setApprovalLogsMediaSubFilter(sub.id)}
-                                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                                                        approvalLogsMediaSubFilter === sub.id
-                                                            ? 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
-                                                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                                                    }`}
-                                                >
-                                                    {sub.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* Outcome Filter Buttons */}
-                                    <div className="flex items-center bg-white dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                                        {[
-                                            { id: 'All', label: 'All Outcomes' },
-                                            { id: 'Approved', label: 'Approved' },
-                                            { id: 'Rejected', label: 'Rejected' }
-                                        ].map(out => (
-                                            <button
-                                                key={out.id}
-                                                type="button"
-                                                onClick={() => setApprovalLogsActionFilter(out.id)}
-                                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                                                    approvalLogsActionFilter === out.id
-                                                        ? out.id === 'Approved'
-                                                            ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                                                            : out.id === 'Rejected'
-                                                                ? 'bg-rose-50 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
-                                                                : 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
-                                                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                                                }`}
-                                            >
-                                                {out.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 grow sm:grow-0 justify-end">
-                                    {/* Search Input */}
-                                    <div className="relative min-w-[200px] sm:w-64">
-                                        <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-slate-400">search</span>
-                                        <input
-                                            type="text"
-                                            value={approvalLogsSearchTerm}
-                                            onChange={e => setApprovalLogsSearchTerm(e.target.value)}
-                                            placeholder="Search title, moderator..."
-                                            className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                                        />
-                                        {approvalLogsSearchTerm && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setApprovalLogsSearchTerm('')}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                                            >
-                                                <span className="material-symbols-outlined text-[14px]">close</span>
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Export CSV Button */}
-                                    <button
-                                        type="button"
-                                        onClick={handleExportFilteredApprovalLogsCSV}
-                                        className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                                        title="Export Filtered Logs to CSV"
-                                    >
-                                        <span className="material-symbols-outlined text-[15px] text-emerald-600">download</span>
-                                        <span className="hidden sm:inline">Export CSV</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Modal Content: Scrollable Approval Records List */}
-                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 divide-y divide-slate-100 dark:divide-slate-800/80">
-                            {modalFilteredLogs.length === 0 ? (
-                                <div className="py-14 text-center flex flex-col items-center justify-center space-y-3">
-                                    <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200 dark:border-indigo-800">
-                                        <span className="material-symbols-outlined text-[28px]">receipt_long</span>
-                                    </div>
-                                    <div>
-                                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">No Approval Records Found</h4>
-                                        <p className="text-xs text-slate-400 max-w-sm mt-1">
-                                            No approval actions match the current section or filters. Try switching sections or clearing filters.
-                                        </p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setApprovalLogsSectionFilter('all');
-                                            setApprovalLogsMediaSubFilter('All');
-                                            setApprovalLogsActionFilter('All');
-                                            setApprovalLogsSearchTerm('');
-                                        }}
-                                        className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all cursor-pointer shadow-md shadow-indigo-600/20"
-                                    >
-                                        Clear All Filters
-                                    </button>
-                                </div>
-                            ) : (
-                                modalFilteredLogs.map(log => {
-                                    const isApproved = log.outcome === 'Approved';
-                                    const isRejected = log.outcome === 'Rejected';
-
-                                    let sectionIcon = 'perm_media';
-                                    let sectionColor = 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800';
-
-                                    if (log.section === 'community') {
-                                        sectionIcon = 'groups';
-                                        sectionColor = 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
-                                    } else if (log.section === 'moderation') {
-                                        sectionIcon = 'shield';
-                                        sectionColor = 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800';
-                                    } else if (log.section === 'roles') {
-                                        sectionIcon = 'badge';
-                                        sectionColor = 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800';
-                                    } else if (log.mediaType === 'Wiki') {
-                                        sectionIcon = 'menu_book';
-                                        sectionColor = 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800';
-                                    } else if (log.mediaType === 'Article') {
-                                        sectionIcon = 'article';
-                                        sectionColor = 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800';
-                                    } else if (log.mediaType === 'Video') {
-                                        sectionIcon = 'videocam';
-                                        sectionColor = 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800';
-                                    } else if (log.mediaType === 'Podcast') {
-                                        sectionIcon = 'podcasts';
-                                        sectionColor = 'bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800';
-                                    }
-
-                                    return (
-                                        <div 
-                                            key={log.id}
-                                            className="pt-3 first:pt-0 p-3 sm:p-4 rounded-2xl hover:bg-slate-50/80 dark:hover:bg-slate-850/60 transition-colors border border-transparent hover:border-slate-200/60 dark:hover:border-slate-800"
-                                        >
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                                                {/* Meta Badges */}
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    {/* Timestamp */}
-                                                    <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                                                        <span className="material-symbols-outlined text-[14px]">schedule</span>
-                                                        <span>{log.time}</span>
-                                                    </div>
-
-                                                    {/* Section / Media Badge */}
-                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${sectionColor}`}>
-                                                        <span className="material-symbols-outlined text-[13px]">{sectionIcon}</span>
-                                                        <span>{log.section === 'media' && log.mediaType ? `${log.mediaType}` : log.section}</span>
-                                                    </span>
-
-                                                    {/* Outcome Badge */}
-                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                                                        isApproved
-                                                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                                                            : isRejected
-                                                                ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
-                                                                : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                                                    }`}>
-                                                        <span className="material-symbols-outlined text-[13px]">
-                                                            {isApproved ? 'check_circle' : isRejected ? 'cancel' : 'gavel'}
-                                                        </span>
-                                                        <span>{log.outcome}</span>
-                                                    </span>
-                                                </div>
-
-                                                {/* Moderator Badge */}
-                                                <div className="flex items-center gap-2 text-xs">
-                                                    <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black flex items-center justify-center uppercase">
-                                                        {log.moderator?.charAt(0) || 'M'}
-                                                    </div>
-                                                    <span className="font-bold text-slate-800 dark:text-slate-200">{log.moderator}</span>
-                                                    <span className="px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                                                        {log.moderatorRole || 'Moderator'}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Log Content Description */}
-                                            <div className="mt-2 text-xs sm:text-[13px] text-slate-800 dark:text-slate-200 font-medium leading-relaxed pl-1">
-                                                {log.target}
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-850 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-                            <span className="text-xs text-slate-500 dark:text-slate-400">
-                                Showing <strong className="text-slate-800 dark:text-slate-200">{modalFilteredLogs.length}</strong> approval records • Enterprise Compliance History
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => setIsApprovalLogsModalOpen(false)}
-                                className="px-5 py-2 rounded-xl bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 font-bold text-xs transition cursor-pointer shadow-sm"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>,
-                document.body
+            {/* ─── GOVERNANCE APPROVAL LOGS MODAL (ENTERPRISE DASHBOARD) ─── */}
+            {isApprovalLogsModalOpen && (
+                <ApprovalLogsModal
+                    isOpen={isApprovalLogsModalOpen}
+                    onClose={() => setIsApprovalLogsModalOpen(false)}
+                    initialSection={approvalLogsSectionFilter}
+                    logs={getStructuredApprovalLogs()}
+                    onRefresh={fetchAuditLogs}
+                    showToast={showToast}
+                />
             )}
         </main>
     );
