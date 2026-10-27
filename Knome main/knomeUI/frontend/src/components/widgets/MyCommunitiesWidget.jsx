@@ -85,8 +85,12 @@ export default function MyCommunitiesWidget() {
                 };
             });
 
-            // Only display communities the current user has joined
-            const joinedOnly = mapped.filter(c => c.isJoined);
+            // Only display communities the current user has joined, limited to top 10 sorted by membership
+            const joinedOnly = mapped
+                .filter(c => c.isJoined)
+                .sort((a, b) => (b.membersCount || 0) - (a.membersCount || 0))
+                .slice(0, 10);
+
             setCommunities(prev => {
                 if (prev.length === joinedOnly.length && prev.every((c, i) => c.id === joinedOnly[i].id && c.name === joinedOnly[i].name && c.membersCount === joinedOnly[i].membersCount)) {
                     return prev;

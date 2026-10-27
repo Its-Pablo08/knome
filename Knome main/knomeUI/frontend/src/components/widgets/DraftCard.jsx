@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { formatDraftTimeAgo } from '../../utils/draftManager';
+import { useConfirm } from '../contexts/ConfirmDialogContext';
 
 export default function DraftCard({ draft, onEditDraft, onDeleteDraft, onPublishDraft }) {
+    const confirm = useConfirm();
     const [isPublishing, setIsPublishing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -20,7 +22,14 @@ export default function DraftCard({ draft, onEditDraft, onDeleteDraft, onPublish
     const audios = attachments.filter(a => a.type === 'audio' || a.fileType?.toLowerCase() === 'audio');
 
     const handleDelete = async () => {
-        if (!window.confirm('Are you sure you want to permanently delete this draft? This action cannot be undone.')) return;
+        const ok = await confirm({
+            title: 'Delete Draft',
+            message: 'Are you sure you want to permanently delete this draft? This action cannot be undone.',
+            confirmText: 'Delete Draft',
+            cancelText: 'Cancel',
+            variant: 'danger'
+        });
+        if (!ok) return;
 
         setIsDeleting(true);
         try {
