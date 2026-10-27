@@ -190,29 +190,27 @@ public class NotificationRepository : INotificationRepository
 
         var oldMessage = target.Message;
         var eventType = target.EventType;
-        var targetDate = target.CreatedDate;
-        var windowStart = targetDate.AddMinutes(-30);
-        var windowEnd = targetDate.AddMinutes(30);
 
-        List<Notification> siblings;
+        List<Notification> toDelete;
         if (!string.IsNullOrEmpty(oldMessage))
         {
-            siblings = await _db.Notifications
-                .Where(n => n.EventType == eventType && n.Message == oldMessage && n.CreatedDate >= windowStart && n.CreatedDate <= windowEnd)
+            toDelete = await _db.Notifications
+                .Where(n => (n.EventType == eventType || n.EventType == Constants.NotificationTypes.HrAnnouncement || n.EventType == "AdminBroadcast") 
+                            && n.Message == oldMessage)
                 .ToListAsync();
         }
         else
         {
-            siblings = new List<Notification> { target };
+            toDelete = new List<Notification>();
         }
 
-        if (!siblings.Any(s => s.NotificationId == target.NotificationId))
+        if (!toDelete.Any(s => s.NotificationId == target.NotificationId))
         {
-            siblings.Add(target);
+            toDelete.Add(target);
         }
 
-        _db.Notifications.RemoveRange(siblings);
+        _db.Notifications.RemoveRange(toDelete);
         await _db.SaveChangesAsync();
-        return siblings.Count;
+        return toDelete.Count;
     }
 }

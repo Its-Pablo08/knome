@@ -44,7 +44,7 @@ public class ScheduledPostHostedService : BackgroundService
                             {
                                 await notifService.PublishAsync(
                                     post.AuthorUserId,
-                                    Constants.NotificationTypes.HrAnnouncement,
+                                    Constants.NotificationTypes.PostPublished,
                                     "Your scheduled post has successfully gone live.",
                                     relatedContentType: Constants.ContentTypes.Post,
                                     relatedContentId: post.PostId);
@@ -70,7 +70,7 @@ public class ScheduledPostHostedService : BackgroundService
                             {
                                 await notifService.PublishAsync(
                                     article.AuthorUserId,
-                                    Constants.NotificationTypes.HrAnnouncement,
+                                    Constants.NotificationTypes.ArticlePublished,
                                     $"Your scheduled article \"{article.Title}\" has successfully gone live.",
                                     relatedContentType: Constants.ContentTypes.Article,
                                     relatedContentId: article.ArticleId);

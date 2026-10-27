@@ -1,30 +1,95 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { notificationsApi } from '../../utils/apiService';
 
-export default function BroadcastModal({ isOpen, onClose, initialData = null, onSuccess }) {
-    const isEditMode = Boolean(initialData?.id);
+export default function BroadcastModal({ isOpen, onClose, initialData = null, broadcasts = [], onSuccess }) {
+    const [broadcastsList, setBroadcastsList] = useState([]);
+    const [selectedTab, setSelectedTab] = useState('new'); // 'new' | id/number
     const [title, setTitle] = useState('');
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [toastMessage, setToastMessage] = useState('');
 
-    useEffect(() => {
-        if (isOpen) {
-            if (initialData) {
-                setTitle(initialData.title || '');
-                setMessage(initialData.content || initialData.message || '');
-            } else {
+    const resolveId = (item) => item?.id ?? item?.Id ?? item?.notificationId;
+
+    // Fetch latest broadcasts on open or use provided broadcasts
+    const refreshBroadcasts = useCallback(async (preferredSelectId = null) => {
+        try {
+            const res = await notificationsApi.broadcasts.getAll();
+            const list = Array.isArray(res) ? res : (res?.items || res?.data || []);
+            // Enforce at most 3 active broadcasts
+            const capped = list.slice(0, 3);
+            setBroadcastsList(capped);
+
+            if (preferredSelectId !== null) {
+                const found = capped.find(b => String(resolveId(b)) === String(preferredSelectId));
+                if (found) {
+                    setSelectedTab(String(resolveId(found)));
+                    setTitle(found.title || '');
+                    setMessage(found.content || found.message || '');
+                    return;
+                }
+            }
+
+            if (capped.length >= 3) {
+                // If 3 are already active, default to editing the first broadcast
+                setSelectedTab(String(resolveId(capped[0])));
+                setTitle(capped[0].title || '');
+                setMessage(capped[0].content || capped[0].message || '');
+            } else if (capped.length > 0 && preferredSelectId === undefined) {
+                // Default to new broadcast if slots available
+                setSelectedTab('new');
                 setTitle('');
                 setMessage('');
             }
+        } catch (e) {
+            console.error('Failed to load active broadcasts for modal:', e);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (isOpen) {
             setError('');
             setToastMessage('');
+
+            if (initialData && resolveId(initialData)) {
+                const initId = resolveId(initialData);
+                setSelectedTab(String(initId));
+                setTitle(initialData.title || '');
+                setMessage(initialData.content || initialData.message || '');
+                refreshBroadcasts(initId);
+            } else {
+                setSelectedTab('new');
+                setTitle('');
+                setMessage('');
+                refreshBroadcasts();
+            }
         }
-    }, [isOpen, initialData]);
+    }, [isOpen, initialData, refreshBroadcasts]);
 
     if (!isOpen) return null;
+
+    const currentBroadcast = selectedTab !== 'new' 
+        ? broadcastsList.find(b => String(resolveId(b)) === String(selectedTab))
+        : null;
+    const isEditMode = Boolean(currentBroadcast && resolveId(currentBroadcast));
+
+    const handleSelectTab = (tabKey) => {
+        setSelectedTab(tabKey);
+        setError('');
+        setToastMessage('');
+        if (tabKey === 'new') {
+            setTitle('');
+            setMessage('');
+        } else {
+            const item = broadcastsList.find(b => String(resolveId(b)) === String(tabKey));
+            if (item) {
+                setTitle(item.title || '');
+                setMessage(item.content || item.message || '');
+            }
+        }
+    };
 
     const templates = [
         {
@@ -71,12 +136,18 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
             return;
         }
 
+        if (!isEditMode && broadcastsList.length >= 3) {
+            setError('At most 3 broadcasts can be active at the same time. Please remove or edit an existing broadcast.');
+            return;
+        }
+
         setIsSubmitting(true);
         setError('');
 
         try {
             if (isEditMode) {
-                await notificationsApi.broadcasts.update(initialData.id, {
+                const targetId = resolveId(currentBroadcast);
+                await notificationsApi.broadcasts.update(targetId, {
                     title: title.trim(),
                     message: trimmedMsg
                 });
@@ -86,19 +157,26 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
                     title: title.trim(),
                     message: trimmedMsg
                 });
-                setToastMessage('Broadcast announcement sent to all employees.');
+                setToastMessage('New broadcast published to all employees.');
             }
 
-            // Broadcast global custom event
+            // Dispatch global events for instant cross-tab / cross-component sync
             window.dispatchEvent(new CustomEvent('knome:broadcast-updated', {
                 detail: { action: isEditMode ? 'updated' : 'created' }
             }));
 
-            if (onSuccess) onSuccess();
+            if (onSuccess) {
+                try {
+                    onSuccess();
+                } catch (cbErr) {
+                    console.warn('[BroadcastModal] onSuccess callback error (safely caught):', cbErr);
+                }
+            }
 
+            await refreshBroadcasts();
             setTimeout(() => {
                 onClose();
-            }, 800);
+            }, 500);
         } catch (err) {
             console.error('Failed to save broadcast announcement:', err);
             setError(err?.response?.data?.message || err?.message || 'Failed to publish broadcast. Please try again.');
@@ -108,23 +186,53 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
     };
 
     const handleDelete = async () => {
-        const targetId = initialData?.id || initialData?.Id || initialData?.notificationId;
-        if (!targetId) return;
+        const targetId = resolveId(currentBroadcast) || resolveId(initialData);
+        if (!targetId) {
+            setError('Could not identify broadcast to remove.');
+            return;
+        }
 
         setIsSubmitting(true);
         setError('');
 
         try {
             await notificationsApi.broadcasts.delete(targetId);
+
+            // Optimistically filter from local list
+            const updated = broadcastsList.filter(b => String(resolveId(b)) !== String(targetId));
+            setBroadcastsList(updated);
+
+            setToastMessage('Broadcast announcement removed.');
+
             window.dispatchEvent(new CustomEvent('knome:broadcast-updated', {
-                detail: { action: 'deleted' }
+                detail: { action: 'deleted', id: targetId }
+            }));
+            window.dispatchEvent(new CustomEvent('knome:broadcast-deleted', {
+                detail: { id: targetId }
             }));
 
-            if (onSuccess) onSuccess();
-            onClose();
+            if (onSuccess) {
+                try {
+                    onSuccess();
+                } catch (cbErr) {
+                    console.warn('[BroadcastModal] onSuccess callback error (safely caught):', cbErr);
+                }
+            }
+
+            // Switch to remaining broadcast or switch to 'new' mode
+            if (updated.length > 0) {
+                const next = updated[0];
+                setSelectedTab(String(resolveId(next)));
+                setTitle(next.title || '');
+                setMessage(next.content || next.message || '');
+            } else {
+                setSelectedTab('new');
+                setTitle('');
+                setMessage('');
+            }
         } catch (err) {
             console.error('Failed to delete broadcast:', err);
-            setError('Failed to remove broadcast announcement.');
+            setError(err?.response?.data?.message || err?.message || 'Failed to remove broadcast announcement.');
         } finally {
             setIsSubmitting(false);
         }
@@ -133,7 +241,7 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
             <div 
-                className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]"
+                className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Toast Notification */}
@@ -162,7 +270,7 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
                                 </span>
                             </div>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                Organization-wide banner alert for all MPOnline employees
+                                Organization-wide banner alert for all MPOnline employees (Up to 3 active)
                             </p>
                         </div>
                     </div>
@@ -176,8 +284,58 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
                     </button>
                 </div>
 
+                {/* Broadcast Slots Switcher Tabs */}
+                <div className="px-6 py-2.5 bg-slate-100/70 dark:bg-slate-950/60 border-b border-slate-200/70 dark:border-slate-800 flex items-center justify-between gap-2 overflow-x-auto shrink-0">
+                    <div className="flex items-center gap-2">
+                        {broadcastsList.map((b, idx) => {
+                            const bId = String(resolveId(b));
+                            const isSelected = selectedTab === bId;
+                            return (
+                                <button
+                                    key={bId || idx}
+                                    type="button"
+                                    onClick={() => handleSelectTab(bId)}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                                        isSelected 
+                                            ? 'bg-amber-500 text-white border-amber-500 shadow-sm shadow-amber-500/20' 
+                                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-amber-500/50'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-[15px]" style={{fontVariationSettings: isSelected ? "'FILL' 1" : "'FILL' 0"}}>
+                                        campaign
+                                    </span>
+                                    <span>Broadcast #{idx + 1}</span>
+                                </button>
+                            );
+                        })}
+
+                        {broadcastsList.length < 3 && (
+                            <button
+                                type="button"
+                                onClick={() => handleSelectTab('new')}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                                    selectedTab === 'new'
+                                        ? 'bg-amber-500 text-white border-amber-500 shadow-sm shadow-amber-500/20'
+                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-amber-500/50'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-[15px]">add</span>
+                                <span>Add Broadcast ({broadcastsList.length}/3)</span>
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0">
+                        {broadcastsList.length === 3 ? (
+                            <span className="text-amber-600 dark:text-amber-400 font-black">3/3 Active (Max)</span>
+                        ) : (
+                            <span>{broadcastsList.length}/3 Active</span>
+                        )}
+                    </div>
+                </div>
+
                 {/* Body (Scrollable) */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-5 flex-1 min-h-0 overflow-y-auto">
+                <form onSubmit={handleSubmit} className="p-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
                     {/* Error Banner */}
                     {error && (
                         <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl text-rose-600 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
@@ -186,15 +344,15 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
                         </div>
                     )}
 
-                    {/* Target Audience Pill */}
+                    {/* Target Audience Pill & Broadcast Slot Info */}
                     <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-indigo-500 text-[18px]">group</span>
                             <span className="font-semibold text-slate-700 dark:text-slate-300">Audience:</span>
-                            <span className="font-bold text-slate-900 dark:text-white">All Active Employees (Organization-Wide)</span>
+                            <span className="font-bold text-slate-900 dark:text-white">All Active Employees (Org-Wide)</span>
                         </div>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                            Live Feed Banner
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                            {isEditMode ? `Editing Slot ${broadcastsList.findIndex(b => String(resolveId(b)) === String(selectedTab)) + 1} of 3` : `New Broadcast (Slot ${broadcastsList.length + 1} of 3)`}
                         </span>
                     </div>
 
@@ -255,12 +413,12 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
                             </span>
                         </div>
                         <textarea
-                            rows={4}
+                            rows={3}
                             value={message}
                             maxLength={400}
                             onChange={(e) => setMessage(e.target.value)}
                             placeholder="Type the announcement details to broadcast across all employee dashboards and notification channels..."
-                            className="w-full p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all resize-none leading-relaxed"
+                            className="w-full p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all resize-none leading-relaxed"
                         />
                     </div>
                 </form>
@@ -274,6 +432,7 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
                                 onClick={handleDelete}
                                 disabled={isSubmitting}
                                 className="px-3.5 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                                title="Delete this broadcast announcement"
                             >
                                 <span className="material-symbols-outlined text-[16px]">delete</span>
                                 <span>Remove Broadcast</span>
@@ -298,7 +457,7 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, on
                                     <span className="material-symbols-outlined text-[16px]">
                                         {isEditMode ? 'save' : 'send'}
                                     </span>
-                                    <span>{isEditMode ? 'Save Changes' : 'Send Broadcast'}</span>
+                                    <span>{isEditMode ? 'Save Changes' : 'Publish Broadcast'}</span>
                                 </>
                             )}
                         </button>

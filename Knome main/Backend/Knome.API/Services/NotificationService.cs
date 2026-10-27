@@ -351,11 +351,13 @@ public class NotificationService : INotificationService
                 continue;
             }
 
-            // Exclude personal user notifications (role updates, moderation alerts, login greetings)
+            // Exclude personal user notifications (role updates, moderation alerts, login greetings, scheduled content publication)
             if (msg.Contains("roles have been updated", StringComparison.OrdinalIgnoreCase) ||
                 msg.Contains("role has been updated", StringComparison.OrdinalIgnoreCase) ||
                 msg.Contains("reviewed by moderation", StringComparison.OrdinalIgnoreCase) ||
                 msg.StartsWith("First-time login", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("has successfully gone live", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("Your scheduled", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(item.RelatedContentType, "User", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(item.RelatedContentType, "VideoModeration", StringComparison.OrdinalIgnoreCase))
             {
@@ -386,7 +388,7 @@ public class NotificationService : INotificationService
             });
         }
 
-        return result;
+        return result.Take(3).ToList();
     }
 
     public async Task<bool> UpdateBroadcastAsync(long id, string newMessage)
