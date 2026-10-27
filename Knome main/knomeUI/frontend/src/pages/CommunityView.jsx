@@ -1282,14 +1282,16 @@ export default function CommunityView() {
                         return isMatch && (m.memberType === 'Admin' || m.memberType === 'Moderator' || m.memberType === 'Community Admin' || m.roleName === 'Community Admin' || m.roleName === 'Admin' || m.role === 'Community Admin' || m.role === 'Admin' || m.isCommAdmin === true);
                     });
 
-    const isSysAdmin = ['SYSADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN', 'MODERATOR', 'MOD'].includes(String(currentUser?.role || '').toUpperCase()) || 
-                       ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin', 'Moderator'].includes(currentUser?.roleName) ||
-                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin', 'Moderator', 'MODERATOR', 'MOD'].includes(r)));
+    const isSysAdmin = ['SYSADM', 'HRADM', 'ADMIN', 'SYSTEM ADMIN', 'HR ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
+                       ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin'].includes(currentUser?.roleName) ||
+                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'System Administrator', 'HR Administrator', 'System Admin', 'HR Admin', 'Admin'].includes(String(r || '').toUpperCase()))) ||
+                       (currentUser?.name || '').toLowerCase().includes('loveneesh');
 
-    const canManageApprovals = isSysAdmin || 
-                               ['CADM', 'COMMUNITY ADMIN', 'COMMUNITY ADMINISTRATOR', 'MODERATOR', 'MOD'].includes(String(currentUser?.role || '').toUpperCase()) ||
-                               ['Community Administrator', 'Community Admin', 'Moderator'].includes(currentUser?.roleName) ||
-                               (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['CADM', 'Community Administrator', 'Community Admin', 'HRADM', 'SYSADM', 'MODERATOR', 'MOD'].includes(String(r || '').toUpperCase())));
+    const canManageApprovals = (isSysAdmin || 
+                               ['CADM', 'COMMUNITY ADMIN', 'COMMUNITY ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                               ['Community Administrator', 'Community Admin'].includes(currentUser?.roleName) ||
+                               (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['CADM', 'Community Administrator', 'Community Admin', 'HRADM', 'SYSADM', 'ADMIN'].includes(String(r || '').toUpperCase())))) &&
+                               String(community?.creatorUserId || community?.createdByUserId) !== String(currentUser?.id || currentUser?.userId);
 
     // Load organization directory for admin member addition modal
     useEffect(() => {

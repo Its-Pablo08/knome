@@ -1020,20 +1020,27 @@ export default function AdminConsole() {
                     createdDate: c.createdDate || c.createdAt,
                     status: c.approvalStatus || 'Pending'
                 }));
-                // Server DB is authoritative: prune decided communities (approved or rejected) from local pending storage
+                // Server DB is authoritative, but keep uncommitted local pending items
                 try {
                     const localList = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
                     const activeApiIds = new Set(mapped.map(m => String(m.id)));
                     const activeApiNames = new Set(mapped.map(m => (m.name || '').toLowerCase().trim()));
+                    const approvedCustomComms = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
+                    const approvedCustomIds = new Set(approvedCustomComms.filter(c => c.status === 'Approved' || c.isApproved).map(c => String(c.id)));
+                    const approvedCustomNames = new Set(approvedCustomComms.filter(c => c.status === 'Approved' || c.isApproved).map(c => (c.name || '').toLowerCase().trim()));
 
-                    const prunedLocal = localList.filter(l => {
-                        const numId = Number(l.id);
-                        if (!isNaN(numId) && numId > 0 && numId < 1000000000) {
-                            return false;
-                        }
-                        return !activeApiIds.has(String(l.id)) && !activeApiNames.has((l.name || '').toLowerCase().trim());
-                    });
-                    localStorage.setItem('knome_pending_community_approvals', JSON.stringify(prunedLocal));
+                    const preservedLocal = localList.filter(l => 
+                        !approvedCustomIds.has(String(l.id)) &&
+                        !approvedCustomNames.has((l.name || '').toLowerCase().trim()) &&
+                        l.status !== 'Approved' &&
+                        l.status !== 'Rejected' &&
+                        !activeApiIds.has(String(l.id)) && 
+                        !activeApiNames.has((l.name || '').toLowerCase().trim())
+                    );
+                    const merged = [...mapped, ...preservedLocal];
+                    localStorage.setItem('knome_pending_community_approvals', JSON.stringify(merged));
+                    setPendingCommunityApprovals(merged);
+                    return;
                 } catch (_) {}
 
                 setPendingCommunityApprovals(mapped);

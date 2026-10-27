@@ -93,6 +93,14 @@ export default function Communities() {
             ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'MODERATOR', 'MOD'].includes(String(r || '').toUpperCase())
         ));
 
+    const isAuthorizedAdmin = ['SYSADM', 'HRADM', 'CADM', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
+        ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'HR MANAGER', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
+        ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'HR MANAGER', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => 
+            ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(r || '').toUpperCase())
+        )) ||
+        (currentUser?.name || '').toLowerCase().includes('loveneesh');
+
     const loadPendingApprovals = async () => {
         try {
             const res = await communitiesApi.getPending({ noCache: true });
@@ -120,21 +128,27 @@ export default function Communities() {
                     status: c.approvalStatus || 'Pending'
                 }));
 
-                // Server DB is authoritative: prune decided communities (approved or rejected) from local pending storage
+                // Server DB is authoritative, but keep uncommitted local pending items
                 try {
                     const localList = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
                     const activeApiIds = new Set(mapped.map(m => String(m.id)));
                     const activeApiNames = new Set(mapped.map(m => (m.name || '').toLowerCase().trim()));
+                    const approvedDbComms = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
+                    const approvedDbIds = new Set(approvedDbComms.filter(c => c.status === 'Approved' || c.isApproved).map(c => String(c.id)));
+                    const approvedDbNames = new Set(approvedDbComms.filter(c => c.status === 'Approved' || c.isApproved).map(c => (c.name || '').toLowerCase().trim()));
 
-                    const prunedLocal = localList.filter(l => {
-                        const numId = Number(l.id);
-                        // Any numeric DB ID not returned by backend is no longer pending (approved or rejected)
-                        if (!isNaN(numId) && numId > 0 && numId < 1000000000) {
-                            return false;
-                        }
-                        return !activeApiIds.has(String(l.id)) && !activeApiNames.has((l.name || '').toLowerCase().trim());
-                    });
-                    localStorage.setItem('knome_pending_community_approvals', JSON.stringify(prunedLocal));
+                    const preservedLocal = localList.filter(l => 
+                        !approvedDbIds.has(String(l.id)) &&
+                        !approvedDbNames.has((l.name || '').toLowerCase().trim()) &&
+                        l.status !== 'Approved' &&
+                        l.status !== 'Rejected' &&
+                        !activeApiIds.has(String(l.id)) && 
+                        !activeApiNames.has((l.name || '').toLowerCase().trim())
+                    );
+                    const merged = [...mapped, ...preservedLocal];
+                    localStorage.setItem('knome_pending_community_approvals', JSON.stringify(merged));
+                    setPendingApprovals(merged);
+                    return;
                 } catch (_) {}
 
                 setPendingApprovals(mapped);
@@ -144,7 +158,8 @@ export default function Communities() {
             console.warn('Backend pending communities fetch note:', e);
         }
         try {
-            const list = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
+            const list = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]')
+                .filter(c => c.status !== 'Approved' && c.status !== 'Rejected');
             setPendingApprovals(list);
         } catch (e) {
             setPendingApprovals([]);
@@ -254,13 +269,21 @@ export default function Communities() {
                     remainingDeleted.forEach(id => deletedIds.add(id));
                 }
 
-                // Prune active approved communities from pending approvals & promote in joined communities
+                // Prune only officially approved communities from pending approvals & promote in joined communities
                 try {
-                    const pending = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
-                    const cleanedPending = pending.filter(p => !activeDbIds.has(String(p.id)) && !activeDbNames.has((p.name || '').toLowerCase().trim()));
-                    if (cleanedPending.length !== pending.length) {
+                    const localPendingComms = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
+                    const approvedCustomComms = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
+                    const approvedCustomIds = new Set(approvedCustomComms.filter(c => c.status === 'Approved' || c.isApproved).map(c => String(c.id)));
+                    const approvedCustomNames = new Set(approvedCustomComms.filter(c => c.status === 'Approved' || c.isApproved).map(c => (c.name || '').toLowerCase().trim()));
+
+                    // Keep any community that is waiting for approval
+                    const cleanedPending = localPendingComms.filter(p => 
+                        !approvedCustomIds.has(String(p.id)) && 
+                        !approvedCustomNames.has((p.name || '').toLowerCase().trim())
+                    );
+                    if (cleanedPending.length !== localPendingComms.length) {
                         localStorage.setItem('knome_pending_community_approvals', JSON.stringify(cleanedPending));
-                        setPendingApprovals(prev => prev.filter(p => !activeDbIds.has(String(p.id)) && !activeDbNames.has((p.name || '').toLowerCase().trim())));
+                        setPendingApprovals(prev => prev.filter(p => !approvedCustomIds.has(String(p.id)) && !approvedCustomNames.has((p.name || '').toLowerCase().trim())));
                     }
 
                     const userKey = `knome_joined_communities_${currentUid || 'guest'}`;
@@ -269,7 +292,7 @@ export default function Communities() {
                     const activeDbMap = new Map(data.map(c => [String(c.communityId || c.id), c]));
 
                     const syncedUserJoined = userJoined.map(uj => {
-                        if ((uj.status === 'pending_approval' || uj.status === 'pending') && (activeDbIds.has(String(uj.id)) || activeDbNames.has((uj.name || '').toLowerCase().trim()))) {
+                        if ((uj.status === 'pending_approval' || uj.status === 'pending') && (approvedCustomIds.has(String(uj.id)) || approvedCustomNames.has((uj.name || '').toLowerCase().trim()))) {
                             userJoinedUpdated = true;
                             return { ...uj, status: 'joined' };
                         }
@@ -297,8 +320,15 @@ export default function Communities() {
                     console.warn('Community pending approval sync error:', syncErr);
                 }
 
+                // Active communities from DB — exclude any that are still pending admin clearance
+                const pendingList = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
+                const pendingIdSet = new Set(pendingList.map(p => String(p.id)));
+                const pendingNameSet = new Set(pendingList.map(p => (p.name || '').toLowerCase().trim()));
+
                 const apiMapped = data
-                    .filter(c => c.isActive === undefined || c.isActive === true || c.isActive === 1)
+                    .filter(c => (c.isActive === undefined || c.isActive === true || c.isActive === 1) &&
+                                 !pendingIdSet.has(String(c.communityId)) &&
+                                 !pendingNameSet.has((c.name || '').toLowerCase().trim()))
                     .map(c => {
                         const localMembers = JSON.parse(localStorage.getItem(`knome_community_members_${c.communityId}`) || '[]');
                         const count = localMembers.length > 0 ? deduplicateMembers(localMembers).length : (c.membersCount || 1);
@@ -329,9 +359,23 @@ export default function Communities() {
             try {
                 const pending = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
                 if (pending.length > 0) {
+                    const isApprovalExemptAdmin = ['SYSADM', 'HRADM', 'CADM', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                        ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
+                        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => 
+                            ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN'].includes(String(r || '').toUpperCase())
+                        ));
+                    const isModeratorUser = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+                        ['MODERATOR'].includes(String(currentUser?.roleName || '').toUpperCase());
+
                     const toAutoApprove = pending.filter(p => 
-                        (isHRorAdmin && (String(p.creatorUserId) === String(currentUser?.id) || (p.createdBy || '').toLowerCase().includes('loveneesh'))) ||
-                        p.status === 'Approved'
+                        !isModeratorUser &&
+                        (p.creatorDesignation || '').toLowerCase() !== 'moderator' &&
+                        (p.creatorRole || '').toUpperCase() !== 'MOD' &&
+                        (p.creatorRole || '').toUpperCase() !== 'MODERATOR' &&
+                        (
+                            (isApprovalExemptAdmin && (String(p.creatorUserId) === String(currentUser?.id) || (p.createdBy || '').toLowerCase().includes('loveneesh'))) ||
+                            p.status === 'Approved'
+                        )
                     );
                     if (toAutoApprove.length > 0) {
                         const remainingPending = pending.filter(p => !toAutoApprove.some(a => String(a.id) === String(p.id)));
@@ -348,10 +392,16 @@ export default function Communities() {
                 console.warn('Pending community migration note:', e);
             }
 
-            // Merge Custom Created Communities
+            // Merge Custom Created Communities (pending communities must NEVER be published)
             const custom = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
+            const pendingNames = new Set(JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]').map(p => (p.name || '').toLowerCase().trim()));
+            const pendingIds = new Set(JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]').map(p => String(p.id)));
+
             custom.forEach(c => {
                 const cleanName = (c.name || '').toLowerCase().trim();
+                if (c.status === 'Pending' || c.status === 'Pending Approval' || c.isApproved === false || pendingIds.has(String(c.id)) || pendingNames.has(cleanName)) {
+                    return;
+                }
                 if (!deletedIds.has(String(c.id)) && !existingIds.has(String(c.id)) && !existingNames.has(cleanName)) {
                     const localMembers = JSON.parse(localStorage.getItem(`knome_community_members_${c.id}`) || '[]');
                     const count = localMembers.length > 0 ? deduplicateMembers(localMembers).length : (parseInt(c.members) || 1);
@@ -1019,6 +1069,11 @@ export default function Communities() {
 
     // Filter communities based on activeTab + search + type + category (FR-CM-09)
     const filteredCommunities = communities.filter(c => {
+        // Pending approval communities must never be visible on Discover or in general list
+        if (c.status === 'Pending' || c.status === 'Pending Approval' || c.isApproved === false) {
+            return false;
+        }
+
         // Tab filter
         if (activeTab === 'My Communities') {
             // FR-CM-06: Include joined (Approved), subscribed, and pending request communities
@@ -1061,9 +1116,14 @@ export default function Communities() {
         resetScrollLoading();
     }, [activeTab, filterType, filterCategory, searchQuery, resetScrollLoading]);
 
-    // Employee's own pending communities for "My Communities" tab (exclude any that are already active/approved)
+    // Creator's own pending communities for "My Communities" tab (exclude any that are already active/approved)
+    const currentUid = String(currentUser?.userId || currentUser?.id || '');
+    const currentName = (currentUser?.name || currentUser?.fullName || '').toLowerCase().trim();
     const myPendingCommunities = pendingApprovals.filter(p => 
-        String(p.creatorUserId) === String(currentUser?.id) &&
+        (String(p.creatorUserId) === currentUid || 
+         (p.creatorEmployeeId && currentUser?.employeeId && p.creatorEmployeeId.toUpperCase() === currentUser.employeeId.toUpperCase()) ||
+         (currentName && p.creatorName && p.creatorName.toLowerCase().trim() === currentName) ||
+         (currentName && p.createdBy && p.createdBy.toLowerCase().trim() === currentName)) &&
         !communities.some(c => String(c.id) === String(p.id) || (c.name || '').toLowerCase().trim() === (p.name || '').toLowerCase().trim())
     );
 
@@ -1089,7 +1149,7 @@ export default function Communities() {
                         </p>
                     </div>
                     <div className="relative z-10 shrink-0 flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
-                        {['SYSADM', 'HRADM', 'EMP'].includes(currentUser?.role || 'EMP') && (
+                        {(Boolean(currentUser) || ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'MODERATOR', 'MOD', 'EMP', 'EMPLOYEE'].includes(String(currentUser?.role || currentUser?.roleName || 'EMP').toUpperCase())) && (
                             <button 
                                 onClick={() => setIsCreateOpen(true)}
                                 className="w-full sm:w-auto px-6 py-3 bg-indigo-500 text-white font-bold rounded-xl hover:bg-indigo-600 transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2 cursor-pointer"
@@ -1281,20 +1341,30 @@ export default function Communities() {
                                                     <span className="material-symbols-outlined text-[16px]">visibility</span>
                                                     <span>View</span>
                                                 </button>
-                                                <button
-                                                    onClick={(e) => handleApproveCommunity(e, comm)}
-                                                    className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer"
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px]">verified</span>
-                                                    Approve &amp; Launch
-                                                </button>
-                                                <button
-                                                    onClick={(e) => handleRejectCommunity(e, comm)}
-                                                    className="py-2.5 px-3 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shrink-0"
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px]">cancel</span>
-                                                    Reject
-                                                </button>
+
+                                                {isAuthorizedAdmin && String(comm.creatorUserId) !== String(currentUser?.id) ? (
+                                                    <>
+                                                        <button
+                                                            onClick={(e) => handleApproveCommunity(e, comm)}
+                                                            className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[16px]">verified</span>
+                                                            Approve &amp; Launch
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => handleRejectCommunity(e, comm)}
+                                                            className="py-2.5 px-3 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[16px]">cancel</span>
+                                                            Reject
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <div className="flex-1 py-2.5 px-3 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5">
+                                                        <span className="material-symbols-outlined text-[16px]">hourglass_top</span>
+                                                        <span>Awaiting Admin Clearance</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

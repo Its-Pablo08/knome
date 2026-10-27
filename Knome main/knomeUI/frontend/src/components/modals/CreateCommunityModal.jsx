@@ -104,6 +104,10 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
         )) ||
         (currentUser?.name || '').toLowerCase().includes('loveneesh');
 
+    const isModerator = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['MODERATOR'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
     // Form State
     const [type, setType] = useState('public');
     const [defaultOrg, setDefaultOrg] = useState('');
@@ -641,17 +645,20 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                 avatar: finalAvatar,
                 thumbnail: finalAvatar,
                 thumbnailUrl: finalAvatar,
-                createdBy: currentUser?.name || currentUser?.fullName || 'Employee',
+                createdBy: currentUser?.name || currentUser?.fullName || (isModerator ? 'Moderator' : 'Employee'),
+                creatorName: currentUser?.name || currentUser?.fullName || (isModerator ? 'Moderator' : 'Employee'),
                 creatorUserId: currentUser?.id || currentUser?.userId || 1,
                 creatorEmployeeId: currentUser?.employeeId || `MPO${currentUser?.id || '101'}`,
                 creatorDepartment: currentUser?.department || currentUser?.departmentName || 'MPOnline Limited',
+                creatorDesignation: currentUser?.roleName || currentUser?.designation || (isModerator ? 'Moderator' : 'Employee'),
+                creatorRole: isModerator ? 'MOD' : (currentUser?.role || 'EMP'),
                 creatorAvatar: currentUser?.avatar || null,
                 createdDate: dbCommunity?.createdDate || new Date().toISOString(),
                 rules: filteredRules.length > 0 ? filteredRules : ['Be respectful.', 'Stay on topic.'],
                 faq: filteredFaq.length > 0 ? filteredFaq : [{ q: 'Who can join?', a: 'All MPOnline employees.' }],
                 defaultOrg: type === 'default' ? defaultOrg : null,
-                status: (dbCommunity?.approvalStatus === 'Approved' || isHRorAdmin || !isCommunityApprovalRequired()) ? 'Approved' : 'Pending Approval',
-                isApproved: (dbCommunity?.approvalStatus === 'Approved' || isHRorAdmin || !isCommunityApprovalRequired()),
+                status: (!isModerator && (dbCommunity?.approvalStatus === 'Approved' || isHRorAdmin || !isCommunityApprovalRequired())) ? 'Approved' : 'Pending Approval',
+                isApproved: (!isModerator && (dbCommunity?.approvalStatus === 'Approved' || isHRorAdmin || !isCommunityApprovalRequired())),
                 invitedUserIds: invitedUserIds || [],
             };
 
@@ -685,8 +692,8 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                 actionLink: `/community/view?id=${newCommunity.id}`
             }));
 
-            // ── CASE A: Regular Employee when community approval policy is ON -> Goes to Admin for Approval ──
-            const shouldAutoApprove = dbCommunity?.approvalStatus === 'Approved' || isHRorAdmin || !isCommunityApprovalRequired();
+            // ── CASE A: Moderator or Regular Employee when community approval policy is ON -> Goes to Admin for Approval ──
+            const shouldAutoApprove = !isModerator && (isHRorAdmin || (dbCommunity?.approvalStatus === 'Approved' && !isModerator) || (!isCommunityApprovalRequired() && !isModerator));
             if (!shouldAutoApprove) {
                 // 1. Add to pending approvals list
                 const existingApprovals = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
@@ -1499,14 +1506,14 @@ export default function CreateCommunityModal({ isOpen, onClose, onCommunityCreat
                             ) : (
                                 <button onClick={handleSubmit} disabled={isSubmitting}
                                     className={`px-8 py-2.5 text-white text-[13px] font-bold rounded-xl transition-colors shadow-md disabled:opacity-50 flex items-center gap-2 cursor-pointer ${
-                                        !isHRorAdmin 
+                                        (!isHRorAdmin || isModerator) 
                                             ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20' 
                                             : 'bg-indigo-500 hover:bg-indigo-600 shadow-indigo-500/20'
                                     }`}>
                                     <span className="material-symbols-outlined text-[18px]">
-                                        {!isHRorAdmin ? 'hourglass_top' : 'send'}
+                                        {(!isHRorAdmin || isModerator) ? 'hourglass_top' : 'send'}
                                     </span>
-                                    {!isHRorAdmin 
+                                    {(!isHRorAdmin || isModerator) 
                                         ? (isSubmitting ? 'Sending for Approval...' : 'Send for Approval') 
                                         : (isSubmitting ? 'Creating...' : (invitedUserIds.length === candidateUsers.length && candidateUsers.length > 0 ? '⚡ Create & Add All Members' : (invitedUserIds.length > 0 ? `Create & Add ${invitedUserIds.length} Members` : 'Create Community')))
                                     }

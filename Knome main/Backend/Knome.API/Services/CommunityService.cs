@@ -79,6 +79,16 @@ public class CommunityService : ICommunityService
                name == "MODERATOR" || name == "MOD" || code == "MOD" || code == "MODERATOR";
     }
 
+    private static bool IsCommunityApprovalExemptRole(Role r)
+    {
+        if (r == null) return false;
+        var name = (r.RoleName ?? string.Empty).Trim().ToUpper();
+        var code = (r.RoleCode ?? string.Empty).Trim().ToUpper();
+        return name == "SYSTEM ADMINISTRATOR" || name == "SYSTEM ADMIN" || code == "SYSADM" ||
+               name == "HR ADMINISTRATOR" || name == "HR ADMIN" || code == "HRADM" ||
+               name == "COMMUNITY ADMINISTRATOR" || name == "COMMUNITY ADMIN" || code == "CADM";
+    }
+
     private async Task CheckIsAdminOrSysAdminAsync(int communityId, int currentUserId)
     {
         var community = await _db.Communities.FirstOrDefaultAsync(c => c.CommunityId == communityId);
@@ -338,12 +348,17 @@ public class CommunityService : ICommunityService
         }
 
         var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-        var isHRorAdmin = user != null && user.Roles.Any(IsPrivilegedAdminRole);
+        var isHRorAdmin = user != null && user.Roles.Any(IsCommunityApprovalExemptRole);
+        var isModerator = user != null && user.Roles.Any(r => {
+            var name = (r.RoleName ?? string.Empty).Trim().ToUpper();
+            var code = (r.RoleCode ?? string.Empty).Trim().ToUpper();
+            return name == "MODERATOR" || name == "MOD" || code == "MOD" || code == "MODERATOR";
+        });
 
         var requireApproval = _systemSettingService != null
             ? await _systemSettingService.GetRequireCommunityApprovalAsync()
             : true;
-        var shouldAutoApprove = !requireApproval || isHRorAdmin;
+        var shouldAutoApprove = !isModerator && (!requireApproval || isHRorAdmin);
 
         var community = new Community
         {
@@ -557,7 +572,7 @@ public class CommunityService : ICommunityService
     public async Task<CommunityDto> ApproveCommunityAsync(int communityId, int currentUserId)
     {
         var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-        var isPrivilegedAdmin = user != null && user.Roles.Any(IsPrivilegedAdminRole);
+        var isPrivilegedAdmin = user != null && user.Roles.Any(IsCommunityApprovalExemptRole);
 
         if (!isPrivilegedAdmin)
         {
@@ -632,7 +647,7 @@ public class CommunityService : ICommunityService
     public async Task RejectCommunityAsync(int communityId, int currentUserId, RejectCommunityDto dto)
     {
         var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-        var isPrivilegedAdmin = user != null && user.Roles.Any(IsPrivilegedAdminRole);
+        var isPrivilegedAdmin = user != null && user.Roles.Any(IsCommunityApprovalExemptRole);
 
         if (!isPrivilegedAdmin)
         {
