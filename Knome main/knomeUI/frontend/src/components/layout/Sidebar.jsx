@@ -133,7 +133,7 @@ export default function Sidebar() {
     if (isSysAdmin) {
         navItems.push({ to: '/admin-console', icon: 'admin_panel_settings', label: 'Admin Console', color: '#f43f5e' });
     } else if (isHrAdmin) {
-        navItems.push({ to: '/admin-console?domain=governance', icon: 'manage_accounts', label: 'User & Access Governance', color: '#8b5cf6', matchPaths: ['/admin-console'] });
+        navItems.push({ to: '/admin-console?domain=governance', icon: 'manage_accounts', label: 'Admin Console & Governance', color: '#8b5cf6', matchPaths: ['/admin-console'] });
     } else if (isModerator) {
         navItems.push({ to: '/moderation-console', icon: 'gavel', label: 'Moderation Console', color: '#f59e0b', matchPaths: ['/moderation-console', '/admin-console'] });
     }

@@ -4474,7 +4474,7 @@ export default function AdminConsole() {
     const handleSaveConfigClick = () => {
         const changes = getPendingGovernanceChanges();
         setIsSaveSuccess(false);
-        if (false) {
+        if (changes.length === 0) {
             showToast('No changes to save.', 'info');
             return;
         }
@@ -5236,7 +5236,7 @@ export default function AdminConsole() {
                             className="text-slate-700 dark:text-slate-300 font-semibold cursor-pointer hover:text-blue-600 transition-colors"
                             onClick={() => handleDomainSelect(activeDomain)}
                         >
-                            {activeDomain === 'moderation' ? 'Content Moderation & Safety' : activeDomain === 'governance' ? 'User & Access Governance' : 'Operations & Compliance'}
+                            {activeDomain === 'moderation' ? 'Content Moderation & Safety' : activeDomain === 'governance' ? 'Admin Console & Governance' : 'Operations & Compliance'}
                         </span>
                         <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-slate-700">chevron_right</span>
                         <span className="text-blue-700 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/50 px-2.5 py-0.5 rounded-lg border border-blue-200/80 dark:border-blue-800/80 shadow-2xs">
@@ -5491,7 +5491,7 @@ export default function AdminConsole() {
                                 <h3 className={`font-extrabold text-xs sm:text-sm tracking-tight truncate ${
                                     activeDomain === 'governance' ? 'text-white' : 'text-slate-900 dark:text-white'
                                 }`}>
-                                    User & Access Governance
+                                    Admin Console & Governance
                                 </h3>
                                 <p className={`text-[10px] sm:text-[11px] truncate ${
                                     activeDomain === 'governance' ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'
@@ -10389,39 +10389,6 @@ export default function AdminConsole() {
                             </button>
                         </div>
                     </div>
-                    {false && (
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-sm shrink-0">
-                                    <span className="material-symbols-outlined text-[22px]">tune</span>
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-                                        Platform Feature Access Control (Module Toggles)
-                                    </h3>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        Configure individual module availability across Knome. When a feature is toggled OFF, navigation links are hidden, direct routes are blocked, and backend APIs are protected.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                                <button
-                                    type="button"
-                                    onClick={() => handleSetAllFeatures(true)}
-                                    className="px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 text-[11px] font-bold cursor-pointer transition-all"
-                                >
-                                    Enable All Features
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleSetAllFeatures(false)}
-                                    className="px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 text-[11px] font-bold cursor-pointer transition-all"
-                                >
-                                    Disable All Features
-                                </button>
-                            </div>
-                        </div>)}
 
                         {/* ── 6 INDEPENDENT FEATURE CARDS GRID ── */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

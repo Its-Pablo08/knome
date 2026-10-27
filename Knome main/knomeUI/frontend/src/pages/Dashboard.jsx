@@ -453,205 +453,158 @@ export default function Dashboard() {
                     </div>
 
                     {/* HR Organization Announcement Banner (FR-DB-05) - Supports Up to 3 Broadcasts */}
-                    {announcements && announcements.length > 0 && announcements[activeBroadcastIndex] && (() => {
-                        const broadcast = announcements[activeBroadcastIndex];
-                        const headline = broadcast.title || broadcast.message || 'Organization Announcement';
-                        const bodyContent = broadcast.content || broadcast.details || (broadcast.title && broadcast.message && broadcast.title !== broadcast.message ? broadcast.message : '');
-                        const priority = broadcast.priority || 'High Priority';
-
-                        return (
-                            <div 
-                                onMouseEnter={() => setIsBroadcastHovered(true)}
-                                onMouseLeave={() => setIsBroadcastHovered(false)}
-                                className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-amber-500/35 dark:border-amber-500/30 bg-gradient-to-br from-amber-50/95 via-orange-50/40 to-white/95 dark:from-slate-900/95 dark:via-amber-950/25 dark:to-slate-900/90 shadow-lg shadow-amber-500/5 dark:shadow-black/20 p-5 sm:p-6 transition-all duration-300 hover:shadow-xl hover:shadow-amber-500/10 hover:border-amber-500/50 group backdrop-blur-md animate-in fade-in duration-300"
-                            >
-                                {/* Top Ambient Gradient Highlight Bar */}
-                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500"></div>
-
-                                {/* Decorative Background Radial Glow */}
-                                <div className="absolute -top-16 -right-16 w-56 h-56 bg-gradient-to-br from-amber-400/20 via-orange-400/10 to-transparent dark:from-amber-500/10 dark:via-orange-500/5 rounded-full blur-2xl pointer-events-none"></div>
-
-                                <div className="relative z-10 flex flex-col gap-4">
-                                    {/* Top Row: Icon + Badges + Admin Controls */}
-                                    <div className="flex items-start justify-between gap-3 sm:gap-4">
-                                        <div className="flex items-start gap-3.5 sm:gap-4 flex-1 min-w-0">
-                                            {/* Prominent Broadcast Icon with Pulsing Live Indicator */}
-                                            <div className="relative shrink-0 mt-0.5">
-                                                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white flex items-center justify-center shadow-md shadow-orange-500/30 ring-4 ring-amber-500/10 dark:ring-amber-400/10 transform transition-transform group-hover:scale-105 duration-300">
-                                                    <span className="material-symbols-outlined text-[26px] sm:text-[28px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                                                        campaign
-                                                    </span>
-                                                </div>
-                                                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                                                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-500 border-2 border-white dark:border-slate-900"></span>
-                                                </span>
-                                            </div>
-
-                                            {/* Content Area */}
-                                            <div className="flex-1 min-w-0">
-                                                {/* Header Badges */}
-                                                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10.5px] font-black uppercase tracking-wider shadow-xs shadow-orange-500/20">
-                                                        <span className="material-symbols-outlined text-[13px]">podcasts</span>
-                                                        <span>HR Broadcast {announcements.length > 1 ? `#${activeBroadcastIndex + 1}` : ''}</span>
-                                                    </div>
-
-                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/10 dark:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[10.5px] font-extrabold uppercase tracking-wider">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                                                        <span>{priority}</span>
-                                                    </div>
-
-                                                    <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-amber-700/80 dark:text-amber-300/80 bg-amber-500/10 px-2.5 py-0.5 rounded-full">
-                                                        <span className="material-symbols-outlined text-[13px] text-amber-500">corporate_fare</span>
-                                                        <span>Organization Announcement</span>
-                                                    </span>
-
-                                                    {announcements.length > 1 && (
-                                                        <span className="sm:hidden text-[10px] font-extrabold text-amber-700/80 dark:text-amber-300/80 bg-amber-500/15 px-2 py-0.5 rounded-full">
-                                                            {activeBroadcastIndex + 1} of {announcements.length}
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                {/* Bold Headline */}
-                                                <h3 className="text-base sm:text-lg lg:text-xl font-black text-slate-900 dark:text-white tracking-tight leading-snug group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
-                                                    {headline}
-                                                </h3>
-
-                                                {/* Broadcast Message / Details */}
-                                                {bodyContent && (
-                                                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed mt-1.5">
-                                                        {bodyContent}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* HR Admin & System Admin Actions */}
-                                        <div className="flex items-center gap-1.5 shrink-0 self-start">
-                                            {isHrOrSysAdmin && (
-                                                <>
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingBroadcastData(broadcast);
-                                                            setIsBroadcastModalOpen(true);
-                                                        }}
-                                                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:scale-[1.02] active:scale-95"
-                                                        title="Edit this broadcast announcement"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[15px]">edit</span>
-                                                        <span>Edit</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={async () => {
-                                                            const targetId = broadcast?.id || broadcast?.Id || broadcast?.notificationId;
-                                                            if (!targetId) return;
-
-                                                            // Optimistically remove from UI immediately
-                                                            setAnnouncements(prev => prev.filter(a => (a.id || a.Id || a.notificationId) !== targetId));
-
-                                                            try {
-                                                                await notificationsApi.broadcasts.delete(targetId);
-                                                                window.dispatchEvent(new CustomEvent('knome:broadcast-updated'));
-                                                                window.dispatchEvent(new CustomEvent('knome:broadcast-deleted', { detail: { id: targetId } }));
-                                                            } catch (e) {
-                                                                console.error('Failed to remove broadcast:', e);
-                                                                loadAnnouncements();
-                                                            }
-                                                        }}
-                                                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 transition-all cursor-pointer"
-                                                        title="Remove announcement"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[17px]">delete</span>
-                                                    </button>
-                                                    {announcements.length < 3 && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setEditingBroadcastData(null);
-                                                                setIsBroadcastModalOpen(true);
-                                                            }}
-                                                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all flex items-center gap-1 cursor-pointer hover:scale-[1.02] active:scale-95"
-                                                            title="Add another broadcast (up to 3)"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[15px]">add</span>
-                                                            <span>Add ({announcements.length}/3)</span>
-                                                        </button>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
+                    {announcements && announcements.length > 0 && announcements[activeBroadcastIndex] && (
+                        <div 
+                            onMouseEnter={() => setIsBroadcastHovered(true)}
+                            onMouseLeave={() => setIsBroadcastHovered(false)}
+                            className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/30 flex flex-col gap-3 shadow-xs animate-in fade-in duration-300"
+                        >
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start gap-3 flex-1 min-w-0">
+                                    <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                        <span className="material-symbols-outlined text-[20px]" style={{fontVariationSettings: "'FILL' 1"}}>campaign</span>
                                     </div>
-
-                                    {/* Multi-Broadcast Pagination & Navigation Controls */}
-                                    {announcements.length > 1 && (
-                                        <div className="flex items-center justify-between pt-3 mt-1 border-t border-amber-500/20 dark:border-amber-500/15 text-xs">
-                                            <div className="flex items-center gap-2.5">
-                                                <span className="text-[11px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                                                    Announcements
-                                                </span>
-                                                <div className="flex items-center gap-1.5">
-                                                    {announcements.map((_, dotIdx) => (
-                                                        <button
-                                                            key={dotIdx}
-                                                            type="button"
-                                                            onClick={() => setActiveBroadcastIndex(dotIdx)}
-                                                            className={`transition-all duration-300 rounded-full cursor-pointer ${
-                                                                dotIdx === activeBroadcastIndex 
-                                                                    ? 'w-6 h-2 bg-gradient-to-r from-amber-500 to-orange-500 shadow-xs shadow-orange-500/30' 
-                                                                    : 'w-2 h-2 bg-slate-300 dark:bg-slate-700 hover:bg-amber-400 dark:hover:bg-amber-500'
-                                                            }`}
-                                                            title={`View Announcement #${dotIdx + 1}`}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            <div className="flex items-center gap-1.5 bg-amber-500/10 dark:bg-amber-500/15 px-2.5 py-1 rounded-xl border border-amber-500/20">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveBroadcastIndex(prev => (prev - 1 + announcements.length) % announcements.length)}
-                                                    className="p-1 rounded-lg hover:bg-amber-500/20 text-amber-800 dark:text-amber-200 cursor-pointer transition-colors active:scale-90 flex items-center justify-center"
-                                                    title="Previous broadcast"
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px] block">chevron_left</span>
-                                                </button>
-                                                <span className="text-[11px] font-black text-amber-800 dark:text-amber-200 px-1 select-none">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                            <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white px-2 py-0.5 rounded-md">
+                                                HR Broadcast #{activeBroadcastIndex + 1}
+                                            </span>
+                                            <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                                                • Organization Announcement
+                                            </span>
+                                            {announcements.length > 1 && (
+                                                <span className="text-[10px] font-bold text-amber-700/70 dark:text-amber-300/70 bg-amber-500/10 px-2 py-0.2 rounded-full">
                                                     {activeBroadcastIndex + 1} of {announcements.length}
                                                 </span>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveBroadcastIndex(prev => (prev + 1) % announcements.length)}
-                                                    className="p-1 rounded-lg hover:bg-amber-500/20 text-amber-800 dark:text-amber-200 cursor-pointer transition-colors active:scale-90 flex items-center justify-center"
-                                                    title="Next broadcast"
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px] block">chevron_right</span>
-                                                </button>
-                                            </div>
+                                            )}
                                         </div>
+                                        <h4 className="text-sm font-black text-slate-900 dark:text-white leading-snug">
+                                            {announcements[activeBroadcastIndex].title || announcements[activeBroadcastIndex].message}
+                                        </h4>
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 font-medium leading-relaxed">
+                                            {announcements[activeBroadcastIndex].content || announcements[activeBroadcastIndex].details || announcements[activeBroadcastIndex].message}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* HR Admin & System Admin Actions */}
+                                <div className="flex items-center gap-1.5 shrink-0 self-start">
+                                    {isHrOrSysAdmin && (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    setEditingBroadcastData(announcements[activeBroadcastIndex]);
+                                                    setIsBroadcastModalOpen(true);
+                                                }}
+                                                className="px-2.5 py-1 rounded-lg text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 transition-all flex items-center gap-1 cursor-pointer"
+                                                title="Edit this broadcast announcement"
+                                            >
+                                                <span className="material-symbols-outlined text-[15px]">edit</span>
+                                                <span>Edit</span>
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    const target = announcements[activeBroadcastIndex];
+                                                    const targetId = target?.id || target?.Id || target?.notificationId;
+                                                    if (!targetId) return;
+
+                                                    // Optimistically remove from UI immediately
+                                                    setAnnouncements(prev => prev.filter(a => (a.id || a.Id || a.notificationId) !== targetId));
+
+                                                    try {
+                                                        await notificationsApi.broadcasts.delete(targetId);
+                                                        window.dispatchEvent(new CustomEvent('knome:broadcast-updated'));
+                                                        window.dispatchEvent(new CustomEvent('knome:broadcast-deleted', { detail: { id: targetId } }));
+                                                    } catch (e) {
+                                                        console.error('Failed to remove broadcast:', e);
+                                                        loadAnnouncements();
+                                                    }
+                                                }}
+                                                className="p-1 rounded-lg text-amber-700/60 dark:text-amber-300/60 hover:text-rose-600 hover:bg-rose-500/15 transition-all cursor-pointer"
+                                                title="Remove announcement"
+                                            >
+                                                <span className="material-symbols-outlined text-[17px]">delete</span>
+                                            </button>
+                                            {announcements.length < 3 && (
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingBroadcastData(null);
+                                                        setIsBroadcastModalOpen(true);
+                                                    }}
+                                                    className="px-2 py-1 rounded-lg text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 transition-all flex items-center gap-0.5 cursor-pointer"
+                                                    title="Add another broadcast (up to 3)"
+                                                >
+                                                    <span className="material-symbols-outlined text-[15px]">add</span>
+                                                    <span>Add ({announcements.length}/3)</span>
+                                                </button>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </div>
-                        );
-                    })()}
+
+                            {/* Multi-Broadcast Pagination & Navigation Controls */}
+                            {announcements.length > 1 && (
+                                <div className="flex items-center justify-between pt-2 border-t border-amber-500/20 text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                        {announcements.map((_, dotIdx) => (
+                                            <button
+                                                key={dotIdx}
+                                                type="button"
+                                                onClick={() => setActiveBroadcastIndex(dotIdx)}
+                                                className={`transition-all rounded-full cursor-pointer ${
+                                                    dotIdx === activeBroadcastIndex 
+                                                        ? 'w-5 h-1.5 bg-amber-500 shadow-xs' 
+                                                        : 'w-1.5 h-1.5 bg-amber-500/30 hover:bg-amber-500/60'
+                                                }`}
+                                                title={`View Announcement #${dotIdx + 1}`}
+                                            />
+                                        ))}
+                                    </div>
+
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveBroadcastIndex(prev => (prev - 1 + announcements.length) % announcements.length)}
+                                            className="p-1 rounded-lg hover:bg-amber-500/15 text-amber-700 dark:text-amber-300 cursor-pointer transition-colors"
+                                            title="Previous broadcast"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+                                        </button>
+                                        <span className="text-[11px] font-bold text-amber-700/80 dark:text-amber-300/80 px-1">
+                                            {activeBroadcastIndex + 1} / {announcements.length}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveBroadcastIndex(prev => (prev + 1) % announcements.length)}
+                                            className="p-1 rounded-lg hover:bg-amber-500/15 text-amber-700 dark:text-amber-300 cursor-pointer transition-colors"
+                                            title="Next broadcast"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* HR Admin Prompt when No Broadcast is Active */}
                     {(!announcements || announcements.length === 0) && isHrOrSysAdmin && (
-                        <div className="relative overflow-hidden p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-dashed border-amber-500/30 dark:border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs backdrop-blur-sm">
-                            <div className="flex items-center gap-3.5">
-                                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
-                                    <span className="material-symbols-outlined text-[24px]" style={{fontVariationSettings: "'FILL' 1"}}>campaign</span>
+                        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/5 border border-dashed border-amber-500/30 flex items-center justify-between gap-3 shadow-2xs">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                    <span className="material-symbols-outlined text-[20px]" style={{fontVariationSettings: "'FILL' 1"}}>campaign</span>
                                 </div>
                                 <div>
-                                    <div className="flex items-center gap-2 mb-0.5">
-                                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2.5 py-0.5 rounded-full">
-                                            HR Broadcast System
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-md">
+                                            HR Admin Broadcast
                                         </span>
                                         <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
                                             No Active Organization Broadcast
                                         </span>
                                     </div>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                                         Publish company-wide announcements, town halls, or urgent notices to all MPOnline employees.
                                     </p>
                                 </div>
@@ -661,9 +614,9 @@ export default function Dashboard() {
                                     setEditingBroadcastData(null);
                                     setIsBroadcastModalOpen(true);
                                 }}
-                                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-1.5 cursor-pointer shrink-0 hover:scale-[1.02] active:scale-95"
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all shadow-xs shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer shrink-0"
                             >
-                                <span className="material-symbols-outlined text-[17px]">campaign</span>
+                                <span className="material-symbols-outlined text-[16px]">campaign</span>
                                 <span>Create Broadcast</span>
                             </button>
                         </div>

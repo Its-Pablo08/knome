@@ -158,9 +158,8 @@ export default function SharedClipCard({ post }) {
     const clipInfo = resolveClipInfo(post);
     const [clipDetails, setClipDetails] = useState(null);
 
-    if (!isClipsEnabled) return null;
-
     useEffect(() => {
+        if (!isClipsEnabled) return;
         const cid = clipInfo.clipId;
         if (!cid) return;
         let isMounted = true;
@@ -185,7 +184,9 @@ export default function SharedClipCard({ post }) {
         }
 
         return () => { isMounted = false; };
-    }, [clipInfo.clipId]);
+    }, [clipInfo.clipId, isClipsEnabled]);
+
+    if (!isClipsEnabled) return null;
 
     const handleOpenClip = (e) => {
         if (e) {
