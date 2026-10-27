@@ -671,6 +671,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMessageEncryptionService, MessageEncryptionService>();
         services.AddScoped<IUserMessageRepository, UserMessageRepository>();
         services.AddScoped<IUserMessageService, UserMessageService>();
+
+        // Suspension Requests Workflow
+        services.AddScoped<ISuspensionRequestRepository, SuspensionRequestRepository>();
+        services.AddScoped<ISuspensionRequestService, SuspensionRequestService>();
     }
 
     private static void AddSwagger(IServiceCollection services)

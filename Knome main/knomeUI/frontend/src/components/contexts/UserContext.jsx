@@ -326,22 +326,30 @@ export const deduplicateMembers = (members = [], contextUsers = []) => {
  */
 export const resolveUserStatus = (user) => {
     if (!user) return 'Active';
+    const uidStr = String(user.userId || user.id || '');
+    const empStr = String(user.employeeId || '').toUpperCase();
+    try {
+        const overrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
+        const o = (uidStr && overrides[uidStr]) || (empStr && overrides[empStr]);
+        if (o) {
+            if (o.isActive === true && !o.isSuspended) return 'Active';
+            if (o.isActive === false || o.isSuspended === true || (o.status && o.status.toLowerCase() === 'suspended')) return 'Suspended';
+        }
+    } catch {}
     try {
         const savedSusp = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
-        const uidStr = String(user.userId || user.id || '');
-        const empStr = String(user.employeeId || '').toUpperCase();
         if ((uidStr && savedSusp[uidStr]) || (empStr && savedSusp[empStr])) return 'Suspended';
     } catch {}
+    const isSuspended = user.isSuspended === true 
+        || user.isPermanentlySuspended === true 
+        || (user.suspendedUntil && new Date(user.suspendedUntil) > new Date())
+        || (typeof user.status === 'string' && user.status.trim().toLowerCase() === 'suspended');
+    if (isSuspended) return 'Suspended';
     if (typeof user.status === 'string') {
         const s = user.status.trim().toLowerCase();
-        if (s === 'suspended') return 'Suspended';
         if (s === 'inactive' || s === 'deactivated') return 'Inactive';
         if (s === 'active') return 'Active';
     }
-    const isSuspended = user.isSuspended === true 
-        || user.isPermanentlySuspended === true 
-        || (user.suspendedUntil && new Date(user.suspendedUntil) > new Date());
-    if (isSuspended) return 'Suspended';
     if (user.isActive === false) return 'Inactive';
     return 'Active';
 };
@@ -1744,35 +1752,63 @@ export const UserProvider = ({ children }) => {
     }, [awardRuleKarma]);
 
     const toggleUserActiveStatus = useCallback((userId, isActive, reason = '') => {
+        const uidStr = String(userId);
         try {
             const savedSuspended = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
             if (!isActive) {
-                savedSuspended[String(userId)] = {
+                savedSuspended[uidStr] = {
                     suspendedAt: new Date().toISOString(),
                     reason: reason || 'Suspended by System Administrator'
                 };
             } else {
-                delete savedSuspended[String(userId)];
+                delete savedSuspended[uidStr];
             }
             localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
         } catch (e) {}
 
+        // Persist explicit status override in knome_user_overrides
+        try {
+            const userOverrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
+            userOverrides[uidStr] = {
+                ...(userOverrides[uidStr] || {}),
+                isActive: isActive,
+                isSuspended: !isActive,
+                isPermanentlySuspended: !isActive,
+                suspendedUntil: null,
+                status: isActive ? 'Active' : 'Suspended'
+            };
+            localStorage.setItem('knome_user_overrides', JSON.stringify(userOverrides));
+        } catch (e) {}
+
         setUsersList(prev => prev.map(u => {
-            const matchById = u.userId && String(u.userId) === String(userId);
-            const matchBySeedId = u.id && String(u.id) === String(userId);
-            if (matchById || matchBySeedId) {
+            const matchById = u.userId && String(u.userId) === uidStr;
+            const matchBySeedId = u.id && String(u.id) === uidStr;
+            const matchByEmp = u.employeeId && String(u.employeeId).toUpperCase() === uidStr.toUpperCase();
+            if (matchById || matchBySeedId || matchByEmp) {
                 if (u.employeeId) {
                     try {
                         const savedSuspended = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
+                        const empKey = u.employeeId.toUpperCase();
                         if (!isActive) {
-                            savedSuspended[u.employeeId.toUpperCase()] = {
+                            savedSuspended[empKey] = {
                                 suspendedAt: new Date().toISOString(),
                                 reason: reason || 'Suspended by System Administrator'
                             };
                         } else {
-                            delete savedSuspended[u.employeeId.toUpperCase()];
+                            delete savedSuspended[empKey];
                         }
                         localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
+
+                        const userOverrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
+                        userOverrides[empKey] = {
+                            ...(userOverrides[empKey] || {}),
+                            isActive: isActive,
+                            isSuspended: !isActive,
+                            isPermanentlySuspended: !isActive,
+                            suspendedUntil: null,
+                            status: isActive ? 'Active' : 'Suspended'
+                        };
+                        localStorage.setItem('knome_user_overrides', JSON.stringify(userOverrides));
                     } catch (e) {}
                 }
                 return { 
@@ -1780,6 +1816,7 @@ export const UserProvider = ({ children }) => {
                     isActive: isActive,
                     isSuspended: !isActive,
                     isPermanentlySuspended: !isActive,
+                    suspendedUntil: null,
                     status: isActive ? 'Active' : 'Suspended'
                 };
             }
@@ -1788,9 +1825,10 @@ export const UserProvider = ({ children }) => {
 
         setCurrentUser(prev => {
             if (!prev) return prev;
-            const matchById = prev.userId && String(prev.userId) === String(userId);
-            const matchBySeedId = prev.id && String(prev.id) === String(userId);
-            if (matchById || matchBySeedId) {
+            const matchById = prev.userId && String(prev.userId) === uidStr;
+            const matchBySeedId = prev.id && String(prev.id) === uidStr;
+            const matchByEmp = prev.employeeId && String(prev.employeeId).toUpperCase() === uidStr.toUpperCase();
+            if (matchById || matchBySeedId || matchByEmp) {
                 if (!isActive) {
                     localStorage.removeItem('knome_jwt');
                     localStorage.removeItem('knome_refresh');
@@ -1806,7 +1844,14 @@ export const UserProvider = ({ children }) => {
                         status: 'Suspended'
                     };
                 }
-                return { ...prev, isActive: true, isSuspended: false, status: 'Active' };
+                return { 
+                    ...prev, 
+                    isActive: true, 
+                    isSuspended: false, 
+                    isPermanentlySuspended: false, 
+                    suspendedUntil: null, 
+                    status: 'Active' 
+                };
             }
             return prev;
         });

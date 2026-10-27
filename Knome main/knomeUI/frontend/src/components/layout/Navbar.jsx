@@ -618,6 +618,8 @@ export default function Navbar() {
             targetUrl = wikiId ? `/wiki/view?id=${wikiId}` : '/wiki';
         } else if (isConnectionReq || type.includes('connection') || msg.includes('connection request')) {
             targetUrl = msg.includes('accepted') ? '/network?tab=Connections' : '/network?tab=Requests';
+        } else if (type.includes('suspension') || relType === 'suspensionrequest' || msg.includes('suspension request')) {
+            targetUrl = '/admin-console?domain=governance&tab=suspension_requests';
         } else if (!targetUrl) {
             if (msg.includes('post') || type.includes('post') || type.includes('share') || relType === 'post') {
                 targetUrl = refId ? `/posts?id=${refId}` : '/posts';
@@ -635,9 +637,12 @@ export default function Navbar() {
         }
 
         const dateFormatted = formatNotificationDate(dateVal);
+        const rawMessage = n.message || n.text || n.title || '';
+        const cleanMessage = rawMessage.includes('__KNOME_PAYLOAD__') ? rawMessage.split('__KNOME_PAYLOAD__')[0].trim() : rawMessage;
+
         const parsed = parseNotificationContent({
             senderName: rawSender,
-            message: n.message || n.text || n.title,
+            message: cleanMessage,
             relatedContentType: n.relatedContentType,
             type: n.notificationType || n.eventType || n.type,
             wikiTitle: n.wikiTitle || (relType === 'wiki' ? n.title : null)
@@ -653,8 +658,8 @@ export default function Navbar() {
             category,
             type: isWiki ? 'wiki_share' : ((isConnectionReq && !isAccepted) ? 'follow_request' : (isConnectionReq && isAccepted ? 'connection_accepted' : (isFollow ? 'follow' : type))),
             title: isWiki ? (parsed.wikiTitle || 'Wiki Share') : (n.title || (isAccepted ? 'Connection Accepted' : (isFollow ? 'New Follower' : (isConnectionReq ? 'Connection Request' : 'Notification')))),
-            text: n.message || n.text,
-            message: n.message || n.text,
+            text: cleanMessage,
+            message: cleanMessage,
             parsedSender: parsed.sender,
             parsedAction: parsed.action,
             wikiTitle: parsed.wikiTitle || n.wikiTitle,

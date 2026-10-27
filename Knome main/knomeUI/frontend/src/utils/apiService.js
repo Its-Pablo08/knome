@@ -603,6 +603,77 @@ export const adminApi = {
     approveRoleRequest: (requestId, roleName, comment) => roleRequestsApi.approve(requestId, roleName, comment),
     rejectRoleRequest: (requestId, reason) => roleRequestsApi.reject(requestId, reason),
 
+    /** Suspension Requests Workflow (HR Approval Hub) */
+    getSuspensionRequests: async (status) => {
+        try {
+            const query = status && status !== 'All' ? `?status=${encodeURIComponent(status)}` : '';
+            const res = await apiClient.get(`/users/suspension-requests${query}`);
+            const data = res?.data || res || [];
+            if (Array.isArray(data)) {
+                try {
+                    localStorage.setItem('knome_suspension_requests', JSON.stringify(data));
+                } catch (_) {}
+            }
+            return { data };
+        } catch (err) {
+            console.warn("Backend getSuspensionRequests error, falling back to local cache:", err);
+            try {
+                const list = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
+                return { data: list };
+            } catch {
+                return { data: [] };
+            }
+        }
+    },
+    createSuspensionRequest: async (payload) => {
+        try {
+            const res = await apiClient.post('/users/suspension-requests', payload);
+            const savedItem = res?.data || res || payload;
+            try {
+                const list = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
+                const updated = [savedItem, ...list.filter(x => x.requestId !== savedItem.requestId)];
+                localStorage.setItem('knome_suspension_requests', JSON.stringify(updated));
+            } catch (_) {}
+            window.dispatchEvent(new CustomEvent('knome_suspension_request_created', { detail: savedItem }));
+            return { data: savedItem };
+        } catch (e) {
+            console.warn("Backend createSuspensionRequest error:", e);
+            throw e;
+        }
+    },
+    approveSuspensionRequest: async (requestId) => {
+        try {
+            const res = await apiClient.post(`/users/suspension-requests/${requestId}/approve`);
+            const savedItem = res?.data || res;
+            try {
+                const list = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
+                const updated = list.map(x => x.requestId === requestId ? { ...x, status: 'Approved', reviewedAt: new Date().toISOString() } : x);
+                localStorage.setItem('knome_suspension_requests', JSON.stringify(updated));
+            } catch (_) {}
+            window.dispatchEvent(new CustomEvent('knome_suspension_request_created', { detail: savedItem }));
+            return { data: savedItem };
+        } catch (e) {
+            console.warn("Backend approveSuspensionRequest error:", e);
+            throw e;
+        }
+    },
+    rejectSuspensionRequest: async (requestId, reason = '') => {
+        try {
+            const res = await apiClient.post(`/users/suspension-requests/${requestId}/reject`, { reason });
+            const savedItem = res?.data || res;
+            try {
+                const list = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
+                const updated = list.map(x => x.requestId === requestId ? { ...x, status: 'Rejected', reviewedAt: new Date().toISOString(), rejectionReason: reason } : x);
+                localStorage.setItem('knome_suspension_requests', JSON.stringify(updated));
+            } catch (_) {}
+            window.dispatchEvent(new CustomEvent('knome_suspension_request_created', { detail: savedItem }));
+            return { data: savedItem };
+        } catch (e) {
+            console.warn("Backend rejectSuspensionRequest error:", e);
+            throw e;
+        }
+    },
+
     /** GET /users */
     getUsers: (pageNumber = 1, pageSize = 20, search = '') => {
         const params = new URLSearchParams({ pageNumber, pageSize });

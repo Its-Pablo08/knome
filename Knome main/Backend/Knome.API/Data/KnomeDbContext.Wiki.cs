@@ -18,6 +18,7 @@ public partial class KnomeDbContext
         ConfigureWikiEntities(modelBuilder);
         ConfigureClipEntities(modelBuilder);
         ConfigureSystemSettingEntities(modelBuilder);
+        ConfigureSuspensionRequestEntities(modelBuilder);
     }
 
     private static void ConfigureWikiEntities(ModelBuilder modelBuilder)

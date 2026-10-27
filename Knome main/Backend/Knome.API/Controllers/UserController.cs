@@ -17,10 +17,12 @@ namespace Knome.API.Controllers;
 public class UserController : KnomeControllerBase
 {
     private readonly IUserService _userService;
+    private readonly ISuspensionRequestService _suspensionRequestService;
 
-    public UserController(IUserService userService)
+    public UserController(IUserService userService, ISuspensionRequestService suspensionRequestService)
     {
         _userService = userService;
+        _suspensionRequestService = suspensionRequestService;
     }
 
     /// <summary>
@@ -367,5 +369,53 @@ public class UserController : KnomeControllerBase
     {
         var status = await _userService.GetRoleRequestStatusAsync(employeeId);
         return Ok(ApiResponse<RoleRequestStatusDto>.SuccessResponse(200, "Role request status retrieved.", status));
+    }
+
+    /// <summary>
+    /// Retrieves all suspension requests (HR Admins & System Admins see all; Moderators see submitted).
+    /// </summary>
+    [HttpGet("suspension-requests")]
+    [Authorize(Roles = Roles.AllAdmins)]
+    [ProducesResponseType(typeof(ApiResponse<List<SuspensionRequestDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetSuspensionRequests([FromQuery] string? status = null)
+    {
+        var requests = await _suspensionRequestService.GetSuspensionRequestsAsync(GetCurrentUserId(), status);
+        return Ok(ApiResponse<List<SuspensionRequestDto>>.SuccessResponse(200, "Suspension requests retrieved successfully.", requests));
+    }
+
+    /// <summary>
+    /// Submits a new employee suspension request for HR review & approval.
+    /// </summary>
+    [HttpPost("suspension-requests")]
+    [Authorize(Roles = Roles.AllAdmins)]
+    [ProducesResponseType(typeof(ApiResponse<SuspensionRequestDto>), StatusCodes.Status201Created)]
+    public async Task<IActionResult> CreateSuspensionRequest([FromBody] CreateSuspensionRequestDto dto)
+    {
+        var request = await _suspensionRequestService.CreateSuspensionRequestAsync(GetCurrentUserId(), dto);
+        return StatusCode(StatusCodes.Status201Created, ApiResponse<SuspensionRequestDto>.SuccessResponse(201, "Suspension request submitted successfully.", request));
+    }
+
+    /// <summary>
+    /// Approves an employee suspension request and applies account suspension. Restricted to HR & System Admins.
+    /// </summary>
+    [HttpPost("suspension-requests/{requestId:long}/approve")]
+    [Authorize(Roles = Roles.SystemAndHRAdmins)]
+    [ProducesResponseType(typeof(ApiResponse<SuspensionRequestDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ApproveSuspensionRequest(long requestId)
+    {
+        var request = await _suspensionRequestService.ApproveSuspensionRequestAsync(GetCurrentUserId(), requestId);
+        return Ok(ApiResponse<SuspensionRequestDto>.SuccessResponse(200, "Suspension request approved successfully.", request));
+    }
+
+    /// <summary>
+    /// Declines/rejects an employee suspension request with a recorded reason. Restricted to HR & System Admins.
+    /// </summary>
+    [HttpPost("suspension-requests/{requestId:long}/reject")]
+    [Authorize(Roles = Roles.SystemAndHRAdmins)]
+    [ProducesResponseType(typeof(ApiResponse<SuspensionRequestDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RejectSuspensionRequest(long requestId, [FromBody] ReviewSuspensionRequestDto dto)
+    {
+        var request = await _suspensionRequestService.RejectSuspensionRequestAsync(GetCurrentUserId(), requestId, dto);
+        return Ok(ApiResponse<SuspensionRequestDto>.SuccessResponse(200, "Suspension request rejected.", request));
     }
 }

@@ -4,39 +4,46 @@ GO
 -- Only seed if Clips table is currently empty
 IF NOT EXISTS (SELECT 1 FROM [dbo].[Clips])
 BEGIN
-    INSERT INTO [dbo].[Clips] (
-        [Title],
-        [Description],
-        [VideoUrl],
-        [ThumbnailUrl],
-        [DurationSeconds],
-        [Hashtags],
-        [Visibility],
-        [CommunityId],
-        [AudienceUserIds],
-        [Status],
-        [CreatedByUserId],
-        [CreatedDate],
-        [UpdatedDate],
-        [ViewCount],
-        [LikesCount],
-        [CommentsCount],
-        [SharesCount],
-        [IsActive],
-        [IsDeleted]
-    ) VALUES 
-    (
-        N'Welcome to Knome Clips! 🎬 Experience short-form enterprise video sharing',
-        N'Introducing vertical short video reels at MPOnline. Share tech updates, quick tips, team milestones, and creative knowledge directly with colleagues.',
-        N'https://vjs.zencdn.net/v/oceans.mp4',
-        N'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600&h=1000',
-        46,
-        N'#Innovation #MPOnline #Tech #ClipsLaunch',
-        N'Public',
-        NULL,
-        NULL,
-        N'Published',
-        1076, -- Vishendra Sharma (UserId 1076)
+    DECLARE @DefaultUser INT = (SELECT TOP 1 UserId FROM [dbo].[Users] ORDER BY UserId ASC);
+    DECLARE @UserVishendra INT = COALESCE((SELECT TOP 1 UserId FROM [dbo].[Users] WHERE UserId = 1076), @DefaultUser);
+    DECLARE @UserLoveneesh INT = COALESCE((SELECT TOP 1 UserId FROM [dbo].[Users] WHERE UserId = 1), @DefaultUser);
+    DECLARE @UserSourabh INT = COALESCE((SELECT TOP 1 UserId FROM [dbo].[Users] WHERE UserId = 3), @DefaultUser);
+
+    IF @DefaultUser IS NOT NULL
+    BEGIN
+        INSERT INTO [dbo].[Clips] (
+            [Title],
+            [Description],
+            [VideoUrl],
+            [ThumbnailUrl],
+            [DurationSeconds],
+            [Hashtags],
+            [Visibility],
+            [CommunityId],
+            [AudienceUserIds],
+            [Status],
+            [CreatedByUserId],
+            [CreatedDate],
+            [UpdatedDate],
+            [ViewCount],
+            [LikesCount],
+            [CommentsCount],
+            [SharesCount],
+            [IsActive],
+            [IsDeleted]
+        ) VALUES 
+        (
+            N'Welcome to Knome Clips! 🎬 Experience short-form enterprise video sharing',
+            N'Introducing vertical short video reels at MPOnline. Share tech updates, quick tips, team milestones, and creative knowledge directly with colleagues.',
+            N'https://vjs.zencdn.net/v/oceans.mp4',
+            N'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600&h=1000',
+            46,
+            N'#Innovation #MPOnline #Tech #ClipsLaunch',
+            N'Public',
+            NULL,
+            NULL,
+            N'Published',
+            @UserVishendra,
         GETUTCDATE(),
         GETUTCDATE(),
         0, -- Genuine Knome view count starting at 0
@@ -55,9 +62,7 @@ BEGIN
         N'#Frontend #React #Tailwind #UIUX #Design',
         N'Public',
         NULL,
-        NULL,
-        N'Published',
-        1, -- Loveneesh Sharma
+            @UserLoveneesh, -- Loveneesh Sharma
         GETUTCDATE(),
         GETUTCDATE(),
         0, -- Genuine Knome view count starting at 0
@@ -78,7 +83,7 @@ BEGIN
         NULL,
         NULL,
         N'Published',
-        3, -- Sourabh Sahu
+        @UserSourabh, -- Sourabh Sahu
         GETUTCDATE(),
         GETUTCDATE(),
         0, -- Genuine Knome view count starting at 0
@@ -89,7 +94,8 @@ BEGIN
         0
     );
 
-    PRINT 'Seeded 3 Knome enterprise clips with 0 views.';
+        PRINT 'Seeded 3 Knome enterprise clips with 0 views.';
+    END
 END
 ELSE
 BEGIN

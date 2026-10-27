@@ -58,6 +58,11 @@ try {
     if (Test-Path "$ScriptDir\SETUP_MESSAGES_DB.ps1") {
         & "$ScriptDir\SETUP_MESSAGES_DB.ps1"
     }
+
+    # 0g. Ensure Suspension Requests Tables Exist
+    if (Test-Path "$ScriptDir\SETUP_SUSPENSION_REQUESTS_DB.ps1") {
+        & "$ScriptDir\SETUP_SUSPENSION_REQUESTS_DB.ps1"
+    }
 } catch {
     Write-Host " [Warning] Knome database not reachable on LAPTOP-458. Ensure SQL Server on LAPTOP-458 is running and reachable." -ForegroundColor DarkYellow
 }

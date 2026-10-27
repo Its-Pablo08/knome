@@ -22,9 +22,15 @@ export default function SuspendUserModal({
     user: initialUser = null,
     availableUsers = [],
     onConfirm,
-    title = 'Suspend Account',
-    subtitle = 'Choose suspension period and reason'
+    isHrAdmin = false,
+    isSysAdmin = false,
+    isModerator = false,
+    title,
+    subtitle
 }) {
+    const isCommunityScope = Boolean(title && title.toLowerCase().includes('community'));
+    const resolvedTitle = title || (isHrAdmin ? 'Suspend Employee Account' : 'Request Employee Account Suspension');
+    const resolvedSubtitle = subtitle || (isHrAdmin ? 'Enterprise account suspension & governance enforcement' : 'Submit suspension request for HR Administrator approval');
     const [selectedUser, setSelectedUser] = useState(initialUser);
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [duration, setDuration] = useState('7d');
@@ -101,8 +107,8 @@ export default function SuspendUserModal({
                             <span className="material-symbols-outlined text-[22px]">person_off</span>
                         </div>
                         <div>
-                            <h3 className="font-bold text-slate-900 dark:text-white text-base leading-tight">{title}</h3>
-                            <p className="text-[12px] text-slate-500 leading-tight mt-0.5">{subtitle}</p>
+                            <h3 className="font-bold text-slate-900 dark:text-white text-base leading-tight">{resolvedTitle}</h3>
+                            <p className="text-[12px] text-slate-500 leading-tight mt-0.5">{resolvedSubtitle}</p>
                         </div>
                     </div>
                     <button
@@ -116,6 +122,29 @@ export default function SuspendUserModal({
 
                 {/* Body (Scrollable, never overflows parent) */}
                 <div className="p-5 sm:p-6 flex-1 min-h-0 overflow-y-auto space-y-4">
+                    {/* Governance Policy Notice Banner */}
+                    {!isCommunityScope && (!isHrAdmin ? (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2.5">
+                            <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                <span className="material-symbols-outlined text-[17px]">policy</span>
+                            </div>
+                            <div className="text-xs">
+                                <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                    <span>HR Administrator Approval Required</span>
+                                    <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded text-[9px] font-black uppercase">Governance</span>
+                                </p>
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-snug">
+                                    Per platform governance policy, account suspensions initiated by {isSysAdmin ? 'System Administrators' : 'Moderators'} are not executed directly. This suspension request will be sent to an <strong>HR Administrator</strong> for review and final approval.
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="p-2.5 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-800/40 rounded-xl flex items-center gap-2 text-xs text-indigo-800 dark:text-indigo-200">
+                            <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400 text-[18px] shrink-0">verified_user</span>
+                            <span><strong>HR Admin Action:</strong> You have authority to execute direct employee suspensions.</span>
+                        </div>
+                    ))}
+
                     {/* Member / User Preview Card OR Searchable Picker */}
                     {user ? (
                         <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
@@ -306,15 +335,27 @@ export default function SuspendUserModal({
                     >
                         Cancel
                     </button>
-                    <button
-                        type="button"
-                        onClick={handleConfirm}
-                        disabled={!user || isCustomInvalid || isSubmitting}
-                        className="px-5 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
-                    >
-                        <span className="material-symbols-outlined text-[16px]">person_off</span>
-                        {isSubmitting ? 'Suspending...' : 'Confirm Suspension'}
-                    </button>
+                    {isCommunityScope || isHrAdmin ? (
+                        <button
+                            type="button"
+                            onClick={handleConfirm}
+                            disabled={!user || isCustomInvalid || isSubmitting}
+                            className="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">person_off</span>
+                            <span>{isSubmitting ? 'Suspending...' : 'Confirm Suspension'}</span>
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={handleConfirm}
+                            disabled={!user || isCustomInvalid || isSubmitting}
+                            className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">{isSubmitting ? 'hourglass_top' : 'send'}</span>
+                            <span>{isSubmitting ? 'Submitting Request...' : 'Submit for HR Approval'}</span>
+                        </button>
+                    )}
                 </div>
             </div>
         </div>,
