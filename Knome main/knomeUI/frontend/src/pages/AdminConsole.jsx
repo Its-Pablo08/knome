@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { useUser, getUserStatusConfig, deduplicateMembers, roleNameToCode } from '../components/contexts/UserContext';
+import { useUser, getUserStatusConfig, deduplicateMembers, roleNameToCode, INITIAL_USERS } from '../components/contexts/UserContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
 import { useToast } from '../components/contexts/ToastContext';
-import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, videosApi, communitiesApi, mediaApi, clipsApi, settingsApi, wikiApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
+import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, videosApi, communitiesApi, mediaApi, clipsApi, settingsApi, wikiApi, notificationsApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
 import * as XLSX from 'xlsx';
 import useScrollLoading from '../hooks/useScrollLoading';
@@ -349,6 +349,7 @@ export default function AdminConsole() {
                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['HRADM', 'HR ADMINISTRATOR', 'HRADMIN', 'HR ADMIN'].includes(String(r || '').toUpperCase())));
 
     const isAuthorized = isSysAdmin || isHrAdmin || isModerator;
+    const canManageSuspensions = isHrAdmin || isSysAdmin;
 
     // Synchronize URL path with user role context (/moderation-console for Moderator, /admin-console for SysAdmin & HR Admin)
     useEffect(() => {
@@ -379,6 +380,7 @@ export default function AdminConsole() {
     // Hierarchical Domain Derived from Active Tab
     const activeDomain = useMemo(() => {
         if (['users', 'role_requests'].includes(activeTab)) return 'governance';
+        if (activeTab === 'suspension_requests') return 'governance';
         if (['audit', 'serilog', 'analytics'].includes(activeTab)) return 'operations';
         if (activeTab === 'approval_policy') return isSysAdmin ? 'moderation' : 'governance';
         if (['moderation', 'media_approvals', 'community_approvals'].includes(activeTab)) return 'moderation';
@@ -391,7 +393,10 @@ export default function AdminConsole() {
         if (activeTab === 'role_requests') {
             setActiveTab('users');
         }
-    }, [activeTab]);
+        if (activeTab === 'suspension_requests' && !canManageSuspensions) {
+            setActiveTab(isModerator ? 'moderation' : 'users');
+        }
+    }, [activeTab, canManageSuspensions, isModerator]);
 
     // Switch Domain and Auto-select First Tab in that Domain
     const handleDomainSelect = (domain) => {
@@ -442,6 +447,10 @@ export default function AdminConsole() {
 
     // User Management State
     const [usersList, setUsersList] = useState(() => contextUsers || []);
+    const usersListRef = useRef(usersList);
+    useEffect(() => {
+        usersListRef.current = usersList;
+    }, [usersList]);
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [selectedRoleFilter, setSelectedRoleFilter] = useState('All');
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
@@ -521,6 +530,121 @@ export default function AdminConsole() {
     const [isLoadingRoleRequests, setIsLoadingRoleRequests] = useState(false);
     const [roleRequestSearchTerm, setRoleRequestSearchTerm] = useState('');
     const [requestTargetRoles, setRequestTargetRoles] = useState({});
+
+    // Account Suspension Requests State (Pending HR Admin Review & Execution)
+    const [suspensionRequests, setSuspensionRequests] = useState(() => {
+        try {
+            const stored = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
+            if (Array.isArray(stored) && stored.length > 0) return stored;
+        } catch (e) {}
+        return [];
+    });
+    const [suspensionRequestStatusFilter, setSuspensionRequestStatusFilter] = useState('All');
+    const [suspensionRequestSearchTerm, setSuspensionRequestSearchTerm] = useState('');
+    const [rejectSuspensionModalRequest, setRejectSuspensionModalRequest] = useState(null);
+    const [rejectSuspensionReasonInput, setRejectSuspensionReasonInput] = useState('');
+
+    // Realtime sync for suspension requests from Backend Database API
+    const syncSuspensionRequestsFromBackend = useCallback(async () => {
+        try {
+            // 1. Fetch live suspension requests directly from the database API
+            const apiRes = await adminApi.getSuspensionRequests('All').catch(err => {
+                console.warn("Backend getSuspensionRequests error, falling back to local storage:", err);
+                return null;
+            });
+
+            let dbRequests = [];
+            if (Array.isArray(apiRes?.data)) {
+                dbRequests = apiRes.data;
+            } else if (Array.isArray(apiRes)) {
+                dbRequests = apiRes;
+            }
+
+            // Normalize database records
+            const normalizedDbRequests = dbRequests.map(r => ({
+                ...r,
+                note: r.note || r.reason || '',
+                fullReason: r.fullReason || r.reason || 'Policy Violation',
+                reviewedBy: r.reviewedBy || r.reviewedByName || null,
+                reviewedByName: r.reviewedByName || r.reviewedBy || null,
+                targetFullName: r.targetFullName || `Employee #${r.targetUserId}`,
+                requestedByName: r.requestedByName || 'Moderator',
+                requestedByRole: r.requestedByRole || 'Moderator'
+            }));
+
+            // 2. Load locally stored requests (for optimistic updates or offline fallback)
+            let localRequests = [];
+            try {
+                const stored = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
+                if (Array.isArray(stored)) localRequests = stored;
+            } catch (e) {}
+
+            const requestMap = new Map();
+            // Local items first
+            localRequests.forEach(r => {
+                if (r && r.requestId) requestMap.set(String(r.requestId), r);
+            });
+            // DB records take authoritative precedence
+            normalizedDbRequests.forEach(r => {
+                if (r && r.requestId) requestMap.set(String(r.requestId), r);
+            });
+
+            const mergedList = Array.from(requestMap.values())
+                .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+            setSuspensionRequests(mergedList);
+            try {
+                localStorage.setItem('knome_suspension_requests', JSON.stringify(mergedList));
+            } catch (e) {}
+
+            // Synchronize usersList state with any approved suspensions
+            const approvedUserIds = new Set(
+                mergedList.filter(r => r.status === 'Approved').map(r => Number(r.targetUserId))
+            );
+            if (approvedUserIds.size > 0) {
+                setUsersList(prev => prev.map(u => {
+                    const uid = Number(u.userId || u.id);
+                    if (approvedUserIds.has(uid) && u.isActive) {
+                        return { ...u, isActive: false, isSuspended: true, status: 'Suspended' };
+                    }
+                    return u;
+                }));
+            }
+
+            return mergedList;
+        } catch (err) {
+            console.warn('Error syncing suspension requests from backend:', err);
+        }
+    }, []);
+
+    // Realtime sync for suspension requests across tabs and actions
+    useEffect(() => {
+        const handleSync = () => {
+            syncSuspensionRequestsFromBackend();
+        };
+        window.addEventListener('knome_suspension_request_created', handleSync);
+        window.addEventListener('storage', handleSync);
+        return () => {
+            window.removeEventListener('knome_suspension_request_created', handleSync);
+            window.removeEventListener('storage', handleSync);
+        };
+    }, [syncSuspensionRequestsFromBackend]);
+
+    // Auto-sync suspension requests when activeTab is suspension_requests or governance
+    useEffect(() => {
+        if (canManageSuspensions) {
+            syncSuspensionRequestsFromBackend();
+        }
+    }, [activeTab, canManageSuspensions, syncSuspensionRequestsFromBackend]);
+
+    // Live background polling (every 6 seconds) for cross-session/InPrivate real-time updates
+    useEffect(() => {
+        if (!canManageSuspensions) return;
+        const interval = setInterval(() => {
+            syncSuspensionRequestsFromBackend();
+        }, 6000);
+        return () => clearInterval(interval);
+    }, [canManageSuspensions, syncSuspensionRequestsFromBackend]);
 
     // Community Channels Moderation State (Live active project communities)
     const [communityChannels, setCommunityChannels] = useState([]);
@@ -1810,7 +1934,7 @@ export default function AdminConsole() {
     const handleRefreshAll = async () => {
         setIsRefreshing(true);
         setLastUpdatedTime(new Date().toLocaleTimeString());
-        await Promise.all([fetchReports(), fetchUsers(), fetchAuditLogs(), fetchRoleRequests(), fetchCommunities(), refreshPendingMedia()]);
+        await Promise.all([fetchReports(), fetchUsers(), fetchAuditLogs(), fetchRoleRequests(), fetchCommunities(), refreshPendingMedia(), syncSuspensionRequestsFromBackend()]);
         setTimeout(() => setIsRefreshing(false), 500);
         showToast('Console data refreshed successfully.');
     };
@@ -2168,17 +2292,29 @@ export default function AdminConsole() {
         }
     };
 
-    // 2. Fetch Users — Comprehensive Aggregator across SQL Server API + EmployeeHub
+    // 2. Fetch Users — Comprehensive Aggregator across SQL Server API + INITIAL_USERS + EmployeeHub
     const fetchUsers = async () => {
         setIsLoadingUsers(true);
         try {
-            const res = await adminApi.getUsers(1, 100, userSearchTerm);
+            const res = await adminApi.getUsers(1, 100, '');
             let apiItems = [];
             if (res) {
                 apiItems = Array.isArray(res) ? res : (res.items || []);
             }
 
             let allMerged = [...apiItems];
+
+            // Merge canonical roster from INITIAL_USERS so all platform employees (including Mayur Bansal and Vilash Deshmukh) are present
+            INITIAL_USERS.forEach(initU => {
+                const exists = allMerged.some(u => 
+                    (initU.employeeId && u.employeeId && initU.employeeId.toUpperCase() === u.employeeId.toUpperCase()) ||
+                    (initU.userId && String(initU.userId) === String(u.userId || u.id)) ||
+                    (initU.id && String(initU.id) === String(u.userId || u.id))
+                );
+                if (!exists) {
+                    allMerged.push({ ...initU });
+                }
+            });
 
             // Merge additional employees from EmployeeHub and local storage
             try {
@@ -2211,15 +2347,63 @@ export default function AdminConsole() {
                 }
             } catch (e) {}
 
+            // Load all confirmed suspended accounts from localStorage and approved suspension requests
+            let savedSuspended = {};
+            try {
+                savedSuspended = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
+            } catch (e) {}
+
+            let userOverrides = {};
+            try {
+                userOverrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
+            } catch (e) {}
+
+            const approvedSuspUserIds = new Set();
+            const approvedSuspEmpIds = new Set();
+            try {
+                const localReqs = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
+                const allReqs = [...(suspensionRequests || []), ...(Array.isArray(localReqs) ? localReqs : [])];
+                allReqs.forEach(r => {
+                    if (r && r.status === 'Approved') {
+                        if (r.targetUserId) approvedSuspUserIds.add(Number(r.targetUserId));
+                        if (r.targetEmployeeId) approvedSuspEmpIds.add(String(r.targetEmployeeId).toUpperCase());
+                    }
+                });
+            } catch (e) {}
+
             const mapped = allMerged.map(u => {
-                const assignedRole = getUserAssignedRole(u);
-                const empId = u.employeeId || `MPO${u.userId || u.id || '100'}`;
-                const email = u.email || `${(u.fullName || u.name || 'user').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`;
-                const avatar = u.profilePhotoUrl || u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName || u.name || 'U')}&background=6366f1&color=fff&bold=true`;
-                const rawKarma = typeof u.karmaPoints === 'number' ? u.karmaPoints : (typeof u.karma === 'number' ? u.karma : 0);
-                const isUserSuspended = u.isSuspended === true || u.isPermanentlySuspended === true || u.isActive === false;
+                const uidNum = Number(u.userId || u.id);
+                const uidStr = String(u.userId || u.id || '');
+                const empUpper = String(u.employeeId || '').toUpperCase();
+
+                const override = userOverrides[uidStr] || (empUpper && userOverrides[empUpper]) || {};
+                const uWithOverride = { ...u, ...override };
+
+                const assignedRole = getUserAssignedRole(uWithOverride);
+                const empId = uWithOverride.employeeId || `MPO${uidNum || '100'}`;
+                const email = uWithOverride.email || `${(uWithOverride.fullName || uWithOverride.name || 'user').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`;
+                const avatar = uWithOverride.profilePhotoUrl || uWithOverride.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(uWithOverride.fullName || uWithOverride.name || 'U')}&background=6366f1&color=fff&bold=true`;
+                const rawKarma = typeof uWithOverride.karmaPoints === 'number' ? uWithOverride.karmaPoints : (typeof uWithOverride.karma === 'number' ? uWithOverride.karma : 0);
+
+                const isExplicitlyActive = override.isActive === true && !override.isSuspended;
+                const isExplicitlySuspended = override.isActive === false || override.isSuspended === true;
+
+                const isSuspendedInStorage = !isExplicitlyActive && Boolean(
+                    (uidStr && savedSuspended[uidStr]) ||
+                    (empUpper && savedSuspended[empUpper]) ||
+                    approvedSuspUserIds.has(uidNum) ||
+                    approvedSuspEmpIds.has(empUpper)
+                );
+                const isUserSuspended = isExplicitlySuspended || (!isExplicitlyActive && (
+                    isSuspendedInStorage || 
+                    uWithOverride.isSuspended === true || 
+                    uWithOverride.isPermanentlySuspended === true || 
+                    uWithOverride.isActive === false || 
+                    (uWithOverride.status || '').toLowerCase() === 'suspended'
+                ));
+
                 return {
-                    ...u,
+                    ...uWithOverride,
                     employeeId: empId,
                     email: email,
                     avatar: avatar,
@@ -2228,8 +2412,11 @@ export default function AdminConsole() {
                     roles: [assignedRole],
                     isActive: !isUserSuspended,
                     isSuspended: isUserSuspended,
+                    isPermanentlySuspended: isUserSuspended,
+                    suspendedUntil: isUserSuspended ? uWithOverride.suspendedUntil : null,
+                    status: isUserSuspended ? 'Suspended' : 'Active',
                     karmaPoints: rawKarma,
-                    karmaBadgeLevel: u.karmaBadgeLevel || (rawKarma >= 1000 ? 'Gold' : rawKarma >= 500 ? 'Silver' : 'Bronze')
+                    karmaBadgeLevel: uWithOverride.karmaBadgeLevel || (rawKarma >= 1000 ? 'Gold' : rawKarma >= 500 ? 'Silver' : 'Bronze')
                 };
             });
             setUsersList(mapped);
@@ -2993,6 +3180,79 @@ export default function AdminConsole() {
             return;
         }
 
+        // If caller is NOT an HR Administrator or System Administrator (i.e. Moderator),
+        // account suspensions MUST NOT execute directly. Instead, route to HR Administrator for approval.
+        if (!canManageSuspensions) {
+            const alreadyPending = suspensionRequests.some(r => Number(r.targetUserId) === numericId && r.status === 'Pending');
+            if (alreadyPending) {
+                showToast(`A suspension request for ${resolvedName} is already pending HR review.`, 'warning');
+                return;
+            }
+
+            let savedRequest = null;
+            try {
+                const apiRes = await adminApi.createSuspensionRequest({
+                    targetUserId: numericId,
+                    duration: payload?.duration || '7d',
+                    durationDays: days,
+                    customDate: customDate ? new Date(customDate).toISOString() : null,
+                    isPermanent: isPermanent,
+                    category: payload?.category || 'Violation of community guidelines',
+                    reason: payload?.note || '',
+                    fullReason: reason,
+                    reportId: previewReport?.reportId ? Number(previewReport.reportId) : null,
+                    contentId: previewReport?.contentId ? Number(previewReport.contentId) : null,
+                    contentType: previewReport?.contentType || null
+                });
+                if (apiRes?.data) {
+                    savedRequest = {
+                        ...apiRes.data,
+                        note: apiRes.data.note || apiRes.data.reason || payload?.note || '',
+                        fullReason: apiRes.data.fullReason || reason,
+                        reviewedBy: apiRes.data.reviewedByName || null,
+                        reviewedByName: apiRes.data.reviewedByName || null
+                    };
+                }
+            } catch (err) {
+                console.error("Failed to save suspension request to database:", err);
+                const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to submit suspension request.";
+                showToast(errMsg, 'error');
+                return;
+            }
+
+            if (!savedRequest) {
+                showToast("Failed to submit suspension request. Please try again.", "error");
+                return;
+            }
+
+            const finalRecord = savedRequest;
+
+            setSuspensionRequests(prev => [finalRecord, ...prev.filter(r => String(r.requestId) !== String(finalRecord.requestId))]);
+            try {
+                const existing = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
+                const updatedList = [finalRecord, ...existing.filter(r => String(r.requestId) !== String(finalRecord.requestId))];
+                localStorage.setItem('knome_suspension_requests', JSON.stringify(updatedList));
+            } catch (e) {}
+
+            window.dispatchEvent(new CustomEvent('knome_suspension_request_created', { detail: finalRecord }));
+
+            logAuditEntry(
+                'SuspensionRequestSubmitted',
+                `Submitted suspension request for Employee #${numericId} (${resolvedName}) by ${currentUser?.fullName || 'Moderator'} (${isSysAdmin ? 'System Admin' : 'Moderator'}) - Reason: ${reason} (Pending HR Approval)`,
+                'text-amber-500 font-bold'
+            );
+
+            setIsSuspendModalOpen(false);
+            setSelectedUserToSuspend(null);
+            setSuspendUserId('');
+            setSuspendUserName('');
+            setSuspendReason('');
+            setSuspendSearchTerm('');
+
+            showToast(`Suspension request for ${resolvedName} submitted to HR Administrator for approval.`);
+            return;
+        }
+
         try {
             await adminApi.suspendUser(numericId, reason, days, customDate, isPermanent);
         } catch (err) {
@@ -3005,18 +3265,31 @@ export default function AdminConsole() {
             const empKey = targetUser?.employeeId ? targetUser.employeeId.toUpperCase() : null;
             savedSuspended[String(numericId)] = {
                 suspendedAt: new Date().toISOString(),
-                reason: reason || 'Suspended by System Administrator'
+                reason: reason || 'Suspended by HR Administrator'
             };
             if (empKey) {
                 savedSuspended[empKey] = {
                     suspendedAt: new Date().toISOString(),
-                    reason: reason || 'Suspended by System Administrator'
+                    reason: reason || 'Suspended by HR Administrator'
                 };
             }
             localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
         } catch (e) {}
         setUsersList(prev => prev.map(u => (Number(u.userId || u.id) === numericId || (targetUser?.employeeId && u.employeeId === targetUser.employeeId)) ? { ...u, isActive: false, isSuspended: true, status: 'Suspended' } : u));
         
+        // Auto-approve any pending suspension requests for this target user
+        setSuspensionRequests(prev => {
+            const updated = prev.map(r => (Number(r.targetUserId) === numericId && r.status === 'Pending') ? {
+                ...r,
+                status: 'Approved',
+                reviewedAt: new Date().toISOString(),
+                reviewedBy: currentUser?.fullName || 'HR Administrator',
+                reviewedByRole: 'HR Administrator'
+            } : r);
+            localStorage.setItem('knome_suspension_requests', JSON.stringify(updated));
+            return updated;
+        });
+
         setIsSuspendModalOpen(false);
         setSelectedUserToSuspend(null);
         showToast(`Employee #${numericId} (${resolvedName}) suspended.`);
@@ -3031,6 +3304,140 @@ export default function AdminConsole() {
         setSuspendUserName('');
         setSuspendReason('');
         setSuspendSearchTerm('');
+    };
+
+    // HR / System Administrator Approval Action on Suspension Requests
+    const handleApproveSuspensionRequest = async (requestId) => {
+        if (!canManageSuspensions) {
+            showToast('Only HR Administrators and System Administrators have permission to approve employee account suspensions.', 'warning');
+            return;
+        }
+        const req = suspensionRequests.find(r => String(r.requestId) === String(requestId));
+        if (!req) return;
+
+        const targetUserId = Number(req.targetUserId);
+        const targetName = req.targetFullName || `Employee #${targetUserId}`;
+
+        // Call backend API to approve suspension request
+        try {
+            await adminApi.approveSuspensionRequest(requestId);
+        } catch (err) {
+            console.error("Backend approveSuspensionRequest error:", err);
+            const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to approve suspension request.";
+            showToast(errMsg, 'error');
+            return;
+        }
+
+        if (toggleUserActiveStatus) toggleUserActiveStatus(targetUserId, false, req.fullReason);
+
+        try {
+            const savedSuspended = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
+            const empKey = req.targetEmployeeId ? req.targetEmployeeId.toUpperCase() : null;
+            savedSuspended[String(targetUserId)] = {
+                suspendedAt: new Date().toISOString(),
+                reason: req.fullReason || 'Suspension approved by HR Administrator',
+                approvedBy: currentUser?.fullName || 'HR Administrator',
+                requestId: req.requestId
+            };
+            if (empKey) {
+                savedSuspended[empKey] = savedSuspended[String(targetUserId)];
+            }
+            localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
+        } catch (e) {}
+
+        setUsersList(prev => prev.map(u => (Number(u.userId || u.id) === targetUserId || (req.targetEmployeeId && u.employeeId === req.targetEmployeeId)) ? { ...u, isActive: false, isSuspended: true, status: 'Suspended' } : u));
+
+        const updatedRequests = suspensionRequests.map(r => String(r.requestId) === String(requestId) ? {
+            ...r,
+            status: 'Approved',
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: currentUser?.fullName || 'HR Administrator',
+            reviewedByName: currentUser?.fullName || 'HR Administrator',
+            reviewedByRole: 'HR Administrator'
+        } : r);
+        setSuspensionRequests(updatedRequests);
+        try {
+            localStorage.setItem('knome_suspension_requests', JSON.stringify(updatedRequests));
+        } catch (e) {}
+
+        if (req.requestedByUserId && req.requestedByUserId > 0) {
+            try {
+                notificationsApi.createNotification({
+                    recipientUserId: Number(req.requestedByUserId),
+                    notificationType: 'SuspensionApproved',
+                    message: `Your suspension request for ${targetName} was approved by HR Administrator ${currentUser?.fullName || 'HR Admin'}. The account has been suspended.__KNOME_PAYLOAD__${JSON.stringify({ requestId: req.requestId, status: 'Approved', targetUserId })}`,
+                    relatedContentType: 'SuspensionRequest',
+                    referenceId: targetUserId
+                }).catch(() => {});
+            } catch (e) {}
+        }
+
+        logAuditEntry(
+            'UserSuspended',
+            `HR Administrator ${currentUser?.fullName || 'HR Admin'} approved suspension of Employee #${targetUserId} (${targetName}) requested by ${req.requestedByName} (${req.requestedByRole}) - Reason: ${req.fullReason}`,
+            'text-rose-500 font-black'
+        );
+
+        showToast(`Suspension approved! Employee #${targetUserId} (${targetName}) has been suspended.`);
+    };
+
+    // HR / System Administrator Rejection Action on Suspension Requests
+    const handleRejectSuspensionRequest = async (requestId, reason = '') => {
+        if (!canManageSuspensions) {
+            showToast('Only HR Administrators and System Administrators have permission to reject employee suspension requests.', 'warning');
+            return;
+        }
+        const req = suspensionRequests.find(r => String(r.requestId) === String(requestId));
+        if (!req) return;
+
+        const rejectionNote = reason.trim() || 'Declined by HR Administrator';
+        const targetName = req.targetFullName || `Employee #${req.targetUserId}`;
+
+        // Call backend API to reject suspension request
+        try {
+            await adminApi.rejectSuspensionRequest(requestId, rejectionNote);
+        } catch (err) {
+            console.error("Backend rejectSuspensionRequest error:", err);
+            const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to reject suspension request.";
+            showToast(errMsg, 'error');
+            return;
+        }
+
+        const updatedRequests = suspensionRequests.map(r => String(r.requestId) === String(requestId) ? {
+            ...r,
+            status: 'Rejected',
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: currentUser?.fullName || 'HR Administrator',
+            reviewedByName: currentUser?.fullName || 'HR Administrator',
+            reviewedByRole: 'HR Administrator',
+            rejectionReason: rejectionNote
+        } : r);
+        setSuspensionRequests(updatedRequests);
+        try {
+            localStorage.setItem('knome_suspension_requests', JSON.stringify(updatedRequests));
+        } catch (e) {}
+
+        if (req.requestedByUserId && req.requestedByUserId > 0) {
+            try {
+                notificationsApi.createNotification({
+                    recipientUserId: Number(req.requestedByUserId),
+                    notificationType: 'SuspensionRejected',
+                    message: `Your suspension request for ${targetName} was rejected by HR Administrator ${currentUser?.fullName || 'HR Admin'}. Note: ${rejectionNote}__KNOME_PAYLOAD__${JSON.stringify({ requestId: req.requestId, status: 'Rejected', targetUserId: Number(req.targetUserId), rejectionReason: rejectionNote })}`,
+                    relatedContentType: 'SuspensionRequest',
+                    referenceId: Number(req.targetUserId)
+                }).catch(() => {});
+            } catch (e) {}
+        }
+
+        logAuditEntry(
+            'SuspensionRequestRejected',
+            `HR Administrator ${currentUser?.fullName || 'HR Admin'} rejected suspension request for Employee #${req.targetUserId} (${targetName}) requested by ${req.requestedByName} (${req.requestedByRole}) - Reason: ${rejectionNote}`,
+            'text-amber-500 font-bold'
+        );
+
+        setRejectSuspensionModalRequest(null);
+        setRejectSuspensionReasonInput('');
+        showToast(`Suspension request for ${targetName} was rejected.`);
     };
 
     // Handle User Activate/Reinstate
@@ -3054,6 +3461,95 @@ export default function AdminConsole() {
 
         // If user is suspended/inactive, reactivate them
         const targetId = Number(user.userId || user.id);
+        const targetEmpId = (user.employeeId || '').toUpperCase();
+        const targetName = user.fullName || user.name || `Employee #${targetId}`;
+
+        // 1. Instant optimistic update to local usersList state so the UI responds immediately with zero lag
+        setUsersList(prev => prev.map(u => {
+            const match = (targetId && Number(u.userId || u.id) === targetId) ||
+                          (targetEmpId && String(u.employeeId || '').toUpperCase() === targetEmpId);
+            return match ? { 
+                ...u, 
+                isActive: true, 
+                isSuspended: false, 
+                isPermanentlySuspended: false, 
+                suspendedUntil: null, 
+                status: 'Active' 
+            } : u;
+        }));
+
+        // 2. Clear from knome_suspended_accounts in localStorage
+        try {
+            const savedSuspended = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
+            if (targetId) delete savedSuspended[String(targetId)];
+            if (targetEmpId) delete savedSuspended[targetEmpId];
+            localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
+        } catch (e) {}
+
+        // 3. Mark any suspension requests for this user as 'Reactivated' in state & localStorage
+        setSuspensionRequests(prev => {
+            const updated = prev.map(r => {
+                const match = (targetId && Number(r.targetUserId) === targetId) ||
+                              (targetEmpId && String(r.targetEmployeeId || '').toUpperCase() === targetEmpId);
+                if (match && (r.status === 'Approved' || r.status === 'Pending')) {
+                    return { 
+                        ...r, 
+                        status: 'Reactivated', 
+                        reactivatedAt: new Date().toISOString(), 
+                        reactivatedBy: currentUser?.fullName || 'HR Administrator' 
+                    };
+                }
+                return r;
+            });
+            try {
+                localStorage.setItem('knome_suspension_requests', JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+        });
+
+        // 4. Save explicit active override to knome_user_overrides
+        try {
+            const userOverrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
+            const overridePayload = {
+                isActive: true,
+                isSuspended: false,
+                isPermanentlySuspended: false,
+                suspendedUntil: null,
+                status: 'Active'
+            };
+            if (targetId) {
+                userOverrides[String(targetId)] = { ...(userOverrides[String(targetId)] || {}), ...overridePayload };
+            }
+            if (targetEmpId) {
+                userOverrides[targetEmpId] = { ...(userOverrides[targetEmpId] || {}), ...overridePayload };
+            }
+            localStorage.setItem('knome_user_overrides', JSON.stringify(userOverrides));
+        } catch (e) {}
+
+        // 5. Update UserContext state
+        if (toggleUserActiveStatus && !isNaN(targetId)) {
+            toggleUserActiveStatus(targetId, true);
+        }
+
+        // 6. Broadcast event across tabs/listeners
+        try {
+            window.dispatchEvent(new CustomEvent('knome_user_activated', { 
+                detail: { userId: targetId, employeeId: targetEmpId, name: targetName } 
+            }));
+            window.dispatchEvent(new Event('storage'));
+        } catch (e) {}
+
+        showToast(`User ${targetName} is now Active.`);
+
+        logAuditEntry(
+            'UserActivated',
+            `Reactivated Employee ${targetName}`,
+            'text-emerald-500 font-bold',
+            'User',
+            targetId
+        );
+
+        // 7. Fire backend activation API asynchronously in background
         try {
             if (!isNaN(targetId) && targetId > 0) {
                 await adminApi.activateUser(targetId);
@@ -3061,24 +3557,6 @@ export default function AdminConsole() {
         } catch (err) {
             console.warn("Backend activation notice:", err);
         }
-
-        if (toggleUserActiveStatus && !isNaN(targetId)) toggleUserActiveStatus(targetId, true);
-        try {
-            const savedSuspended = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
-            delete savedSuspended[String(targetId)];
-            if (user?.employeeId) {
-                delete savedSuspended[user.employeeId.toUpperCase()];
-            }
-            localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
-        } catch (e) {}
-        setUsersList(prev => prev.map(u => (Number(u.userId || u.id) === targetId || (user.employeeId && u.employeeId === user.employeeId)) ? { ...u, isActive: true, isSuspended: false, status: 'Active' } : u));
-        showToast(`User ${user.fullName || user.name} is now Active.`);
-
-        logAuditEntry(
-            'UserActivated',
-            `Reactivated Employee ${user.fullName || user.name}`,
-            'text-emerald-500 font-bold'
-        );
     };
 
     // Handle Permanent User Deletion (Cascades All Associated Data)
@@ -3412,14 +3890,19 @@ export default function AdminConsole() {
 
             // 2. Save Active / Suspended status if changed
             if (editForm.isActive !== editingUser.isActive) {
-                try {
-                    if (editForm.isActive) {
-                        await adminApi.activateUser(targetId);
-                    } else {
-                        await adminApi.suspendUser(targetId, 'Administrative update', 365, null, true);
+                if (!editForm.isActive && !isHrAdmin) {
+                    showToast('Suspending an employee account requires HR Administrator approval. Please submit a suspension request.', 'warning');
+                    editForm.isActive = true;
+                } else {
+                    try {
+                        if (editForm.isActive) {
+                            await adminApi.activateUser(targetId);
+                        } else {
+                            await adminApi.suspendUser(targetId, 'Administrative update', 365, null, true);
+                        }
+                    } catch (e) {
+                        console.warn('Backend status update warning:', e);
                     }
-                } catch (e) {
-                    console.warn('Backend status update warning:', e);
                 }
             }
 
@@ -4215,7 +4698,17 @@ export default function AdminConsole() {
     const dismissedCount = reports.filter(r => r.status === 'Dismissed' || r.status === 'Reviewed' || (r.actionTaken && (r.actionTaken.toLowerCase().includes('dismiss') || r.actionTaken.toLowerCase().includes('reinstate')))).length;
     const reviewedCount = actionTakenCount + dismissedCount;
     const highPriorityCount = reports.filter(r => r.reasonCode === 'Harassment' || r.reasonCode === 'Copyright' || r.severity === 'Critical' || r.severity === 'High').length;
-    const suspendedUsersCount = usersList.filter(u => !u.isActive).length;
+    const suspendedUsersCount = useMemo(() => {
+        const suspendedUserIdentities = new Set();
+        (usersList || []).forEach(u => {
+            if (u.isSuspended || !u.isActive || (u.status || '').toLowerCase() === 'suspended') {
+                const canonicalId = String(u.userId || u.id || u.employeeId || '');
+                if (canonicalId) suspendedUserIdentities.add(canonicalId);
+            }
+        });
+        return suspendedUserIdentities.size;
+    }, [usersList]);
+
     const moderatorsCount = usersList.filter(u => {
         const assigned = (u.roleName || getUserAssignedRole(u) || '').toLowerCase();
         return assigned.includes('mod');
@@ -4231,7 +4724,9 @@ export default function AdminConsole() {
     const activeModeratorsCount = moderatorsCount + hrAdminsCount + systemAdminsCount;
     const aiFlaggedCount = reports.filter(r => r.reasonCode === 'Spam' || r.reasonCode === 'Inappropriate' || (r.aiScore && parseInt(r.aiScore) > 70)).length;
     const communitiesCount = communityChannels.length;
-    const activeUsersCount = usersList.filter(u => u.isActive).length || usersList.length;
+    const activeUsersCount = useMemo(() => {
+        return (usersList || []).filter(u => u.isActive && !u.isSuspended && (u.status || '').toLowerCase() !== 'suspended').length;
+    }, [usersList]);
     const todayReportsCount = reports.filter(r => {
         const todayStr = new Date().toLocaleDateString();
         return r.reportedDate?.includes(todayStr) || (r.rawReportedDate && Date.now() - r.rawReportedDate < 86400000);
@@ -4543,6 +5038,7 @@ export default function AdminConsole() {
                         <span className="text-blue-700 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/50 px-2.5 py-0.5 rounded-lg border border-blue-200/80 dark:border-blue-800/80 shadow-2xs">
                             {activeTab === 'moderation' ? 'Content Reports' :
                              activeTab === 'media_approvals' ? 'Media Approvals' :
+                             activeTab === 'suspension_requests' ? 'Account Suspension Requests' :
                              activeTab === 'approval_policy' ? (approvalSubTab === 'modules' ? 'Platform Feature Access Control' : 'Governance & Platform Approvals') :
                              activeTab === 'ai_moderation' ? 'AI Moderation Rules' :
                              activeTab === 'communities' ? 'Community Moderation' :
@@ -4921,6 +5417,29 @@ export default function AdminConsole() {
                                     {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
                                 </span>
                             </button>
+                            {canManageSuspensions && (
+                                <button
+                                    onClick={() => setActiveTab('suspension_requests')}
+                                    className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
+                                        activeTab === 'suspension_requests'
+                                            ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                            : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
+                                    }`}
+                                >
+                                    <span className={`material-symbols-outlined text-[17px] ${
+                                        activeTab === 'suspension_requests' ? 'text-white' : 'text-amber-500'
+                                    }`}>gavel</span>
+                                    <span>Suspension Requests</span>
+                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+                                        activeTab === 'suspension_requests' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                    }`}>
+                                        {suspensionRequests.filter(r => r.status === 'Pending').length}
+                                    </span>
+                                    {suspensionRequests.filter(r => r.status === 'Pending').length > 0 && (
+                                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                    )}
+                                </button>
+                            )}
                         </>
                     )}
 
@@ -6594,11 +7113,20 @@ export default function AdminConsole() {
                                                 <td className="px-4 py-3.5">
                                                     {(() => {
                                                         const statusCfg = getUserStatusConfig(u);
+                                                        const hasPendingSuspension = suspensionRequests.some(r => Number(r.targetUserId) === Number(u.userId || u.id) && r.status === 'Pending');
                                                         return (
-                                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border shadow-xs ${statusCfg.badgeClass}`}>
-                                                                <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dotClass} ${u.isActive ? 'animate-pulse' : ''}`}></span>
-                                                                <span>{statusCfg.label}</span>
-                                                            </span>
+                                                            <div className="flex flex-col gap-1">
+                                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border shadow-xs w-fit transition-all duration-200 ${statusCfg.badgeClass}`}>
+                                                                    <span className={`w-1.5 h-1.5 rounded-full transition-colors duration-200 ${statusCfg.dotClass} ${u.isActive ? 'animate-pulse' : ''}`}></span>
+                                                                    <span>{statusCfg.label}</span>
+                                                                </span>
+                                                                {hasPendingSuspension && (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 w-fit">
+                                                                        <span className="material-symbols-outlined text-[12px] animate-pulse">hourglass_top</span>
+                                                                        <span>Pending HR Approval</span>
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         );
                                                     })()}
                                                 </td>
@@ -6636,15 +7164,15 @@ export default function AdminConsole() {
                                                         <button
                                                             type="button"
                                                             onClick={() => handleToggleUserActive(u)}
-                                                            className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all cursor-pointer shadow-xs ${
+                                                            className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 cursor-pointer shadow-xs active:scale-95 ${
                                                                 u.isActive 
-                                                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 border-rose-200/60 dark:border-rose-800/60' 
-                                                                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border-emerald-200/60 dark:border-emerald-800/60'
+                                                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 border-rose-200/60 dark:border-rose-800/60 hover:shadow-xs' 
+                                                                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-xs'
                                                             }`}
-                                                            title={u.isActive ? "Suspend User" : "Activate User"}
-                                                            aria-label={u.isActive ? "Suspend User" : "Activate User"}
+                                                            title={u.isActive ? (isHrAdmin ? "Suspend User" : "Request Suspension") : "Activate User"}
+                                                            aria-label={u.isActive ? (isHrAdmin ? "Suspend User" : "Request Suspension") : "Activate User"}
                                                         >
-                                                            <span className="material-symbols-outlined text-[17px]">
+                                                            <span className="material-symbols-outlined text-[17px] transition-transform duration-200">
                                                                 {u.isActive ? 'person_off' : 'how_to_reg'}
                                                             </span>
                                                         </button>
@@ -6658,6 +7186,346 @@ export default function AdminConsole() {
                         </table>
                     </div>
                     <ScrollLoadingIndicator isVisible={visibleUserCount < filteredUsers.length} text="Loading more users on scroll..." />
+                </div>
+            )}
+
+            {/* ─── TAB: SUSPENSION REQUESTS (HR APPROVAL HUB) ─── */}
+            {activeTab === 'suspension_requests' && canManageSuspensions && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs p-5 sm:p-6 space-y-6">
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex items-start sm:items-center gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/25 shadow-xs">
+                                <span className="material-symbols-outlined text-[24px]">gavel</span>
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h2 className="text-base font-black text-slate-900 dark:text-white">
+                                        Account Suspension Requests
+                                    </h2>
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                                        {suspensionRequests.filter(r => r.status === 'Pending').length} Pending Review
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-2xl">
+                                    {canManageSuspensions 
+                                        ? "Review employee account suspension requests submitted by Moderators. Approved suspensions take immediate effect across the platform."
+                                        : "Track submitted employee suspension requests sent to HR Administrators for review, verification, and governance enforcement."}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-auto">
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    setIsRefreshing(true);
+                                    await syncSuspensionRequestsFromBackend();
+                                    setIsRefreshing(false);
+                                    showToast('Suspension requests list refreshed.');
+                                }}
+                                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                            >
+                                <span className={`material-symbols-outlined text-[16px] ${isRefreshing ? 'animate-spin' : ''}`}>sync</span>
+                                <span>Refresh</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSelectedUserToSuspend(null);
+                                    setIsSuspendModalOpen(true);
+                                }}
+                                className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-amber-500/20"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">add_circle</span>
+                                <span>{canManageSuspensions ? 'Suspend Employee' : 'New Suspension Request'}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Filter Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setSuspensionRequestStatusFilter('All')}
+                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                                suspensionRequestStatusFilter === 'All'
+                                    ? 'bg-[#0c1838] text-white border-[#1e295a] shadow-xs'
+                                    : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">All Requests</span>
+                                <span className="material-symbols-outlined text-[18px]">list_alt</span>
+                            </div>
+                            <div className="text-xl font-black mt-1 leading-none">
+                                {suspensionRequests.length}
+                            </div>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setSuspensionRequestStatusFilter('Pending')}
+                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                                suspensionRequestStatusFilter === 'Pending'
+                                    ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-500/20'
+                                    : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 hover:border-amber-300'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Pending HR</span>
+                                <span className="material-symbols-outlined text-[18px]">hourglass_top</span>
+                            </div>
+                            <div className="text-xl font-black mt-1 leading-none flex items-center gap-1.5">
+                                <span>{suspensionRequests.filter(r => r.status === 'Pending').length}</span>
+                                {suspensionRequests.filter(r => r.status === 'Pending').length > 0 && (
+                                    <span className="w-2 h-2 rounded-full bg-amber-400 dark:bg-amber-300 animate-pulse"></span>
+                                )}
+                            </div>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setSuspensionRequestStatusFilter('Approved')}
+                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                                suspensionRequestStatusFilter === 'Approved'
+                                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-md shadow-emerald-600/20'
+                                    : 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300 hover:border-emerald-300'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Approved</span>
+                                <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                            </div>
+                            <div className="text-xl font-black mt-1 leading-none">
+                                {suspensionRequests.filter(r => r.status === 'Approved').length}
+                            </div>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setSuspensionRequestStatusFilter('Rejected')}
+                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                                suspensionRequestStatusFilter === 'Rejected'
+                                    ? 'bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-600/20'
+                                    : 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 text-rose-800 dark:text-rose-300 hover:border-rose-300'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Rejected</span>
+                                <span className="material-symbols-outlined text-[18px]">cancel</span>
+                            </div>
+                            <div className="text-xl font-black mt-1 leading-none">
+                                {suspensionRequests.filter(r => r.status === 'Rejected').length}
+                            </div>
+                        </button>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div className="relative max-w-md">
+                        <span className="material-symbols-outlined absolute left-3 top-2.5 text-slate-400 text-[18px]">search</span>
+                        <input
+                            type="text"
+                            value={suspensionRequestSearchTerm}
+                            onChange={e => setSuspensionRequestSearchTerm(e.target.value)}
+                            placeholder="Search requests by employee, requester, reason, department..."
+                            className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold outline-none focus:border-amber-500 text-slate-900 dark:text-white placeholder:text-slate-400"
+                        />
+                    </div>
+
+                    {/* Requests Grid */}
+                    {(() => {
+                        const filtered = suspensionRequests.filter(r => {
+                            const matchesStatus = suspensionRequestStatusFilter === 'All' || (r.status || '').toLowerCase() === suspensionRequestStatusFilter.toLowerCase();
+                            const term = (suspensionRequestSearchTerm || '').trim().toLowerCase();
+                            if (!term) return matchesStatus;
+                            const matchesTerm = 
+                                (r.targetFullName || '').toLowerCase().includes(term) ||
+                                (r.targetEmployeeId || '').toLowerCase().includes(term) ||
+                                (r.targetEmail || '').toLowerCase().includes(term) ||
+                                (r.targetDepartment || '').toLowerCase().includes(term) ||
+                                (r.requestedByName || '').toLowerCase().includes(term) ||
+                                (r.requestedByRole || '').toLowerCase().includes(term) ||
+                                (r.fullReason || '').toLowerCase().includes(term) ||
+                                (r.category || '').toLowerCase().includes(term) ||
+                                String(r.targetUserId || '').includes(term);
+                            return matchesStatus && matchesTerm;
+                        });
+
+                        if (filtered.length === 0) {
+                            return (
+                                <div className="py-12 text-center flex flex-col items-center justify-center border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50">
+                                    <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3">
+                                        <span className="material-symbols-outlined text-[32px]">gavel</span>
+                                    </div>
+                                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                                        No {suspensionRequestStatusFilter !== 'All' ? suspensionRequestStatusFilter : ''} Suspension Requests Found
+                                    </h3>
+                                    <p className="text-xs text-slate-400 max-w-sm mt-1">
+                                        {suspensionRequestStatusFilter === 'Pending'
+                                            ? "There are currently no employee account suspension requests awaiting HR review."
+                                            : "No suspension requests match your search criteria."}
+                                    </p>
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {filtered.map((req) => {
+                                    const isPending = req.status === 'Pending';
+                                    const targetUserInList = usersList.find(u => Number(u.userId || u.id) === Number(req.targetUserId));
+                                    const isCurrentlySuspended = targetUserInList ? !targetUserInList.isActive : false;
+
+                                    return (
+                                        <div
+                                            key={req.requestId}
+                                            className={`p-5 rounded-2xl border transition-all space-y-4 ${
+                                                isPending
+                                                    ? 'border-amber-400/60 bg-amber-500/[0.03] dark:bg-amber-950/10 shadow-xs'
+                                                    : req.status === 'Approved'
+                                                        ? 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-500/[0.02] dark:bg-emerald-950/10'
+                                                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20'
+                                            }`}
+                                        >
+                                            {/* Header Strip */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-300 dark:border-amber-800/60">
+                                                        {req.duration === 'custom' ? `Until ${req.customDate}` : (req.duration === 'indefinite' ? 'Indefinite' : `${req.durationDays || 7} Days`)}
+                                                    </span>
+                                                    {req.reportId && (
+                                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                                            Report #{req.reportId}
+                                                        </span>
+                                                    )}
+                                                    <span className="text-[11px] text-slate-400">
+                                                        {new Date(req.createdAt).toLocaleDateString()} at {new Date(req.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+
+                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                                                    isPending
+                                                        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400 animate-pulse'
+                                                        : req.status === 'Approved'
+                                                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-400'
+                                                            : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-400'
+                                                }`}>
+                                                    {isPending ? 'Pending HR Approval' : req.status}
+                                                </span>
+                                            </div>
+
+                                            {/* Target Employee Card */}
+                                            <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    {req.targetAvatar ? (
+                                                        <img
+                                                            src={resolveMediaUrl(req.targetAvatar)}
+                                                            alt={req.targetFullName}
+                                                            className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-rose-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
+                                                            {(req.targetFullName || 'U')[0].toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                                            {req.targetFullName}
+                                                        </p>
+                                                        <p className="text-[11px] text-slate-400 truncate">
+                                                            {req.targetDesignation || 'Staff'} • {req.targetDepartment || 'MPOnline'}
+                                                        </p>
+                                                        <p className="text-[10px] text-slate-400 truncate font-mono">
+                                                            ID: #{req.targetUserId} {req.targetEmployeeId ? `(${req.targetEmployeeId})` : ''}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                                                    isCurrentlySuspended 
+                                                        ? 'bg-rose-500/15 text-rose-600 border border-rose-500/20' 
+                                                        : 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/20'
+                                                }`}>
+                                                    {isCurrentlySuspended ? 'Suspended' : 'Active'}
+                                                </span>
+                                            </div>
+
+                                            {/* Requester & Reason Details */}
+                                            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/50 space-y-2 text-xs">
+                                                <div className="flex items-center justify-between text-[11px]">
+                                                    <span className="text-slate-400 font-semibold">Requested By:</span>
+                                                    <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                                                        <span className="material-symbols-outlined text-[14px] text-indigo-500">account_circle</span>
+                                                        <span>{req.requestedByName}</span>
+                                                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-extrabold">
+                                                            {req.requestedByRole}
+                                                        </span>
+                                                    </span>
+                                                </div>
+
+                                                <div>
+                                                    <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Reason for Suspension:</p>
+                                                    <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700/60 text-slate-800 dark:text-slate-200 font-medium">
+                                                        <span className="font-bold text-rose-600 dark:text-rose-400 block text-[11px] mb-0.5">
+                                                            {req.category || 'Violation of Guidelines'}
+                                                        </span>
+                                                        {req.note ? <p className="text-[11px] text-slate-600 dark:text-slate-300 italic">"{req.note}"</p> : null}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Review outcome / Actions */}
+                                            {isPending ? (
+                                                <div>
+                                                    {canManageSuspensions ? (
+                                                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setRejectSuspensionModalRequest(req);
+                                                                    setRejectSuspensionReasonInput('');
+                                                                }}
+                                                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/30 dark:hover:bg-rose-900/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 transition-colors cursor-pointer flex items-center gap-1"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[15px]">close</span>
+                                                                <span>Reject</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleApproveSuspensionRequest(req.requestId)}
+                                                                className="px-4 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition-all cursor-pointer flex items-center gap-1"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[15px]">check_circle</span>
+                                                                <span>Approve & Suspend</span>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 text-[11px] text-amber-700 dark:text-amber-400 font-semibold bg-amber-500/10 p-2.5 rounded-xl">
+                                                            <span className="material-symbols-outlined text-[16px] shrink-0">pending_actions</span>
+                                                            <span>Submitted to HR Administrator. Account remains active pending review.</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <span>Reviewed By: <strong className="text-slate-800 dark:text-slate-200">{req.reviewedBy || 'HR Administrator'}</strong></span>
+                                                        <span>{req.reviewedAt ? new Date(req.reviewedAt).toLocaleDateString() : ''}</span>
+                                                    </div>
+                                                    {req.rejectionReason && (
+                                                        <p className="text-rose-600 dark:text-rose-400 font-medium">
+                                                            Rejection reason: "{req.rejectionReason}"
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 
@@ -10285,9 +11153,74 @@ export default function AdminConsole() {
                 user={selectedUserToSuspend}
                 availableUsers={usersList}
                 onConfirm={handleConfirmSuspend}
-                title="Suspend Employee Account"
-                subtitle="Enterprise account suspension & governance enforcement"
+                isHrAdmin={canManageSuspensions}
+                isSysAdmin={isSysAdmin}
+                isModerator={isModerator}
+                title={canManageSuspensions ? "Suspend Employee Account" : "Request Employee Account Suspension"}
+                subtitle={canManageSuspensions ? "Enterprise account suspension & governance enforcement" : "Submit suspension request for HR Administrator review & approval"}
             />
+
+            {/* ─── MODAL: REJECT SUSPENSION REQUEST REASON PROMPT ─── */}
+            {rejectSuspensionModalRequest && createPortal(
+                <div className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                            <div className="flex items-center gap-2.5 text-rose-600">
+                                <span className="material-symbols-outlined text-2xl">cancel</span>
+                                <h3 className="text-base font-black text-slate-900 dark:text-white">Reject Suspension Request</h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setRejectSuspensionModalRequest(null);
+                                    setRejectSuspensionReasonInput('');
+                                }}
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">close</span>
+                            </button>
+                        </div>
+
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Provide a reason for rejecting the suspension request for <strong>{rejectSuspensionModalRequest.targetFullName}</strong> submitted by {rejectSuspensionModalRequest.requestedByName}. The employee account will remain active.
+                        </p>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                                Reason for Rejection
+                            </label>
+                            <textarea
+                                value={rejectSuspensionReasonInput}
+                                onChange={e => setRejectSuspensionReasonInput(e.target.value)}
+                                placeholder="Explain why this suspension request is declined (e.g. Insufficient evidence, First-time minor infraction, Resolved via counseling)..."
+                                rows={3}
+                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-rose-500"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setRejectSuspensionModalRequest(null);
+                                    setRejectSuspensionReasonInput('');
+                                }}
+                                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleRejectSuspensionRequest(rejectSuspensionModalRequest.requestId, rejectSuspensionReasonInput)}
+                                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-600/20 transition-all cursor-pointer"
+                            >
+                                Confirm Rejection
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             {/* ─── MODAL 2: CHANGE EMPLOYEE ROLE (SINGLE ROLE ASSIGNMENT) ─── */}
             {isRoleModalOpen && createPortal(
@@ -11025,9 +11958,10 @@ export default function AdminConsole() {
                                                 setIsSuspendModalOpen(true);
                                             }}
                                             className="px-3.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 font-bold text-[11px] border border-amber-500/20 rounded-lg transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                                            title={canManageSuspensions ? "Suspend User" : "Submit Suspension Request for HR Approval"}
                                         >
-                                            <span className="material-symbols-outlined text-[15px]">person_off</span>
-                                            <span>Suspend User</span>
+                                            <span className="material-symbols-outlined text-[15px]">{canManageSuspensions ? 'person_off' : 'hourglass_top'}</span>
+                                            <span>{canManageSuspensions ? 'Suspend User' : 'Request Suspension'}</span>
                                         </button>
                                     </div>
                                 </>
@@ -11079,9 +12013,10 @@ export default function AdminConsole() {
                                                 setIsSuspendModalOpen(true);
                                             }}
                                             className="px-3.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 font-bold text-[11px] border border-amber-500/20 rounded-lg transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                                            title={canManageSuspensions ? "Suspend User" : "Submit Suspension Request for HR Approval"}
                                         >
-                                            <span className="material-symbols-outlined text-[15px]">person_off</span>
-                                            <span>Suspend User</span>
+                                            <span className="material-symbols-outlined text-[15px]">{canManageSuspensions ? 'person_off' : 'hourglass_top'}</span>
+                                            <span>{canManageSuspensions ? 'Suspend User' : 'Request Suspension'}</span>
                                         </button>
                                     </div>
                                 </>

@@ -53,7 +53,7 @@ public class UserRepository : Repository<Models.User>, IUserRepository
             .Include(u => u.Department)
             .Include(u => u.Roles)
             .Include(u => u.KarmaBalance)
-            .Where(u => u.IsActive && (AllowedUserIds.Contains(u.UserId) || AllowedEmployeeIds.Contains(u.EmployeeId)))
+            .Where(u => AllowedUserIds.Contains(u.UserId) || AllowedEmployeeIds.Contains(u.EmployeeId))
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))

@@ -29,5 +29,7 @@ public class UserProfile : Profile
             .ForMember(dest => dest.KarmaBadgeLevel, opt => opt.MapFrom(src => src.KarmaBalance != null ? src.KarmaBalance.BadgeLevel : "Bronze"))
             .ForMember(dest => dest.IsSuspended, opt => opt.MapFrom(src => src.IsPermanentlySuspended || (src.SuspendedUntil.HasValue && src.SuspendedUntil > Knome.API.Common.KnomeTime.Now)))
             .ForMember(dest => dest.SuspendedUntil, opt => opt.MapFrom(src => src.SuspendedUntil));
+
+        CreateMap<Models.SuspensionRequest, SuspensionRequestDto>();
     }
 }
