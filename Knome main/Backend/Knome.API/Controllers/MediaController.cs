@@ -209,8 +209,14 @@ public class MediaController : KnomeControllerBase
         else if (item.TryGetProperty("type", out var tProp))
             mediaType = tProp.GetString()?.ToLower() ?? "video";
 
+        var itemStatus = "";
+        if (item.TryGetProperty("status", out var sProp))
+            itemStatus = sProp.GetString() ?? "";
+
         bool requireApproval = true;
-        if (_settingService != null)
+        // If an item explicitly arrives with status PendingApproval (such as an Employee Wiki or Article submission),
+        // it must enter the pending approval queue for Moderator approval
+        if (itemStatus != "PendingApproval" && _settingService != null)
         {
             if (mediaType == "podcast" || mediaType == "audio")
             {
@@ -234,7 +240,7 @@ public class MediaController : KnomeControllerBase
             }
         }
 
-        if (!requireApproval)
+        if (!requireApproval && itemStatus != "PendingApproval")
         {
             // When approval is disabled (OFF) for this media type, items must NOT enter the admin approval queue!
             return Ok(ApiResponse<object>.SuccessResponse(200, $"{mediaType.ToUpper()} approval policy is disabled. Media does not enter the approval queue.", item));

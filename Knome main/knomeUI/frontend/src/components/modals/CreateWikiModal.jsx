@@ -79,16 +79,20 @@ export const PRESET_COVERS = PRESET_COVER_BANNERS.map(p => p.url);
 export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData = null }) {
     const { currentUser } = useUser();
     const { addToast } = useToast();
-    const isModerator = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
-        ['Moderator'].includes(currentUser?.roleName) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+    const isModerator = ['MOD', 'MODERATOR', 'CADM'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['Moderator', 'Community Admin', 'Community Administrator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR', 'CADM'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
 
-    // Moderators and employees cannot directly publish; only System Admin can bypass approval
-    const canDirectPublish = !isModerator && (
-        ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+    const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
         ['System Administrator', 'System Admin'].includes(currentUser?.roleName) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())))
-    );
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    const isHrAdmin = ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['HR Administrator', 'HR Admin'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    const isEmployee = !isModerator && !isSysAdmin && !isHrAdmin;
+    const canDirectPublish = !isEmployee;
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -449,8 +453,9 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
         setIsSaving(true);
         try {
             let finalStatus = status;
+            // Whenever an Employee creates a Wiki, submit to Moderator for approval under Moderation Console → Media Approvals
             const wikiApprovalRequired = isWikiApprovalRequired();
-            if (finalStatus !== 'Draft' && wikiApprovalRequired && !canDirectPublish) {
+            if (finalStatus !== 'Draft' && (isEmployee || (wikiApprovalRequired && !canDirectPublish))) {
                 finalStatus = 'PendingApproval';
             }
 
@@ -493,7 +498,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     localStorage.setItem('knome_pending_media_approvals', JSON.stringify([pendingItem, ...existingPending]));
                     window.dispatchEvent(new CustomEvent('pending-media-updated', { detail: pendingItem }));
 
-                    addToast('Wiki submitted successfully! It has been sent for approval before going live. 📝', 'success');
+                    addToast('Wiki submitted to Moderator for approval! It will be published once approved. 📝', 'success');
                 } else {
                     addToast('Wiki updated successfully!', 'success');
                 }
@@ -558,7 +563,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
                     localStorage.setItem('knome_notifications', JSON.stringify([modNotif, ...existingNotifs]));
 
-                    addToast('Wiki submitted successfully! It has been sent for approval before going live. 📝', 'success');
+                    addToast('Wiki submitted to Moderator for approval! It will be published once approved. 📝', 'success');
                 } else {
                     addToast('Wiki created successfully!', 'success');
                 }

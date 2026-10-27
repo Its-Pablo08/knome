@@ -68,6 +68,29 @@ public class ArticleService : IArticleService
         if (article == null)
             throw new NotFoundException($"Article ID {articleId} not found.");
 
+        // Unpublished articles (PendingApproval, Draft, Rejected) are only accessible to the author and Administrators/Moderators
+        if (article.Status == ArticleStatuses.PendingApproval || article.Status == "Pending" || article.Status == ArticleStatuses.Draft || article.Status == "Rejected")
+        {
+            var isAuthor = currentUserId > 0 && article.AuthorUserId == currentUserId;
+            var isPrivileged = false;
+            if (currentUserId > 0 && !isAuthor)
+            {
+                var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
+                isPrivileged = user != null && user.Roles.Any(r =>
+                    r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" ||
+                    r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" ||
+                    r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM" ||
+                    r.RoleName == Roles.Moderator || r.RoleCode == "MOD" ||
+                    (r.RoleName != null && (r.RoleName.Contains("Admin") || r.RoleName.Contains("Moderator") || r.RoleName.Contains("Mod"))) ||
+                    (r.RoleCode != null && (r.RoleCode.Contains("ADM") || r.RoleCode.Contains("MOD"))));
+            }
+
+            if (!isAuthor && !isPrivileged)
+            {
+                throw new UnauthorizedException("This article is unpublished and awaiting moderator approval.");
+            }
+        }
+
         if (currentUserId > 0)
         {
             var updatedViews = await _interactionService.RecordViewAsync(ContentTypes.Article, articleId, currentUserId);
@@ -159,17 +182,29 @@ public class ArticleService : IArticleService
         if (requestedStatus != ArticleStatuses.Draft)
         {
             var caller = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-            var isCallerAdmin = caller != null && caller.Roles.Any(r => 
+            var isExempt = caller != null && caller.Roles.Any(r => 
                 r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" || 
-                r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM");
+                r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" ||
+                r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM" ||
+                r.RoleName == Roles.Moderator || r.RoleCode == "MOD" ||
+                (r.RoleName != null && (r.RoleName.Contains("Admin") || r.RoleName.Contains("Moderator") || r.RoleName.Contains("Mod"))) ||
+                (r.RoleCode != null && (r.RoleCode.Contains("ADM") || r.RoleCode.Contains("MOD"))));
 
-            var requireApproval = _systemSettingService != null
-                ? await _systemSettingService.GetRequireArticleApprovalAsync()
-                : false;
-
-            if (requireApproval && !isCallerAdmin)
+            if (!isExempt)
             {
+                // Whenever an Employee creates an Article, it is submitted to the Moderator for approval
                 finalStatus = ArticleStatuses.PendingApproval;
+            }
+            else
+            {
+                var requireApproval = _systemSettingService != null
+                    ? await _systemSettingService.GetRequireArticleApprovalAsync()
+                    : false;
+
+                if (requireApproval && !(caller != null && caller.Roles.Any(r => r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM")))
+                {
+                    finalStatus = ArticleStatuses.PendingApproval;
+                }
             }
         }
 
@@ -207,11 +242,14 @@ public class ArticleService : IArticleService
             .ToList();
 
         var saved = await _repo.AddArticleAsync(article, normalizedTags, dto.AttachmentUrls, initialVersion);
-        try
+        if (saved.Status == ArticleStatuses.Published)
         {
-            await _karmaService.AwardKarmaAsync(currentUserId, KarmaActivityTypes.CreateArticle, KarmaPoints.CreateArticlePoints, ContentTypes.Article, saved.ArticleId, KarmaCaps.CreateArticleDailyCap);
+            try
+            {
+                await _karmaService.AwardKarmaAsync(currentUserId, KarmaActivityTypes.CreateArticle, KarmaPoints.CreateArticlePoints, ContentTypes.Article, saved.ArticleId, KarmaCaps.CreateArticleDailyCap);
+            }
+            catch { }
         }
-        catch { }
 
         var resDto = _mapper.Map<ArticleDetailDto>(saved);
         resDto.EngagementSummary = await _interactionService.GetContentSummaryAsync(ContentTypes.Article, saved.ArticleId, currentUserId);
@@ -253,6 +291,7 @@ public class ArticleService : IArticleService
         article.ContentHtml = dto.ContentHtml;
         article.CategoryId = dto.CategoryId;
 
+        var oldStatus = article.Status;
         if (dto.Status == ArticleStatuses.Scheduled && dto.ScheduledDate.HasValue)
         {
             var istScheduledDate = KnomeTime.ToIst(dto.ScheduledDate.Value);
@@ -276,6 +315,15 @@ public class ArticleService : IArticleService
             article.ScheduledDate = KnomeTime.ToIst(dto.ScheduledDate);
             if (dto.Status == ArticleStatuses.Published && article.PublishedDate == null)
                 article.PublishedDate = KnomeTime.Now;
+        }
+
+        if (oldStatus == ArticleStatuses.PendingApproval && article.Status == ArticleStatuses.Published)
+        {
+            try
+            {
+                await _karmaService.AwardKarmaAsync(article.AuthorUserId, KarmaActivityTypes.CreateArticle, KarmaPoints.CreateArticlePoints, ContentTypes.Article, article.ArticleId, KarmaCaps.CreateArticleDailyCap);
+            }
+            catch { }
         }
         article.AvgReadTimeSeconds = CalculateAvgReadTimeSeconds(dto.ContentHtml);
 

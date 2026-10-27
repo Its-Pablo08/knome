@@ -170,14 +170,14 @@ export default function Navbar() {
                 eventType: 'Message',
                 notificationType: 'Message',
                 title: 'New Message',
-                senderName: sender.fullName || sender.name || 'Colleague',
+                senderName: sender.fullName || sender.name || 'Employee',
                 senderAvatar: sender.avatar,
                 senderUserId: sender.userId,
                 targetUserId: uId,
                 recipientUserId: uId,
                 userId: uId,
-                message: `${sender.fullName || sender.name || 'Colleague'}: "${message.text}"`,
-                text: `${sender.fullName || sender.name || 'Colleague'}: "${message.text}"`,
+                message: `${sender.fullName || sender.name || 'Employee'}: "${message.text}"`,
+                text: `${sender.fullName || sender.name || 'Employee'}: "${message.text}"`,
                 targetUrl: `/messages?userId=${sender.userId}&name=${encodeURIComponent(sender.fullName || sender.name || '')}`,
                 unread: true,
                 createdDate: new Date().toISOString()
@@ -595,16 +595,11 @@ export default function Navbar() {
             category = 'Community';
         }
 
-        let senderName = n.senderName || n.actorName;
-        if (!senderName || senderName === 'System') {
-            const match = (n.message || '').match(/^(.+?)\s+(shared|invited|sent|commented|liked|reacted|posted|mentioned)\b/i);
-            if (match && match[1].trim()) {
-                senderName = match[1].trim();
-            } else {
-                senderName = 'Colleague';
-            }
-        }
-        const senderAvatar = resolveMediaUrl(n.senderAvatar) || (senderName && senderName !== 'System' ? `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=6366f1&color=fff` : null);
+        // Do not default to generic placeholder names; let parseNotificationContent extract the employee name
+        let rawSender = (n.senderName && n.senderName !== 'Colleague' && n.senderName !== 'System' && n.senderName !== 'User' && n.senderName !== 'Teammate') 
+            ? n.senderName 
+            : (n.actorName && n.actorName !== 'Colleague' && n.actorName !== 'System' ? n.actorName : '');
+
         const dateVal = n.createdAt || n.createdDate || n.created_at;
         const refId = n.relatedContentId || n.referenceId;
 
@@ -641,12 +636,15 @@ export default function Navbar() {
 
         const dateFormatted = formatNotificationDate(dateVal);
         const parsed = parseNotificationContent({
-            senderName,
+            senderName: rawSender,
             message: n.message || n.text || n.title,
             relatedContentType: n.relatedContentType,
             type: n.notificationType || n.eventType || n.type,
             wikiTitle: n.wikiTitle || (relType === 'wiki' ? n.title : null)
         });
+
+        const resolvedSender = parsed.sender || rawSender || n.title || 'MPOnline Team';
+        const senderAvatar = resolveMediaUrl(n.senderAvatar) || (resolvedSender ? `https://ui-avatars.com/api/?name=${encodeURIComponent(resolvedSender)}&background=6366f1&color=fff` : null);
 
         const isAccepted = msg.includes('accepted');
 
@@ -673,7 +671,7 @@ export default function Navbar() {
             color,
             bg,
             senderUserId: n.senderUserId || n.actorUserId,
-            senderName: parsed.sender || senderName,
+            senderName: resolvedSender,
             senderAvatar,
             handled: n.isRead || isAccepted,
             status: isAccepted ? 'approved' : 'pending'
@@ -711,8 +709,9 @@ export default function Navbar() {
                         const m = urlSource.match(/\/wiki(?:\/view)?(?:\?id=|\/)(\d+)/i) || urlSource.match(/[?&]id=(\d+)/i);
                         if (m) wId = m[1];
                     }
+                    const rawCommSender = (n.senderName && n.senderName !== 'Colleague' && n.senderName !== 'System' && n.senderName !== 'Community Admin') ? n.senderName : '';
                     const parsed = parseNotificationContent({
-                        senderName: n.senderName || 'Community Admin',
+                        senderName: rawCommSender,
                         message: n.text || n.message,
                         relatedContentType: isWiki ? 'Wiki' : n.relatedContentType,
                         type: n.type,
@@ -720,6 +719,8 @@ export default function Navbar() {
                     });
                     const dateVal = n.createdDate || n.createdAt || n.timestamp || n.date;
                     const dateFormatted = formatNotificationDate(dateVal);
+                    const resolvedCommSender = parsed.sender || (n.senderName && n.senderName !== 'Colleague' ? n.senderName : null) || 'Community Admin';
+                    const commAvatar = resolveMediaUrl(n.senderAvatar) || (resolvedCommSender ? `https://ui-avatars.com/api/?name=${encodeURIComponent(resolvedCommSender)}&background=6366f1&color=fff` : null);
                     return {
                         id: n.id || `local_${n.communityId}_${n.targetUserId}_${n.type}`,
                         type: isWiki ? 'wiki_share' : (n.type || 'community_invite'),
@@ -734,8 +735,8 @@ export default function Navbar() {
                         wikiTitle: parsed.wikiTitle || n.wikiTitle,
                         wikiId: wId,
                         isWiki: isWiki,
-                        senderName: parsed.sender || n.senderName || 'Community Admin',
-                        senderAvatar: n.senderAvatar || null,
+                        senderName: resolvedCommSender,
+                        senderAvatar: commAvatar,
                         senderUserId: n.senderUserId,
                         time: dateFormatted,
                         displayDate: dateFormatted,
@@ -815,13 +816,16 @@ export default function Navbar() {
 
                     const dateVal = n.createdDate || n.createdAt || n.timestamp || n.date;
                     const dateFormatted = formatNotificationDate(dateVal);
+                    const rawGenSender = (n.senderName && n.senderName !== 'Colleague' && n.senderName !== 'System' && n.senderName !== 'Teammate') ? n.senderName : '';
                     const parsed = parseNotificationContent({
-                        senderName: n.senderName || 'Teammate',
+                        senderName: rawGenSender,
                         message: n.text || n.message,
                         relatedContentType: isWiki ? 'Wiki' : n.relatedContentType,
                         type: n.type,
                         wikiTitle: n.wikiTitle
                     });
+                    const resolvedGenSender = parsed.sender || (n.senderName && n.senderName !== 'Colleague' && n.senderName !== 'Teammate' ? n.senderName : null) || 'MPOnline Team';
+                    const genAvatar = resolveMediaUrl(n.senderAvatar) || (resolvedGenSender ? `https://ui-avatars.com/api/?name=${encodeURIComponent(resolvedGenSender)}&background=6366f1&color=fff` : null);
 
                     let icon = 'notifications';
                     let color = 'text-slate-400';
@@ -870,8 +874,8 @@ export default function Navbar() {
                         wikiTitle: parsed.wikiTitle || n.wikiTitle,
                         wikiId: wId,
                         isWiki: isWiki,
-                        senderName: parsed.sender || n.senderName || 'Teammate',
-                        senderAvatar: n.senderAvatar || null,
+                        senderName: resolvedGenSender,
+                        senderAvatar: genAvatar,
                         senderUserId: n.senderUserId,
                         time: dateFormatted,
                         displayDate: dateFormatted,
@@ -1090,13 +1094,13 @@ export default function Navbar() {
                     recipientId: myId,
                     sender: {
                         userId: senderId,
-                        fullName: notification.senderName || mapped.senderName || 'Colleague',
+                        fullName: notification.senderName || mapped.senderName || 'Employee',
                         avatar: notification.senderAvatar || mapped.senderAvatar || null
                     },
                     message: {
                         id: `notif_${notification.notificationId || Date.now()}`,
                         senderId,
-                        senderName: notification.senderName || mapped.senderName || 'Colleague',
+                        senderName: notification.senderName || mapped.senderName || 'Employee',
                         text: rawText,
                         time: formatNotificationDate(notification.createdDate || new Date().toISOString()),
                         timestamp: new Date(notification.createdDate || Date.now()).getTime()
@@ -1131,9 +1135,9 @@ export default function Navbar() {
                             id: `msg_toast_${Date.now()}`,
                             type: 'message',
                             eventType: 'Message',
-                            title: `Message from ${payload.sender?.fullName || 'Colleague'}`,
+                            title: `Message from ${payload.sender?.fullName || 'Employee'}`,
                             message: payload.message.text,
-                            senderName: payload.sender?.fullName || 'Colleague',
+                            senderName: payload.sender?.fullName || 'Employee',
                             senderAvatar: payload.sender?.avatar || null,
                             targetUrl: `/messages?userId=${payload.senderId}&name=${encodeURIComponent(payload.sender?.fullName || '')}`,
                             time: 'Just now',
@@ -2207,7 +2211,7 @@ export default function Navbar() {
                                                             <div className="flex-1 min-w-0">
                                                                 <p className="text-[12.5px] leading-snug text-slate-800 dark:text-slate-200">
                                                                     <span className="font-bold text-slate-900 dark:text-white mr-1">
-                                                                        <HighlightText text={n.parsedSender || n.senderName || n.title || 'Colleague'} query={notifSearchQuery} />
+                                                                        <HighlightText text={n.parsedSender || n.senderName || n.title || 'MPOnline Team'} query={notifSearchQuery} />
                                                                     </span>
                                                                     <span className="text-slate-600 dark:text-slate-300">
                                                                         <HighlightText text={n.parsedAction || n.text || n.message} query={notifSearchQuery} />

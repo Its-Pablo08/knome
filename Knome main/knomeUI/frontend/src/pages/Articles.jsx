@@ -21,16 +21,20 @@ export default function Articles() {
     const navigate = useNavigate();
     const { addToast } = useToast();
     const confirm = useConfirm();
-    const isModerator = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
-        ['Moderator'].includes(currentUser?.roleName) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+    const isModerator = ['MOD', 'MODERATOR', 'CADM'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['Moderator', 'Community Admin', 'Community Administrator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR', 'CADM'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
 
-    // Moderators and employees cannot directly publish; only System Admin can bypass approval
-    const canDirectPublish = !isModerator && (
-        ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+    const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
         ['System Administrator', 'System Admin'].includes(currentUser?.roleName) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())))
-    );
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    const isHrAdmin = ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['HR Administrator', 'HR Admin'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    const isEmployee = !isModerator && !isSysAdmin && !isHrAdmin;
+    const canDirectPublish = !isEmployee;
     
     // Page view mode: 'list' or 'create'
     const [viewMode, setViewMode] = useState('list');
@@ -117,10 +121,6 @@ export default function Articles() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest'
-    
-    const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) || 
-                       ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) || 
-                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'System Administrator', 'SystemAdmin', 'System Admin'].includes(r)));
 
     // Dynamic Categories State
     const [availableCategories, setAvailableCategories] = useState([
@@ -614,9 +614,9 @@ export default function Articles() {
             isoScheduledDate = parsed.toISOString();
         }
 
-        // If submitted by employee or moderator (not sysadmin) and not saving draft, route to approval if policy is ON
+        // Whenever an Employee creates an Article, submit to Moderator for approval under Moderation Console → Media Approvals
         const articleApprovalRequired = isArticleApprovalRequired();
-        if (finalStatus !== 'Draft' && articleApprovalRequired && !canDirectPublish) {
+        if (finalStatus !== 'Draft' && (isEmployee || (articleApprovalRequired && !canDirectPublish))) {
             finalStatus = 'PendingApproval';
         }
 
@@ -718,7 +718,7 @@ export default function Articles() {
                 const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
                 localStorage.setItem('knome_notifications', JSON.stringify([modNotif, ...existingNotifs]));
 
-                addToast('Article submitted successfully! It has been sent for approval before going live. 📝', 'success');
+                addToast('Article submitted to Moderator for approval! It will be published once approved. 📝', 'success');
             } else if (finalStatus === 'Scheduled') {
                 addToast(`Article scheduled for publication on ${formatToDDMMYYYY(scheduledTime)}! ⏰`, 'success');
             } else if (finalStatus === 'Draft') {
@@ -757,6 +757,18 @@ export default function Articles() {
 
     const currentUserIdStr = String(currentUser?.userId || currentUser?.id || '');
 
+    // Calculate pending approval articles authored by current user
+    const myPendingArticles = allArticles.filter(art => 
+        (art.status === 'PendingApproval' || art.status === 'Pending') && 
+        String(art.authorUserId || art.author?.id || '') === currentUserIdStr
+    );
+
+    // Calculate rejected articles authored by current user
+    const myRejectedArticles = allArticles.filter(art => 
+        art.status === 'Rejected' && 
+        String(art.authorUserId || art.author?.id || '') === currentUserIdStr
+    );
+
     // Calculate scheduled articles authored by current user
     const myScheduledArticles = allArticles.filter(art => 
         (art.status === 'Scheduled' || art.isScheduledFuture) && 
@@ -773,12 +785,22 @@ export default function Articles() {
     const rawFiltered = allArticles.filter(art => {
         const isArticleScheduled = art.status === 'Scheduled' || art.isScheduledFuture;
         const isArticleDraft = art.status === 'Draft';
+        const isArticlePending = art.status === 'PendingApproval' || art.status === 'Pending';
+        const isArticleRejected = art.status === 'Rejected';
         const authorIdStr = String(art.authorUserId || art.author?.id || '');
 
-        if (isArticleScheduled || isArticleDraft) {
-            if (authorIdStr !== currentUserIdStr) {
+        if (isArticleScheduled || isArticleDraft || isArticlePending || isArticleRejected) {
+            if (authorIdStr !== currentUserIdStr && !isModerator && !isSysAdmin) {
                 return false;
             }
+        }
+
+        if (selectedCategory.startsWith('⏳ Pending')) {
+            return isArticlePending;
+        }
+
+        if (selectedCategory.startsWith('❌ Rejected')) {
+            return isArticleRejected;
         }
 
         if (selectedCategory.startsWith('⏰ Scheduled')) {
@@ -789,7 +811,7 @@ export default function Articles() {
             return isArticleDraft;
         }
 
-        // When browsing 'All' or specific subject categories, hide drafts so published articles are shown
+        // When browsing 'All' or specific subject categories, hide drafts so published/pending articles are shown
         if (isArticleDraft) {
             return false;
         }
@@ -839,7 +861,10 @@ export default function Articles() {
 
     const categories = [
         'All', 
+        ...(myPendingArticles.length > 0 ? [`⏳ Pending (${myPendingArticles.length})`] : []),
+        ...(myRejectedArticles.length > 0 ? [`❌ Rejected (${myRejectedArticles.length})`] : []),
         ...(myScheduledArticles.length > 0 ? [`⏰ Scheduled (${myScheduledArticles.length})`] : []),
+        ...(myDraftArticles.length > 0 ? [`📝 Drafts (${myDraftArticles.length})`] : []),
         ...availableCategories.map(c => c.name).filter(n => n && n !== 'All')
     ];
 
@@ -987,6 +1012,8 @@ export default function Articles() {
                             {filteredArticles.slice(0, visibleCount).map(art => {
                                 const isScheduled = art.status === 'Scheduled' || art.isScheduledFuture;
                                 const isDraft = art.status === 'Draft';
+                                const isPending = art.status === 'PendingApproval' || art.status === 'Pending';
+                                const isRejected = art.status === 'Rejected';
                                 const isAuthor = String(art.authorUserId || art.author?.id) === currentUserIdStr;
                                 return (
                                 <div 
@@ -1001,14 +1028,39 @@ export default function Articles() {
                                     className={`group cursor-pointer rounded-2xl overflow-hidden border ${
                                         isDraft
                                             ? 'border-amber-400 dark:border-amber-600 bg-amber-50/30 dark:bg-amber-950/20'
-                                            : isScheduled 
-                                                ? 'border-amber-400/80 dark:border-amber-600/80 bg-amber-50/20 dark:bg-amber-950/10' 
-                                                : 'border-theme-30 bg-theme-60-surface'
+                                            : isPending
+                                                ? 'border-amber-400/80 dark:border-amber-600/80 bg-amber-50/20 dark:bg-amber-950/10'
+                                                : isRejected
+                                                    ? 'border-rose-400/80 dark:border-rose-600/80 bg-rose-50/20 dark:bg-rose-950/10'
+                                                    : isScheduled 
+                                                        ? 'border-amber-400/80 dark:border-amber-600/80 bg-amber-50/20 dark:bg-amber-950/10' 
+                                                        : 'border-theme-30 bg-theme-60-surface'
                                     } transition-all duration-300 hover:-translate-y-1 hover:shadow-xl flex flex-col`}
                                     style={{
                                         boxShadow: 'var(--shadow-premium)'
                                     }}
                                 >
+                                    {/* Pending Approval Banner */}
+                                    {isPending && (
+                                        <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-500/10 border-b border-amber-300 dark:border-amber-700/60 px-4 py-2 flex items-center justify-between text-xs text-amber-950 dark:text-amber-200">
+                                            <div className="flex items-center gap-1.5 font-bold">
+                                                <span className="material-symbols-outlined text-[16px] text-amber-600 dark:text-amber-400 animate-spin">hourglass_empty</span>
+                                                <span className="font-extrabold uppercase tracking-wide text-[11px] px-2 py-0.5 rounded-md bg-amber-200/80 dark:bg-amber-800/60 text-amber-900 dark:text-amber-100">Pending Approval</span>
+                                                <span className="text-[11px] opacity-80 ml-1">Awaiting Moderator Approval</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Rejected Banner */}
+                                    {isRejected && (
+                                        <div className="bg-gradient-to-r from-rose-500/20 via-red-500/15 to-rose-500/10 border-b border-rose-300 dark:border-rose-700/60 px-4 py-2 flex items-center justify-between text-xs text-rose-950 dark:text-rose-200">
+                                            <div className="flex items-center gap-1.5 font-bold">
+                                                <span className="material-symbols-outlined text-[16px] text-rose-600 dark:text-rose-400">cancel</span>
+                                                <span className="font-extrabold uppercase tracking-wide text-[11px] px-2 py-0.5 rounded-md bg-rose-200/80 dark:bg-rose-800/60 text-rose-900 dark:text-rose-100">Rejected</span>
+                                                <span className="text-[11px] opacity-80 ml-1">Unpublished by Moderator</span>
+                                            </div>
+                                        </div>
+                                    )}
                                     {/* Draft Banner */}
                                     {isDraft && (
                                         <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-500/10 border-b border-amber-300 dark:border-amber-700/60 px-4 py-2 flex items-center justify-between text-xs text-amber-950 dark:text-amber-200">

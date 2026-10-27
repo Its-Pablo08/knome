@@ -114,10 +114,27 @@ export default function ArticleView() {
     // Find current article or fallback
     const article = currentArticle || articles.find(art => String(art.id) === String(articleId)) || articles.find(art => String(art.id) === '1') || articles[0];
 
+    const isModerator = ['MOD', 'MODERATOR', 'CADM'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['Moderator', 'Community Admin', 'Community Administrator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR', 'CADM'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
     const isSystemAdminOrAuthor = ['SYSADM', 'HRADM', 'SYSTEM ADMIN', 'HR ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
                                   ['System Administrator', 'HR Administrator', 'System Admin', 'HR Admin'].includes(currentUser?.roleName) || 
                                   (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'HRADM', 'System Administrator', 'HR Administrator', 'System Admin', 'HR Admin'].includes(r))) ||
                                   article?.author?.name === currentUser?.fullName;
+
+    const isAuthor = String(article?.authorUserId || article?.author?.id || '') === String(currentUser?.userId || currentUser?.id || '') ||
+                     article?.author?.name === currentUser?.fullName;
+
+    const isPending = article?.status === 'PendingApproval' || article?.status === 'Pending';
+    const isRejected = article?.status === 'Rejected';
+
+    useEffect(() => {
+        if (article && (isPending || isRejected) && !isAuthor && !isModerator && !isSystemAdminOrAuthor) {
+            addToast('This article is currently unpublished and awaiting approval.', 'warning');
+            navigate('/articles', { replace: true });
+        }
+    }, [article?.id, isPending, isRejected, isAuthor, isModerator, isSystemAdminOrAuthor]);
 
     const handleDeleteArticle = async () => {
         if (!article?.id) return;
@@ -473,6 +490,32 @@ export default function ArticleView() {
                             </button>
                         </div>
                     </nav>
+
+                    {/* Pending Approval Banner */}
+                    {isPending && (
+                        <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-center gap-3">
+                            <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-2xl animate-spin">hourglass_empty</span>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-sm">Pending Moderator Approval</h4>
+                                <p className="text-xs text-amber-800 dark:text-amber-300">
+                                    This article has been submitted to the Moderator for approval under Moderation Console → Media Approvals. It remains unpublished and visible only to you until approved.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Rejected Banner */}
+                    {isRejected && (
+                        <div className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200 flex items-center gap-3">
+                            <span className="material-symbols-outlined text-rose-600 dark:text-rose-400 text-2xl">cancel</span>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-sm">Submission Rejected</h4>
+                                <p className="text-xs text-rose-800 dark:text-rose-300">
+                                    This article was reviewed by the Moderator and rejected. It remains unpublished.
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
                     <h1 className="text-3xl md:text-5xl font-black tracking-tight text-slate-900 dark:text-white leading-[1.15] mb-6">
                         {article.title}

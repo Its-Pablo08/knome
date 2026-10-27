@@ -299,7 +299,8 @@ export default function WikiView() {
         setIsLoading(true);
         try {
             const data = await wikiApi.getWiki(wikiId);
-            if (data?.status === 'PendingApproval' && !isModerator && !isSysAdmin) {
+            const isAuthor = String(data?.createdByUserId || '') === String(currentUser?.userId || currentUser?.id || '');
+            if ((data?.status === 'PendingApproval' || data?.status === 'Rejected') && !isAuthor && !isModerator && !isSysAdmin) {
                 addToast('This wiki documentation is currently awaiting approval.', 'warning');
                 navigate('/wiki');
                 return null;
@@ -772,6 +773,32 @@ export default function WikiView() {
                 </div>
             </div>
 
+            {/* Pending Approval Banner */}
+            {wiki.status === 'PendingApproval' && (
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-center gap-3">
+                    <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-2xl animate-spin">hourglass_empty</span>
+                    <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-sm">Pending Moderator Approval</h4>
+                        <p className="text-xs text-amber-800 dark:text-amber-300">
+                            This wiki documentation has been submitted to the Moderator for approval under Moderation Console → Media Approvals. It remains unpublished and visible only to you until approved.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* Rejected Banner */}
+            {wiki.status === 'Rejected' && (
+                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200 flex items-center gap-3">
+                    <span className="material-symbols-outlined text-rose-600 dark:text-rose-400 text-2xl">cancel</span>
+                    <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-sm">Submission Rejected</h4>
+                        <p className="text-xs text-rose-800 dark:text-rose-300">
+                            This wiki documentation was reviewed by the Moderator and rejected. It remains unpublished.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Main Workspace: Left Outline Sidebar + Right Article Reader */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
                 {/* Left Sidebar: Outline Navigation Tree */}
@@ -782,8 +809,14 @@ export default function WikiView() {
                         {/* Wiki Summary Header Card */}
                         <div className="space-y-2 pb-3 border-b border-slate-100 dark:border-slate-800">
                             <div className="flex items-center justify-between gap-1">
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                                    {wiki.status}
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    wiki.status === 'PendingApproval'
+                                        ? 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700/80'
+                                        : wiki.status === 'Rejected'
+                                            ? 'bg-rose-500/20 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-700/80'
+                                            : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                                }`}>
+                                    {wiki.status === 'PendingApproval' ? '⏳ Pending Approval' : wiki.status === 'Rejected' ? '❌ Rejected' : wiki.status}
                                 </span>
                                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                                     <span className="flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-300" title="Total Unique Views">

@@ -131,7 +131,7 @@ export const appendMessageToGlobalStorage = (payload, currentUserId = null) => {
                 participantIds: [Number(senderId), Number(recipientId)],
                 participants: {
                     [Number(senderId)]: sender,
-                    [Number(recipientId)]: payload.recipient || { userId: Number(recipientId), fullName: 'Colleague' }
+                    [Number(recipientId)]: payload.recipient || { userId: Number(recipientId), fullName: 'Employee' }
                 },
                 participant: sender,
                 unreadCounts: {
@@ -353,13 +353,13 @@ export const initMessengerSignalR = (userId, forceReconnect = false) => {
                 recipientId: uId,
                 sender: {
                     userId: senderId,
-                    fullName: notif.senderName || 'Colleague',
+                    fullName: notif.senderName || 'Employee',
                     avatar: notif.senderAvatar || null
                 },
                 message: {
                     id: `notif_${notif.notificationId || Date.now()}`,
                     senderId,
-                    senderName: notif.senderName || 'Colleague',
+                    senderName: notif.senderName || 'Employee',
                     text: rawText,
                     attachments: parsedAttachments,
                     time: new Date(notif.createdDate || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -501,7 +501,7 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
         recipientId,
         sender: {
             userId: senderId,
-            fullName: sender.fullName || sender.name || 'Colleague',
+            fullName: sender.fullName || sender.name || 'Employee',
             designation: sender.designation || 'Staff',
             department: sender.department || 'MPOnline',
             avatar: sender.avatar || sender.profilePhotoUrl || null,
@@ -509,7 +509,7 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
         },
         recipient: {
             userId: recipientId,
-            fullName: recipient.fullName || recipient.name || 'Colleague',
+            fullName: recipient.fullName || recipient.name || 'Employee',
             designation: recipient.designation || 'Staff',
             department: recipient.department || 'MPOnline',
             avatar: recipient.avatar || recipient.profilePhotoUrl || null,
@@ -518,7 +518,7 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
         message: {
             id: message.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
             senderId,
-            senderName: sender.fullName || sender.name || 'Colleague',
+            senderName: sender.fullName || sender.name || 'Employee',
             text: message.text || '',
             attachments: attachmentsList,
             time: message.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -573,10 +573,10 @@ export const sendLiveMessage = async ({ sender, recipient, conversationId, messa
     try {
         const createFn = notificationsApi.createNotification || notificationsApi.create;
         if (createFn) {
-            let notificationBody = `${sender.fullName || sender.name || 'Colleague'}: "${message.text || ''}"`;
+            let notificationBody = `${sender.fullName || sender.name || 'Employee'}: "${message.text || ''}"`;
             if (attachmentsList.length > 0) {
                 if (!message.text) {
-                    notificationBody = `${sender.fullName || sender.name || 'Colleague'}: "📎 ${attachmentsList[0]?.name || 'Sent an attachment'}"`;
+                    notificationBody = `${sender.fullName || sender.name || 'Employee'}: "📎 ${attachmentsList[0]?.name || 'Sent an attachment'}"`;
                 }
                 const compactAtts = attachmentsList.map(a => ({
                     id: a.id,

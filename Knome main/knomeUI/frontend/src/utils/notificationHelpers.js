@@ -151,9 +151,12 @@ export const isSelfNotification = (notif, currentUser) => {
  * E.g., "Vilash Deshmukh liked your post" -> { sender: "Vilash Deshmukh", action: "liked your post." }
  */
 export const parseNotificationContent = (notif) => {
-    let sender = notif.senderName || notif.actorName || '';
-    let message = notif.message || notif.title || '';
+    let rawSender = String(notif.senderName || notif.actorName || notif.fromName || '').trim();
+    let message = String(notif.message || notif.text || notif.title || '').trim();
     let wikiTitle = notif.wikiTitle || null;
+
+    // Discard generic placeholder names so we can extract the real employee name
+    let sender = /^(colleague|system|user|teammate)$/i.test(rawSender) ? '' : rawSender;
 
     // Check for Wiki notification patterns
     const isWiki = (notif.relatedContentType || '').toLowerCase() === 'wiki' ||
@@ -178,19 +181,21 @@ export const parseNotificationContent = (notif) => {
         }
 
         // Extract sender from message if not already given
-        if (!sender || sender === 'System' || sender === 'Colleague') {
+        if (!sender) {
             const sMatch = message.match(/^(.+?)\s+(?:shared|added|invited)\b/i);
             if (sMatch && sMatch[1] && sMatch[1].toLowerCase() !== 'you' && sMatch[1].toLowerCase() !== 'a') {
                 sender = sMatch[1].trim();
             }
         }
 
+        const fallbackSender = sender || notif.title || 'Knowledge Base';
+
         if (message.toLowerCase().includes('added as a') || message.toLowerCase().includes('added as an')) {
             const roleMatch = message.match(/added as a[n]?\s+([a-zA-Z]+)\s+to Wiki/i);
             const role = roleMatch ? roleMatch[1] : 'Editor';
             const article = /^[aeiou]/i.test(role) ? 'an' : 'a';
             return {
-                sender: sender || 'Colleague',
+                sender: fallbackSender,
                 action: `added you as ${article} ${role} to Wiki`,
                 wikiTitle,
                 isWiki: true
@@ -201,7 +206,7 @@ export const parseNotificationContent = (notif) => {
             const commMatch = message.match(/shared (?:a |a new )?wiki in ([^:.]+)/i);
             const commName = commMatch ? commMatch[1].trim() : 'Community';
             return {
-                sender: sender || 'Colleague',
+                sender: fallbackSender,
                 action: `shared a Wiki in ${commName}`,
                 wikiTitle,
                 isWiki: true
@@ -209,35 +214,115 @@ export const parseNotificationContent = (notif) => {
         }
 
         return {
-            sender: sender || 'Colleague',
+            sender: fallbackSender,
             action: 'shared a Wiki with you',
             wikiTitle,
             isWiki: true
         };
     }
 
-    // If senderName is already populated, clean the message
-    if (sender) {
-        let action = message;
-        // If message starts with sender name, strip it out
-        if (action.toLowerCase().startsWith(sender.toLowerCase())) {
-            action = action.slice(sender.length).trim();
-            // Remove leading colon or dash
-            if (action.startsWith(':') || action.startsWith('-')) {
-                action = action.slice(1).trim();
+    // 1. Check for approvals / rejections:
+    // E.g.: "🎉 Congratulations! Your community "testing sourabh" has been approved by Deepak Simrodia and is now live."
+    // E.g.: "🎉 Great news! Your community "testing sourabh" has been approved by HR Admin (Deepak Simrodia) and is now live!"
+    // E.g.: "❌ Your community request for "testing sourabh" was not approved by Deepak Simrodia. Reason: ..."
+    const approvalMatch = message.match(/(?:has been |was |is )?(approved|declined|rejected|not approved)\s+by\s+(?:(?:HR Admin|Community Admin|Admin|Moderator)\s*\(([^)]+)\)|([A-Za-z\s.'-]+?))(?:\s+and\s+is\s+now\s+(?:live|published)|\s*\(now\s+live\)|\s*\.|\s*!|\s+Reason:|$)/i);
+
+    if (approvalMatch) {
+        const actorName = (approvalMatch[2] || approvalMatch[3] || '').trim();
+        const decision = approvalMatch[1].toLowerCase();
+        const isApproved = decision === 'approved';
+
+        const quotedMatch = message.match(/["“”'‘’`]([^"“”'‘’`]+)["“”'‘’`]/);
+        const itemName = quotedMatch ? quotedMatch[1].trim() : '';
+
+        const reasonMatch = message.match(/Reason:\s*([^.\r\n]+)/i);
+        const reasonText = reasonMatch ? ` (Reason: ${reasonMatch[1].trim()})` : '';
+
+        const effectiveSender = (!/^(system|admin|administrator|colleague)$/i.test(actorName) && actorName) ? actorName : (sender || 'Administrator');
+
+        let actionText = '';
+        if (message.toLowerCase().includes('community')) {
+            if (isApproved) {
+                actionText = itemName ? `approved your community "${itemName}" and is now live.` : 'approved your community request and is now live.';
+            } else {
+                actionText = itemName ? `declined your community request for "${itemName}".${reasonText}` : `declined your community request.${reasonText}`;
             }
+        } else if (message.toLowerCase().includes('article')) {
+            if (isApproved) {
+                actionText = itemName ? `approved your article "${itemName}" and is now published.` : 'approved your article request and is now published.';
+            } else {
+                actionText = itemName ? `declined your article "${itemName}".${reasonText}` : `declined your article request.${reasonText}`;
+            }
+        } else {
+            actionText = isApproved ? `approved your request.` : `declined your request.${reasonText}`;
         }
-        return { sender, action: action || 'sent an update.', wikiTitle, isWiki };
+
+        return {
+            sender: effectiveSender,
+            action: actionText,
+            wikiTitle,
+            isWiki: false
+        };
     }
 
-    // If senderName is not separate, try extracting from message e.g. "Vilash Deshmukh liked your post"
+    // 2. Check for Community Approval Request
+    // E.g.: "📋 New Community Approval Request: sourabh singh created "testing sourabh". Awaiting HR / Admin approval."
+    const approvalReqMatch = message.match(/New Community Approval Request:\s*([A-Za-z\s.'-]+?)\s+created\s+["“”'‘’`]([^"“”'‘’`]+)["“”'‘’`]/i);
+    if (approvalReqMatch) {
+        const creatorName = approvalReqMatch[1].trim();
+        const commName = approvalReqMatch[2].trim();
+        return {
+            sender: creatorName,
+            action: `created community "${commName}". Awaiting approval.`,
+            wikiTitle,
+            isWiki: false
+        };
+    }
+
+    // 3. Check for Community Invitations
+    // E.g.: "📢 Deepak Simrodia invited you to join the community "testing sourabh"."
+    const commInviteMatch = message.match(/(?:📢\s*)?([A-Za-z\s.'-]+?)\s+invited you to join (?:the )?community\s+["“”'‘’`]([^"“”'‘’`]+)["“”'‘’`]/i);
+    if (commInviteMatch) {
+        const inviter = commInviteMatch[1].trim();
+        const commName = commInviteMatch[2].trim();
+        return {
+            sender: inviter,
+            action: `invited you to join community "${commName}".`,
+            wikiTitle,
+            isWiki: false
+        };
+    }
+
+    // 4. Check for broadcast announcements with pipe "|" separator
+    // E.g.: "Organization Announcement | test"
+    // E.g.: "Upcoming Public Holiday Notice | All MPOnline offices will remain closed..."
+    if (message.includes('|')) {
+        const pipeIdx = message.indexOf('|');
+        const headerTitle = message.substring(0, pipeIdx).trim();
+        const bodyContent = message.substring(pipeIdx + 1).trim();
+        if (headerTitle && bodyContent) {
+            return {
+                sender: sender || headerTitle,
+                action: bodyContent,
+                wikiTitle,
+                isWiki: false
+            };
+        }
+    }
+
+    // 5. Clean leading emojis & symbols before social action extraction
+    const cleanMsg = message.replace(/^[\p{Emoji}\p{Extended_Pictographic}\s•\-–—:|📢🎉📋❌✅]+/u, '').trim();
+
+    // 6. Check for standard social actions
     const knownActions = [
         ' liked your post',
         ' commented on your post',
+        ' replied to your comment',
         ' shared a post with you',
         ' shared an article with you',
         ' shared a video with you',
         ' shared a wiki with you',
+        ' shared a podcast with you',
         ' sent you a connection request',
         ' accepted your connection request',
         ' followed you',
@@ -247,24 +332,59 @@ export const parseNotificationContent = (notif) => {
         ' posted in ',
         ' shared a new post in ',
         ' published a new post',
+        ' published a new article',
+        ' published a new video',
+        ' published a new podcast',
+        ' uploaded a clip',
         ' tagged you',
         ' mentioned you'
     ];
 
     for (const act of knownActions) {
-        const idx = message.toLowerCase().indexOf(act.toLowerCase());
+        const idx = cleanMsg.toLowerCase().indexOf(act.toLowerCase());
         if (idx > 0) {
-            sender = message.substring(0, idx).trim();
-            const action = message.substring(idx).trim();
-            return { sender, action, wikiTitle, isWiki };
+            const extractedSender = cleanMsg.substring(0, idx).trim();
+            const action = cleanMsg.substring(idx).trim();
+            return { 
+                sender: sender || extractedSender, 
+                action, 
+                wikiTitle, 
+                isWiki: false 
+            };
         }
     }
 
-    // Fallback: Use title or first few words
+    // 7. Check for actions with "... by <Name>"
+    const byMatch = cleanMsg.match(/(.+?)\s+by\s+([A-Za-z\s.'-]+?)(?:\.|$|!)/i);
+    if (byMatch && byMatch[2] && byMatch[2].trim().length > 2) {
+        const candidateActor = byMatch[2].trim();
+        if (!/^(system|admin|administrator|colleague|mponline)$/i.test(candidateActor)) {
+            return {
+                sender: candidateActor,
+                action: byMatch[1].trim() + '.',
+                wikiTitle,
+                isWiki: false
+            };
+        }
+    }
+
+    // 8. If sender is already populated, clean the message
+    if (sender) {
+        let action = message;
+        if (action.toLowerCase().startsWith(sender.toLowerCase())) {
+            action = action.slice(sender.length).trim();
+            if (action.startsWith(':') || action.startsWith('-')) {
+                action = action.slice(1).trim();
+            }
+        }
+        return { sender, action: action || 'sent an update.', wikiTitle, isWiki: false };
+    }
+
+    // 9. Fallback: Use notification title or category, never "Colleague"
     return {
-        sender: notif.title || 'Knome Notification',
+        sender: notif.title || (notif.category ? `${notif.category} Update` : 'MPOnline Team'),
         action: message,
         wikiTitle,
-        isWiki
+        isWiki: false
     };
 };

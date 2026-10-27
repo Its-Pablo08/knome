@@ -23,6 +23,20 @@ export default function Wiki() {
     const tagFromUrl = searchParams.get('tag') || '';
     const searchFromUrl = searchParams.get('q') || '';
 
+    const isModerator = ['MOD', 'MODERATOR', 'CADM'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['Moderator', 'Community Admin', 'Community Administrator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR', 'CADM'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['System Administrator', 'System Admin'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    const isHrAdmin = ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['HR Administrator', 'HR Admin'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    const currentUserId = currentUser?.userId || currentUser?.id;
+
     useEffect(() => {
         if (directWikiId) {
             navigate(`/wiki/view?id=${directWikiId}`, { replace: true });
@@ -78,7 +92,7 @@ export default function Wiki() {
             if (activeTab === 'recent') {
                 const list = await wikiApi.getRecentlyUpdatedWikis(18);
                 const rawItems = Array.isArray(list) ? list : (list?.data || []);
-                const items = rawItems.filter(w => w.status !== 'PendingApproval' && w.status !== 'Rejected');
+                const items = rawItems.filter(w => w.status === 'Published' || w.status === 'Archived' || String(w.createdByUserId) === String(currentUserId) || isModerator || isSysAdmin || isHrAdmin);
                 setWikis(items);
                 setTotalCount(items.length);
             } else {
@@ -92,8 +106,8 @@ export default function Wiki() {
                 });
 
                 const rawItems = res?.items || res?.data || (Array.isArray(res) ? res : []);
-                // Strictly exclude unapproved submissions from the public wiki library
-                const items = (Array.isArray(rawItems) ? rawItems : []).filter(w => w.status !== 'PendingApproval' && w.status !== 'Rejected');
+                // Exclude unapproved submissions from other regular users, but keep author's own pending/rejected wikis
+                const items = (Array.isArray(rawItems) ? rawItems : []).filter(w => w.status === 'Published' || w.status === 'Archived' || String(w.createdByUserId) === String(currentUserId) || isModerator || isSysAdmin || isHrAdmin);
                 setWikis(items);
                 setTotalCount(items.length);
             }
@@ -445,6 +459,8 @@ export default function Wiki() {
                         const statusColors = {
                             Published: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
                             Draft: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+                            PendingApproval: 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700/80',
+                            Rejected: 'bg-rose-500/20 text-rose-800 dark:text-rose-200 border-rose-300 dark:border-rose-700/80',
                             Archived: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                         };
 
@@ -476,7 +492,7 @@ export default function Wiki() {
                                     {/* Top Badges */}
                                     <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1">
                                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border backdrop-blur-md ${statusColors[wiki.status] || statusColors.Published}`}>
-                                            {wiki.status}
+                                            {wiki.status === 'PendingApproval' ? '⏳ Pending Approval' : wiki.status === 'Rejected' ? '❌ Rejected' : wiki.status}
                                         </span>
 
                                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border backdrop-blur-md ${permBadges[wiki.userPermission] || permBadges.Viewer}`}>
@@ -618,6 +634,8 @@ export default function Wiki() {
                             const statusColors = {
                                 Published: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
                                 Draft: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+                                PendingApproval: 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700/80',
+                                Rejected: 'bg-rose-500/20 text-rose-800 dark:text-rose-200 border-rose-300 dark:border-rose-700/80',
                                 Archived: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                             };
 
