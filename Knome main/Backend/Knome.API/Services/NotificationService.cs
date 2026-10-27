@@ -249,11 +249,59 @@ public class NotificationService : INotificationService
 
         if (string.IsNullOrEmpty(dto.SenderName) && !string.IsNullOrEmpty(dto.Message))
         {
-            var match = System.Text.RegularExpressions.Regex.Match(dto.Message, @"^(.+?)\s+(shared|invited|sent|commented|liked|reacted|posted|mentioned|replied)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (match.Success && !string.IsNullOrWhiteSpace(match.Groups[1].Value))
+            // 1. Approvals, rejections, reviews: "has been approved by Deepak Simrodia", "declined by Deepak Simrodia"
+            var decisionMatch = System.Text.RegularExpressions.Regex.Match(
+                dto.Message,
+                @"(?:approved|declined|rejected|not approved)\s+by\s+(?:(?:HR Admin|Community Admin|Admin|Moderator)\s*\(([^)]+)\)|([A-Za-z\s.'-]+?))(?:\s+and\s+is\s+now\s+(?:live|published)|\s*\(now\s+live\)|\s*\.|\s*!|\s+Reason:|$)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            if (decisionMatch.Success)
             {
-                dto.SenderName = match.Groups[1].Value.Trim();
+                var candidate = (!string.IsNullOrWhiteSpace(decisionMatch.Groups[1].Value) ? decisionMatch.Groups[1].Value : decisionMatch.Groups[2].Value).Trim();
+                if (!string.IsNullOrWhiteSpace(candidate) && !System.Text.RegularExpressions.Regex.IsMatch(candidate, @"^(system|colleague|user|admin|administrator)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                {
+                    dto.SenderName = candidate;
+                }
             }
+
+            // 2. Community approval requests: "New Community Approval Request: sourabh singh created..."
+            if (string.IsNullOrEmpty(dto.SenderName))
+            {
+                var reqMatch = System.Text.RegularExpressions.Regex.Match(
+                    dto.Message,
+                    @"New Community Approval Request:\s*([A-Za-z\s.'-]+?)\s+created\b",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (reqMatch.Success && !string.IsNullOrWhiteSpace(reqMatch.Groups[1].Value))
+                {
+                    dto.SenderName = reqMatch.Groups[1].Value.Trim();
+                }
+            }
+
+            // 3. Social actions, stripping emojis from front of message
+            if (string.IsNullOrEmpty(dto.SenderName))
+            {
+                var cleanMessage = System.Text.RegularExpressions.Regex.Replace(dto.Message, @"^[\p{Cs}\p{So}\p{Sk}\s🎉📢📋❌✅•\-–—:|]+", string.Empty).Trim();
+                var match = System.Text.RegularExpressions.Regex.Match(cleanMessage, @"^(.+?)\s+(shared|invited|sent|commented|liked|reacted|posted|mentioned|replied)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (match.Success && !string.IsNullOrWhiteSpace(match.Groups[1].Value))
+                {
+                    dto.SenderName = match.Groups[1].Value.Trim();
+                }
+            }
+
+            // 4. Announcements with pipe: "Organization Announcement | test"
+            if (string.IsNullOrEmpty(dto.SenderName) && dto.Message.Contains('|'))
+            {
+                var pipeParts = dto.Message.Split('|');
+                if (pipeParts.Length > 1 && !string.IsNullOrWhiteSpace(pipeParts[0]))
+                {
+                    dto.SenderName = pipeParts[0].Trim();
+                }
+            }
+        }
+
+        if (!string.IsNullOrEmpty(dto.SenderName) && string.IsNullOrEmpty(dto.SenderAvatar))
+        {
+            dto.SenderAvatar = $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(dto.SenderName)}&background=6366f1&color=fff";
         }
 
         if (dto.EventType == Constants.NotificationTypes.ConnectionRequest)

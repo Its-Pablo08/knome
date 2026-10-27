@@ -9,12 +9,10 @@ import {
     articlesApi, 
     videosApi, 
     podcastsApi,
-    analyticsApi,
-    notificationsApi
+    analyticsApi
 } from '../utils/apiService';
 import { useUser } from '../components/contexts/UserContext';
 import HighlightText from '../components/ui/HighlightText';
-import BroadcastModal from '../components/modals/BroadcastModal';
 
 export default function HRAnalytics() {
     const { currentUser, users: contextUsers } = useUser();
@@ -23,9 +21,6 @@ export default function HRAnalytics() {
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
-    const [editingBroadcast, setEditingBroadcast] = useState(null);
-    const [activeBroadcasts, setActiveBroadcasts] = useState([]);
 
     // Live backend data states
     const [engagementMetrics, setEngagementMetrics] = useState(null);
@@ -169,32 +164,9 @@ export default function HRAnalytics() {
         }
     }, [contextUsers]);
 
-    const loadBroadcasts = useCallback(() => {
-        notificationsApi.broadcasts.getAll().then(res => {
-            const list = Array.isArray(res) ? res : (res?.items || res?.data || []);
-            // Enforce at most 3 active broadcasts and filter out any personal publication notices
-            const valid = list.filter(item => {
-                const msg = String(item.message || item.content || '').toLowerCase();
-                return !msg.includes('has successfully gone live') && !msg.includes('your scheduled');
-            }).slice(0, 3);
-            setActiveBroadcasts(valid);
-        }).catch(() => setActiveBroadcasts([]));
-    }, []);
-
     useEffect(() => {
         loadData();
-        loadBroadcasts();
-
-        const handleBroadcastUpdate = () => {
-            loadBroadcasts();
-        };
-        window.addEventListener('knome:broadcast-updated', handleBroadcastUpdate);
-        window.addEventListener('knome:broadcast-deleted', handleBroadcastUpdate);
-        return () => {
-            window.removeEventListener('knome:broadcast-updated', handleBroadcastUpdate);
-            window.removeEventListener('knome:broadcast-deleted', handleBroadcastUpdate);
-        };
-    }, [loadData, loadBroadcasts]);
+    }, [loadData]);
 
     const handleRefresh = () => {
         setRefreshing(true);
@@ -427,18 +399,6 @@ export default function HRAnalytics() {
                 {/* Header Control Buttons */}
                 <div className="relative z-10 shrink-0 flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
                     <button
-                        onClick={() => {
-                            setEditingBroadcast(activeBroadcasts.length > 0 ? activeBroadcasts[0] : null);
-                            setIsBroadcastModalOpen(true);
-                        }}
-                        className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 text-sm cursor-pointer"
-                        title="Send or manage organization broadcast announcements (up to 3)"
-                    >
-                        <span className="material-symbols-outlined text-[20px]" style={{fontVariationSettings: "'FILL' 1"}}>campaign</span>
-                        <span>{activeBroadcasts.length > 0 ? `Manage Broadcasts (${activeBroadcasts.length}/3)` : 'Send Broadcast'}</span>
-                    </button>
-
-                    <button
                         onClick={handleRefresh}
                         disabled={refreshing}
                         className="w-full sm:w-auto px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 cursor-pointer"
@@ -471,102 +431,6 @@ export default function HRAnalytics() {
                     </div>
                 </div>
             </div>
-
-            {/* Active Organization Broadcast Notices (Up to 3) */}
-            {activeBroadcasts && activeBroadcasts.length > 0 && (
-                <div className="mb-6 space-y-3">
-                    <div className="flex items-center justify-between px-1">
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                                Active Organization Broadcasts
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/15 text-amber-700 dark:text-amber-300">
-                                {activeBroadcasts.length}/3 Active
-                            </span>
-                        </div>
-                        {activeBroadcasts.length < 3 && (
-                            <button
-                                onClick={() => {
-                                    setEditingBroadcast(null);
-                                    setIsBroadcastModalOpen(true);
-                                }}
-                                className="text-xs font-bold text-amber-600 hover:text-amber-700 dark:text-amber-400 flex items-center gap-1 cursor-pointer transition-colors"
-                            >
-                                <span className="material-symbols-outlined text-[16px]">add_circle</span>
-                                <span>Add Broadcast ({activeBroadcasts.length}/3)</span>
-                            </button>
-                        )}
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3">
-                        {activeBroadcasts.map((b, idx) => {
-                            const bId = b?.id || b?.Id || b?.notificationId;
-                            return (
-                                <div 
-                                    key={bId || idx}
-                                    className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/30 flex items-start justify-between gap-4 shadow-xs animate-in fade-in duration-300"
-                                >
-                                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-                                            <span className="material-symbols-outlined text-[22px]" style={{fontVariationSettings: "'FILL' 1"}}>campaign</span>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                                <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white px-2 py-0.5 rounded-md">
-                                                    Live HR Broadcast #{idx + 1}
-                                                </span>
-                                                <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
-                                                    • Active on all employee dashboards
-                                                </span>
-                                            </div>
-                                            <h4 className="text-sm font-black text-slate-900 dark:text-white leading-snug">
-                                                {b.title || b.message}
-                                            </h4>
-                                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 font-medium leading-relaxed">
-                                                {b.content || b.details || b.message}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <button
-                                            onClick={() => {
-                                                setEditingBroadcast(b);
-                                                setIsBroadcastModalOpen(true);
-                                            }}
-                                            className="px-3 py-1.5 rounded-xl text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 transition-all flex items-center gap-1.5 cursor-pointer"
-                                            title="Edit this broadcast announcement"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">edit</span>
-                                            <span>Edit Message</span>
-                                        </button>
-                                        <button
-                                            onClick={async () => {
-                                                if (!bId) return;
-
-                                                setActiveBroadcasts(prev => prev.filter(item => (item.id || item.Id || item.notificationId) !== bId));
-
-                                                try {
-                                                    await notificationsApi.broadcasts.delete(bId);
-                                                    window.dispatchEvent(new CustomEvent('knome:broadcast-updated'));
-                                                    window.dispatchEvent(new CustomEvent('knome:broadcast-deleted', { detail: { id: bId } }));
-                                                    loadBroadcasts();
-                                                } catch (e) {
-                                                    console.error('Failed to remove broadcast:', e);
-                                                    loadBroadcasts();
-                                                }
-                                            }}
-                                            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
-                                            title="Remove Broadcast"
-                                        >
-                                            <span className="material-symbols-outlined text-[18px]">delete</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
 
             {/* 5 Report Selector Tabs (RPT-01 to RPT-05) */}
             <div className="flex border-b border-border-subtle dark:border-outline-variant mb-stack-lg overflow-x-auto no-scrollbar gap-2">
@@ -1006,17 +870,6 @@ export default function HRAnalytics() {
                     )}
                 </>
             )}
-
-            <BroadcastModal
-                isOpen={isBroadcastModalOpen}
-                onClose={() => {
-                    setIsBroadcastModalOpen(false);
-                    setEditingBroadcast(null);
-                }}
-                initialData={editingBroadcast}
-                broadcasts={activeBroadcasts}
-                onSuccess={() => loadBroadcasts()}
-            />
         </main>
     );
 }

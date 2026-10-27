@@ -134,6 +134,16 @@ public class WikiService : IWikiService
             throw new ForbiddenException("This Wiki is currently a Draft and only accessible to its authors/collaborators.");
         }
 
+        if (wiki.Status == "PendingApproval")
+        {
+            throw new ForbiddenException("This Wiki is pending moderator approval and has not been published yet.");
+        }
+
+        if (wiki.Status == "Rejected")
+        {
+            throw new ForbiddenException("This Wiki has been rejected by moderation and is not published.");
+        }
+
         // If Published or Archived and no restricted target shares, public to organization
         var hasRestrictedShares = wiki.WikiShares.Any(s => s.ShareType == "User" || s.ShareType == "Community" || s.ShareType == "Group");
         if ((wiki.Status == "Published" || wiki.Status == "Archived") && !hasRestrictedShares) return;
@@ -370,12 +380,9 @@ public class WikiService : IWikiService
             if (requestedStatus != "Draft")
             {
                 var isUserAdmin = await IsAdministratorAsync(currentUserId);
-                var requireApproval = _systemSettingService != null
-                    ? await _systemSettingService.GetRequireWikiApprovalAsync()
-                    : false;
-
-                if (requireApproval && !isUserAdmin)
+                if (!isUserAdmin)
                 {
+                    // Whenever an Employee creates a Wiki, it is submitted to the Moderator for approval
                     finalStatus = "PendingApproval";
                 }
             }

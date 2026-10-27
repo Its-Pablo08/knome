@@ -77,13 +77,20 @@ public class WikiRepository : IWikiRepository
             .Include(w => w.WikiCollaborators)
             .Include(w => w.WikiShares)
             .Include(w => w.WikiSections)
-            .Where(w => !w.IsDeleted && w.Status != "PendingApproval" && w.Status != "Rejected")
+            .Where(w => !w.IsDeleted && (w.Status == "Published" || w.Status == "Archived" || isAdministrator || (currentUserId > 0 && w.CreatedByUserId == currentUserId)))
             .AsQueryable();
 
         // Status filter
         if (!string.IsNullOrWhiteSpace(status) && status != "All")
         {
-            query = query.Where(w => w.Status == status);
+            if ((status == "PendingApproval" || status == "Rejected" || status == "Draft") && !isAdministrator)
+            {
+                query = query.Where(w => w.Status == status && w.CreatedByUserId == currentUserId);
+            }
+            else
+            {
+                query = query.Where(w => w.Status == status);
+            }
         }
 
         // Community filter
@@ -133,8 +140,19 @@ public class WikiRepository : IWikiRepository
         }
         else
         {
-            // "all" or general list: only Published wikis appear in the public library
-            query = query.Where(w => w.Status == "Published");
+            // "all" or general list: Published wikis for everyone, plus author's own wikis (drafts/pending/rejected) or all for admin
+            if (isAdministrator)
+            {
+                // Admins see all non-deleted
+            }
+            else if (currentUserId > 0)
+            {
+                query = query.Where(w => w.Status == "Published" || w.CreatedByUserId == currentUserId);
+            }
+            else
+            {
+                query = query.Where(w => w.Status == "Published");
+            }
         }
 
         var totalCount = await query.CountAsync();

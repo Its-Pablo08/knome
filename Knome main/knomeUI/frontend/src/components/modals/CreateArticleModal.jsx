@@ -11,16 +11,20 @@ import { isArticleApprovalRequired } from '../../utils/systemConfig';
 export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }) {
     const { currentUser, awardRuleKarma } = useUser();
     const { addToast } = useToast();
-    const isModerator = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
-        ['Moderator'].includes(currentUser?.roleName) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+    const isModerator = ['MOD', 'MODERATOR', 'CADM'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['Moderator', 'Community Admin', 'Community Administrator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR', 'CADM'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
 
-    // Moderators and employees cannot directly publish; only System Admin can bypass approval
-    const canDirectPublish = !isModerator && (
-        ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+    const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
         ['System Administrator', 'System Admin'].includes(currentUser?.roleName) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())))
-    );
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    const isHrAdmin = ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+        ['HR Administrator', 'HR Admin'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
+
+    const isEmployee = !isModerator && !isSysAdmin && !isHrAdmin;
+    const canDirectPublish = !isEmployee;
     const [title, setTitle] = useState('');
     const [category, setCategory] = useState('7');
     const [tags, setTags] = useState('');
@@ -320,11 +324,6 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isScheduling]);
 
-
-    const isSysAdmin = currentUser?.role === 'SYSADM' || 
-                       currentUser?.roleName === 'System Administrator' || 
-                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'System Administrator', 'SystemAdmin'].includes(r)));
-
     const [availableCategories, setAvailableCategories] = useState([
         { categoryId: 1, name: 'Technology' },
         { categoryId: 7, name: 'Engineering' },
@@ -433,9 +432,9 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
             isoScheduledDate = parsed.toISOString();
         }
 
-        // If submitted by employee or moderator (not sysadmin) and not saving draft, route to approval if policy is ON
+        // Whenever an Employee creates an Article, submit to Moderator for approval under Moderation Console → Media Approvals
         const articleApprovalRequired = isArticleApprovalRequired();
-        if (finalStatus !== 'Draft' && articleApprovalRequired && !canDirectPublish) {
+        if (finalStatus !== 'Draft' && (isEmployee || (articleApprovalRequired && !canDirectPublish))) {
             finalStatus = 'PendingApproval';
         }
         
@@ -517,7 +516,7 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
                 const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
                 localStorage.setItem('knome_notifications', JSON.stringify([modNotif, ...existingNotifs]));
 
-                addToast('Article submitted successfully! It has been sent for approval before going live. 📝', 'success');
+                addToast('Article submitted to Moderator for approval! It will be published once approved. 📝', 'success');
             } else if (finalStatus === 'Scheduled') {
                 addToast(`Article scheduled for publication on ${formatToDDMMYYYY(scheduledTime)}! ⏰`, 'success');
             } else if (finalStatus === 'Draft') {

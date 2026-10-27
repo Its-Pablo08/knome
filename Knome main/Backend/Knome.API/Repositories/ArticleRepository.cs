@@ -59,7 +59,7 @@ public class ArticleRepository : IArticleRepository
 
         if (!string.IsNullOrWhiteSpace(status))
         {
-            if ((status == "Scheduled" || status == "Draft") && currentUserId > 0)
+            if ((status == "Scheduled" || status == "Draft" || status == "PendingApproval" || status == "Pending" || status == "Rejected") && currentUserId > 0)
             {
                 query = query.Where(a => a.Status == status && a.AuthorUserId == currentUserId);
             }
@@ -72,7 +72,7 @@ public class ArticleRepository : IArticleRepository
         {
             if (currentUserId > 0)
             {
-                query = query.Where(a => a.Status == "Published" || ((a.Status == "Scheduled" || a.Status == "Draft") && a.AuthorUserId == currentUserId));
+                query = query.Where(a => a.Status == "Published" || ((a.Status == "Scheduled" || a.Status == "Draft" || a.Status == "PendingApproval" || a.Status == "Pending" || a.Status == "Rejected") && a.AuthorUserId == currentUserId));
             }
             else
             {
