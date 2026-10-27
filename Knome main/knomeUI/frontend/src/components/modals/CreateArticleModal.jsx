@@ -548,31 +548,6 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
     const modalFooter = (
         <div className="flex flex-wrap justify-between items-center gap-3 w-full">
             <div className="flex items-center gap-2">
-                {/* Active Scheduled Pill Chip */}
-                {scheduledTime && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/50 border border-amber-300/80 dark:border-amber-700/60 rounded-xl text-amber-900 dark:text-amber-200 text-xs font-semibold shadow-xs">
-                        <span className="material-symbols-outlined text-[16px] text-amber-600 dark:text-amber-400 animate-pulse">schedule</span>
-                        <button
-                            type="button"
-                            onClick={() => setIsScheduling(true)}
-                            className="hover:underline flex items-center gap-1.5 cursor-pointer text-left"
-                            title="Click to edit schedule"
-                        >
-                            <span className="font-mono font-bold">{formatToDDMMYYYY(scheduledTime)}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-200/80 dark:bg-amber-800/80 text-amber-950 dark:text-amber-100 font-extrabold">
-                                {getRelativeScheduleText(scheduledTime)}
-                            </span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { setScheduledTime(''); setIsScheduling(false); }}
-                            className="ml-0.5 text-amber-600 hover:text-amber-950 dark:hover:text-amber-100 hover:bg-amber-200/60 dark:hover:bg-amber-800/60 p-0.5 rounded-full cursor-pointer transition-colors"
-                            title="Remove schedule (publish immediately)"
-                        >
-                            <span className="material-symbols-outlined text-[15px]">close</span>
-                        </button>
-                    </div>
-                )}
             </div>
 
             <div className="flex items-center gap-2 ml-auto">
@@ -599,56 +574,18 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
                             </button>
 
                             <button 
-                                data-schedule-trigger="true"
                                 type="button"
-                                onClick={() => {
-                                    setTempScheduleTime(scheduledTime || '');
-                                    setIsScheduling(!isScheduling);
-                                }}
+                                onClick={() => handlePublish('Published')} 
                                 disabled={isPublishing}
-                                className={`px-3 py-2 border rounded-lg font-label-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-                                    scheduledTime 
-                                        ? 'bg-amber-100 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 font-bold' 
-                                        : (isScheduling 
-                                            ? 'bg-indigo-100 dark:bg-indigo-900/50 border-indigo-200 text-indigo-600' 
-                                            : 'border-border-subtle text-primary hover:bg-surface-container'
-                                          )
-                                }`}
-                                title={scheduledTime ? "Schedule active - click to edit" : (isScheduling ? "Close scheduler" : "Schedule publication")}
-                            >
-                                <span className="material-symbols-outlined text-[16px]">
-                                    {scheduledTime ? 'alarm_on' : 'schedule'}
-                                </span>
-                                <span>{scheduledTime ? 'Scheduled' : 'Schedule'}</span>
-                                {scheduledTime && (
-                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping ml-0.5" />
-                                )}
-                            </button>
-
-                            <button 
-                                type="button"
-                                onClick={() => handlePublish(scheduledTime ? 'Scheduled' : 'Published')} 
-                                disabled={isPublishing}
-                                className={`px-5 py-2 font-label-md rounded-lg transition-all shadow-sm disabled:opacity-50 flex items-center gap-2 cursor-pointer ${
-                                    scheduledTime 
-                                        ? 'bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white font-bold shadow-md hover:scale-105' 
-                                        : 'bg-electric-blue text-white hover:opacity-90'
-                                }`}
+                                className="px-5 py-2 font-label-md rounded-lg transition-all shadow-sm disabled:opacity-50 flex items-center gap-2 cursor-pointer bg-electric-blue text-white hover:opacity-90"
                             >
                                 {isPublishing ? (
                                     <>
                                         <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                                        <span>{scheduledTime ? 'Scheduling...' : 'Publishing...'}</span>
+                                        <span>Publishing...</span>
                                     </>
                                 ) : (
-                                    scheduledTime ? (
-                                        <>
-                                            <span className="material-symbols-outlined text-[17px]">event_available</span>
-                                            Schedule Article
-                                        </>
-                                    ) : (
-                                        'Publish Article'
-                                    )
+                                    'Publish Article'
                                 )}
                             </button>
                         </>
@@ -890,114 +827,8 @@ export default function CreateArticleModal({ isOpen, onClose, onArticleCreated }
 
                 <div className="bg-surface-container-low text-slate-gray p-2.5 rounded-lg text-xs flex items-start gap-2">
                     <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">info</span>
-                    <p>Articles are subject to Knome's community guidelines and moderation (FR-SM-06). Scheduled articles remain private until the scheduled date, then publish automatically.</p>
+                    <p>Articles are subject to Knome's community guidelines and moderation (FR-SM-06).</p>
                 </div>
-
-                {/* Centered Scheduling Modal with Custom Date & Time Picker */}
-                {isScheduling && (
-                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-                        <div 
-                            ref={schedulePopoverRef}
-                            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-md max-h-[94vh] overflow-y-auto p-4 text-slate-800 dark:text-slate-100 space-y-3.5 custom-scrollbar"
-                        >
-                            {/* Popover Header */}
-                            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700/60">
-                                <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-sm">
-                                        <span className="material-symbols-outlined text-[18px]">event_upcoming</span>
-                                    </div>
-                                    <div>
-                                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-                                            Schedule Article Publication
-                                        </h4>
-                                        <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
-                                            Automated Knome platform delivery
-                                        </p>
-                                    </div>
-                                </div>
-                                <button 
-                                    type="button"
-                                    onClick={() => setIsScheduling(false)}
-                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-                                    title="Close"
-                                >
-                                    <span className="material-symbols-outlined text-[18px]">close</span>
-                                </button>
-                            </div>
-
-                            {/* Quick Options */}
-                            <div>
-                                <span className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">
-                                    Quick Options:
-                                </span>
-                                <div className="grid grid-cols-4 gap-1.5">
-                                    <button
-                                        type="button"
-                                        onClick={() => setTempScheduleTime(getLocalDatetimeInputValue(15))}
-                                        className="px-2 py-1.5 bg-slate-100 dark:bg-slate-700/80 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 text-slate-700 dark:text-slate-200 rounded-lg text-[10.5px] font-bold transition-colors cursor-pointer text-center"
-                                    >
-                                        +15 Mins
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setTempScheduleTime(getLocalDatetimeInputValue(30))}
-                                        className="px-2 py-1.5 bg-slate-100 dark:bg-slate-700/80 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 text-slate-700 dark:text-slate-200 rounded-lg text-[10.5px] font-bold transition-colors cursor-pointer text-center"
-                                    >
-                                        +30 Mins
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setTempScheduleTime(getLocalDatetimeInputValue(60))}
-                                        className="px-2 py-1.5 bg-slate-100 dark:bg-slate-700/80 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 text-slate-700 dark:text-slate-200 rounded-lg text-[10.5px] font-bold transition-colors cursor-pointer text-center"
-                                    >
-                                        +1 Hour
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setTempScheduleTime(getTomorrowTime(9))}
-                                        className="px-2 py-1.5 bg-slate-100 dark:bg-slate-700/80 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 text-slate-700 dark:text-slate-200 rounded-lg text-[10.5px] font-bold transition-colors cursor-pointer text-center"
-                                    >
-                                        Tomorrow 9 AM
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Integrated Interactive Custom Date & Time Picker with OK button */}
-                            <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-xs">
-                                <CustomDateTimePicker
-                                    value={tempScheduleTime}
-                                    onChange={(newVal) => setTempScheduleTime(newVal)}
-                                    onConfirm={(newVal) => {
-                                        const chosenVal = newVal || tempScheduleTime;
-                                        if (!chosenVal) {
-                                            addToast('Please select a date and time to schedule.', 'error');
-                                            return;
-                                        }
-                                        const chosen = new Date(chosenVal);
-                                        if (isNaN(chosen.getTime())) {
-                                            addToast('Invalid schedule date/time.', 'error');
-                                            return;
-                                        }
-                                        if (chosen.getTime() <= Date.now()) {
-                                            addToast('Scheduled time must be in the future.', 'error');
-                                            return;
-                                        }
-                                        setScheduledTime(chosenVal);
-                                        setIsScheduling(false);
-                                        addToast(`Article scheduled for ${formatScheduleDisplay(chosenVal)}`, 'success');
-                                    }}
-                                    onCancel={() => setIsScheduling(false)}
-                                    onClear={() => {
-                                        setScheduledTime('');
-                                        setTempScheduleTime('');
-                                        setIsScheduling(false);
-                                        addToast('Schedule cleared. Article will publish immediately.', 'info');
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 {/* Knome Custom Hyperlink Dialog */}
                 {isLinkModalOpen && (

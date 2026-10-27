@@ -92,7 +92,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
         (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
 
     const isEmployee = !isModerator && !isSysAdmin && !isHrAdmin;
-    const canDirectPublish = !isEmployee;
+    const canDirectPublish = isSysAdmin || isHrAdmin;
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -453,13 +453,19 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
         setIsSaving(true);
         try {
             let finalStatus = status;
-            // Whenever an Employee creates a Wiki, submit to Moderator for approval under Moderation Console → Media Approvals
-            const wikiApprovalRequired = isWikiApprovalRequired();
-            if (finalStatus !== 'Draft' && (isEmployee || (wikiApprovalRequired && !canDirectPublish))) {
+            // Whenever a Moderator or Employee creates a Wiki (with Draft or Published),
+            // it automatically appears in the Media Approval section with a Pending Approval status.
+            if (!isSysAdmin && !isHrAdmin) {
                 finalStatus = 'PendingApproval';
             }
 
             if (isEditMode) {
+                if (initialData?.status === 'Published' && (isSysAdmin || isHrAdmin)) {
+                    finalStatus = 'Published';
+                } else if (!isSysAdmin && !isHrAdmin && initialData?.status !== 'Published') {
+                    finalStatus = 'PendingApproval';
+                }
+
                 const payload = {
                     title: trimmedTitle,
                     description: description.trim(),
@@ -481,7 +487,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                         category: 'Knowledge Base',
                         tags: tags || [],
                         thumbnail: coverImageUrl || null,
-                        authorName: currentUser?.name || currentUser?.fullName || 'Employee',
+                        authorName: currentUser?.name || currentUser?.fullName || (isModerator ? 'Moderator' : 'Employee'),
                         authorId: currentUser?.userId || currentUser?.id,
                         authorAvatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
                         submittedDate: new Date().toISOString(),
@@ -495,10 +501,12 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                         console.warn("Backend media pending submission fallback:", apiErr);
                     }
                     const existingPending = JSON.parse(localStorage.getItem('knome_pending_media_approvals') || '[]');
-                    localStorage.setItem('knome_pending_media_approvals', JSON.stringify([pendingItem, ...existingPending]));
+                    const filtered = existingPending.filter(p => p.id !== pendingItem.id && String(p.wikiId) !== String(initialData.wikiId));
+                    localStorage.setItem('knome_pending_media_approvals', JSON.stringify([pendingItem, ...filtered]));
                     window.dispatchEvent(new CustomEvent('pending-media-updated', { detail: pendingItem }));
+                    window.dispatchEvent(new CustomEvent('wiki-updated', { detail: updated }));
 
-                    addToast('Wiki submitted to Moderator for approval! It will be published once approved. 📝', 'success');
+                    addToast('Wiki submitted to Media Approvals! It will be published once approved. 📝', 'success');
                 } else {
                     addToast('Wiki updated successfully!', 'success');
                 }
@@ -517,7 +525,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                 localStorage.removeItem('wiki_draft_create');
 
                 if (finalStatus === 'PendingApproval') {
-                    const wikiId = created?.wikiId || Date.now();
+                    const wikiId = created?.wikiId || created?.data?.wikiId || created?.id || Date.now();
                     const pendingItem = {
                         id: `pending_wiki_${wikiId}`,
                         wikiId: wikiId,
@@ -527,7 +535,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                         category: 'Knowledge Base',
                         tags: tags || [],
                         thumbnail: coverImageUrl || null,
-                        authorName: currentUser?.name || currentUser?.fullName || 'Employee',
+                        authorName: currentUser?.name || currentUser?.fullName || (isModerator ? 'Moderator' : 'Employee'),
                         authorId: currentUser?.userId || currentUser?.id,
                         authorAvatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
                         submittedDate: new Date().toISOString(),
@@ -541,15 +549,17 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                         console.warn("Backend media pending submission fallback:", apiErr);
                     }
                     const existingPending = JSON.parse(localStorage.getItem('knome_pending_media_approvals') || '[]');
-                    localStorage.setItem('knome_pending_media_approvals', JSON.stringify([pendingItem, ...existingPending]));
+                    const filtered = existingPending.filter(p => p.id !== pendingItem.id && String(p.wikiId) !== String(wikiId));
+                    localStorage.setItem('knome_pending_media_approvals', JSON.stringify([pendingItem, ...filtered]));
                     window.dispatchEvent(new CustomEvent('pending-media-updated', { detail: pendingItem }));
+                    window.dispatchEvent(new CustomEvent('wiki-created', { detail: created }));
 
                     const modNotif = {
                         id: `notif_approval_${Date.now()}`,
                         type: 'media_approval',
                         category: 'System',
-                        text: `${currentUser?.name || 'Employee'} submitted wiki "${trimmedTitle}" awaiting moderator approval.`,
-                        senderName: currentUser?.name || 'Employee',
+                        text: `${currentUser?.name || (isModerator ? 'Moderator' : 'Employee')} submitted wiki "${trimmedTitle}" awaiting approval.`,
+                        senderName: currentUser?.name || (isModerator ? 'Moderator' : 'Employee'),
                         senderAvatar: currentUser?.avatar || currentUser?.profilePhotoUrl || null,
                         senderUserId: currentUser?.userId || currentUser?.id,
                         createdDate: new Date().toISOString(),
@@ -563,7 +573,7 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                     const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
                     localStorage.setItem('knome_notifications', JSON.stringify([modNotif, ...existingNotifs]));
 
-                    addToast('Wiki submitted to Moderator for approval! It will be published once approved. 📝', 'success');
+                    addToast('Wiki submitted to Media Approvals! It will be published once approved. 📝', 'success');
                 } else {
                     addToast('Wiki created successfully!', 'success');
                 }
@@ -652,9 +662,9 @@ export default function CreateWikiModal({ isOpen, onClose, onSaved, initialData 
                         </select>
                         <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-relaxed">
                             {status === 'Published'
-                                ? 'Published wikis are visible to all employees across the organization.'
+                                ? (!isSysAdmin && !isHrAdmin ? 'Submits to Media Approvals. Visible organization-wide once approved.' : 'Published wikis are visible to all employees across the organization.')
                                 : status === 'Draft'
-                                    ? 'Draft wikis are restricted to authors and designated collaborators.'
+                                    ? (!isSysAdmin && !isHrAdmin ? 'Draft wikis submit to Media Approvals with Pending Approval status, remaining unpublished until approved.' : 'Draft wikis are restricted to authors and designated collaborators.')
                                     : 'Archived wikis are preserved in read-only mode.'}
                         </p>
                     </div>

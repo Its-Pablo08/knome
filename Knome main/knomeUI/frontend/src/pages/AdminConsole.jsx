@@ -162,12 +162,12 @@ const getFallbackPostContent = (report) => {
         || (!isGenericAuthor ? report.reportedUserName : null)
         || known?.authorName
         || (report.reportedUserId ? USER_NAME_FALLBACKS[report.reportedUserId] : null)
-        || (report.reportedUserId ? `User #${report.reportedUserId}` : 'Loveneesh Sharma');
+        || (report.reportedUserId ? `User #${report.reportedUserId}` : (report.reportedUserName || 'Content Author'));
 
     const resolvedAuthorId = cached?.authorUserId 
         || report.reportedUserId 
         || known?.authorUserId 
-        || 1;
+        || null;
 
     const isBoilerplateContent = !report.postContentSnippet ||
         report.postContentSnippet.includes('Content removed under admin governance policy') ||
@@ -2127,6 +2127,7 @@ export default function AdminConsole() {
             const vidBlacklist = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]').map(String);
             const podBlacklist = JSON.parse(localStorage.getItem('knome_deleted_podcast_ids') || '[]').map(String);
             const clipBlacklist = JSON.parse(localStorage.getItem('knome_deleted_clip_ids') || '[]').map(String);
+            const wikiBlacklist = JSON.parse(localStorage.getItem('knome_deleted_wiki_ids') || '[]').map(String);
 
             // Group all reports by unique content ID: `${contentType}_${contentId}`
             const contentGroups = new Map();
@@ -2161,7 +2162,8 @@ export default function AdminConsole() {
                                       (cType.toLowerCase() === 'article' && artBlacklist.includes(cIdStr)) ||
                                       (cType.toLowerCase() === 'video' && vidBlacklist.includes(cIdStr)) ||
                                       (cType.toLowerCase() === 'podcast' && podBlacklist.includes(cIdStr)) ||
-                                      (cType.toLowerCase() === 'clip' && clipBlacklist.includes(cIdStr));
+                                      (cType.toLowerCase() === 'clip' && clipBlacklist.includes(cIdStr)) ||
+                                      (cType.toLowerCase() === 'wiki' && wikiBlacklist.includes(cIdStr));
 
                 // All unique report IDs associated with this content
                 const allReportIds = [...new Set(group.map(i => i.reportId).filter(Boolean))];
@@ -2170,7 +2172,10 @@ export default function AdminConsole() {
                 const reportersMap = new Map();
                 group.forEach(i => {
                     const rId = i.reporterUserId || 0;
-                    const rName = i.reporterFullName || (rId ? `User #${rId}` : 'Anonymous');
+                    const foundRepUser = rId ? usersList.find(u => Number(u.userId || u.id) === Number(rId)) : null;
+                    const rName = (!i.reporterFullName || i.reporterFullName === 'Unknown' || i.reporterFullName.startsWith('User #'))
+                        ? (foundRepUser?.fullName || i.reporterFullName || (rId ? `User #${rId}` : 'Reporter'))
+                        : (i.reporterFullName || foundRepUser?.fullName || (rId ? `User #${rId}` : 'Reporter'));
                     const rReason = i.reasonCode || 'Inappropriate';
                     const rDate = i.reportedDate ? new Date(i.reportedDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Recent';
                     if (!reportersMap.has(rId) || reportersMap.get(rId).fullName.startsWith('User #')) {
@@ -2183,7 +2188,7 @@ export default function AdminConsole() {
                     }
                 });
                 const allReporters = Array.from(reportersMap.values());
-                const primaryReporter = allReporters.find(rep => rep.userId === primaryItem.reporterUserId) || allReporters[0] || { userId: 0, fullName: 'Anonymous' };
+                const primaryReporter = allReporters.find(rep => rep.userId === primaryItem.reporterUserId) || allReporters[0] || { userId: primaryItem.reporterUserId || 0, fullName: primaryItem.reporterFullName || 'Reporter' };
                 const otherReportersCount = Math.max(0, allReporters.length - 1);
                 const allReportersText = `Reported ${group.length} time${group.length === 1 ? '' : 's'}:\n` +
                     allReporters.map(rep => `• ${rep.fullName} (ID: #${rep.userId}) - Reason: ${rep.reasonCode} (${rep.dateStr})`).join('\n');
@@ -2235,21 +2240,22 @@ export default function AdminConsole() {
                     cachedData = cache[`${cType}_${cId}`] || cache[`Post_${cId}`] || cache[cId] || null;
                 } catch {}
 
+                const resolvedAuthorUserId = primaryItem.reportedUserId || cachedData?.authorUserId || null;
+                const foundAuthorUser = resolvedAuthorUserId ? usersList.find(u => Number(u.userId || u.id) === Number(resolvedAuthorUserId)) : null;
+
                 const isGenericAuthor = !primaryItem.reportedUserName ||
                     primaryItem.reportedUserName.toLowerCase().includes('reported author') ||
                     primaryItem.reportedUserName.toLowerCase().includes('content author') ||
+                    primaryItem.reportedUserName.toLowerCase().includes('wiki author') ||
+                    primaryItem.reportedUserName.toLowerCase().includes('clip creator') ||
+                    primaryItem.reportedUserName.toLowerCase().includes('video creator') ||
+                    primaryItem.reportedUserName.toLowerCase().includes('podcast host') ||
                     primaryItem.reportedUserName === primaryItem.reporterFullName;
 
-                const fallbackKnownAuthor = {
-                    10049: 'Suresh verma',
-                    10050: 'Rohan Verma',
-                    10048: 'Aarav Sharma'
-                }[cId] || null;
-
                 const resolvedReportedAuthor = (!isGenericAuthor ? primaryItem.reportedUserName : null)
+                    || foundAuthorUser?.fullName
                     || cachedData?.authorName
-                    || fallbackKnownAuthor
-                    || (primaryItem.reportedUserId ? `User #${primaryItem.reportedUserId}` : 'Suresh verma');
+                    || (resolvedAuthorUserId ? `User #${resolvedAuthorUserId}` : (primaryItem.reportedUserName || 'Content Author'));
 
                 const isBoilerplateSnippet = !primaryItem.postContentSnippet ||
                     primaryItem.postContentSnippet.includes('Content removed under admin governance policy') ||
@@ -2273,6 +2279,12 @@ export default function AdminConsole() {
                 const rawDates = group.map(i => i.rawReportedDate || (i.reportedDate ? new Date(i.reportedDate).getTime() : 0)).filter(d => !isNaN(d) && d > 0);
                 const latestRawReportDate = rawDates.length > 0 ? Math.max(...rawDates) : Date.now();
 
+                const defaultCommunity = cType === 'Wiki' ? 'Wiki & Documentation' :
+                    (cType === 'Video' ? 'Video Library' :
+                    (cType === 'Podcast' ? 'Audio Room' :
+                    (cType === 'Clip' ? 'Clips' :
+                    (cType === 'Article' ? 'Knowledge Hub' : 'General Collaboration'))));
+
                 aggregatedList.push({
                     reportId: primaryItem.reportId || (Date.now() + Math.floor(Math.random() * 1000)),
                     allReportIds,
@@ -2282,11 +2294,11 @@ export default function AdminConsole() {
                     reporterFullName: primaryReporter.fullName,
                     otherReportersCount,
                     allReportersText,
-                    reportedUserId: primaryItem.reportedUserId || cachedData?.authorUserId || null,
+                    reportedUserId: resolvedAuthorUserId,
                     reportedUserName: resolvedReportedAuthor,
                     contentType: cType,
                     contentId: cId,
-                    communityName: primaryItem.communityName || 'Engineering & Tech',
+                    communityName: primaryItem.communityName || defaultCommunity,
                     reasonCode: primaryItem.reasonCode || 'Inappropriate',
                     severity: primaryItem.severity || scoreInfo.severity,
                     aiScore: scoreInfo.formattedScore,
@@ -2822,6 +2834,8 @@ export default function AdminConsole() {
                         await videosApi.delete(contentId);
                     } else if (cType === 'podcast') {
                         await podcastsApi.delete(contentId);
+                    } else if (cType === 'wiki') {
+                        await wikiApi.deleteWiki(contentId);
                     }
                 } catch (delErr) {
                     console.warn('Backend direct delete warning:', delErr);
@@ -2894,6 +2908,15 @@ export default function AdminConsole() {
                         clipBlacklist.push(cidStr);
                         localStorage.setItem('knome_deleted_clip_ids', JSON.stringify(clipBlacklist));
                     }
+                } else if (cType === 'wiki') {
+                    const wikiBlacklist = JSON.parse(localStorage.getItem('knome_deleted_wiki_ids') || '[]');
+                    if (!wikiBlacklist.includes(cidStr)) {
+                        wikiBlacklist.push(cidStr);
+                        localStorage.setItem('knome_deleted_wiki_ids', JSON.stringify(wikiBlacklist));
+                    }
+                    const localWikis = JSON.parse(localStorage.getItem('knome_local_wikis') || '[]');
+                    const filteredWikis = localWikis.filter(w => String(w.id || w.wikiId) !== cidStr);
+                    localStorage.setItem('knome_local_wikis', JSON.stringify(filteredWikis));
                 }
 
                 // Invalidate API cache so all next queries fetch fresh database truth
@@ -2908,6 +2931,7 @@ export default function AdminConsole() {
             window.dispatchEvent(new CustomEvent('video-deleted', { detail: { id: contentId, videoId: contentId } }));
             window.dispatchEvent(new CustomEvent('podcast-deleted', { detail: { id: contentId, podcastId: contentId } }));
             window.dispatchEvent(new CustomEvent('clip-deleted', { detail: { id: contentId, clipId: contentId } }));
+            window.dispatchEvent(new CustomEvent('wiki-deleted', { detail: { id: contentId, wikiId: contentId } }));
             window.dispatchEvent(new CustomEvent('knome_content_moderated', { detail: { contentId, contentType, actionType: 'Removed Content' } }));
             window.dispatchEvent(new Event('storage'));
         }
@@ -3227,6 +3251,30 @@ export default function AdminConsole() {
                 } else {
                     setPreviewPost(getFallbackPostContent(report));
                 }
+            } else if (report.contentType === 'Wiki') {
+                let wiki = null;
+                try {
+                    const res = await wikiApi.getWiki(report.contentId).catch(() => null);
+                    wiki = res?.data || res;
+                } catch (e) {}
+
+                if (wiki && (wiki.title || wiki.description || wiki.overviewContent)) {
+                    setPreviewPost({
+                        authorName: wiki.createdByUserName || wiki.createdByUser?.fullName || report.reportedUserName || 'Wiki Author',
+                        authorFullName: wiki.createdByUserName || wiki.createdByUser?.fullName || report.reportedUserName || 'Wiki Author',
+                        authorUserId: wiki.createdByUserId || wiki.createdByUser?.id || report.reportedUserId || null,
+                        authorDesignation: wiki.authorDesignation || 'Wiki Contributor',
+                        title: wiki.title || `Wiki #${report.contentId}`,
+                        content: wiki.description || (wiki.overviewContent ? wiki.overviewContent.replace(/<[^>]*>?/gm, '') : report.postContentSnippet),
+                        contentHtml: wiki.overviewContent,
+                        category: wiki.categoryName || 'Wiki Library',
+                        coverImageUrl: wiki.coverImageUrl,
+                        isWiki: true,
+                        createdDate: wiki.createdAt || report.reportedDate
+                    });
+                } else {
+                    setPreviewPost(getFallbackPostContent(report));
+                }
             } else {
                 let res = await postsApi.getById(report.contentId).catch(() => null);
                 if (!res) {
@@ -3238,15 +3286,15 @@ export default function AdminConsole() {
                 }
                 if (res) {
                     const targetAuthorId = res.authorUserId || res.authorId || res.userId || report.reportedUserId;
-                    const foundUser = usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId));
-                    const authorName = res.authorFullName || res.authorUser?.fullName || foundUser?.fullName || res.authorName || res.author?.name || report.reportedUserName || (targetAuthorId === 1 ? 'Loveneesh Sharma' : 'Reported Content Author');
+                    const foundUser = targetAuthorId ? usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId)) : null;
+                    const authorName = res.authorFullName || res.authorUser?.fullName || foundUser?.fullName || res.authorName || res.author?.name || report.reportedUserName || (targetAuthorId ? `User #${targetAuthorId}` : 'Reported Content Author');
                     const contentText = res.contentText || res.content || res.text || report.postContentSnippet;
                     setPreviewPost({
                         ...res,
                         authorName,
                         authorFullName: authorName,
                         authorUserId: targetAuthorId,
-                        authorDesignation: foundUser?.designation || res.authorDesignation || (targetAuthorId === 1 ? 'TPM' : 'Employee'),
+                        authorDesignation: foundUser?.designation || res.authorDesignation || 'Employee',
                         contentText,
                         content: contentText
                     });
@@ -6883,18 +6931,19 @@ export default function AdminConsole() {
                                                     <td className="px-3 py-2.5">
                                                         {(() => {
                                                             const targetAuthorId = r.reportedUserId;
-                                                            const foundUser = usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId));
+                                                            const foundUser = targetAuthorId ? usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId)) : null;
                                                             let authorName = r.reportedUserName;
                                                             if (!authorName || authorName.toLowerCase().includes('reported author') || authorName.toLowerCase().includes('content author')) {
-                                                                authorName = foundUser?.fullName || (targetAuthorId === 1 ? 'Loveneesh Sharma' : (targetAuthorId ? `User #${targetAuthorId}` : 'Loveneesh Sharma'));
+                                                                authorName = foundUser?.fullName || (targetAuthorId ? `User #${targetAuthorId}` : 'Author');
                                                             }
-                                                            const authorId = targetAuthorId || foundUser?.userId || 1;
                                                             return (
                                                                 <>
                                                                     <div className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[130px]" title={authorName}>
                                                                         <HighlightText text={authorName} query={searchQuery} />
                                                                     </div>
-                                                                    <div className="text-[10px] text-slate-400">ID: #{authorId}</div>
+                                                                    <div className="text-[10px] text-slate-400">
+                                                                        {targetAuthorId ? `ID: #${targetAuthorId}` : (foundUser ? `ID: #${foundUser.userId || foundUser.id}` : 'ID: -')}
+                                                                    </div>
                                                                 </>
                                                             );
                                                         })()}
@@ -11711,15 +11760,15 @@ export default function AdminConsole() {
                                     {(() => {
                                         const repId = previewReport.reporterUserId || previewReport.reporterId || previewReport.requestedByUserId || (previewReport.reporters && previewReport.reporters[0]?.userId) || null;
                                         const foundUser = repId ? usersList.find(u => Number(u.userId || u.id) === Number(repId)) : null;
-                                        const repName = previewReport.reporterFullName || (previewReport.reporters && previewReport.reporters[0]?.fullName) || previewReport.requestedByName || foundUser?.fullName || (repId ? `Employee #${repId}` : 'Moderator');
-                                        const resolvedId = repId || foundUser?.userId || 1050;
+                                        const repName = previewReport.reporterFullName || (previewReport.reporters && previewReport.reporters[0]?.fullName) || previewReport.requestedByName || foundUser?.fullName || (repId ? `Employee #${repId}` : 'Reporter');
+                                        const resolvedId = repId || foundUser?.userId || null;
                                         return (
                                             <>
                                                 <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate" title={repName}>
                                                     {repName}
                                                 </p>
                                                 <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono font-medium mt-0.5">
-                                                    User ID: #{resolvedId}
+                                                    User ID: {resolvedId ? `#${resolvedId}` : '-'}
                                                 </p>
                                             </>
                                         );
@@ -11782,13 +11831,13 @@ export default function AdminConsole() {
                                         <div className="flex items-center gap-3">
                                             {(() => {
                                                 const targetAuthorId = previewPost.authorUserId || previewPost.authorId || previewPost.userId || previewReport.reportedUserId;
-                                                const foundUser = usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId));
+                                                const foundUser = targetAuthorId ? usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId)) : null;
                                                 let cleanAuthor = previewPost.authorFullName || previewPost.authorName || foundUser?.fullName || previewReport.reportedUserName;
                                                 if (!cleanAuthor || cleanAuthor.toLowerCase().includes('reported author') || cleanAuthor.toLowerCase().includes('content author')) {
-                                                    cleanAuthor = foundUser?.fullName || (targetAuthorId === 1 ? 'Loveneesh Sharma' : 'Employee');
+                                                    cleanAuthor = foundUser?.fullName || (targetAuthorId ? `User #${targetAuthorId}` : 'Content Author');
                                                 }
                                                 const initial = (cleanAuthor[0] || 'U').toUpperCase();
-                                                const designation = foundUser?.designation || previewPost.authorDesignation || (cleanAuthor === 'Loveneesh Sharma' ? 'TPM' : (cleanAuthor === 'Suresh verma' ? 'software developer' : (cleanAuthor === 'Rohan Verma' ? 'HR Specialist' : 'Employee')));
+                                                const designation = foundUser?.designation || previewPost.authorDesignation || 'Employee';
                                                 const rawDate = previewPost.createdDate || previewPost.createdAt || previewReport.reportedDate;
                                                 const formattedDate = rawDate ? new Date(rawDate).toLocaleDateString() : new Date().toLocaleDateString();
                                                 return (
@@ -11952,6 +12001,45 @@ export default function AdminConsole() {
                                                     className="text-xs text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1 hover:underline cursor-pointer"
                                                 >
                                                     <span>Open Full Article in Hub</span>
+                                                    <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                                                </button>
+                                            </div>
+                                            {previewPost.title && (
+                                                <h4 className="text-base font-black text-slate-900 dark:text-white">
+                                                    {previewPost.title}
+                                                </h4>
+                                            )}
+                                            {previewPost.coverImageUrl && (
+                                                <img
+                                                    src={resolveMediaUrl(previewPost.coverImageUrl)}
+                                                    alt={previewPost.title || 'Cover'}
+                                                    className="w-full h-44 object-cover rounded-xl border border-slate-200 dark:border-slate-800"
+                                                />
+                                            )}
+                                            {previewPost.contentHtml && (
+                                                <div 
+                                                    className="text-xs text-slate-600 dark:text-slate-300 line-clamp-4 leading-relaxed bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800"
+                                                    dangerouslySetInnerHTML={{ __html: previewPost.contentHtml }}
+                                                />
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Wiki Preview if Content is Wiki */}
+                                    {(previewPost.isWiki || previewReport.contentType === 'Wiki') && (
+                                        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold text-[10px] uppercase tracking-wider">
+                                                    {previewPost.category || 'Wiki Library'}
+                                                </span>
+                                                <button
+                                                    onClick={() => {
+                                                        setIsPreviewOpen(false);
+                                                        navigate(`/wiki/view?id=${previewReport.contentId}`);
+                                                    }}
+                                                    className="text-xs text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                                                >
+                                                    <span>Open Full Wiki in Reader</span>
                                                     <span className="material-symbols-outlined text-[14px]">open_in_new</span>
                                                 </button>
                                             </div>
@@ -12308,8 +12396,8 @@ export default function AdminConsole() {
                                         <button
                                             onClick={() => {
                                                 setIsPreviewOpen(false);
-                                                const targetUserId = previewPost?.authorUserId || previewPost?.userId || previewPost?.authorId || previewReport.reportedUserId || previewReport.reporterUserId;
-                                                const targetUserName = previewPost?.authorFullName || previewPost?.authorName || previewPost?.fullName || previewReport.reportedUserName || previewReport.reporterFullName;
+                                                const targetUserId = previewPost?.authorUserId || previewPost?.userId || previewPost?.authorId || previewReport.reportedUserId || null;
+                                                const targetUserName = previewPost?.authorFullName || previewPost?.authorName || previewPost?.fullName || previewReport.reportedUserName || (targetUserId ? `User #${targetUserId}` : 'Reported Author');
                                                 const targetUser = usersList.find(u => Number(u.userId || u.id) === Number(targetUserId)) || {
                                                     userId: targetUserId,
                                                     fullName: targetUserName,

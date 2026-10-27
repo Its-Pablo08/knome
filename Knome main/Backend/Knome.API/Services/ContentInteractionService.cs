@@ -1035,7 +1035,11 @@ public class ContentInteractionService : IContentInteractionService
             }
             await _repo.UpdateReportAsync(existingReport);
             var reloadedExisting = await _repo.GetReportByIdAsync(existingReport.ReportId);
-            return _mapper.Map<ModerationReportDto>(reloadedExisting);
+            var enrichedExisting = await EnrichReportsAsync(new List<ModerationReport> { reloadedExisting ?? existingReport });
+            var existingDto = enrichedExisting.FirstOrDefault() ?? _mapper.Map<ModerationReportDto>(reloadedExisting);
+            existingDto.Details = dto.Details ?? dto.Description;
+            existingDto.Description = dto.Description ?? dto.Details;
+            return existingDto;
         }
 
         var report = new ModerationReport
@@ -1050,7 +1054,11 @@ public class ContentInteractionService : IContentInteractionService
 
         var saved = await _repo.AddReportAsync(report);
         var reloaded = await _repo.GetReportByIdAsync(saved.ReportId);
-        return _mapper.Map<ModerationReportDto>(reloaded);
+        var enrichedNew = await EnrichReportsAsync(new List<ModerationReport> { reloaded ?? saved });
+        var createdDto = enrichedNew.FirstOrDefault() ?? _mapper.Map<ModerationReportDto>(reloaded);
+        createdDto.Details = dto.Details ?? dto.Description;
+        createdDto.Description = dto.Description ?? dto.Details;
+        return createdDto;
     }
 
     public async Task<List<ModerationReportDto>> GetPendingReportsAsync(int pageNumber, int pageSize)
@@ -1236,11 +1244,14 @@ public class ContentInteractionService : IContentInteractionService
         var dtos = _mapper.Map<List<ModerationReportDto>>(reports);
         if (dtos.Count == 0) return dtos;
 
-        var postIds = dtos.Where(d => d.ContentType.Equals("Post", StringComparison.OrdinalIgnoreCase)).Select(d => d.ContentId).Distinct().ToList();
-        var videoIds = dtos.Where(d => d.ContentType.Equals("Video", StringComparison.OrdinalIgnoreCase)).Select(d => d.ContentId).Distinct().ToList();
-        var articleIds = dtos.Where(d => d.ContentType.Equals("Article", StringComparison.OrdinalIgnoreCase)).Select(d => d.ContentId).Distinct().ToList();
-        var podcastIds = dtos.Where(d => d.ContentType.Equals("Podcast", StringComparison.OrdinalIgnoreCase)).Select(d => d.ContentId).Distinct().ToList();
-        var clipIds = dtos.Where(d => d.ContentType.Equals("Clip", StringComparison.OrdinalIgnoreCase)).Select(d => d.ContentId).Distinct().ToList();
+        var postIds = dtos.Where(d => ContentTypes.Normalize(d.ContentType) == ContentTypes.Post).Select(d => d.ContentId).Distinct().ToList();
+        var videoIds = dtos.Where(d => ContentTypes.Normalize(d.ContentType) == ContentTypes.Video).Select(d => d.ContentId).Distinct().ToList();
+        var articleIds = dtos.Where(d => ContentTypes.Normalize(d.ContentType) == ContentTypes.Article).Select(d => d.ContentId).Distinct().ToList();
+        var podcastIds = dtos.Where(d => ContentTypes.Normalize(d.ContentType) == ContentTypes.Podcast).Select(d => d.ContentId).Distinct().ToList();
+        var clipIds = dtos.Where(d => ContentTypes.Normalize(d.ContentType) == ContentTypes.Clip).Select(d => d.ContentId).Distinct().ToList();
+        var wikiIds = dtos.Where(d => ContentTypes.Normalize(d.ContentType) == ContentTypes.Wiki).Select(d => d.ContentId).Distinct().ToList();
+        var commentIds = dtos.Where(d => ContentTypes.Normalize(d.ContentType) == ContentTypes.Comment).Select(d => d.ContentId).Distinct().ToList();
+        var jobIds = dtos.Where(d => ContentTypes.Normalize(d.ContentType) == ContentTypes.Job).Select(d => (int)d.ContentId).Distinct().ToList();
 
         var posts = postIds.Count > 0 
             ? await _db.Posts.AsNoTracking()
@@ -1282,25 +1293,71 @@ public class ContentInteractionService : IContentInteractionService
                 .ToDictionaryAsync(c => c.ClipId)
             : new Dictionary<long, Clip>();
 
-        var reporterUserIds = dtos.Where(d => d.ReporterUserId > 0).Select(d => d.ReporterUserId).Distinct().ToList();
-        var reporterUsers = reporterUserIds.Count > 0
+        var wikis = wikiIds.Count > 0
+            ? await _db.Wikis.AsNoTracking()
+                .Include(w => w.CreatedByUser)
+                .Include(w => w.Category)
+                .Where(w => wikiIds.Contains(w.WikiId))
+                .ToDictionaryAsync(w => (long)w.WikiId)
+            : new Dictionary<long, Wiki>();
+
+        var comments = commentIds.Count > 0
+            ? await _db.Comments.AsNoTracking()
+                .Include(c => c.User)
+                .Where(c => commentIds.Contains(c.CommentId))
+                .ToDictionaryAsync(c => c.CommentId)
+            : new Dictionary<long, Comment>();
+
+        var jobs = jobIds.Count > 0
+            ? await _db.Jobs.AsNoTracking()
+                .Include(j => j.PostedByUser)
+                .Where(j => jobIds.Contains(j.JobId))
+                .ToDictionaryAsync(j => (long)j.JobId)
+            : new Dictionary<long, Job>();
+
+        var allUserIds = new HashSet<int>();
+        foreach (var d in dtos)
+        {
+            if (d.ReporterUserId > 0) allUserIds.Add(d.ReporterUserId);
+            if (d.ModeratorUserId.HasValue && d.ModeratorUserId.Value > 0) allUserIds.Add(d.ModeratorUserId.Value);
+        }
+        foreach (var p in posts.Values) if (p.AuthorUserId > 0) allUserIds.Add(p.AuthorUserId);
+        foreach (var v in videos.Values) if (v.UploaderUserId > 0) allUserIds.Add(v.UploaderUserId);
+        foreach (var a in articles.Values) if (a.AuthorUserId > 0) allUserIds.Add(a.AuthorUserId);
+        foreach (var p in podcasts.Values) if (p.UploaderUserId > 0) allUserIds.Add(p.UploaderUserId);
+        foreach (var c in clips.Values) if (c.CreatedByUserId > 0) allUserIds.Add(c.CreatedByUserId);
+        foreach (var w in wikis.Values) if (w.CreatedByUserId > 0) allUserIds.Add(w.CreatedByUserId);
+        foreach (var c in comments.Values) if (c.UserId > 0) allUserIds.Add(c.UserId);
+        foreach (var j in jobs.Values) if (j.PostedByUserId > 0) allUserIds.Add(j.PostedByUserId);
+
+        var usersMap = allUserIds.Count > 0
             ? await _db.Users.AsNoTracking()
-                .Where(u => reporterUserIds.Contains(u.UserId))
+                .Where(u => allUserIds.Contains(u.UserId))
                 .ToDictionaryAsync(u => u.UserId)
             : new Dictionary<int, User>();
 
         foreach (var dto in dtos)
         {
-            if (reporterUsers.TryGetValue(dto.ReporterUserId, out var repUser))
+            // 1. Authoritative Reporter Full Name from SQL Server database
+            if (usersMap.TryGetValue(dto.ReporterUserId, out var repUser) && !string.IsNullOrWhiteSpace(repUser.FullName))
             {
                 dto.ReporterFullName = repUser.FullName;
             }
-            else if (string.IsNullOrWhiteSpace(dto.ReporterFullName) || dto.ReporterFullName == "Unknown")
+            else if (string.IsNullOrWhiteSpace(dto.ReporterFullName) || dto.ReporterFullName.Equals("Unknown", StringComparison.OrdinalIgnoreCase))
             {
                 dto.ReporterFullName = dto.ReporterUserId > 0 ? $"User #{dto.ReporterUserId}" : "Moderator";
             }
 
-            // Severity & AiScore
+            // 2. Moderator Name
+            if (dto.ModeratorUserId.HasValue && dto.ModeratorUserId.Value > 0)
+            {
+                if (usersMap.TryGetValue(dto.ModeratorUserId.Value, out var modUser) && !string.IsNullOrWhiteSpace(modUser.FullName))
+                {
+                    dto.ModeratorFullName = modUser.FullName;
+                }
+            }
+
+            // 3. Severity & AI Score
             dto.Severity = dto.ReasonCode switch
             {
                 "Harassment" or "Copyright" => "Critical",
@@ -1318,84 +1375,166 @@ public class ContentInteractionService : IContentInteractionService
                 _ => "75% AI"
             };
 
-            if (dto.ContentType.Equals("Post", StringComparison.OrdinalIgnoreCase))
+            // 4. Content Entity Relationship & Author Resolution
+            var normContentType = ContentTypes.Normalize(dto.ContentType);
+
+            if (normContentType == ContentTypes.Post)
             {
                 if (posts.TryGetValue(dto.ContentId, out var post))
                 {
                     dto.ReportedUserId = post.AuthorUserId;
-                    dto.ReportedUserName = post.AuthorUser?.FullName ?? $"User #{post.AuthorUserId}";
+                    dto.ReportedUserName = (usersMap.TryGetValue(post.AuthorUserId, out var author) && !string.IsNullOrWhiteSpace(author.FullName))
+                        ? author.FullName
+                        : (post.AuthorUser?.FullName ?? (post.AuthorUserId > 0 ? $"User #{post.AuthorUserId}" : "Post Author"));
                     dto.PostContentSnippet = post.ContentText;
-                    dto.CommunityName = post.Communities.FirstOrDefault()?.Name ?? "Engineering & Tech";
+                    dto.CommunityName = post.Communities.FirstOrDefault()?.Name ?? "General Collaboration";
                 }
                 else
                 {
-                    dto.ReportedUserName = "Reported Author";
                     dto.PostContentSnippet = $"Reported {dto.ReasonCode} content for Post #{dto.ContentId}. Content snapshot under administrative review.";
-                    dto.CommunityName = "Engineering & Tech";
+                    dto.CommunityName = "General Collaboration";
                 }
             }
-            else if (dto.ContentType.Equals("Video", StringComparison.OrdinalIgnoreCase))
+            else if (normContentType == ContentTypes.Video)
             {
                 if (videos.TryGetValue(dto.ContentId, out var video))
                 {
                     dto.ReportedUserId = video.UploaderUserId;
-                    dto.ReportedUserName = video.UploaderUser?.FullName ?? $"User #{video.UploaderUserId}";
+                    dto.ReportedUserName = (usersMap.TryGetValue(video.UploaderUserId, out var author) && !string.IsNullOrWhiteSpace(author.FullName))
+                        ? author.FullName
+                        : (video.UploaderUser?.FullName ?? (video.UploaderUserId > 0 ? $"User #{video.UploaderUserId}" : "Video Creator"));
                     dto.PostContentSnippet = video.Title;
                     dto.CommunityName = video.Category?.Name ?? "Video Library";
                 }
                 else
                 {
-                    dto.ReportedUserName = "Content Creator";
                     dto.PostContentSnippet = $"Reported {dto.ReasonCode} violation on Video #{dto.ContentId}.";
                     dto.CommunityName = "Video Library";
                 }
             }
-            else if (dto.ContentType.Equals("Article", StringComparison.OrdinalIgnoreCase))
+            else if (normContentType == ContentTypes.Article)
             {
                 if (articles.TryGetValue(dto.ContentId, out var article))
                 {
                     dto.ReportedUserId = article.AuthorUserId;
-                    dto.ReportedUserName = article.AuthorUser?.FullName ?? $"User #{article.AuthorUserId}";
+                    dto.ReportedUserName = (usersMap.TryGetValue(article.AuthorUserId, out var author) && !string.IsNullOrWhiteSpace(author.FullName))
+                        ? author.FullName
+                        : (article.AuthorUser?.FullName ?? (article.AuthorUserId > 0 ? $"User #{article.AuthorUserId}" : "Article Author"));
                     dto.PostContentSnippet = article.Title;
                     dto.CommunityName = article.Category?.Name ?? "Knowledge Hub";
                 }
                 else
                 {
-                    dto.ReportedUserName = "Article Author";
                     dto.PostContentSnippet = $"Reported {dto.ReasonCode} violation on Article #{dto.ContentId}.";
                     dto.CommunityName = "Knowledge Hub";
                 }
             }
-            else if (dto.ContentType.Equals("Podcast", StringComparison.OrdinalIgnoreCase))
+            else if (normContentType == ContentTypes.Podcast)
             {
                 if (podcasts.TryGetValue(dto.ContentId, out var podcast))
                 {
                     dto.ReportedUserId = podcast.UploaderUserId;
-                    dto.ReportedUserName = podcast.UploaderUser?.FullName ?? $"User #{podcast.UploaderUserId}";
+                    dto.ReportedUserName = (usersMap.TryGetValue(podcast.UploaderUserId, out var author) && !string.IsNullOrWhiteSpace(author.FullName))
+                        ? author.FullName
+                        : (podcast.UploaderUser?.FullName ?? (podcast.UploaderUserId > 0 ? $"User #{podcast.UploaderUserId}" : "Podcast Host"));
                     dto.PostContentSnippet = podcast.Title;
                     dto.CommunityName = podcast.Category?.Name ?? "Audio Room";
                 }
                 else
                 {
-                    dto.ReportedUserName = "Podcast Host";
                     dto.PostContentSnippet = $"Reported {dto.ReasonCode} violation on Podcast #{dto.ContentId}.";
                     dto.CommunityName = "Audio Room";
                 }
             }
-            else if (dto.ContentType.Equals("Clip", StringComparison.OrdinalIgnoreCase))
+            else if (normContentType == ContentTypes.Clip)
             {
                 if (clips.TryGetValue(dto.ContentId, out var clip))
                 {
                     dto.ReportedUserId = clip.CreatedByUserId;
-                    dto.ReportedUserName = clip.CreatedByUser?.FullName ?? $"User #{clip.CreatedByUserId}";
+                    dto.ReportedUserName = (usersMap.TryGetValue(clip.CreatedByUserId, out var author) && !string.IsNullOrWhiteSpace(author.FullName))
+                        ? author.FullName
+                        : (clip.CreatedByUser?.FullName ?? (clip.CreatedByUserId > 0 ? $"User #{clip.CreatedByUserId}" : "Clip Creator"));
                     dto.PostContentSnippet = !string.IsNullOrWhiteSpace(clip.Title) ? clip.Title : (clip.Description ?? "Clip");
                     dto.CommunityName = clip.Community?.Name ?? "Clips";
                 }
                 else
                 {
-                    dto.ReportedUserName = "Clip Creator";
                     dto.PostContentSnippet = $"Reported {dto.ReasonCode} violation on Clip #{dto.ContentId}.";
                     dto.CommunityName = "Clips";
+                }
+            }
+            else if (normContentType == ContentTypes.Wiki)
+            {
+                if (wikis.TryGetValue(dto.ContentId, out var wiki))
+                {
+                    dto.ReportedUserId = wiki.CreatedByUserId;
+                    dto.ReportedUserName = (usersMap.TryGetValue(wiki.CreatedByUserId, out var author) && !string.IsNullOrWhiteSpace(author.FullName))
+                        ? author.FullName
+                        : (wiki.CreatedByUser?.FullName ?? (wiki.CreatedByUserId > 0 ? $"User #{wiki.CreatedByUserId}" : "Wiki Author"));
+                    dto.PostContentSnippet = !string.IsNullOrWhiteSpace(wiki.Title)
+                        ? (!string.IsNullOrWhiteSpace(wiki.Description) ? $"{wiki.Title}: {wiki.Description}" : wiki.Title)
+                        : "Wiki Documentation";
+                    dto.CommunityName = wiki.Category?.Name ?? "Wiki & Documentation";
+                }
+                else
+                {
+                    dto.PostContentSnippet = $"Reported {dto.ReasonCode} violation on Wiki #{dto.ContentId}.";
+                    dto.CommunityName = "Wiki & Documentation";
+                }
+            }
+            else if (normContentType == ContentTypes.Comment)
+            {
+                if (comments.TryGetValue(dto.ContentId, out var comment))
+                {
+                    dto.ReportedUserId = comment.UserId;
+                    dto.ReportedUserName = (usersMap.TryGetValue(comment.UserId, out var author) && !string.IsNullOrWhiteSpace(author.FullName))
+                        ? author.FullName
+                        : (comment.User?.FullName ?? (comment.UserId > 0 ? $"User #{comment.UserId}" : "Comment Author"));
+                    dto.PostContentSnippet = comment.CommentText;
+                    dto.CommunityName = "Discussion & Comments";
+                }
+                else
+                {
+                    dto.PostContentSnippet = $"Reported {dto.ReasonCode} violation on Comment #{dto.ContentId}.";
+                    dto.CommunityName = "Discussion & Comments";
+                }
+            }
+            else if (normContentType == ContentTypes.Job)
+            {
+                if (jobs.TryGetValue(dto.ContentId, out var job))
+                {
+                    dto.ReportedUserId = job.PostedByUserId;
+                    dto.ReportedUserName = (usersMap.TryGetValue(job.PostedByUserId, out var author) && !string.IsNullOrWhiteSpace(author.FullName))
+                        ? author.FullName
+                        : (job.PostedByUser?.FullName ?? (job.PostedByUserId > 0 ? $"User #{job.PostedByUserId}" : "Recruiter"));
+                    dto.PostContentSnippet = job.Title;
+                    dto.CommunityName = "Career Hub";
+                }
+                else
+                {
+                    dto.PostContentSnippet = $"Reported {dto.ReasonCode} violation on Job #{dto.ContentId}.";
+                    dto.CommunityName = "Career Hub";
+                }
+            }
+
+            // Fallback: If dto.ReportedUserId is still unresolved, query DB directly via repository
+            if (!dto.ReportedUserId.HasValue || dto.ReportedUserId.Value <= 0)
+            {
+                var fallbackAuthorId = await _repo.GetContentAuthorUserIdAsync(dto.ContentType, dto.ContentId);
+                if (fallbackAuthorId.HasValue && fallbackAuthorId.Value > 0)
+                {
+                    dto.ReportedUserId = fallbackAuthorId.Value;
+                    if (usersMap.TryGetValue(fallbackAuthorId.Value, out var authorUser) && !string.IsNullOrWhiteSpace(authorUser.FullName))
+                    {
+                        dto.ReportedUserName = authorUser.FullName;
+                    }
+                    else
+                    {
+                        var singleUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == fallbackAuthorId.Value);
+                        dto.ReportedUserName = (singleUser != null && !string.IsNullOrWhiteSpace(singleUser.FullName))
+                            ? singleUser.FullName
+                            : $"User #{fallbackAuthorId.Value}";
+                    }
                 }
             }
         }

@@ -9,6 +9,7 @@ import HighlightText from '../components/ui/HighlightText';
 import CreateWikiModal from '../components/modals/CreateWikiModal';
 import WikiShareModal from '../components/modals/WikiShareModal';
 import SaveToCategoryModal from '../components/modals/SaveToCategoryModal';
+import ReportModal from '../components/modals/ReportModal';
 
 export default function Wiki() {
     const { currentUser } = useUser();
@@ -61,6 +62,7 @@ export default function Wiki() {
     const [editingWiki, setEditingWiki] = useState(null);
     const [sharingWiki, setSharingWiki] = useState(null);
     const [savingWikiModal, setSavingWikiModal] = useState(null);
+    const [reportingWiki, setReportingWiki] = useState(null);
 
     // Bookmarking state
     const [savedWikiIds, setSavedWikiIds] = useState(() => {
@@ -139,7 +141,7 @@ export default function Wiki() {
         loadPopularTags();
     }, []);
 
-    // Listen for real-time SignalR view count updates
+    // Listen for real-time SignalR view count updates & approval events
     useEffect(() => {
         const handleViewUpdated = (e) => {
             const detail = e.detail;
@@ -157,8 +159,20 @@ export default function Wiki() {
             }));
         };
 
+        const handleWikiChange = () => loadWikis();
+
         window.addEventListener('knome:view-updated', handleViewUpdated);
-        return () => window.removeEventListener('knome:view-updated', handleViewUpdated);
+        window.addEventListener('wiki-created', handleWikiChange);
+        window.addEventListener('wiki-published', handleWikiChange);
+        window.addEventListener('wiki-updated', handleWikiChange);
+        window.addEventListener('pending-media-updated', handleWikiChange);
+        return () => {
+            window.removeEventListener('knome:view-updated', handleViewUpdated);
+            window.removeEventListener('wiki-created', handleWikiChange);
+            window.removeEventListener('wiki-published', handleWikiChange);
+            window.removeEventListener('wiki-updated', handleWikiChange);
+            window.removeEventListener('pending-media-updated', handleWikiChange);
+        };
     }, []);
 
     const handleDeleteWiki = async (wiki, e) => {
@@ -371,6 +385,7 @@ export default function Wiki() {
                         <option value="All">All Statuses</option>
                         <option value="Published">Published Only</option>
                         <option value="Draft">Drafts Only</option>
+                        <option value="PendingApproval">Pending Approval</option>
                     </select>
 
                     {selectedTag && (
@@ -601,6 +616,18 @@ export default function Wiki() {
                                                 <span className="material-symbols-outlined text-[16px]">share</span>
                                             </button>
 
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setReportingWiki(wiki);
+                                                }}
+                                                className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                                title="Report Wiki"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">flag</span>
+                                            </button>
+
                                             {wiki.canDelete && (
                                                 <button
                                                     type="button"
@@ -755,6 +782,17 @@ export default function Wiki() {
                                             >
                                                 <span className="material-symbols-outlined text-[17px]">share</span>
                                             </button>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setReportingWiki(wiki);
+                                                }}
+                                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                                title="Report Wiki"
+                                            >
+                                                <span className="material-symbols-outlined text-[17px]">flag</span>
+                                            </button>
                                             {wiki.canDelete && (
                                                 <button
                                                     type="button"
@@ -857,6 +895,16 @@ export default function Wiki() {
                 onClose={() => setSavingWikiModal(null)}
                 item={savingWikiModal}
                 onSaved={handleWikiSaved}
+            />
+
+            <ReportModal
+                isOpen={Boolean(reportingWiki)}
+                onClose={() => setReportingWiki(null)}
+                targetType="Wiki"
+                targetId={reportingWiki?.wikiId || reportingWiki?.id}
+                targetName={reportingWiki?.createdByUserName || reportingWiki?.createdByUser?.fullName || reportingWiki?.createdByUser?.name || 'Wiki Author'}
+                targetUserId={reportingWiki?.createdByUserId || reportingWiki?.createdByUser?.id}
+                targetContent={reportingWiki?.title ? `${reportingWiki.title}${reportingWiki?.description ? ` - ${reportingWiki.description}` : ''}` : ''}
             />
         </div>
     );

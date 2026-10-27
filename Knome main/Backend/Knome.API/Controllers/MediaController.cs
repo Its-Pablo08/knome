@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Knome.API.Constants;
+using Knome.API.Data;
 using Knome.API.Exceptions;
 using Knome.API.Interfaces;
 using Knome.API.Responses;
@@ -11,6 +14,7 @@ using Knome.API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -31,18 +35,21 @@ public class MediaController : KnomeControllerBase
     private readonly IConfiguration _configuration;
     private readonly ILogger<MediaController> _logger;
     private readonly ISystemSettingService? _settingService;
+    private readonly KnomeDbContext? _db;
     private static readonly object _fileLock = new();
 
     public MediaController(
         IFileStorageService fileStorageService,
         IConfiguration configuration,
         ILogger<MediaController> logger,
-        ISystemSettingService? settingService = null)
+        ISystemSettingService? settingService = null,
+        KnomeDbContext? db = null)
     {
         _fileStorageService = fileStorageService;
         _configuration = configuration;
         _logger = logger;
         _settingService = settingService;
+        _db = db;
     }
 
     [HttpPost("upload")]
@@ -155,48 +162,235 @@ public class MediaController : KnomeControllerBase
     }
 
     [HttpGet("pending")]
-    [ProducesResponseType(typeof(ApiResponse<List<JsonElement>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<JsonNode>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPendingMedia()
     {
         var filePath = GetPendingFilePath();
-        if (!System.IO.File.Exists(filePath))
-        {
-            return Ok(ApiResponse<List<JsonElement>>.SuccessResponse(200, "Pending media retrieved.", new List<JsonElement>()));
-        }
+        var pendingArray = new JsonArray();
+        bool fileDirty = false;
 
-        try
+        lock (_fileLock)
         {
-            var json = await System.IO.File.ReadAllTextAsync(filePath);
-            var list = JsonSerializer.Deserialize<List<JsonElement>>(json) ?? new List<JsonElement>();
-
-            if (_settingService != null)
+            if (System.IO.File.Exists(filePath))
             {
-                var enableVideos = await _settingService.GetEnableVideosAsync();
-                var enablePodcasts = await _settingService.GetEnablePodcastsAsync();
-                var enableArticles = await _settingService.GetEnableArticlesAsync();
-                var enableWiki = await _settingService.GetEnableWikiAsync();
-                list = list.Where(item => {
-                    var mediaType = "video";
-                    if (item.TryGetProperty("mediaType", out var mtProp))
-                        mediaType = mtProp.GetString()?.ToLower() ?? "video";
-                    else if (item.TryGetProperty("type", out var tProp))
-                        mediaType = tProp.GetString()?.ToLower() ?? "video";
-
-                    if ((mediaType == "podcast" || mediaType == "audio") && !enablePodcasts) return false;
-                    if (mediaType == "video" && !enableVideos) return false;
-                    if (mediaType == "article" && !enableArticles) return false;
-                    if (mediaType == "wiki" && !enableWiki) return false;
-                    return true;
-                }).ToList();
+                try
+                {
+                    var json = System.IO.File.ReadAllText(filePath);
+                    if (JsonNode.Parse(json) is JsonArray arr)
+                    {
+                        pendingArray = arr;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed reading pending media approvals");
+                }
             }
+        }
 
-            return Ok(ApiResponse<List<JsonElement>>.SuccessResponse(200, "Pending media retrieved.", list));
-        }
-        catch (Exception ex)
+        if (_db != null)
         {
-            _logger.LogWarning(ex, "Failed reading pending media approvals");
-            return Ok(ApiResponse<List<JsonElement>>.SuccessResponse(200, "Pending media retrieved.", new List<JsonElement>()));
+            try
+            {
+                var dbPendingWikis = await _db.Wikis
+                    .AsNoTracking()
+                    .Include(w => w.CreatedByUser)
+                    .Include(w => w.WikiTags)
+                    .Where(w => !w.IsDeleted && w.Status == "PendingApproval")
+                    .ToListAsync();
+
+                var dbPendingWikiIds = dbPendingWikis.Select(w => w.WikiId).ToHashSet();
+
+                var dbPendingArticles = await _db.Articles
+                    .AsNoTracking()
+                    .Include(a => a.AuthorUser)
+                    .Include(a => a.ArticleTags)
+                    .Where(a => a.Status == "PendingApproval")
+                    .ToListAsync();
+
+                var dbPendingArticleIds = dbPendingArticles.Select(a => a.ArticleId).ToHashSet();
+
+                var itemsToKeep = new JsonArray();
+                var existingWikiIdsInQueue = new HashSet<long>();
+                var existingArticleIdsInQueue = new HashSet<long>();
+
+                foreach (var node in pendingArray)
+                {
+                    if (node is not JsonObject obj) continue;
+
+                    var mType = (obj["mediaType"]?.ToString() ?? obj["type"]?.ToString() ?? "").ToLowerInvariant();
+
+                    if (mType == "wiki")
+                    {
+                        long? wId = null;
+                        if (long.TryParse(obj["wikiId"]?.ToString(), out var widVal)) wId = widVal;
+                        else if (obj["id"] != null)
+                        {
+                            var idStr = obj["id"]!.ToString().Replace("pending_wiki_", "");
+                            if (long.TryParse(idStr, out var idVal)) wId = idVal;
+                        }
+
+                        if (wId.HasValue)
+                        {
+                            // If this wiki is already in the database and is NOT PendingApproval, skip it (it's resolved or deleted)
+                            if (!dbPendingWikiIds.Contains(wId.Value))
+                            {
+                                fileDirty = true;
+                                continue;
+                            }
+                            existingWikiIdsInQueue.Add(wId.Value);
+                        }
+                    }
+                    else if (mType == "article")
+                    {
+                        long? aId = null;
+                        if (long.TryParse(obj["articleId"]?.ToString(), out var aidVal)) aId = aidVal;
+                        else if (obj["id"] != null)
+                        {
+                            var idStr = obj["id"]!.ToString().Replace("pending_article_", "");
+                            if (long.TryParse(idStr, out var aidVal2)) aId = aidVal2;
+                        }
+
+                        if (aId.HasValue)
+                        {
+                            if (!dbPendingArticleIds.Contains(aId.Value))
+                            {
+                                fileDirty = true;
+                                continue;
+                            }
+                            existingArticleIdsInQueue.Add(aId.Value);
+                        }
+                    }
+
+                    itemsToKeep.Add(node.DeepClone());
+                }
+
+                // Inject any database pending wikis missing from the queue
+                foreach (var pw in dbPendingWikis)
+                {
+                    if (!existingWikiIdsInQueue.Contains(pw.WikiId))
+                    {
+                        var wikiNode = new JsonObject
+                        {
+                            ["id"] = $"pending_wiki_{pw.WikiId}",
+                            ["wikiId"] = pw.WikiId,
+                            ["mediaType"] = "Wiki",
+                            ["type"] = "Wiki",
+                            ["title"] = pw.Title,
+                            ["description"] = pw.Description ?? "Wiki documentation submission",
+                            ["category"] = "Knowledge Base",
+                            ["tags"] = new JsonArray(pw.WikiTags.Select(t => (JsonNode)JsonValue.Create(t.Tag)!).ToArray()),
+                            ["thumbnail"] = pw.CoverImageUrl,
+                            ["authorName"] = pw.CreatedByUser != null ? pw.CreatedByUser.FullName : "Author",
+                            ["authorId"] = pw.CreatedByUserId,
+                            ["authorAvatar"] = pw.CreatedByUser?.ProfilePhotoUrl,
+                            ["submittedDate"] = pw.UpdatedDate.ToString("o"),
+                            ["status"] = "PendingApproval",
+                            ["contentHtml"] = pw.ContentHtml,
+                            ["dto"] = new JsonObject
+                            {
+                                ["wikiId"] = pw.WikiId,
+                                ["title"] = pw.Title,
+                                ["description"] = pw.Description,
+                                ["contentHtml"] = pw.ContentHtml,
+                                ["status"] = "PendingApproval",
+                                ["coverImageUrl"] = pw.CoverImageUrl
+                            }
+                        };
+                        itemsToKeep.Insert(0, wikiNode);
+                        fileDirty = true;
+                    }
+                }
+
+                // Inject any database pending articles missing from the queue
+                foreach (var pa in dbPendingArticles)
+                {
+                    if (!existingArticleIdsInQueue.Contains(pa.ArticleId))
+                    {
+                        var artNode = new JsonObject
+                        {
+                            ["id"] = $"pending_article_{pa.ArticleId}",
+                            ["articleId"] = pa.ArticleId,
+                            ["mediaType"] = "Article",
+                            ["type"] = "Article",
+                            ["title"] = pa.Title,
+                            ["description"] = pa.Description ?? "Article submission",
+                            ["category"] = "General",
+                            ["tags"] = new JsonArray(pa.ArticleTags.Select(t => (JsonNode)JsonValue.Create(t.Tag)!).ToArray()),
+                            ["thumbnail"] = null,
+                            ["authorName"] = pa.AuthorUser != null ? pa.AuthorUser.FullName : "Author",
+                            ["authorId"] = pa.AuthorUserId,
+                            ["authorAvatar"] = pa.AuthorUser?.ProfilePhotoUrl,
+                            ["submittedDate"] = pa.CreatedDate.ToString("o"),
+                            ["status"] = "PendingApproval",
+                            ["contentHtml"] = pa.ContentHtml,
+                            ["dto"] = new JsonObject
+                            {
+                                ["articleId"] = pa.ArticleId,
+                                ["title"] = pa.Title,
+                                ["description"] = pa.Description,
+                                ["contentHtml"] = pa.ContentHtml,
+                                ["status"] = "PendingApproval"
+                            }
+                        };
+                        itemsToKeep.Insert(0, artNode);
+                        fileDirty = true;
+                    }
+                }
+
+                pendingArray = itemsToKeep;
+
+                if (fileDirty)
+                {
+                    lock (_fileLock)
+                    {
+                        try
+                        {
+                            var updatedJson = JsonSerializer.Serialize(pendingArray, new JsonSerializerOptions { WriteIndented = true });
+                            System.IO.File.WriteAllText(filePath, updatedJson);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed writing synchronized pending media to file");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed synchronizing database pending wikis/articles with media approval queue");
+            }
         }
+
+        var resultList = new List<JsonNode>();
+        foreach (var item in pendingArray)
+        {
+            if (item == null) continue;
+            resultList.Add(item.DeepClone());
+        }
+
+        if (_settingService != null)
+        {
+            var enableVideos = await _settingService.GetEnableVideosAsync();
+            var enablePodcasts = await _settingService.GetEnablePodcastsAsync();
+            var enableArticles = await _settingService.GetEnableArticlesAsync();
+            var enableWiki = await _settingService.GetEnableWikiAsync();
+            resultList = resultList.Where(item => {
+                var mediaType = "video";
+                if (item is JsonObject obj)
+                {
+                    mediaType = (obj["mediaType"]?.ToString() ?? obj["type"]?.ToString() ?? "video").ToLowerInvariant();
+                }
+
+                if ((mediaType == "podcast" || mediaType == "audio") && !enablePodcasts) return false;
+                if (mediaType == "video" && !enableVideos) return false;
+                if (mediaType == "article" && !enableArticles) return false;
+                if (mediaType == "wiki" && !enableWiki) return false;
+                return true;
+            }).ToList();
+        }
+
+        return Ok(ApiResponse<List<JsonNode>>.SuccessResponse(200, "Pending media retrieved.", resultList));
     }
 
     [HttpPost("pending")]
@@ -249,6 +443,14 @@ public class MediaController : KnomeControllerBase
         var filePath = GetPendingFilePath();
         List<JsonElement> list = new();
 
+        string? newId = null;
+        if (item.TryGetProperty("id", out var idProp))
+            newId = idProp.ValueKind == JsonValueKind.String ? idProp.GetString() : idProp.ToString();
+
+        string? newWikiId = null;
+        if (item.TryGetProperty("wikiId", out var widProp))
+            newWikiId = widProp.ValueKind == JsonValueKind.String ? widProp.GetString() : widProp.ToString();
+
         lock (_fileLock)
         {
             if (System.IO.File.Exists(filePath))
@@ -264,6 +466,24 @@ public class MediaController : KnomeControllerBase
                 }
             }
 
+            // Deduplicate: filter out any existing element with identical ID or WikiId
+            list = list.Where(existing => {
+                string? existingId = null;
+                if (existing.TryGetProperty("id", out var eidProp))
+                    existingId = eidProp.ValueKind == JsonValueKind.String ? eidProp.GetString() : eidProp.ToString();
+
+                if (!string.IsNullOrEmpty(newId) && string.Equals(existingId, newId, StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                if (!string.IsNullOrEmpty(newWikiId) && existing.TryGetProperty("wikiId", out var ewidProp))
+                {
+                    var ewidStr = ewidProp.ValueKind == JsonValueKind.String ? ewidProp.GetString() : ewidProp.ToString();
+                    if (string.Equals(ewidStr, newWikiId, StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
+                return true;
+            }).ToList();
+
             list.Insert(0, item);
             var updatedJson = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
             System.IO.File.WriteAllText(filePath, updatedJson);
@@ -272,7 +492,7 @@ public class MediaController : KnomeControllerBase
         return Ok(ApiResponse<object>.SuccessResponse(201, "Media submitted for approval.", item));
     }
 
-    [Authorize(Roles = $"{Roles.Moderator},{Roles.SystemAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin")]
+    [Authorize(Roles = $"{Roles.Moderator},{Roles.SystemAdmin},{Roles.HRAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin,HRADM,HR Administrator,HR Admin")]
     [HttpDelete("pending/{id}")]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
     public IActionResult RemovePendingMedia(string id)
@@ -294,8 +514,24 @@ public class MediaController : KnomeControllerBase
                         {
                             elId = idProp.ValueKind == JsonValueKind.String ? idProp.GetString() : idProp.ToString();
                         }
-                        if (string.Equals(elId, id, StringComparison.OrdinalIgnoreCase))
+
+                        string? elWikiId = null;
+                        if (el.TryGetProperty("wikiId", out var widProp))
+                        {
+                            elWikiId = widProp.ValueKind == JsonValueKind.String ? widProp.GetString() : widProp.ToString();
+                        }
+
+                        string? elArticleId = null;
+                        if (el.TryGetProperty("articleId", out var aidProp))
+                        {
+                            elArticleId = aidProp.ValueKind == JsonValueKind.String ? aidProp.GetString() : aidProp.ToString();
+                        }
+
+                        if (string.Equals(elId, id, StringComparison.OrdinalIgnoreCase) ||
+                            (!string.IsNullOrEmpty(elWikiId) && (string.Equals(elWikiId, id, StringComparison.OrdinalIgnoreCase) || string.Equals($"pending_wiki_{elWikiId}", id, StringComparison.OrdinalIgnoreCase))) ||
+                            (!string.IsNullOrEmpty(elArticleId) && (string.Equals(elArticleId, id, StringComparison.OrdinalIgnoreCase) || string.Equals($"pending_article_{elArticleId}", id, StringComparison.OrdinalIgnoreCase))))
                             continue;
+
                         filtered.Add(el.Clone());
                     }
 

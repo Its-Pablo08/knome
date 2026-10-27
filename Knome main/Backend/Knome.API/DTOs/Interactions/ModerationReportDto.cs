@@ -23,11 +23,15 @@ public class ModerationReportDto
     public DateTime ReportedDate { get; set; }
     public DateTime? ActionDate { get; set; }
     public string? PostContentSnippet { get; set; }
+    public string? Details { get; set; }
+    public string? Description { get; set; }
 }
 
 public class CreateReportDto
 {
     public string ReasonCode { get; set; } = null!;
+    public string? Details { get; set; }
+    public string? Description { get; set; }
 }
 
 public class ResolveReportDto

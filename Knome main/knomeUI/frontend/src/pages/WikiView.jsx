@@ -12,6 +12,7 @@ import WikiShareModal from '../components/modals/WikiShareModal';
 import WikiVersionHistoryModal from '../components/modals/WikiVersionHistoryModal';
 import WikiActivityModal from '../components/modals/WikiActivityModal';
 import SaveToCategoryModal from '../components/modals/SaveToCategoryModal';
+import ReportModal from '../components/modals/ReportModal';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 function OutlineSectionItem({
@@ -293,6 +294,7 @@ export default function WikiView() {
         (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
 
     const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
     const loadWikiData = async (forceFresh = false) => {
         if (!wikiId) return null;
@@ -761,6 +763,17 @@ export default function WikiView() {
                         <span className="material-symbols-outlined text-[18px]">history_edu</span>
                     </button>
 
+                    {/* Report Wiki Button */}
+                    <button
+                        type="button"
+                        onClick={() => setIsReportModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                        title="Report Wiki"
+                    >
+                        <span className="material-symbols-outlined text-[16px] text-rose-500">flag</span>
+                        <span className="hidden sm:inline">Report</span>
+                    </button>
+
                     {/* Mobile outline drawer toggle */}
                     <button
                         type="button"
@@ -1165,6 +1178,18 @@ export default function WikiView() {
                 item={savingWikiModal}
                 onSaved={handleWikiSaved}
             />
+
+            {wiki && (
+                <ReportModal
+                    isOpen={isReportModalOpen}
+                    onClose={() => setIsReportModalOpen(false)}
+                    targetType="Wiki"
+                    targetId={wiki?.wikiId || wiki?.id || wikiId}
+                    targetName={wiki?.createdByUserName || wiki?.createdByUser?.fullName || wiki?.createdByUser?.name || 'Wiki Author'}
+                    targetUserId={wiki?.createdByUserId || wiki?.createdByUser?.id}
+                    targetContent={wiki?.title ? `${wiki.title}${wiki?.description ? ` - ${wiki.description}` : ''}` : ''}
+                />
+            )}
         </div>
     );
 }
