@@ -426,6 +426,7 @@ export const interactionsApi = {
     shareContent: (type, id, sharedToType, targetId = null) => apiClient.post(`/interactions/${type}/${id}/share`, { sharedToType, targetId, sharedToId: targetId }),
     reportContent: (type, id, data) => apiClient.post(`/interactions/${type}/${id}/report`, data),
     getPendingReports: (pageNumber = 1, pageSize = 20) => apiClient.get(`/interactions/reports/pending?pageNumber=${pageNumber}&pageSize=${pageSize}`),
+    getReportById: (reportId) => apiClient.get(`/interactions/reports/${reportId}`),
     getAllReports: (status = null, pageNumber = 1, pageSize = 100) => {
         let url = `/interactions/reports?pageNumber=${pageNumber}&pageSize=${pageSize}`;
         if (status && status !== 'All') url += `&status=${encodeURIComponent(status)}`;

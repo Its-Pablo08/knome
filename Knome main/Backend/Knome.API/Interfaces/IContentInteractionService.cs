@@ -40,6 +40,7 @@ public interface IContentInteractionService
     Task<ModerationReportDto> ReportContentAsync(string contentType, long contentId, int reporterUserId, CreateReportDto dto);
     Task<List<ModerationReportDto>> GetPendingReportsAsync(int pageNumber, int pageSize);
     Task<List<ModerationReportDto>> GetAllReportsAsync(string? status, int pageNumber, int pageSize);
+    Task<ModerationReportDto?> GetReportByIdAsync(long reportId);
     Task<ModerationReportDto> ResolveReportAsync(long reportId, int moderatorUserId, ResolveReportDto dto);
 
     // Unique View Resolution

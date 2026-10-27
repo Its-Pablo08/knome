@@ -345,7 +345,7 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
         }
 
         if (currentUser?.isActive === false) {
-            addToast("Your account is currently suspended by System Admin. You cannot upload videos for approval.", 'error');
+            addToast("Your account is currently suspended by HR Admin. You cannot upload videos for approval.", 'error');
             return;
         }
 

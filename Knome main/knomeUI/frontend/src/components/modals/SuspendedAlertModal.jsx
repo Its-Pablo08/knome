@@ -6,11 +6,77 @@ import React from 'react';
  * Displays clear suspension messaging and requires user to click "OK",
  * which terminates the session and logs the user out to MPO Employee Hub.
  */
-export default function SuspendedAlertModal({ isOpen, user, onOk, reason }) {
+export default function SuspendedAlertModal({ isOpen, user, onOk, reason, suspendedByRole, suspendedByName }) {
     if (!isOpen) return null;
 
     const displayName = user?.fullName || user?.name || 'Employee';
     const employeeId = user?.employeeId || (user?.userId ? `MPO${user.userId}` : '');
+
+    // Dynamically resolve who initiated/approved the suspension
+    const resolveSuspendedBy = () => {
+        const uid = String(user?.userId || user?.id || '');
+        const empId = String(user?.employeeId || '').toUpperCase();
+
+        // 1. Direct props
+        let rawRole = suspendedByRole || user?.suspendedByRole || user?.approvedByRole || user?.reviewedByRole || '';
+        let rawName = suspendedByName || user?.suspendedBy || user?.approvedBy || user?.reviewedByName || user?.reviewedBy || '';
+
+        // 2. Check localStorage knome_suspended_accounts
+        if (!rawRole) {
+            try {
+                const map = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
+                const entry = (uid && map[uid]) || (empId && map[empId]);
+                if (entry) {
+                    rawRole = entry.suspendedByRole || entry.approvedByRole || entry.role || '';
+                    rawName = entry.approvedBy || entry.suspendedBy || '';
+                    if (!rawRole && entry.reason) {
+                        if (/system\s*admin/i.test(entry.reason)) rawRole = 'System Admin';
+                        else if (/hr\s*admin/i.test(entry.reason)) rawRole = 'HR Admin';
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 3. Check localStorage knome_suspension_requests
+        if (!rawRole) {
+            try {
+                const reqs = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
+                const found = reqs.find(r => 
+                    (uid && Number(r.targetUserId) === Number(uid)) ||
+                    (empId && String(r.targetEmployeeId || '').toUpperCase() === empId)
+                );
+                if (found) {
+                    rawRole = found.reviewedByRole || found.reviewedByName || found.requestedByRole || '';
+                    rawName = found.reviewedByName || found.reviewedBy || '';
+                }
+            } catch (e) {}
+        }
+
+        // 4. Check reason prop text
+        if (!rawRole && reason) {
+            if (/system\s*admin/i.test(reason)) rawRole = 'System Admin';
+            else if (/hr\s*admin/i.test(reason)) rawRole = 'HR Admin';
+        }
+
+        // Normalize role
+        const roleLower = String(rawRole || rawName || '').toLowerCase();
+        if (roleLower.includes('system') || roleLower.includes('sysadm')) {
+            return {
+                shortRole: 'System Admin',
+                fullRole: 'System Administrator',
+                contactRole: 'System Administrator'
+            };
+        }
+
+        // Default to HR Admin as primary governance authority per Knome specification
+        return {
+            shortRole: 'HR Admin',
+            fullRole: 'HR Administrator',
+            contactRole: 'HR Administrator'
+        };
+    };
+
+    const adminRoleInfo = resolveSuspendedBy();
 
     return (
         <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
@@ -44,7 +110,7 @@ export default function SuspendedAlertModal({ isOpen, user, onOk, reason }) {
                     id="suspend-alert-title"
                     className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-snug mb-2"
                 >
-                    Your account is suspended by system admin
+                    Your account is suspended by {adminRoleInfo.shortRole}
                 </h2>
 
                 {/* Subtitle / User Identification */}
@@ -58,14 +124,14 @@ export default function SuspendedAlertModal({ isOpen, user, onOk, reason }) {
                     <div className="flex items-start gap-2.5 text-slate-700 dark:text-slate-300">
                         <span className="material-symbols-outlined text-rose-500 text-[18px] shrink-0 mt-0.5">block</span>
                         <p className="leading-relaxed">
-                            Your Knome platform access has been suspended by the <strong>System Administrator</strong>. You cannot access posts, articles, videos, podcasts, or enterprise communities.
+                            Your Knome platform access has been suspended by the <strong>{adminRoleInfo.fullRole}</strong>. You cannot access posts, articles, videos, podcasts, or enterprise communities.
                         </p>
                     </div>
 
                     <div className="flex items-start gap-2.5 pt-2 border-t border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 text-[11px]">
                         <span className="material-symbols-outlined text-amber-500 text-[16px] shrink-0 mt-0.5">contact_support</span>
                         <p>
-                            For inquiries or reactivation requests, please contact your <strong>HR Administrator</strong> or <strong>System Admin</strong>.
+                            For inquiries or reactivation requests, please contact your <strong>{adminRoleInfo.contactRole}</strong>.
                         </p>
                     </div>
                 </div>

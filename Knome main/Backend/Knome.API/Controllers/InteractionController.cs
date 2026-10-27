@@ -271,7 +271,7 @@ public class InteractionController : KnomeControllerBase
         return CreatedAtAction(nameof(GetPendingReports), new { }, ApiResponse<ModerationReportDto>.SuccessResponse(201, "Content reported successfully.", report));
     }
 
-    [Authorize(Roles = $"{Roles.Moderator},{Roles.CommunityAdmin},{Roles.SystemAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin")]
+    [Authorize(Roles = $"{Roles.Moderator},{Roles.CommunityAdmin},{Roles.SystemAdmin},{Roles.HRAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin,HRADM,HR Admin,HR Administrator,CADM,Community Admin,Community Administrator")]
     [HttpGet("reports")]
     [ProducesResponseType(typeof(ApiResponse<List<ModerationReportDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetReports([FromQuery] string? status = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 100)
@@ -280,13 +280,26 @@ public class InteractionController : KnomeControllerBase
         return Ok(ApiResponse<List<ModerationReportDto>>.SuccessResponse(200, "Moderation reports retrieved successfully.", reports));
     }
 
-    [Authorize(Roles = $"{Roles.Moderator},{Roles.CommunityAdmin},{Roles.SystemAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin")]
+    [Authorize(Roles = $"{Roles.Moderator},{Roles.CommunityAdmin},{Roles.SystemAdmin},{Roles.HRAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin,HRADM,HR Admin,HR Administrator,CADM,Community Admin,Community Administrator")]
     [HttpGet("reports/pending")]
     [ProducesResponseType(typeof(ApiResponse<List<ModerationReportDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPendingReports([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
     {
         var reports = await _interactionService.GetPendingReportsAsync(pageNumber, pageSize);
         return Ok(ApiResponse<List<ModerationReportDto>>.SuccessResponse(200, "Pending reports retrieved successfully.", reports));
+    }
+
+    [Authorize(Roles = $"{Roles.Moderator},{Roles.CommunityAdmin},{Roles.SystemAdmin},{Roles.HRAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin,HRADM,HR Admin,HR Administrator,CADM,Community Admin,Community Administrator")]
+    [HttpGet("reports/{reportId}")]
+    [ProducesResponseType(typeof(ApiResponse<ModerationReportDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetReportById(long reportId)
+    {
+        var report = await _interactionService.GetReportByIdAsync(reportId);
+        if (report == null)
+            return NotFound(ApiResponse<object>.ErrorResponse(404, $"Moderation report #{reportId} was not found."));
+
+        return Ok(ApiResponse<ModerationReportDto>.SuccessResponse(200, "Moderation report retrieved successfully.", report));
     }
 
     [Authorize(Roles = $"{Roles.Moderator},{Roles.CommunityAdmin},{Roles.SystemAdmin},{Roles.HRAdmin},MOD,Moderator,SYSADM,System Administrator,System Admin,HRADM,HR Admin,HR Administrator,CADM,Community Admin,Community Administrator")]

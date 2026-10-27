@@ -332,7 +332,7 @@ export const resolveUserStatus = (user) => {
         const overrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
         const o = (uidStr && overrides[uidStr]) || (empStr && overrides[empStr]);
         if (o) {
-            if (o.isActive === true && !o.isSuspended) return 'Active';
+            if (o.isActive === true && !o.isSuspended && (o.status || '').toLowerCase() !== 'suspended') return 'Active';
             if (o.isActive === false || o.isSuspended === true || (o.status && o.status.toLowerCase() === 'suspended')) return 'Suspended';
         }
     } catch {}
@@ -343,14 +343,14 @@ export const resolveUserStatus = (user) => {
     const isSuspended = user.isSuspended === true 
         || user.isPermanentlySuspended === true 
         || (user.suspendedUntil && new Date(user.suspendedUntil) > new Date())
-        || (typeof user.status === 'string' && user.status.trim().toLowerCase() === 'suspended');
+        || (typeof user.status === 'string' && user.status.trim().toLowerCase() === 'suspended')
+        || user.isActive === false;
     if (isSuspended) return 'Suspended';
     if (typeof user.status === 'string') {
         const s = user.status.trim().toLowerCase();
         if (s === 'inactive' || s === 'deactivated') return 'Inactive';
         if (s === 'active') return 'Active';
     }
-    if (user.isActive === false) return 'Inactive';
     return 'Active';
 };
 
@@ -1246,7 +1246,7 @@ export const UserProvider = ({ children }) => {
                 status: 'Suspended'
             });
             setIsAuthenticated(true);
-            throw new Error(`Your account (${localUser.name || localUser.fullName}) has been suspended by System Administrator. Please contact HR for compliance clearance.`);
+            throw new Error(`Your account (${localUser.name || localUser.fullName}) has been suspended by HR Administrator. Please contact HR for compliance clearance.`);
         }
         localStorage.setItem('knome_employeeId', localUser.employeeId);
         try {
@@ -1758,7 +1758,8 @@ export const UserProvider = ({ children }) => {
             if (!isActive) {
                 savedSuspended[uidStr] = {
                     suspendedAt: new Date().toISOString(),
-                    reason: reason || 'Suspended by System Administrator'
+                    reason: reason || 'Suspended by HR Administrator',
+                    suspendedByRole: 'HR Admin'
                 };
             } else {
                 delete savedSuspended[uidStr];
@@ -1792,7 +1793,8 @@ export const UserProvider = ({ children }) => {
                         if (!isActive) {
                             savedSuspended[empKey] = {
                                 suspendedAt: new Date().toISOString(),
-                                reason: reason || 'Suspended by System Administrator'
+                                reason: reason || 'Suspended by HR Administrator',
+                                suspendedByRole: 'HR Admin'
                             };
                         } else {
                             delete savedSuspended[empKey];

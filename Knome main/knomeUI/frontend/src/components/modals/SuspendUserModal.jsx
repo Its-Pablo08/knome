@@ -12,7 +12,8 @@ import HighlightText from '../ui/HighlightText';
  * @param {boolean} props.isOpen
  * @param {Function} props.onClose
  * @param {Object} props.user - Target user/member { userId, id, fullName, name, profilePhotoUrl, designation, department, memberType, roleName }
- * @param {Function} props.onConfirm - async ({ duration, customDate, category, note, fullReason, isPermanent, days }) => void
+ * @param {Object} [props.report] - Optional linked moderation report { reportId, contentId, contentType, reason, category, reasonSnippet, contentSnippet }
+ * @param {Function} props.onConfirm - async ({ duration, customDate, category, note, fullReason, isPermanent, days, reportId, contentId, contentType }) => void
  * @param {string} [props.title] - Optional override title
  * @param {string} [props.subtitle] - Optional override subtitle
  */
@@ -20,6 +21,7 @@ export default function SuspendUserModal({
     isOpen,
     onClose,
     user: initialUser = null,
+    report = null,
     availableUsers = [],
     onConfirm,
     isHrAdmin = false,
@@ -39,14 +41,26 @@ export default function SuspendUserModal({
     const [reasonNote, setReasonNote] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Sync selectedUser if initialUser prop changes
+    // Sync selectedUser if initialUser or report prop changes
     React.useEffect(() => {
         if (initialUser) {
             setSelectedUser(initialUser);
+        } else if (report?.reportedUserId && availableUsers && availableUsers.length > 0) {
+            const found = availableUsers.find(u => Number(u.userId || u.id) === Number(report.reportedUserId));
+            if (found) setSelectedUser(found);
         } else if (availableUsers && availableUsers.length > 0) {
             setSelectedUser(null);
         }
-    }, [initialUser, isOpen]);
+
+        if (report) {
+            if (report.reason || report.category) {
+                setReasonCategory(report.category || report.reason || 'Violation of community guidelines');
+            }
+            if (report.reasonSnippet || report.contentSnippet || report.reason) {
+                setReasonNote(report.reasonSnippet || report.contentSnippet || report.reason || '');
+            }
+        }
+    }, [initialUser, report, isOpen, availableUsers]);
 
     if (!isOpen) return null;
 
@@ -84,7 +98,10 @@ export default function SuspendUserModal({
                 note: reasonNote,
                 fullReason,
                 isPermanent,
-                days
+                days,
+                reportId: report?.reportId ? Number(report.reportId) : null,
+                contentId: report?.contentId ? Number(report.contentId) : null,
+                contentType: report?.contentType || null
             });
             onClose();
         } catch (err) {
@@ -144,6 +161,29 @@ export default function SuspendUserModal({
                             <span><strong>HR Admin Action:</strong> You have authority to execute direct employee suspensions.</span>
                         </div>
                     ))}
+
+                    {/* Attached Moderation Report Context Badge if present */}
+                    {report && (
+                        <div className="p-3 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl text-xs space-y-1">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-[15px] text-indigo-600">policy</span>
+                                    <span>Attached Moderation Report #{report.reportId}</span>
+                                </span>
+                                <span className="text-[10px] uppercase font-black px-1.5 py-0.5 rounded bg-indigo-200/60 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300">
+                                    {report.contentType || 'Post'}
+                                </span>
+                            </div>
+                            <p className="text-[11px] text-slate-700 dark:text-slate-300">
+                                <strong className="text-slate-900 dark:text-white">Violation Reason:</strong> {report.reason || report.category || 'Content violation'}
+                            </p>
+                            {(report.reasonSnippet || report.contentSnippet) && (
+                                <p className="text-[11px] text-slate-500 italic line-clamp-2">
+                                    "{report.reasonSnippet || report.contentSnippet}"
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     {/* Member / User Preview Card OR Searchable Picker */}
                     {user ? (

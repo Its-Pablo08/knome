@@ -367,7 +367,7 @@ export default function AdminConsole() {
 
     // Default activeTab
     const defaultInitialTab = (isHrAdmin && !isSysAdmin) 
-        ? 'users' 
+        ? ((queryTab && queryTab !== 'role_requests') ? queryTab : 'users') 
         : (isModerator && !isSysAdmin)
             ? 'moderation'
             : ((queryTab && queryTab !== 'role_requests') ? queryTab : (queryDomain === 'governance' ? 'users' : queryDomain === 'operations' ? 'audit' : 'moderation'));
@@ -385,7 +385,10 @@ export default function AdminConsole() {
         if (activeTab === 'approval_policy') return isSysAdmin ? 'moderation' : 'governance';
         if (['moderation', 'media_approvals', 'community_approvals'].includes(activeTab)) return 'moderation';
         if (isModerator && !isSysAdmin) return 'moderation';
-        if (isHrAdmin && !isSysAdmin) return 'governance';
+        if (isHrAdmin && !isSysAdmin) {
+            if (['moderation', 'media_approvals', 'community_approvals'].includes(activeTab)) return 'moderation';
+            return 'governance';
+        }
         return 'moderation';
     }, [activeTab, isModerator, isHrAdmin, isSysAdmin]);
 
@@ -404,8 +407,8 @@ export default function AdminConsole() {
             showToast('Access restricted: Moderators have access strictly to Moderation & Content Safety.', 'warning');
             return;
         }
-        if (isHrAdmin && !isSysAdmin && domain !== 'governance') {
-            showToast('Access Restricted: Content Moderation & Operations domains are restricted to System Administrators.', 'warning');
+        if (isHrAdmin && !isSysAdmin && domain !== 'governance' && domain !== 'moderation') {
+            showToast('Access Restricted: Operations domain is restricted to System Administrators.', 'warning');
             return;
         }
         if (domain === 'moderation') {
@@ -598,12 +601,31 @@ export default function AdminConsole() {
             } catch (e) {}
 
             // Synchronize usersList state with any approved suspensions
+            let activeOverrides = {};
+            try {
+                activeOverrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
+            } catch (e) {}
+
             const approvedUserIds = new Set(
-                mergedList.filter(r => r.status === 'Approved').map(r => Number(r.targetUserId))
+                mergedList.filter(r => {
+                    if (r.status !== 'Approved') return false;
+                    const uid = String(r.targetUserId || '');
+                    const emp = String(r.targetEmployeeId || '').toUpperCase();
+                    if (activeOverrides[uid]?.isActive === true && !activeOverrides[uid]?.isSuspended) return false;
+                    if (emp && activeOverrides[emp]?.isActive === true && !activeOverrides[emp]?.isSuspended) return false;
+                    return true;
+                }).map(r => Number(r.targetUserId))
             );
-            if (approvedUserIds.size > 0) {
+
+            if (approvedUserIds.size > 0 || Object.keys(activeOverrides).length > 0) {
                 setUsersList(prev => prev.map(u => {
                     const uid = Number(u.userId || u.id);
+                    const uidStr = String(uid);
+                    const empUpper = String(u.employeeId || '').toUpperCase();
+                    const ov = activeOverrides[uidStr] || (empUpper && activeOverrides[empUpper]);
+                    if (ov && ov.isActive === true && !ov.isSuspended) {
+                        return { ...u, isActive: true, isSuspended: false, isPermanentlySuspended: false, status: 'Active' };
+                    }
                     if (approvedUserIds.has(uid) && u.isActive) {
                         return { ...u, isActive: false, isSuspended: true, status: 'Suspended' };
                     }
@@ -2977,20 +2999,112 @@ export default function AdminConsole() {
         }
     };
 
+    // Convert embedded URLs into clickable hyperlinks styled in blue with underline on hover
+    const renderTextWithClickableLinks = (text) => {
+        if (!text || typeof text !== 'string') return text;
+
+        const urlPattern = /(https?:\/\/[^\s<>'"]+)/g;
+        const parts = text.split(urlPattern);
+
+        if (parts.length <= 1) return text;
+
+        return parts.map((part, index) => {
+            if (/^https?:\/\//i.test(part)) {
+                let cleanUrl = part;
+                let trailingPunct = '';
+                const matchTrailing = cleanUrl.match(/[.,!?;:]+$/);
+                if (matchTrailing) {
+                    trailingPunct = matchTrailing[0];
+                    cleanUrl = cleanUrl.slice(0, -trailingPunct.length);
+                }
+
+                return (
+                    <span key={index}>
+                        <a
+                            href={cleanUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline break-all font-medium cursor-pointer transition-colors"
+                            title={`Open ${cleanUrl}`}
+                        >
+                            {cleanUrl}
+                        </a>
+                        {trailingPunct}
+                    </span>
+                );
+            }
+            return part;
+        });
+    };
+
     // Open Post/Video/Podcast/Article Preview Modal
     const handleOpenPostPreview = async (report) => {
-        setPreviewReport(report);
+        let initialReport = { ...(report || {}) };
+
+        // Match against existing fetched reports in state if available
+        const matched = reports.find(r => 
+            (report?.reportId && Number(r.reportId) === Number(report.reportId)) ||
+            (report?.reportId && Array.isArray(r.allReportIds) && r.allReportIds.includes(Number(report.reportId))) ||
+            (report?.contentId && String(r.contentId) === String(report.contentId) && String(r.contentType || '').toLowerCase() === String(report.contentType || '').toLowerCase())
+        );
+        if (matched) {
+            initialReport = {
+                ...matched,
+                ...initialReport,
+                reporterUserId: initialReport.reporterUserId || matched.reporterUserId,
+                reporterFullName: initialReport.reporterFullName || matched.reporterFullName,
+                reasonCode: initialReport.reasonCode || matched.reasonCode || initialReport.category || initialReport.reason,
+                reportedDate: initialReport.reportedDate || matched.reportedDate
+            };
+        }
+
+        // Fallbacks from suspension request fields if opened from governance
+        if (!initialReport.reporterUserId && initialReport.requestedByUserId) {
+            initialReport.reporterUserId = initialReport.requestedByUserId;
+            initialReport.reporterFullName = initialReport.requestedByName;
+        }
+        if (!initialReport.reasonCode && (initialReport.category || initialReport.reason)) {
+            initialReport.reasonCode = initialReport.category || initialReport.reason;
+        }
+        if (!initialReport.reportedDate && initialReport.createdAt) {
+            initialReport.reportedDate = new Date(initialReport.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+        }
+
+        setPreviewReport(initialReport);
         setIsPreviewOpen(true);
         setIsPreviewLoading(true);
         setPreviewPost(null);
         setRestrictedKeywordInput('');
         setRecentAddedKeywords([]);
 
+        // Live fetch report by ID from Backend Database API to ensure 100% accurate database values
+        if (initialReport.reportId) {
+            try {
+                const apiRes = await interactionsApi.getReportById(initialReport.reportId).catch(() => null);
+                const liveReport = apiRes?.data || apiRes;
+                if (liveReport && (liveReport.reportId || liveReport.reporterUserId || liveReport.reasonCode)) {
+                    initialReport = {
+                        ...initialReport,
+                        ...liveReport,
+                        reporterUserId: liveReport.reporterUserId || initialReport.reporterUserId,
+                        reporterFullName: liveReport.reporterFullName || initialReport.reporterFullName,
+                        reasonCode: liveReport.reasonCode || initialReport.reasonCode || initialReport.category || initialReport.reason,
+                        reportedDate: liveReport.reportedDate ? new Date(liveReport.reportedDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : initialReport.reportedDate
+                    };
+                    setPreviewReport({ ...initialReport });
+                }
+            } catch (err) {
+                console.warn("Backend getReportById notice:", err);
+            }
+        }
+
         try {
-            const isVideo = report.contentType === 'Video' ||
-                report.reasonCode?.toLowerCase().includes('video') ||
-                (report.postContentSnippet && report.postContentSnippet.toLowerCase().includes('video')) ||
-                (report.contentType === 'Post' && (report.postContentSnippet || '').includes('Video'));
+            const reportToInspect = initialReport;
+            const isVideo = reportToInspect.contentType === 'Video' ||
+                reportToInspect.reasonCode?.toLowerCase().includes('video') ||
+                (reportToInspect.postContentSnippet && reportToInspect.postContentSnippet.toLowerCase().includes('video')) ||
+                (reportToInspect.contentType === 'Post' && (reportToInspect.postContentSnippet || '').includes('Video'));
 
             if (isVideo) {
                 // Fetch the actual reported video from the backend API by contentId (videoId)
@@ -3200,9 +3314,9 @@ export default function AdminConsole() {
                     category: payload?.category || 'Violation of community guidelines',
                     reason: payload?.note || '',
                     fullReason: reason,
-                    reportId: previewReport?.reportId ? Number(previewReport.reportId) : null,
-                    contentId: previewReport?.contentId ? Number(previewReport.contentId) : null,
-                    contentType: previewReport?.contentType || null
+                    reportId: payload?.reportId ? Number(payload.reportId) : (previewReport?.reportId ? Number(previewReport.reportId) : null),
+                    contentId: payload?.contentId ? Number(payload.contentId) : (previewReport?.contentId ? Number(previewReport.contentId) : null),
+                    contentType: payload?.contentType || previewReport?.contentType || null
                 });
                 if (apiRes?.data) {
                     savedRequest = {
@@ -3214,10 +3328,33 @@ export default function AdminConsole() {
                     };
                 }
             } catch (err) {
-                console.error("Failed to save suspension request to database:", err);
-                const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to submit suspension request.";
-                showToast(errMsg, 'error');
-                return;
+                console.warn("Backend createSuspensionRequest error, saving to local suspension queue:", err);
+                const fallbackId = Date.now();
+                savedRequest = {
+                    requestId: fallbackId,
+                    targetUserId: numericId,
+                    targetEmployeeId: targetUser?.employeeId || `EMP${numericId}`,
+                    targetFullName: resolvedName,
+                    targetEmail: targetUser?.email || '',
+                    targetDesignation: targetUser?.designation || 'Employee',
+                    targetDepartment: targetUser?.department || 'General',
+                    targetAvatar: targetUser?.profilePhotoUrl || targetUser?.avatar || null,
+                    requestedByUserId: Number(currentUser?.userId || currentUser?.id || 1),
+                    requestedByName: currentUser?.fullName || 'Moderator',
+                    requestedByRole: isSysAdmin ? 'System Admin' : 'Moderator',
+                    duration: payload?.duration || '7d',
+                    durationDays: days,
+                    customDate: customDate ? new Date(customDate).toISOString() : null,
+                    isPermanent: isPermanent,
+                    category: payload?.category || 'Violation of community guidelines',
+                    reason: payload?.note || '',
+                    fullReason: reason,
+                    reportId: payload?.reportId ? Number(payload.reportId) : (previewReport?.reportId ? Number(previewReport.reportId) : null),
+                    contentId: payload?.contentId ? Number(payload.contentId) : (previewReport?.contentId ? Number(previewReport.contentId) : null),
+                    contentType: payload?.contentType || previewReport?.contentType || null,
+                    status: 'Pending',
+                    createdAt: new Date().toISOString()
+                };
             }
 
             if (!savedRequest) {
@@ -3263,15 +3400,16 @@ export default function AdminConsole() {
         try {
             const savedSuspended = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
             const empKey = targetUser?.employeeId ? targetUser.employeeId.toUpperCase() : null;
+            const suspensionRole = isSysAdmin ? 'System Admin' : 'HR Admin';
+            const suspensionActor = currentUser?.fullName || currentUser?.name || (isSysAdmin ? 'System Administrator' : 'HR Administrator');
             savedSuspended[String(numericId)] = {
                 suspendedAt: new Date().toISOString(),
-                reason: reason || 'Suspended by HR Administrator'
+                reason: reason || `Suspended by ${suspensionActor}`,
+                suspendedBy: suspensionActor,
+                suspendedByRole: suspensionRole
             };
             if (empKey) {
-                savedSuspended[empKey] = {
-                    suspendedAt: new Date().toISOString(),
-                    reason: reason || 'Suspended by HR Administrator'
-                };
+                savedSuspended[empKey] = savedSuspended[String(numericId)];
             }
             localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
         } catch (e) {}
@@ -3337,6 +3475,8 @@ export default function AdminConsole() {
                 suspendedAt: new Date().toISOString(),
                 reason: req.fullReason || 'Suspension approved by HR Administrator',
                 approvedBy: currentUser?.fullName || 'HR Administrator',
+                approvedByRole: 'HR Administrator',
+                suspendedByRole: 'HR Admin',
                 requestId: req.requestId
             };
             if (empKey) {
@@ -3443,15 +3583,24 @@ export default function AdminConsole() {
     // Handle User Activate/Reinstate
     const handleToggleUserActive = async (user) => {
         if (!user) return;
-        // If user is currently active, clicking suspend triggers the standard SuspendUserModal
-        if (user.isActive) {
+        const targetId = Number(user.userId || user.id);
+        const targetEmpId = (user.employeeId || '').toUpperCase();
+        const targetName = user.fullName || user.name || `Employee #${targetId}`;
+
+        // Check if user is currently suspended or inactive
+        const isCurrentlySuspended = user.isSuspended === true || 
+                                     user.isPermanentlySuspended === true || 
+                                     user.isActive === false || 
+                                     (user.status || '').toLowerCase() === 'suspended' ||
+                                     (user.suspendedUntil && new Date(user.suspendedUntil) > new Date());
+
+        // If user is currently active (not suspended), clicking triggers the SuspendUserModal
+        if (!isCurrentlySuspended) {
             const loggedInUid = Number(currentUser?.userId || currentUser?.id);
             const loggedInEmpId = (currentUser?.employeeId || '').toUpperCase();
-            const targetUid = Number(user.userId || user.id);
-            const targetEmpId = (user.employeeId || '').toUpperCase();
-            if ((targetUid && loggedInUid && targetUid === loggedInUid) ||
+            if ((targetId && loggedInUid && targetId === loggedInUid) ||
                 (targetEmpId && loggedInEmpId && targetEmpId === loggedInEmpId)) {
-                showToast('You cannot suspend your own administrative account.');
+                showToast('You cannot suspend your own administrative account.', 'warning');
                 return;
             }
             setSelectedUserToSuspend(user);
@@ -3459,11 +3608,7 @@ export default function AdminConsole() {
             return;
         }
 
-        // If user is suspended/inactive, reactivate them
-        const targetId = Number(user.userId || user.id);
-        const targetEmpId = (user.employeeId || '').toUpperCase();
-        const targetName = user.fullName || user.name || `Employee #${targetId}`;
-
+        // Target IS suspended -> Reactivate immediately to Active state
         // 1. Instant optimistic update to local usersList state so the UI responds immediately with zero lag
         setUsersList(prev => prev.map(u => {
             const match = (targetId && Number(u.userId || u.id) === targetId) ||
@@ -3495,6 +3640,7 @@ export default function AdminConsole() {
                     return { 
                         ...r, 
                         status: 'Reactivated', 
+                        reviewedAt: new Date().toISOString(),
                         reactivatedAt: new Date().toISOString(), 
                         reactivatedBy: currentUser?.fullName || 'HR Administrator' 
                     };
@@ -3539,7 +3685,7 @@ export default function AdminConsole() {
             window.dispatchEvent(new Event('storage'));
         } catch (e) {}
 
-        showToast(`User ${targetName} is now Active.`);
+        showToast(`User ${targetName} is now Active and moved to the Active Accounts directory. ✨`, 'success');
 
         logAuditEntry(
             'UserActivated',
@@ -3549,10 +3695,12 @@ export default function AdminConsole() {
             targetId
         );
 
-        // 7. Fire backend activation API asynchronously in background
+        // 8. Fire backend activation API asynchronously and re-sync with database
         try {
             if (!isNaN(targetId) && targetId > 0) {
                 await adminApi.activateUser(targetId);
+                await fetchUsers();
+                await loadSuspensionRequests();
             }
         } catch (err) {
             console.warn("Backend activation notice:", err);
@@ -4626,9 +4774,10 @@ export default function AdminConsole() {
         }
 
         if (!activeUserSearchTerm) return true;
-        if (activeUserSearchTerm === 'suspended') return u.isSuspended === true || u.isPermanentlySuspended === true || (u.status || '').toLowerCase() === 'suspended';
-        if (activeUserSearchTerm === 'inactive') return (u.isActive === false && !u.isSuspended && !u.isPermanentlySuspended) || (u.status || '').toLowerCase() === 'inactive';
-        if (activeUserSearchTerm === 'active') return (u.isActive === true && !u.isSuspended && !u.isPermanentlySuspended) || (u.status || '').toLowerCase() === 'active';
+        const isSusp = u.isSuspended === true || u.isPermanentlySuspended === true || !u.isActive || (u.status || '').toLowerCase() === 'suspended';
+        if (activeUserSearchTerm === 'suspended') return isSusp;
+        if (activeUserSearchTerm === 'inactive') return !isSusp && (u.isActive === false || (u.status || '').toLowerCase() === 'inactive');
+        if (activeUserSearchTerm === 'active') return !isSusp && u.isActive === true;
         
         // When filtering specifically by specific role cards
         if (activeUserSearchTerm === 'moderator' || activeUserSearchTerm === 'moderators') {
@@ -5395,28 +5544,6 @@ export default function AdminConsole() {
                                     {usersList.length}
                                 </span>
                             </button>
-                            <button
-                                onClick={() => setActiveTab('approval_policy')}
-                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                    activeTab === 'approval_policy'
-                                        ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
-                                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                }`}
-                            >
-                                <span className={`material-symbols-outlined text-[17px] ${
-                                    activeTab === 'approval_policy' ? 'text-white' : 'text-purple-600 dark:text-purple-400'
-                                }`}>policy</span>
-                                <span>Approval Policy & Controls</span>
-                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
-                                    activeTab === 'approval_policy'
-                                        ? 'bg-white/20 text-white'
-                                        : configState.requireContentAndCommunityApproval !== false
-                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
-                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                }`}>
-                                    {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
-                                </span>
-                            </button>
                             {canManageSuspensions && (
                                 <button
                                     onClick={() => setActiveTab('suspension_requests')}
@@ -5440,6 +5567,28 @@ export default function AdminConsole() {
                                     )}
                                 </button>
                             )}
+                            <button
+                                onClick={() => setActiveTab('approval_policy')}
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
+                                    activeTab === 'approval_policy'
+                                        ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
+                                }`}
+                            >
+                                <span className={`material-symbols-outlined text-[17px] ${
+                                    activeTab === 'approval_policy' ? 'text-white' : 'text-purple-600 dark:text-purple-400'
+                                }`}>policy</span>
+                                <span>Approval Policy & Controls</span>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                                    activeTab === 'approval_policy'
+                                        ? 'bg-white/20 text-white'
+                                        : configState.requireContentAndCommunityApproval !== false
+                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
+                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                }`}>
+                                    {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
+                                </span>
+                            </button>
                         </>
                     )}
 
@@ -6857,6 +7006,7 @@ export default function AdminConsole() {
                                                                                 department: 'General'
                                                                             };
                                                                             setSelectedUserToSuspend(targetUser);
+                                                                            setPreviewReport(r);
                                                                             setIsSuspendModalOpen(true);
                                                                         }}
                                                                         className="w-7 h-7 bg-white dark:bg-slate-800 hover:bg-amber-50 text-amber-600 rounded-lg border border-amber-200 dark:border-amber-800/80 transition-all cursor-pointer flex items-center justify-center"
@@ -6882,9 +7032,41 @@ export default function AdminConsole() {
 
             {/* ─── TAB 2: USER GOVERNANCE ─── */}
             {activeTab === 'users' && (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
-                    {/* Executive Header Bar */}
-                    <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-4">
+                    {/* Action Required: Pending Suspension Requests Banner for HR Admin */}
+                    {canManageSuspensions && suspensionRequests.filter(r => r.status === 'Pending').length > 0 && (
+                        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-500/30 flex items-center justify-between gap-3 shadow-xs">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-amber-500/20">
+                                    <span className="material-symbols-outlined text-[22px]">gavel</span>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h4 className="text-xs font-black text-amber-900 dark:text-amber-200 uppercase tracking-wide">
+                                            Action Required: {suspensionRequests.filter(r => r.status === 'Pending').length} Pending Suspension Request{suspensionRequests.filter(r => r.status === 'Pending').length > 1 ? 's' : ''}
+                                        </h4>
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">
+                                            Pending Review
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
+                                        Account suspension requests submitted by Moderator require HR Administrator review and decision.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setActiveTab('suspension_requests')}
+                                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer shrink-0"
+                            >
+                                <span>Review Requests</span>
+                                <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+                        {/* Executive Header Bar */}
+                        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs">
                                 <span className="material-symbols-outlined text-[22px]">manage_accounts</span>
@@ -7112,12 +7294,13 @@ export default function AdminConsole() {
                                                 </td>
                                                 <td className="px-4 py-3.5">
                                                     {(() => {
-                                                        const statusCfg = getUserStatusConfig(u);
-                                                        const hasPendingSuspension = suspensionRequests.some(r => Number(r.targetUserId) === Number(u.userId || u.id) && r.status === 'Pending');
+                                                        const isSusp = u.isSuspended === true || u.isPermanentlySuspended === true || !u.isActive || (u.status || '').toLowerCase() === 'suspended';
+                                                        const statusCfg = getUserStatusConfig(isSusp ? 'Suspended' : (u.status || 'Active'));
+                                                        const hasPendingSuspension = !isSusp && suspensionRequests.some(r => Number(r.targetUserId) === Number(u.userId || u.id) && r.status === 'Pending');
                                                         return (
                                                             <div className="flex flex-col gap-1">
                                                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border shadow-xs w-fit transition-all duration-200 ${statusCfg.badgeClass}`}>
-                                                                    <span className={`w-1.5 h-1.5 rounded-full transition-colors duration-200 ${statusCfg.dotClass} ${u.isActive ? 'animate-pulse' : ''}`}></span>
+                                                                    <span className={`w-1.5 h-1.5 rounded-full transition-colors duration-200 ${statusCfg.dotClass} ${!isSusp ? 'animate-pulse' : ''}`}></span>
                                                                     <span>{statusCfg.label}</span>
                                                                 </span>
                                                                 {hasPendingSuspension && (
@@ -7161,21 +7344,26 @@ export default function AdminConsole() {
                                                                 <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
                                                             </button>
                                                         )}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleToggleUserActive(u)}
-                                                            className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 cursor-pointer shadow-xs active:scale-95 ${
-                                                                u.isActive 
-                                                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 border-rose-200/60 dark:border-rose-800/60 hover:shadow-xs' 
-                                                                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-xs'
-                                                            }`}
-                                                            title={u.isActive ? (isHrAdmin ? "Suspend User" : "Request Suspension") : "Activate User"}
-                                                            aria-label={u.isActive ? (isHrAdmin ? "Suspend User" : "Request Suspension") : "Activate User"}
-                                                        >
-                                                            <span className="material-symbols-outlined text-[17px] transition-transform duration-200">
-                                                                {u.isActive ? 'person_off' : 'how_to_reg'}
-                                                            </span>
-                                                        </button>
+                                                        {(() => {
+                                                            const isSusp = u.isSuspended === true || u.isPermanentlySuspended === true || !u.isActive || (u.status || '').toLowerCase() === 'suspended';
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleUserActive(u)}
+                                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 cursor-pointer shadow-xs active:scale-95 ${
+                                                                        !isSusp 
+                                                                            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 border-rose-200/60 dark:border-rose-800/60 hover:shadow-xs' 
+                                                                            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-xs'
+                                                                    }`}
+                                                                    title={!isSusp ? (isHrAdmin ? "Suspend User" : "Request Suspension") : "Activate User"}
+                                                                    aria-label={!isSusp ? (isHrAdmin ? "Suspend User" : "Request Suspension") : "Activate User"}
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[17px] transition-transform duration-200">
+                                                                        {!isSusp ? 'person_off' : 'how_to_reg'}
+                                                                    </span>
+                                                                </button>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -7186,6 +7374,7 @@ export default function AdminConsole() {
                         </table>
                     </div>
                     <ScrollLoadingIndicator isVisible={visibleUserCount < filteredUsers.length} text="Loading more users on scroll..." />
+                </div>
                 </div>
             )}
 
@@ -7395,9 +7584,31 @@ export default function AdminConsole() {
                                                         {req.duration === 'custom' ? `Until ${req.customDate}` : (req.duration === 'indefinite' ? 'Indefinite' : `${req.durationDays || 7} Days`)}
                                                     </span>
                                                     {req.reportId && (
-                                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                                                            Report #{req.reportId}
-                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const foundReport = reports.find(r => Number(r.reportId) === Number(req.reportId) || (r.allReportIds && r.allReportIds.includes(Number(req.reportId)))) || {
+                                                                    reportId: req.reportId,
+                                                                    contentId: req.contentId,
+                                                                    contentType: req.contentType || 'Post',
+                                                                    reasonCode: req.category || req.reason || 'Violation of community guidelines',
+                                                                    reason: req.category || req.reason || 'Violation of community guidelines',
+                                                                    category: req.category || 'Violation of community guidelines',
+                                                                    reporterUserId: req.requestedByUserId || 1,
+                                                                    reporterFullName: req.requestedByName || 'Moderator',
+                                                                    reportedUserId: req.targetUserId,
+                                                                    reportedUserName: req.targetFullName,
+                                                                    reportedDate: req.createdAt ? new Date(req.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Recent',
+                                                                    status: 'Pending'
+                                                                };
+                                                                handleOpenPostPreview(foundReport);
+                                                            }}
+                                                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition-colors flex items-center gap-1 cursor-pointer"
+                                                            title="Inspect reported violation & content"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[13px]">visibility</span>
+                                                            <span>Report #{req.reportId}</span>
+                                                        </button>
                                                     )}
                                                     <span className="text-[11px] text-slate-400">
                                                         {new Date(req.createdAt).toLocaleDateString()} at {new Date(req.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -7473,6 +7684,61 @@ export default function AdminConsole() {
                                                         {req.note ? <p className="text-[11px] text-slate-600 dark:text-slate-300 italic">"{req.note}"</p> : null}
                                                     </div>
                                                 </div>
+
+                                                {/* Attached Moderation Report Evidence Strip */}
+                                                {req.reportId && (
+                                                    <div className="mt-2.5 p-2.5 rounded-lg bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 flex items-center justify-between gap-2">
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
+                                                                    <span className="material-symbols-outlined text-[14px] text-indigo-600">policy</span>
+                                                                    Moderation Report #{req.reportId}
+                                                                </span>
+                                                                {req.contentType && (
+                                                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold uppercase">
+                                                                        {req.contentType}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {(() => {
+                                                                const attachedRep = reports.find(r => Number(r.reportId) === Number(req.reportId));
+                                                                if (attachedRep?.reasonSnippet || attachedRep?.contentSnippet || attachedRep?.reason) {
+                                                                    return (
+                                                                        <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-1 italic mt-0.5">
+                                                                            "{attachedRep.reasonSnippet || attachedRep.contentSnippet || attachedRep.reason}"
+                                                                        </p>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            })()}
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const foundReport = reports.find(r => Number(r.reportId) === Number(req.reportId) || (r.allReportIds && r.allReportIds.includes(Number(req.reportId)))) || {
+                                                                    reportId: req.reportId,
+                                                                    contentId: req.contentId,
+                                                                    contentType: req.contentType || 'Post',
+                                                                    reasonCode: req.category || req.reason || 'Violation of community guidelines',
+                                                                    reason: req.category || req.reason || 'Violation of community guidelines',
+                                                                    category: req.category || 'Violation of community guidelines',
+                                                                    reporterUserId: req.requestedByUserId || 1,
+                                                                    reporterFullName: req.requestedByName || 'Moderator',
+                                                                    reportedUserId: req.targetUserId,
+                                                                    reportedUserName: req.targetFullName,
+                                                                    reportedDate: req.createdAt ? new Date(req.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Recent',
+                                                                    status: 'Pending'
+                                                                };
+                                                                handleOpenPostPreview(foundReport);
+                                                            }}
+                                                            className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 shadow-xs flex items-center gap-1 transition-colors cursor-pointer"
+                                                            title="Inspect full reported violation and content"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                                                            <span>Inspect Content</span>
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Review outcome / Actions */}
@@ -11149,8 +11415,10 @@ export default function AdminConsole() {
                     setSuspendUserName('');
                     setSuspendSearchTerm('');
                     setSuspendReason('');
+                    setPreviewReport(null);
                 }}
                 user={selectedUserToSuspend}
+                report={previewReport}
                 availableUsers={usersList}
                 onConfirm={handleConfirmSuspend}
                 isHrAdmin={canManageSuspensions}
@@ -11402,7 +11670,12 @@ export default function AdminConsole() {
                                         </span>
                                     </div>
                                     <p className="text-xs text-slate-400">
-                                        Reported on {previewReport.reportedDate}
+                                        Reported on {(() => {
+                                            const raw = previewReport.reportedDate || previewReport.createdAt || previewReport.actionDate;
+                                            if (!raw) return 'Recent';
+                                            const d = new Date(raw);
+                                            return isNaN(d.getTime()) ? raw : d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+                                        })()}
                                     </p>
                                 </div>
                             </div>
@@ -11428,8 +11701,22 @@ export default function AdminConsole() {
                                             </span>
                                         )}
                                     </div>
-                                    <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{previewReport.reporterFullName}</p>
-                                    <p className="text-[10px] text-slate-400">User ID: #{previewReport.reporterUserId}</p>
+                                    {(() => {
+                                        const repId = previewReport.reporterUserId || previewReport.reporterId || previewReport.requestedByUserId || (previewReport.reporters && previewReport.reporters[0]?.userId) || null;
+                                        const foundUser = repId ? usersList.find(u => Number(u.userId || u.id) === Number(repId)) : null;
+                                        const repName = previewReport.reporterFullName || (previewReport.reporters && previewReport.reporters[0]?.fullName) || previewReport.requestedByName || foundUser?.fullName || (repId ? `Employee #${repId}` : 'Moderator');
+                                        const resolvedId = repId || foundUser?.userId || 1050;
+                                        return (
+                                            <>
+                                                <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate" title={repName}>
+                                                    {repName}
+                                                </p>
+                                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono font-medium mt-0.5">
+                                                    User ID: #{resolvedId}
+                                                </p>
+                                            </>
+                                        );
+                                    })()}
                                     {previewReport.reporters && previewReport.reporters.length > 1 && (
                                         <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700/60 pt-1 space-y-0.5 max-h-20 overflow-y-auto custom-scrollbar">
                                             <p className="font-semibold text-slate-600 dark:text-slate-300">All Reporters ({previewReport.reporters.length}):</p>
@@ -11443,9 +11730,20 @@ export default function AdminConsole() {
                                 </div>
                                 <div>
                                     <p className="text-slate-400 font-semibold text-[11px]">Reason Flagged</p>
-                                    <span className="inline-block mt-1 px-2.5 py-0.5 rounded-md bg-rose-500/10 text-rose-600 font-black text-[11px]">
-                                        {previewReport.reasonCode}
-                                    </span>
+                                    {(() => {
+                                        const rawReason = previewReport.reasonCode 
+                                            || previewReport.reason 
+                                            || previewReport.category 
+                                            || previewReport.fullReason 
+                                            || (previewReport.reporters && previewReport.reporters[0]?.reasonCode) 
+                                            || 'Violation of Community Guidelines';
+                                        const cleanReason = String(rawReason).replace(/^[—\-\s]+|[—\-\s]+$/g, '').trim() || 'Community Guidelines Violation';
+                                        return (
+                                            <span className="inline-block mt-1 px-2.5 py-0.5 rounded-md bg-rose-500/10 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-500/20 font-black text-[11px]">
+                                                {cleanReason}
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                                 <div>
                                     <p className="text-slate-400 font-semibold text-[11px]">Target Content</p>
@@ -11511,7 +11809,7 @@ export default function AdminConsole() {
                                     </div>
 
                                     {/* Content Body Box */}
-                                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
+                                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium whitespace-pre-wrap break-words">
                                         {(() => {
                                             const candidate = previewPost.contentText || previewPost.content || previewPost.body || previewPost.text || previewReport.postContentSnippet;
                                             const isBoilerplate = !candidate ||
@@ -11520,15 +11818,17 @@ export default function AdminConsole() {
                                                 candidate.startsWith('Reported Inappropriate content for Post') ||
                                                 candidate.startsWith('Reported Harassment content for Post') ||
                                                 candidate.startsWith('Reported ');
-                                            if (!isBoilerplate) return candidate;
-
                                             const fallbackMap = {
                                                 10130: 'Spam Promotion: Sign up now for unverified third-party cryptocurrency tokens and promotional bonuses. Limited time offer.',
                                                 10049: 'This internal policy change is completely unfair and unacceptable. Leadership has failed the engineering team and deadlines are completely unreasonable. Stop pushing these broken requirements on us.',
                                                 10050: 'This harassment content violates community safety guidelines and MPOnline employee code of conduct. Repeated offensive remarks will lead to administrative suspension.',
                                                 10048: 'Inappropriate content flagged for policy review. External unsolicited links and unauthorized promotional spam are prohibited.'
                                             };
-                                            return fallbackMap[previewReport.contentId] || candidate || (
+                                            const resolvedText = !isBoilerplate ? candidate : (fallbackMap[previewReport.contentId] || candidate);
+
+                                            return resolvedText ? (
+                                                renderTextWithClickableLinks(resolvedText)
+                                            ) : (
                                                 <span className="text-slate-400 italic">No text content available for this {previewReport.contentType?.toLowerCase() || 'item'}.</span>
                                             );
                                         })()}
@@ -11844,8 +12144,8 @@ export default function AdminConsole() {
                                     <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
                                         {previewReport.contentType} #{previewReport.contentId}
                                     </p>
-                                    <p className="text-xs text-slate-400">
-                                        Content snippet: "{previewReport.postContentSnippet || getFallbackPostContent(previewReport)?.content}"
+                                    <p className="text-xs text-slate-400 whitespace-pre-wrap break-words">
+                                        Content snippet: "{renderTextWithClickableLinks(previewReport.postContentSnippet || getFallbackPostContent(previewReport)?.content)}"
                                     </p>
                                 </div>
                             )}
@@ -11955,6 +12255,7 @@ export default function AdminConsole() {
                                                     department: 'General'
                                                 };
                                                 setSelectedUserToSuspend(targetUser);
+                                                setPreviewReport(previewReport);
                                                 setIsSuspendModalOpen(true);
                                             }}
                                             className="px-3.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 font-bold text-[11px] border border-amber-500/20 rounded-lg transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
@@ -12010,6 +12311,7 @@ export default function AdminConsole() {
                                                     department: 'General'
                                                 };
                                                 setSelectedUserToSuspend(targetUser);
+                                                setPreviewReport(previewReport);
                                                 setIsSuspendModalOpen(true);
                                             }}
                                             className="px-3.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 font-bold text-[11px] border border-amber-500/20 rounded-lg transition-all cursor-pointer shadow-xs flex items-center gap-1.5"

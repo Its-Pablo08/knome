@@ -1065,6 +1065,30 @@ public class ContentInteractionService : IContentInteractionService
         return await EnrichReportsAsync(reports);
     }
 
+    public async Task<ModerationReportDto?> GetReportByIdAsync(long reportId)
+    {
+        var report = await _repo.GetReportByIdAsync(reportId);
+        if (report == null) return null;
+
+        var enriched = await EnrichReportsAsync(new List<ModerationReport> { report });
+        var dto = enriched.FirstOrDefault() ?? _mapper.Map<ModerationReportDto>(report);
+
+        if (report.ReporterUserId > 0 && (string.IsNullOrWhiteSpace(dto.ReporterFullName) || dto.ReporterFullName == "Unknown"))
+        {
+            var user = await _db.Users.FindAsync(report.ReporterUserId);
+            if (user != null)
+            {
+                dto.ReporterFullName = user.FullName;
+            }
+            else
+            {
+                dto.ReporterFullName = $"User #{report.ReporterUserId}";
+            }
+        }
+
+        return dto;
+    }
+
     public async Task<ModerationReportDto> ResolveReportAsync(long reportId, int moderatorUserId, ResolveReportDto dto)
     {
         var report = await _repo.GetReportByIdAsync(reportId);
@@ -1258,8 +1282,24 @@ public class ContentInteractionService : IContentInteractionService
                 .ToDictionaryAsync(c => c.ClipId)
             : new Dictionary<long, Clip>();
 
+        var reporterUserIds = dtos.Where(d => d.ReporterUserId > 0).Select(d => d.ReporterUserId).Distinct().ToList();
+        var reporterUsers = reporterUserIds.Count > 0
+            ? await _db.Users.AsNoTracking()
+                .Where(u => reporterUserIds.Contains(u.UserId))
+                .ToDictionaryAsync(u => u.UserId)
+            : new Dictionary<int, User>();
+
         foreach (var dto in dtos)
         {
+            if (reporterUsers.TryGetValue(dto.ReporterUserId, out var repUser))
+            {
+                dto.ReporterFullName = repUser.FullName;
+            }
+            else if (string.IsNullOrWhiteSpace(dto.ReporterFullName) || dto.ReporterFullName == "Unknown")
+            {
+                dto.ReporterFullName = dto.ReporterUserId > 0 ? $"User #{dto.ReporterUserId}" : "Moderator";
+            }
+
             // Severity & AiScore
             dto.Severity = dto.ReasonCode switch
             {

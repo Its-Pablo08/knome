@@ -334,6 +334,28 @@ public class UserService : IUserService
         _userRepo.Update(user);
         await _userRepo.SaveChangesAsync();
 
+        try
+        {
+            var userSuspensionRequests = await _db.SuspensionRequests
+                .Where(r => r.TargetUserId == userId && (r.Status == "Approved" || r.Status == "Pending"))
+                .ToListAsync();
+
+            if (userSuspensionRequests.Any())
+            {
+                foreach (var req in userSuspensionRequests)
+                {
+                    req.Status = "Reactivated";
+                    req.ReviewedAt = Knome.API.Common.KnomeTime.Now;
+                    req.ReviewedByUserId = actorUserId;
+                }
+                await _db.SaveChangesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not update suspension requests for activated user {UserId}", userId);
+        }
+
         await _auditLogService.RecordAsync(actorUserId, "ActivateUser", "User", userId, reason: "User reactivated.");
 
         await _notificationService.PublishAsync(
