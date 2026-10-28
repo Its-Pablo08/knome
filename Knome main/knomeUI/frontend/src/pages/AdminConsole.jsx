@@ -370,7 +370,9 @@ export default function AdminConsole() {
         ? ((queryTab && queryTab !== 'role_requests') ? queryTab : 'users') 
         : (isModerator && !isSysAdmin)
             ? 'moderation'
-            : ((queryTab && queryTab !== 'role_requests') ? queryTab : (queryDomain === 'governance' ? 'users' : queryDomain === 'operations' ? 'audit' : 'moderation'));
+            : isSysAdmin
+                ? ((queryTab && !['role_requests', 'users', 'suspension_requests'].includes(queryTab)) ? queryTab : (queryDomain === 'operations' ? 'audit' : 'moderation'))
+                : ((queryTab && queryTab !== 'role_requests') ? queryTab : (queryDomain === 'governance' ? 'users' : queryDomain === 'operations' ? 'audit' : 'moderation'));
 
     const [activeTab, setActiveTab] = useState(defaultInitialTab);
     const [approvalSubTab, setApprovalSubTab] = useState('governance'); // 'governance' | 'modules'
@@ -379,6 +381,7 @@ export default function AdminConsole() {
 
     // Hierarchical Domain Derived from Active Tab
     const activeDomain = useMemo(() => {
+        if (isSysAdmin && ['users', 'role_requests', 'suspension_requests'].includes(activeTab)) return 'moderation';
         if (['users', 'role_requests'].includes(activeTab)) return 'governance';
         if (activeTab === 'suspension_requests') return 'governance';
         if (['audit', 'serilog', 'analytics'].includes(activeTab)) return 'operations';
@@ -394,12 +397,15 @@ export default function AdminConsole() {
 
     useEffect(() => {
         if (activeTab === 'role_requests') {
-            setActiveTab('users');
+            setActiveTab(isSysAdmin ? 'moderation' : 'users');
+        }
+        if (isSysAdmin && (activeTab === 'users' || activeTab === 'suspension_requests')) {
+            setActiveTab('moderation');
         }
         if (activeTab === 'suspension_requests' && !canManageSuspensions) {
-            setActiveTab(isModerator ? 'moderation' : 'users');
+            setActiveTab(isModerator ? 'moderation' : (isSysAdmin ? 'moderation' : 'users'));
         }
-    }, [activeTab, canManageSuspensions, isModerator]);
+    }, [activeTab, canManageSuspensions, isModerator, isSysAdmin]);
 
     // Switch Domain and Auto-select First Tab in that Domain
     const handleDomainSelect = (domain) => {
@@ -409,6 +415,9 @@ export default function AdminConsole() {
         }
         if (isHrAdmin && !isSysAdmin && domain !== 'governance' && domain !== 'moderation') {
             showToast('Access Restricted: Operations domain is restricted to System Administrators.', 'warning');
+            return;
+        }
+        if (isSysAdmin && domain === 'governance') {
             return;
         }
         if (domain === 'moderation') {
@@ -3457,18 +3466,29 @@ export default function AdminConsole() {
             const empKey = targetUser?.employeeId ? targetUser.employeeId.toUpperCase() : null;
             const suspensionRole = isSysAdmin ? 'System Admin' : 'HR Admin';
             const suspensionActor = currentUser?.fullName || currentUser?.name || (isSysAdmin ? 'System Administrator' : 'HR Administrator');
+            const calculatedUntil = isPermanent ? null : (customDate ? new Date(customDate).toISOString() : new Date(Date.now() + (Number(days) || 7) * 24 * 60 * 60 * 1000).toISOString());
             savedSuspended[String(numericId)] = {
                 suspendedAt: new Date().toISOString(),
                 reason: reason || `Suspended by ${suspensionActor}`,
                 suspendedBy: suspensionActor,
-                suspendedByRole: suspensionRole
+                suspendedByRole: suspensionRole,
+                days: days,
+                isPermanent: isPermanent,
+                suspendedUntil: calculatedUntil
             };
             if (empKey) {
                 savedSuspended[empKey] = savedSuspended[String(numericId)];
             }
             localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
         } catch (e) {}
-        setUsersList(prev => prev.map(u => (Number(u.userId || u.id) === numericId || (targetUser?.employeeId && u.employeeId === targetUser.employeeId)) ? { ...u, isActive: false, isSuspended: true, status: 'Suspended' } : u));
+        setUsersList(prev => prev.map(u => (Number(u.userId || u.id) === numericId || (targetUser?.employeeId && u.employeeId === targetUser.employeeId)) ? { 
+            ...u, 
+            isActive: false, 
+            isSuspended: true, 
+            isPermanentlySuspended: isPermanent,
+            suspendedUntil: isPermanent ? null : (customDate ? new Date(customDate).toISOString() : new Date(Date.now() + (Number(days) || 7) * 24 * 60 * 60 * 1000).toISOString()),
+            status: 'Suspended' 
+        } : u));
         
         // Auto-approve any pending suspension requests for this target user
         setSuspensionRequests(prev => {
@@ -5325,6 +5345,7 @@ export default function AdminConsole() {
                                             </div>
                                             <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-black">XLSX</span>
                                         </button>
+                                    {!isSysAdmin && (
                                         <button
                                             onClick={handleExportUsersExcel}
                                             className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 flex items-center justify-between cursor-pointer transition-colors"
@@ -5335,6 +5356,7 @@ export default function AdminConsole() {
                                             </div>
                                             <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-black">XLSX</span>
                                         </button>
+                                    )}
                                         <button
                                             onClick={handleExportAuditExcel}
                                             className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 flex items-center justify-between cursor-pointer transition-colors"
@@ -5373,6 +5395,7 @@ export default function AdminConsole() {
                                             </div>
                                             <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded font-black">CSV</span>
                                         </button>
+                                    {!isSysAdmin && (
                                         <button
                                             onClick={handleExportUsersCSV}
                                             className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-between cursor-pointer transition-colors"
@@ -5383,6 +5406,7 @@ export default function AdminConsole() {
                                             </div>
                                             <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded font-black">CSV</span>
                                         </button>
+                                    )}
                                         <button
                                             onClick={handleExportAuditCSV}
                                             className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-between cursor-pointer transition-colors"
@@ -5403,8 +5427,8 @@ export default function AdminConsole() {
 
             {/* ─── HIERARCHY TIER 1: FUNCTIONAL DOMAIN PILLARS (FOR SYSTEM ADMIN) ─── */}
             {isSysAdmin && (
-                /* Multi-Domain 3-Pillar Deck for System Admin */
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3.5">
+                /* Multi-Domain 2-Pillar Deck for System Admin */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3.5">
                     {/* Pillar 1: Content Moderation & Safety */}
                     <div 
                         onClick={() => handleDomainSelect('moderation')}
@@ -5463,58 +5487,7 @@ export default function AdminConsole() {
                         </div>
                     </div>
 
-                    {/* Pillar 2: User Governance & Access */}
-                    <div 
-                        onClick={() => handleDomainSelect('governance')}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group shadow-xs ${
-                            activeDomain === 'governance'
-                                ? 'bg-[#0c1838] text-white border-[#1e295a] ring-2 ring-purple-500/40 shadow-sm'
-                                : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-slate-200/90 dark:border-slate-800 hover:border-purple-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
-                    >
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${
-                                activeDomain === 'governance' 
-                                    ? 'bg-purple-900/60 text-white border border-purple-400/30' 
-                                    : 'bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50'
-                            }`}>
-                                <span className="material-symbols-outlined text-[22px]">admin_panel_settings</span>
-                            </div>
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 mb-0.5">
-                                    <span className={`text-[10px] font-black uppercase tracking-wider ${
-                                        activeDomain === 'governance' ? 'text-purple-200' : 'text-slate-400'
-                                    }`}>
-                                        DOMAIN 2
-                                    </span>
-                                </div>
-                                <h3 className={`font-extrabold text-xs sm:text-sm tracking-tight truncate ${
-                                    activeDomain === 'governance' ? 'text-white' : 'text-slate-900 dark:text-white'
-                                }`}>
-                                    Admin Console & Governance
-                                </h3>
-                                <p className={`text-[10px] sm:text-[11px] truncate ${
-                                    activeDomain === 'governance' ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'
-                                }`}>
-                                    Employee Accounts, Roles & Privileges
-                                </p>
-                            </div>
-                        </div>
-                        <div className="text-right shrink-0 pl-2">
-                            <span className={`text-lg sm:text-xl font-black block leading-none ${
-                                activeDomain === 'governance' ? 'text-white' : 'text-slate-900 dark:text-white'
-                            }`}>
-                                {usersList.length}
-                            </span>
-                            <span className={`text-[9px] font-bold uppercase tracking-wider ${
-                                activeDomain === 'governance' ? 'text-purple-300' : 'text-slate-400'
-                            }`}>
-                                USERS
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Pillar 3: System Operations & Compliance */}
+                    {/* Pillar 2: System Operations & Compliance */}
                     <div 
                         onClick={() => handleDomainSelect('operations')}
                         className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group shadow-xs ${
@@ -5536,7 +5509,7 @@ export default function AdminConsole() {
                                     <span className={`text-[10px] font-black uppercase tracking-wider ${
                                         activeDomain === 'operations' ? 'text-cyan-200' : 'text-slate-400'
                                     }`}>
-                                        DOMAIN 3
+                                        DOMAIN 2
                                     </span>
                                     {systemLogCounts.errors > 0 ? (
                                         <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white shadow-2xs">
@@ -5579,7 +5552,7 @@ export default function AdminConsole() {
             {/* ─── HIERARCHY TIER 2: FUNCTIONAL SUB-TABS (SCOPED TO ACTIVE DOMAIN) ─── */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-2.5 mb-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap py-0.5">
-                    {activeDomain === 'governance' && (
+                    {activeDomain === 'governance' && !isSysAdmin && (
                         <>
                             <button
                                 onClick={() => setActiveTab('users')}
@@ -6321,7 +6294,7 @@ export default function AdminConsole() {
             )}
 
             {/* TAB 5: USER DIRECTORY FILTERS */}
-            {activeTab === 'users' && (
+            {activeTab === 'users' && !isSysAdmin && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-5">
                     {/* 1. Active Accounts */}
                     <div 
@@ -7087,7 +7060,7 @@ export default function AdminConsole() {
             )}
 
             {/* ─── TAB 2: USER GOVERNANCE ─── */}
-            {activeTab === 'users' && (
+            {activeTab === 'users' && !isSysAdmin && (
                 <div className="space-y-4">
                     {/* Action Required: Pending Suspension Requests Banner for HR Admin */}
                     {canManageSuspensions && suspensionRequests.filter(r => r.status === 'Pending').length > 0 && (

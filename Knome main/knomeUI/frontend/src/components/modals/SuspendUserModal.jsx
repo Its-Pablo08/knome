@@ -33,6 +33,12 @@ export default function SuspendUserModal({
     const isCommunityScope = Boolean(title && title.toLowerCase().includes('community'));
     const resolvedTitle = title || (isHrAdmin ? 'Suspend Employee Account' : 'Request Employee Account Suspension');
     const resolvedSubtitle = subtitle || (isHrAdmin ? 'Enterprise account suspension & governance enforcement' : 'Submit suspension request for HR Administrator approval');
+    // Explicit suspension window role segregation:
+    // Suspension duration options are ONLY displayed in the HR Admin suspension window (and community member suspension scope).
+    // Moderator and System Admin suspension windows do not show duration options or have their functionality altered.
+    const isHrAdminWindow = Boolean(isHrAdmin && !isSysAdmin && !isModerator && !isCommunityScope);
+    const showDurationPicker = isHrAdminWindow || isCommunityScope;
+    const isModeratorWindow = !showDurationPicker;
     const [selectedUser, setSelectedUser] = useState(initialUser);
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [duration, setDuration] = useState('7d');
@@ -83,17 +89,17 @@ export default function SuspendUserModal({
         if (isSubmitting || !user) return;
         setIsSubmitting(true);
         try {
-            const isPermanent = duration === 'indefinite';
+            const isPermanent = isModeratorWindow ? false : duration === 'indefinite';
             const selectedPreset = durationPresets.find(p => p.id === duration);
-            const days = selectedPreset ? selectedPreset.days : 7;
+            const days = isModeratorWindow ? 7 : (selectedPreset ? selectedPreset.days : 7);
             const fullReason = reasonNote.trim()
                 ? `${reasonCategory} — ${reasonNote.trim()}`
                 : reasonCategory;
 
             await onConfirm({
                 user,
-                duration,
-                customDate: duration === 'custom' ? customDate : null,
+                duration: isModeratorWindow ? '7d' : duration,
+                customDate: isModeratorWindow ? null : (duration === 'custom' ? customDate : null),
                 category: reasonCategory,
                 note: reasonNote,
                 fullReason,
@@ -111,7 +117,7 @@ export default function SuspendUserModal({
         }
     };
 
-    const isCustomInvalid = duration === 'custom' && !customDate;
+    const isCustomInvalid = !isModeratorWindow && duration === 'custom' && !customDate;
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-hidden animate-in fade-in duration-200">
@@ -213,7 +219,7 @@ export default function SuspendUserModal({
                                 <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full border bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800">
                                     {displayRole}
                                 </span>
-                                {availableUsers && availableUsers.length > 0 && (
+                                {!report && !isModeratorWindow && availableUsers && availableUsers.length > 0 && (
                                     <button
                                         type="button"
                                         onClick={() => setSelectedUser(null)}
@@ -281,61 +287,63 @@ export default function SuspendUserModal({
                     )}
 
                     {/* Suspension Duration Picker */}
-                    <div>
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
-                            Suspension Duration
-                        </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            {durationPresets.map((opt) => (
+                    {!isModeratorWindow && (
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                                Suspension Duration
+                            </label>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {durationPresets.map((opt) => (
+                                    <button
+                                        key={opt.id}
+                                        type="button"
+                                        onClick={() => setDuration(opt.id)}
+                                        className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                                            duration === opt.id
+                                                ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20'
+                                                : 'bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-amber-300'
+                                        }`}
+                                    >
+                                        <div className="font-bold text-xs">{opt.label}</div>
+                                        <div className={`text-[10px] mt-0.5 ${duration === opt.id ? 'text-amber-100' : 'text-slate-400'}`}>
+                                            {opt.sub}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Custom End Date Option */}
+                            <div className="mt-2.5">
                                 <button
-                                    key={opt.id}
                                     type="button"
-                                    onClick={() => setDuration(opt.id)}
-                                    className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
-                                        duration === opt.id
-                                            ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20'
-                                            : 'bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-amber-300'
+                                    onClick={() => setDuration('custom')}
+                                    className={`w-full p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                                        duration === 'custom'
+                                            ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-400'
+                                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-amber-300'
                                     }`}
                                 >
-                                    <div className="font-bold text-xs">{opt.label}</div>
-                                    <div className={`text-[10px] mt-0.5 ${duration === opt.id ? 'text-amber-100' : 'text-slate-400'}`}>
-                                        {opt.sub}
-                                    </div>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="material-symbols-outlined text-[18px]">calendar_month</span>
+                                        Custom End Date
+                                    </span>
+                                    <span className="text-[11px] font-normal text-slate-400">Specify exact reinstatement date</span>
                                 </button>
-                            ))}
-                        </div>
 
-                        {/* Custom End Date Option */}
-                        <div className="mt-2.5">
-                            <button
-                                type="button"
-                                onClick={() => setDuration('custom')}
-                                className={`w-full p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
-                                    duration === 'custom'
-                                        ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-400'
-                                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-amber-300'
-                                }`}
-                            >
-                                <span className="flex items-center gap-1.5">
-                                    <span className="material-symbols-outlined text-[18px]">calendar_month</span>
-                                    Custom End Date
-                                </span>
-                                <span className="text-[11px] font-normal text-slate-400">Specify exact reinstatement date</span>
-                            </button>
-
-                            {duration === 'custom' && (
-                                <div className="mt-2 pl-2">
-                                    <input
-                                        type="date"
-                                        min={new Date().toISOString().split('T')[0]}
-                                        value={customDate}
-                                        onChange={(e) => setCustomDate(e.target.value)}
-                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500"
-                                    />
-                                </div>
-                            )}
+                                {duration === 'custom' && (
+                                    <div className="mt-2 pl-2">
+                                        <input
+                                            type="date"
+                                            min={new Date().toISOString().split('T')[0]}
+                                            value={customDate}
+                                            onChange={(e) => setCustomDate(e.target.value)}
+                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500"
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Reason for Suspension */}
                     <div>

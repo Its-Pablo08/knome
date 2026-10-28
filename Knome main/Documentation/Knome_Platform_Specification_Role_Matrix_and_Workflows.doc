@@ -1,0 +1,578 @@
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+<meta charset="utf-8">
+<title>Knome Enterprise Platform Specification, Role Matrix & Workflows</title>
+<!--[if gte mso 9]>
+<xml>
+ <w:WordDocument>
+  <w:View>Print</w:View>
+  <w:Zoom>100</w:Zoom>
+  <w:DoNotOptimizeForBrowser/>
+ </w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+  body {
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+    line-height: 1.6;
+    color: #1e293b;
+    margin: 40px;
+    background-color: #ffffff;
+  }
+  h1 {
+    font-size: 26pt;
+    color: #0f172a;
+    border-bottom: 3px solid #3b82f6;
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  h2 {
+    font-size: 18pt;
+    color: #1e3a8a;
+    border-bottom: 1.5px solid #cbd5e1;
+    padding-bottom: 6px;
+    margin-top: 30px;
+  }
+  h3 {
+    font-size: 14pt;
+    color: #334155;
+    margin-top: 20px;
+  }
+  p, li {
+    font-size: 10.5pt;
+  }
+  .meta-box {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 5px solid #3b82f6;
+    padding: 12px 18px;
+    margin-bottom: 25px;
+    border-radius: 4px;
+  }
+  .workflow-box {
+    background-color: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-left: 5px solid #16a34a;
+    padding: 14px 18px;
+    margin: 18px 0;
+    border-radius: 4px;
+  }
+  .governance-box {
+    background-color: #fffbeb;
+    border: 1px solid #fde68a;
+    border-left: 5px solid #f59e0b;
+    padding: 14px 18px;
+    margin: 18px 0;
+    border-radius: 4px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 20px 0;
+    font-size: 10pt;
+  }
+  th {
+    background-color: #1e293b;
+    color: #ffffff;
+    font-weight: bold;
+    text-align: left;
+    padding: 10px 12px;
+    border: 1px solid #334155;
+  }
+  td {
+    padding: 9px 12px;
+    border: 1px solid #cbd5e1;
+    vertical-align: top;
+  }
+  tr:nth-child(even) {
+    background-color: #f8fafc;
+  }
+  .badge-yes {
+    background-color: #dcfce7;
+    color: #166534;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  .badge-no {
+    background-color: #fee2e2;
+    color: #991b1b;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  .badge-special {
+    background-color: #fef3c7;
+    color: #92400e;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  code {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 9.5pt;
+  }
+  .flow-step {
+    font-weight: bold;
+    color: #0369a1;
+  }
+</style>
+</head>
+<body>
+
+<h1>Knome Enterprise Knowledge Platform</h1>
+<p style="font-size: 14pt; color: #475569; margin-top: -6px;"><strong>Architecture Specification, Role-Permissions Matrix & Content Workflows</strong></p>
+
+<div class="meta-box">
+  <strong>Enterprise Organization:</strong> MPOnline Limited (Govt. of Madhya Pradesh Partner)<br>
+  <strong>System Name:</strong> Knome Collaborative Intranet & Enterprise Knowledge Hub<br>
+  <strong>Classification:</strong> Internal Enterprise Architecture Standard & Governance Guide<br>
+  <strong>Document Version:</strong> 3.0 (October 2026)<br>
+  <strong>Authorized By:</strong> Platform Architecture & IT Security Committee
+</div>
+
+<hr>
+
+<h2>1. Platform Architectural Mapping ("Knome Which Which Thing")</h2>
+<p>Knome consolidates the capabilities of major modern digital platforms into an integrated, compliant internal enterprise environment for MPOnline:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 25%;">Platform Inspiration</th>
+      <th style="width: 25%;">Knome Feature Module</th>
+      <th style="width: 50%;">Detailed Enterprise Capabilities</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>1. LinkedIn</strong></td>
+      <td><strong>Feed Posts & Clips</strong></td>
+      <td>
+        • <strong>Feed Posts:</strong> Instant status updates (rich text / up to 400 chars), media attachments (images up to 25MB, documents up to 400MB), @mentions, #hashtags, and targeted audience scoping (Public, Connections, or Specific Community).<br>
+        • <strong>Clips:</strong> Full-screen vertical short-form reels with creator profile links, instant reactions, comments, and views counter.<br>
+        • <strong>Professional Identity:</strong> Colleague directory, Follow / Connect networking requests, skill tags, and DPDP Act 2023 privacy controls.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>2. Stack Overflow</strong></td>
+      <td><strong>Articles & Karma Engine</strong></td>
+      <td>
+        • <strong>Long-Form Technical Articles:</strong> Rich Markdown editor with live preview, syntax-highlighted code blocks, cover banner uploads, reading time estimates, and departmental taxonomy.<br>
+        • <strong>Karma Gamification & Reputation Engine:</strong> Point rewards (+10 Post, +25 Article, +2 Like, daily streaks), Badge tiers (Bronze, Silver, Gold, Platinum), and monthly departmental leaderboards.<br>
+        • <strong>Q&A & Discussions:</strong> Nested threaded comments, technical problem solving, and solution upvotes.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>3. Knome (TCS Enterprise)</strong></td>
+      <td><strong>Enterprise Wiki & SOPs</strong></td>
+      <td>
+        • <strong>Enterprise Wiki Repository:</strong> Centralized departmental documentation, standard operating procedures (SOPs), project technical specifications, and knowledge continuity.<br>
+        • <strong>Pre-Publication Clearance:</strong> Formal peer and moderator approval workflow ensuring high standards of technical governance before publication.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>4. YouTube</strong></td>
+      <td><strong>Videos & Podcasts</strong></td>
+      <td>
+        • <strong>Video Knowledge Hub:</strong> Multimedia video streaming library (MP4, MOV, WebM up to 500MB), watch modals, and engagement metrics.<br>
+        • <strong>Podcasts & Global Audio Player:</strong> Audio series and episode tracks. Equipped with a persistent <strong>Global Audio Player</strong> running at the bottom of the viewport so audio plays without interruption as users browse through other pages.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>5. Employee Hub</strong></td>
+      <td><strong>Internal Careers & Openings</strong></td>
+      <td>
+        • <strong>Internal Job Openings:</strong> Vacancies published by HR across MPOnline departments, candidate eligibility criteria, application deadlines, self-service applications, and automated deadline archiving.<br>
+        • <strong>Broadcast Alerts:</strong> Organization-wide critical corporate banners with real-time SignalR push notifications for town halls, emergency notices, or policy changes.<br>
+        • <strong>Communities:</strong> Public and Private departmental interest channels with membership approval clearance.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>2. Complete Roles & Permissions Matrix ("Yeh Kya Kya Kar Sakte Hai")</h2>
+
+<h3>2.1 The 5 Platform Roles</h3>
+<ul>
+  <li><strong>Employee (<code>EMP</code>):</strong> Standard self-service workplace account for all employees.</li>
+  <li><strong>Community Admin (<code>CADM</code>):</strong> Channel leader managing membership, pinned content, and community-level guidelines.</li>
+  <li><strong>Moderator (<code>MOD</code>):</strong> Content safety steward reviewing flagged items, approving articles/wiki/podcasts, and escalating suspensions.</li>
+  <li><strong>HR Administrator (<code>HRADM</code>):</strong> Workforce operations leader managing job openings, broadcast announcements, community proposals, and direct employee account suspensions with custom durations.</li>
+  <li><strong>System Administrator (<code>SYSADM</code>):</strong> Master security administrator overseeing role assignments, audit logs, keyword security, and infrastructure health.</li>
+</ul>
+
+<h3>2.2 Master Permissions Matrix</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 32%;">Feature / Action</th>
+      <th style="width: 13%;">Employee</th>
+      <th style="width: 14%;">Community Admin</th>
+      <th style="width: 13%;">Moderator</th>
+      <th style="width: 14%;">HR Admin</th>
+      <th style="width: 14%;">System Admin</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="background-color: #f1f5f9;"><td colspan="6"><strong>Content Publishing & Engagement</strong></td></tr>
+    <tr>
+      <td>Create Feed Posts (Direct Publishing)</td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Create Clips (Direct Publishing)</td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Write Articles (Draft & Submit)</td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Write Wiki Entries (Submit for Review)</td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Upload Videos & Podcasts (Submit for Review)</td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Listen to Persistent Audio Player</td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Earn Karma Points & Climb Leaderboard</td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+
+    <tr style="background-color: #f1f5f9;"><td colspan="6"><strong>Community Governance</strong></td></tr>
+    <tr>
+      <td>Join Public Communities</td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Request Access to Private Communities</td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Approve / Reject Community Join Requests</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes (Own)</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Pin Announcements in Community Feed</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes (Own)</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Suspend / Remove Member from Community</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes (Own)</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Approve / Reject Proposed New Communities</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+
+    <tr style="background-color: #f1f5f9;"><td colspan="6"><strong>Content Moderation & Clearance</strong></td></tr>
+    <tr>
+      <td>Report Inappropriate Content (Flag Abuse)</td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Access Moderation Console Queue</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Dismiss False-Positive Reports</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Delete / Remove Violating Posts & Comments</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-special">Own Channel</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Approve / Reject Pending Articles & Wikis</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Approve / Reject Pending Videos & Podcasts</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Submit Suspension Request to HR Admin</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+    </tr>
+
+    <tr style="background-color: #f1f5f9;"><td colspan="6"><strong>Account Suspension & Disciplinary Enforcement</strong></td></tr>
+    <tr>
+      <td>Review Pending Suspension Requests Queue</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Reject Suspension Request (with Reason)</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Direct Account Suspension Execution</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Configure Suspension Duration Presets (1d, 3d, 7d, 14d, 30d, Indefinite, Custom Date)</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes (HR Admin Only)</span></td>
+      <td><span class="badge-no">No</span></td>
+    </tr>
+    <tr>
+      <td>Reinstate Suspended Employee Account</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+
+    <tr style="background-color: #f1f5f9;"><td colspan="6"><strong>HR & Workforce Operations</strong></td></tr>
+    <tr>
+      <td>Browse & Apply for Internal Job Openings</td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Create, Edit & Close Job Openings</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Review Internal Job Applicants</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Publish Org-Wide Broadcast Banners</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>View Workforce & Department Analytics</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+
+    <tr style="background-color: #f1f5f9;"><td colspan="6"><strong>System Administration & Security</strong></td></tr>
+    <tr>
+      <td>Assign & Escalate Employee Roles</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Inspect Immutable Security Audit Logs</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Configure Keyword Blocklists & URL Security</td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-no">No</span></td>
+      <td><span class="badge-yes">Yes</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>3. End-to-End Content & Disciplinary Workflows</h2>
+
+<h3>3.1 Workflow 1: Direct Publishing (Feed Posts & Clips)</h3>
+<div class="workflow-box">
+  <p><span class="flow-step">Step 1:</span> Employee creates Post or uploads a vertical Clip.</p>
+  <p><span class="flow-step">Step 2:</span> Client-side scanner verifies text for forbidden keywords or raw PII leaks (Aadhaar, PAN, AWS credentials).</p>
+  <p><span class="flow-step">Step 3:</span> <strong>Direct Instant Publishing:</strong> Post/Clip goes live immediately on the public feed or targeted community channel with zero administrative delay.</p>
+  <p><span class="flow-step">Step 4:</span> Employee is rewarded with <strong>+10 Karma points</strong>; real-time notifications are pushed via SignalR.</p>
+</div>
+
+<h3>3.2 Workflow 2: Moderated Content Approval (Articles, Wiki, Videos & Podcasts)</h3>
+<div class="workflow-box">
+  <p><span class="flow-step">Step 1:</span> Employee drafts an Article, Wiki entry, Video, or Podcast episode.</p>
+  <p><span class="flow-step">Step 2:</span> Employee clicks "Submit for Review". Content status is marked as <code>Pending Approval</code>.</p>
+  <p><span class="flow-step">Step 3:</span> Content queues in the Moderator's <strong>Media & Article Approvals Queue</strong> in the Moderation Console.</p>
+  <p><span class="flow-step">Step 4:</span> Moderator inspects the content for technical accuracy, formatting, and community compliance.</p>
+  <p><span class="flow-step">Step 5 (Resolution):</span></p>
+  <ul>
+    <li><strong>Approved:</strong> Content goes live in the public catalog immediately. Author earns <strong>+25 Karma points</strong>.</li>
+    <li><strong>Declined:</strong> Content is returned to the author's private drafts with actionable feedback notes.</li>
+  </ul>
+</div>
+
+<h3>3.3 Workflow 3: Report Abuse & HR Admin Suspension Governance</h3>
+<div class="governance-box">
+  <p><strong>Platform Governance Principle:</strong> Strict separation of powers between Moderator investigation and HR Administrator disciplinary execution.</p>
+  <p><span class="flow-step">Step 1 (Flagging):</span> Any employee notices violating or toxic content and clicks <strong>Report Post / Clip / Comment</strong>, specifying violation reason and explanation.</p>
+  <p><span class="flow-step">Step 2 (Investigation):</span> The report appears in the <strong>Content Moderation Queue</strong>. The Moderator reviews the post snapshot, AI severity score, and author details.</p>
+  <p><span class="flow-step">Step 3 (Moderator Action):</span></p>
+  <ul>
+    <li><strong>Dismiss:</strong> If the content is compliant, mark report as resolved.</li>
+    <li><strong>Remove Content:</strong> Moderator immediately deletes the violating post/clip to prevent further dissemination.</li>
+    <li><strong>Escalate Suspension:</strong> If disciplinary action is needed, Moderator clicks <strong>"Request Suspension"</strong>. This submits a formal governance request with evidence directly to HR Administrators.</li>
+  </ul>
+  <p><span class="flow-step">Step 4 (HR Admin Review):</span> HR Admin navigates to <code>Admin Console ➔ Suspension Requests</code>.</p>
+  <p><span class="flow-step">Step 5 (HR Admin Decision):</span></p>
+  <ul>
+    <li><strong>Reject Request:</strong> HR Admin provides a mandatory audit note. Request is marked Rejected; employee remains active.</li>
+    <li><strong>Confirm Suspension:</strong> HR Admin opens the <strong>Suspend Employee Account</strong> modal. <strong>Only HR Administrators</strong> have access to configure the suspension duration:
+      <ul>
+        <li><code>1 Day</code> (24 Hours cooldown)</li>
+        <li><code>3 Days</code> (Short break)</li>
+        <li><code>7 Days</code> (1 Week - Standard governance)</li>
+        <li><code>14 Days</code> (2 Weeks)</li>
+        <li><code>30 Days</code> (1 Month)</li>
+        <li><code>Indefinite</code> (Until manual executive review)</li>
+        <li><code>Custom End Date</code> (Exact calendar reinstatement date)</li>
+      </ul>
+      HR Admin enters a justification note and clicks <strong>Confirm Suspension</strong>.
+    </li>
+  </ul>
+  <p><span class="flow-step">Step 6 (Instant Lockout):</span> The employee's JWT token is instantly revoked by backend <code>SuspensionGuard</code> middleware, terminating active sessions immediately across all devices.</p>
+</div>
+
+<hr>
+
+<h2>4. Technical Infrastructure Overview</h2>
+<ul>
+  <li><strong>Frontend:</strong> React 19, Tailwind CSS, Lucide Icons, Google Material Symbols, Vite</li>
+  <li><strong>Backend:</strong> ASP.NET Core (.NET 10), Entity Framework Core, Clean Architecture</li>
+  <li><strong>Database:</strong> Microsoft SQL Server (MSSQL) with full relational integrity and audit triggers</li>
+  <li><strong>Real-Time Delivery:</strong> SignalR WebSocket hub for immediate notification delivery and broadcast alerts</li>
+  <li><strong>Security Compliance:</strong> JWT Bearer Authentication, Whistleblower Protections, DPDP Act 2023</li>
+</ul>
+
+<p style="text-align: center; color: #64748b; font-size: 9pt; margin-top: 40px;">
+  <em>Prepared for MPOnline Limited Knome Enterprise Knowledge Management Platform — Confidential & Internal Use Only</em>
+</p>
+
+</body>
+</html>
