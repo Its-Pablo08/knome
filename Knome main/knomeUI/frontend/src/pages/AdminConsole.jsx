@@ -4,7 +4,7 @@ import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-do
 import { useUser, getUserStatusConfig, deduplicateMembers, roleNameToCode, INITIAL_USERS } from '../components/contexts/UserContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
 import { useToast } from '../components/contexts/ToastContext';
-import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, videosApi, communitiesApi, mediaApi, clipsApi, settingsApi, wikiApi, notificationsApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
+import { interactionsApi, adminApi, postsApi, podcastsApi, articlesApi, videosApi, communitiesApi, mediaApi, clipsApi, settingsApi, wikiApi, notificationsApi, karmaApi, resolveMediaUrl, getVideoThumbnail, getCommunityImages, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
 import * as XLSX from 'xlsx';
 import useScrollLoading from '../hooks/useScrollLoading';
@@ -1001,12 +1001,31 @@ export default function AdminConsole() {
             thumbnail: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=90&w=1200',
             audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
             duration: '18:20',
-            category: 'Engineering & Tech',
+            category: 'Tech',
             authorName: 'Priya Sharma',
             authorId: 4,
             submittedDate: new Date(Date.now() - 3600000 * 5).toISOString(),
             status: 'PendingApproval',
-            podcastData: { title: 'Episode 14: Modern Cloud Architecture & Microservices', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', uploaderUserId: 4 }
+            podcastData: {
+                title: 'Episode 14: Modern Cloud Architecture & Microservices',
+                description: 'In-depth podcast discussion with engineering leads on ASP.NET Core 10, Entity Framework performance, and SQL Server optimization.',
+                coverImageUrl: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=90&w=1200',
+                audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+                durationSeconds: 1100,
+                categoryName: 'Tech',
+                fileSizeMb: 15,
+                uploaderUserId: 4
+            },
+            dto: {
+                title: 'Episode 14: Modern Cloud Architecture & Microservices',
+                description: 'In-depth podcast discussion with engineering leads on ASP.NET Core 10, Entity Framework performance, and SQL Server optimization.',
+                coverImageUrl: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=90&w=1200',
+                audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+                durationSeconds: 1100,
+                categoryName: 'Tech',
+                fileSizeMb: 15,
+                uploaderUserId: 4
+            }
         },
         {
             id: 'seed_pending_article_1',
@@ -1451,23 +1470,63 @@ export default function AdminConsole() {
                     ? parseInt(targetAuthorId.trim(), 10)
                     : null;
 
-            if (mediaItem.mediaType === 'Video' && mediaItem.dto) {
+            const itemMediaType = (mediaItem.mediaType || mediaItem.type || '').toLowerCase();
+
+            if (itemMediaType === 'video' && (mediaItem.dto || mediaItem.videoData || mediaItem.sourceUrl)) {
                 const postDto = {
-                    ...mediaItem.dto,
-                    uploaderUserId: numericAuthorId
+                    ...(mediaItem.dto || mediaItem.videoData || {}),
+                    title: mediaItem.dto?.title || mediaItem.title,
+                    description: mediaItem.dto?.description || mediaItem.description || '',
+                    sourceUrl: mediaItem.dto?.sourceUrl || mediaItem.sourceUrl || mediaItem.videoUrl,
+                    thumbnailUrl: mediaItem.dto?.thumbnailUrl || mediaItem.thumbnail,
+                    categoryId: mediaItem.dto?.categoryId || 1,
+                    uploaderUserId: numericAuthorId || targetAuthorId || 1
                 };
                 await apiClient.post('/videos', postDto).catch(() => {});
                 window.dispatchEvent(new CustomEvent('video-published'));
-            } else if (mediaItem.mediaType === 'Podcast' && (mediaItem.podcastData || mediaItem.dto)) {
-                const payload = mediaItem.podcastData || mediaItem.dto;
+            } else if (itemMediaType === 'podcast' || itemMediaType === 'audio') {
+                const payload = mediaItem.podcastData || mediaItem.dto || {};
+                
+                let durationSecs = payload.durationSeconds;
+                if (!durationSecs && (mediaItem.duration || payload.duration)) {
+                    const durStr = String(payload.duration || mediaItem.duration).trim();
+                    const parts = durStr.split(':').map(p => parseInt(p, 10));
+                    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                        durationSecs = parts[0] * 60 + parts[1];
+                    } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+                        durationSecs = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                    } else {
+                        const num = parseInt(durStr, 10);
+                        if (!isNaN(num) && num > 0) durationSecs = num;
+                    }
+                }
+                if (!durationSecs || durationSecs <= 0) durationSecs = 180;
+
                 const postPodcast = {
-                    ...payload,
-                    uploaderUserId: numericAuthorId || targetAuthorId
+                    title: (payload.title || mediaItem.title || 'Untitled Podcast').trim(),
+                    description: (payload.description || mediaItem.description || '').trim(),
+                    audioUrl: payload.audioUrl || mediaItem.audioUrl || mediaItem.sourceUrl || '',
+                    coverImageUrl: payload.coverImageUrl || mediaItem.thumbnail || mediaItem.coverImageUrl || 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=90&w=1200',
+                    durationSeconds: durationSecs,
+                    categoryName: payload.categoryName || mediaItem.category || 'General',
+                    categoryId: payload.categoryId || null,
+                    seriesId: payload.seriesId || mediaItem.seriesId || null,
+                    fileSizeMb: payload.fileSizeMb || mediaItem.fileSizeMb || 10,
+                    uploaderUserId: numericAuthorId || targetAuthorId || 1
                 };
-                await podcastsApi.create(postPodcast).catch((err) => {
+
+                let createdPodcast = null;
+                try {
+                    const res = await podcastsApi.create(postPodcast);
+                    createdPodcast = res?.data || res;
+                } catch (err) {
                     console.error("Failed to approve and publish podcast:", err);
-                });
-                window.dispatchEvent(new CustomEvent('podcast-published'));
+                    showToast(`Failed to publish podcast: ${err?.response?.data?.message || err?.message || 'Server error'}`, 'error');
+                    return;
+                }
+
+                window.dispatchEvent(new CustomEvent('podcast-published', { detail: { newPodcast: createdPodcast } }));
+                window.dispatchEvent(new CustomEvent('podcast-created', { detail: { newPodcast: createdPodcast } }));
             } else if (mediaItem.mediaType === 'Article') {
                 const articleId = mediaItem.articleId || mediaItem.dto?.articleId || (typeof mediaItem.id === 'string' ? mediaItem.id.replace('pending_article_', '') : mediaItem.id);
                 const updateDto = {
@@ -1526,16 +1585,38 @@ export default function AdminConsole() {
             const updated = pendingMediaApprovals.filter(m => m.id !== mediaItem.id);
             setPendingMediaApprovals(updated);
             localStorage.setItem('knome_pending_media_approvals', JSON.stringify(updated));
-            const ruleKey = mediaItem.mediaType === 'Video' ? 'VIDEO' : mediaItem.mediaType === 'Podcast' ? 'PODCAST' : mediaItem.mediaType === 'Article' ? 'ARTICLE' : 'WIKI';
+            const itemTypeLower = (mediaItem.mediaType || mediaItem.type || '').toLowerCase();
+            const ruleKey = (itemTypeLower === 'video') ? 'VIDEO' :
+                            (itemTypeLower === 'podcast' || itemTypeLower === 'audio') ? 'PODCAST' :
+                            (itemTypeLower === 'article') ? 'ARTICLE' : 'WIKI';
             const defaultPoints = 8; // Official Karma rule: +8 pts per approved submission (Max 24 pts/day)
 
-            // 1. Award Karma Points ONLY to the user who submitted
+            // 1. Award Karma Points ONLY to the user who submitted (Idempotent: credited exactly once)
+            const karmaAwardKey = `knome_media_karma_awarded_${mediaItem.id}`;
+            const alreadyAwarded = localStorage.getItem(karmaAwardKey);
             let pointsAwarded = 8;
-            if (targetAuthorId && awardRuleKarma) {
-                const res = awardRuleKarma(targetAuthorId, ruleKey, { customTitle: `Approved ${mediaItem.mediaType}: "${mediaItem.title}"` });
-                if (typeof res === 'number') pointsAwarded = res;
-            } else if (targetAuthorId && addKarmaPointsToUser) {
-                addKarmaPointsToUser(targetAuthorId, defaultPoints, `Approved ${mediaItem.mediaType}: "${mediaItem.title}"`);
+
+            if (!alreadyAwarded && targetAuthorId) {
+                localStorage.setItem(karmaAwardKey, new Date().toISOString());
+                if (awardRuleKarma) {
+                    const res = awardRuleKarma(targetAuthorId, ruleKey, { 
+                        customTitle: `Approved ${mediaItem.mediaType || 'Media'}: "${mediaItem.title}"`,
+                        overridePoints: 8
+                    });
+                    if (typeof res === 'number') pointsAwarded = res;
+                } else if (addKarmaPointsToUser) {
+                    addKarmaPointsToUser(targetAuthorId, defaultPoints, `Approved ${mediaItem.mediaType || 'Media'}: "${mediaItem.title}"`);
+                }
+
+                // For non-podcasts, also persist to backend database if numericAuthorId exists
+                // (Note: for Podcasts, backend CreatePodcastAsync already awarded points in database upon publication)
+                if (numericAuthorId && ruleKey !== 'PODCAST' && karmaApi?.awardKarma) {
+                    karmaApi.awardKarma(numericAuthorId, `Approved ${mediaItem.mediaType || 'Media'}`, 8, mediaItem.mediaType, mediaItem.id).catch(() => {});
+                }
+
+                window.dispatchEvent(new CustomEvent('karma-updated', {
+                    detail: { userId: targetAuthorId, points: pointsAwarded, ruleKey }
+                }));
             }
 
             // 2. Send Notification to Author
@@ -1544,13 +1625,13 @@ export default function AdminConsole() {
                     id: `approved_notif_${Date.now()}`,
                     type: 'media_approved',
                     category: 'Karma',
-                    text: `🎉 Your ${mediaItem.mediaType} "${mediaItem.title}" was approved by Moderator! You earned +${pointsAwarded} Karma Points!`,
-                    senderName: 'System Admin',
+                    text: `🎉 Your ${mediaItem.mediaType || 'Podcast'} "${mediaItem.title}" was approved by Moderator! You earned +${pointsAwarded} Karma Points!`,
+                    senderName: currentUser?.fullName || currentUser?.name || 'Moderator',
                     senderUserId: currentUser?.userId || currentUser?.id || 'admin',
                     createdDate: new Date().toISOString(),
                     createdAt: new Date().toISOString(),
                     targetUserId: targetAuthorId,
-                    targetUrl: mediaItem.mediaType === 'Video' ? '/videos' : mediaItem.mediaType === 'Podcast' ? '/podcasts' : mediaItem.mediaType === 'Article' ? '/articles' : '/wiki',
+                    targetUrl: itemTypeLower === 'video' ? '/videos' : (itemTypeLower === 'podcast' || itemTypeLower === 'audio') ? '/podcasts' : itemTypeLower === 'article' ? '/articles' : '/wiki',
                     unread: true
                 };
                 const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
@@ -1691,29 +1772,71 @@ export default function AdminConsole() {
         setPendingMediaApprovals([]);
         localStorage.setItem('knome_pending_media_approvals', JSON.stringify([]));
 
+        const createdPodcasts = [];
+
         for (const m of currentList) {
             try {
-                if (m.mediaType === 'Video' && m.dto) {
-                    const rawAuthorId = m.authorId || m.dto?.uploaderUserId;
+                const itemMediaType = (m.mediaType || m.type || '').toLowerCase();
+                if (itemMediaType === 'video' && (m.dto || m.videoData || m.sourceUrl)) {
+                    const rawAuthorId = m.authorId || m.dto?.uploaderUserId || m.userId;
                     const numericAuthorId = (typeof rawAuthorId === 'number' && Number.isInteger(rawAuthorId) && rawAuthorId > 0)
                         ? rawAuthorId
                         : (typeof rawAuthorId === 'string' && /^\d+$/.test(rawAuthorId.trim()))
                             ? parseInt(rawAuthorId.trim(), 10)
                             : null;
-                    const postDto = { ...m.dto, uploaderUserId: numericAuthorId };
+                    const postDto = {
+                        ...(m.dto || m.videoData || {}),
+                        title: m.dto?.title || m.title,
+                        description: m.dto?.description || m.description || '',
+                        sourceUrl: m.dto?.sourceUrl || m.sourceUrl || m.videoUrl,
+                        thumbnailUrl: m.dto?.thumbnailUrl || m.thumbnail,
+                        categoryId: m.dto?.categoryId || 1,
+                        uploaderUserId: numericAuthorId || rawAuthorId || 1
+                    };
                     await apiClient.post('/videos', postDto).catch(() => {});
-                } else if (m.mediaType === 'Podcast' && (m.podcastData || m.dto)) {
-                    const payload = m.podcastData || m.dto;
-                    const rawAuthorId = m.authorId || payload?.uploaderUserId;
+                } else if (itemMediaType === 'podcast' || itemMediaType === 'audio') {
+                    const payload = m.podcastData || m.dto || {};
+                    const rawAuthorId = m.authorId || payload?.uploaderUserId || m.userId;
                     const numericAuthorId = (typeof rawAuthorId === 'number' && Number.isInteger(rawAuthorId) && rawAuthorId > 0)
                         ? rawAuthorId
                         : (typeof rawAuthorId === 'string' && /^\d+$/.test(rawAuthorId.trim()))
                             ? parseInt(rawAuthorId.trim(), 10)
                             : null;
-                    const postPodcast = { ...payload, uploaderUserId: numericAuthorId || rawAuthorId };
-                    await podcastsApi.create(postPodcast).catch((err) => {
+
+                    let durationSecs = payload.durationSeconds;
+                    if (!durationSecs && (m.duration || payload.duration)) {
+                        const durStr = String(payload.duration || m.duration).trim();
+                        const parts = durStr.split(':').map(p => parseInt(p, 10));
+                        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                            durationSecs = parts[0] * 60 + parts[1];
+                        } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+                            durationSecs = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                        } else {
+                            const num = parseInt(durStr, 10);
+                            if (!isNaN(num) && num > 0) durationSecs = num;
+                        }
+                    }
+                    if (!durationSecs || durationSecs <= 0) durationSecs = 180;
+
+                    const postPodcast = {
+                        title: (payload.title || m.title || 'Untitled Podcast').trim(),
+                        description: (payload.description || m.description || '').trim(),
+                        audioUrl: payload.audioUrl || m.audioUrl || m.sourceUrl || '',
+                        coverImageUrl: payload.coverImageUrl || m.thumbnail || m.coverImageUrl || 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=90&w=1200',
+                        durationSeconds: durationSecs,
+                        categoryName: payload.categoryName || m.category || 'General',
+                        categoryId: payload.categoryId || null,
+                        seriesId: payload.seriesId || m.seriesId || null,
+                        fileSizeMb: payload.fileSizeMb || m.fileSizeMb || 10,
+                        uploaderUserId: numericAuthorId || rawAuthorId || 1
+                    };
+                    try {
+                        const res = await podcastsApi.create(postPodcast);
+                        const created = res?.data || res;
+                        if (created) createdPodcasts.push(created);
+                    } catch (err) {
                         console.error("Failed to batch approve podcast:", err);
-                    });
+                    }
                 } else if (m.mediaType === 'Article') {
                     const articleId = m.articleId || m.dto?.articleId || (typeof m.id === 'string' ? m.id.replace('pending_article_', '') : m.id);
                     const updateDto = {
@@ -1740,11 +1863,48 @@ export default function AdminConsole() {
                     };
                     await wikiApi.updateWiki(wikiId, updatePayload).catch(() => {});
                 }
+
+                // Award Karma points to original author exactly once
+                const batchTargetAuthorId = m.authorId || m.userId || m.dto?.uploaderUserId || m.podcastData?.uploaderUserId;
+                const batchNumericAuthorId = (typeof batchTargetAuthorId === 'number' && Number.isInteger(batchTargetAuthorId) && batchTargetAuthorId > 0)
+                    ? batchTargetAuthorId
+                    : (typeof batchTargetAuthorId === 'string' && /^\d+$/.test(batchTargetAuthorId.trim()))
+                        ? parseInt(batchTargetAuthorId.trim(), 10)
+                        : null;
+                const batchRuleKey = (itemMediaType === 'video') ? 'VIDEO' :
+                                     (itemMediaType === 'podcast' || itemMediaType === 'audio') ? 'PODCAST' :
+                                     (itemMediaType === 'article') ? 'ARTICLE' : 'WIKI';
+                const batchKarmaKey = `knome_media_karma_awarded_${m.id}`;
+                if (!localStorage.getItem(batchKarmaKey) && batchTargetAuthorId) {
+                    localStorage.setItem(batchKarmaKey, new Date().toISOString());
+                    if (awardRuleKarma) {
+                        awardRuleKarma(batchTargetAuthorId, batchRuleKey, {
+                            customTitle: `Approved ${m.mediaType || 'Media'}: "${m.title}"`,
+                            overridePoints: 8
+                        });
+                    } else if (addKarmaPointsToUser) {
+                        addKarmaPointsToUser(batchTargetAuthorId, 8, `Approved ${m.mediaType || 'Media'}: "${m.title}"`);
+                    }
+                    if (batchNumericAuthorId && batchRuleKey !== 'PODCAST' && karmaApi?.awardKarma) {
+                        karmaApi.awardKarma(batchNumericAuthorId, `Approved ${m.mediaType || 'Media'}`, 8, m.mediaType, m.id).catch(() => {});
+                    }
+                    window.dispatchEvent(new CustomEvent('karma-updated', {
+                        detail: { userId: batchTargetAuthorId, points: 8, ruleKey: batchRuleKey }
+                    }));
+                }
+
                 await mediaApi.removePendingApproval(m.id).catch(() => {});
             } catch (e) {}
         }
         window.dispatchEvent(new CustomEvent('video-published'));
-        window.dispatchEvent(new CustomEvent('podcast-published'));
+        if (createdPodcasts.length > 0) {
+            createdPodcasts.forEach(p => {
+                window.dispatchEvent(new CustomEvent('podcast-published', { detail: { newPodcast: p } }));
+                window.dispatchEvent(new CustomEvent('podcast-created', { detail: { newPodcast: p } }));
+            });
+        } else {
+            window.dispatchEvent(new CustomEvent('podcast-published'));
+        }
         window.dispatchEvent(new CustomEvent('article-published'));
         window.dispatchEvent(new CustomEvent('wiki-published'));
 
@@ -6043,7 +6203,7 @@ export default function AdminConsole() {
                             </div>
                             <span className="text-[10px] font-black text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/50 border border-cyan-200/80 dark:border-cyan-800/60 px-2 py-0.5 rounded-full shadow-2xs">Video</span>
                         </div>
-                        <p className="text-xl font-black text-cyan-600 dark:text-cyan-400 leading-none">{pendingMediaApprovals.filter(m => m.mediaType === 'Video').length}</p>
+                        <p className="text-xl font-black text-cyan-600 dark:text-cyan-400 leading-none">{pendingMediaApprovals.filter(m => (m.mediaType || m.type || '').toLowerCase() === 'video').length}</p>
                         <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">VIDEOS ONLY</p>
                     </div>
 
@@ -6062,7 +6222,7 @@ export default function AdminConsole() {
                             </div>
                             <span className="text-[10px] font-black text-pink-700 dark:text-pink-300 bg-pink-50 dark:bg-pink-950/50 border border-pink-200/80 dark:border-pink-800/60 px-2 py-0.5 rounded-full shadow-2xs">Audio</span>
                         </div>
-                        <p className="text-xl font-black text-pink-600 dark:text-pink-400 leading-none">{pendingMediaApprovals.filter(m => m.mediaType === 'Podcast').length}</p>
+                        <p className="text-xl font-black text-pink-600 dark:text-pink-400 leading-none">{pendingMediaApprovals.filter(m => (m.mediaType || m.type || '').toLowerCase() === 'podcast' || (m.mediaType || m.type || '').toLowerCase() === 'audio').length}</p>
                         <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">PODCASTS ONLY</p>
                     </div>
 
@@ -6081,7 +6241,7 @@ export default function AdminConsole() {
                             </div>
                             <span className="text-[10px] font-black text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/50 border border-violet-200/80 dark:border-violet-800/60 px-2 py-0.5 rounded-full shadow-2xs">Text</span>
                         </div>
-                        <p className="text-xl font-black text-violet-600 dark:text-violet-400 leading-none">{pendingMediaApprovals.filter(m => m.mediaType === 'Article').length}</p>
+                        <p className="text-xl font-black text-violet-600 dark:text-violet-400 leading-none">{pendingMediaApprovals.filter(m => (m.mediaType || m.type || '').toLowerCase() === 'article').length}</p>
                         <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate mt-1.5">ARTICLES ONLY</p>
                     </div>
 
@@ -11447,7 +11607,17 @@ export default function AdminConsole() {
                             </p>
                         </div>
                         <span className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 dark:border-indigo-800">
-                            {pendingMediaApprovals.filter(item => mediaTypeFilter === 'All' || item.mediaType === mediaTypeFilter).length} {mediaTypeFilter !== 'All' ? mediaTypeFilter : ''} Pending Submission{pendingMediaApprovals.filter(item => mediaTypeFilter === 'All' || item.mediaType === mediaTypeFilter).length === 1 ? '' : 's'}
+                            {pendingMediaApprovals.filter(item => {
+                                if (mediaTypeFilter === 'All') return true;
+                                const t = (item.mediaType || item.type || '').toLowerCase();
+                                if (mediaTypeFilter === 'Podcast') return t === 'podcast' || t === 'audio';
+                                return t === mediaTypeFilter.toLowerCase();
+                            }).length} {mediaTypeFilter !== 'All' ? mediaTypeFilter : ''} Pending Submission{pendingMediaApprovals.filter(item => {
+                                if (mediaTypeFilter === 'All') return true;
+                                const t = (item.mediaType || item.type || '').toLowerCase();
+                                if (mediaTypeFilter === 'Podcast') return t === 'podcast' || t === 'audio';
+                                return t === mediaTypeFilter.toLowerCase();
+                            }).length === 1 ? '' : 's'}
                         </span>
                     </div>
 
@@ -11455,10 +11625,10 @@ export default function AdminConsole() {
                     <div className="flex flex-wrap items-center gap-2 pb-1">
                         {[
                             { id: 'All', label: 'All Submissions', icon: 'all_inclusive', count: pendingMediaApprovals.length },
-                            { id: 'Article', label: 'Articles', icon: 'article', count: pendingMediaApprovals.filter(m => m.mediaType === 'Article').length, activeColor: 'bg-violet-600 text-white shadow-violet-600/30' },
-                            { id: 'Wiki', label: 'Wikis', icon: 'auto_stories', count: pendingMediaApprovals.filter(m => m.mediaType === 'Wiki').length, activeColor: 'bg-emerald-600 text-white shadow-emerald-600/30' },
-                            { id: 'Video', label: 'Videos', icon: 'videocam', count: pendingMediaApprovals.filter(m => m.mediaType === 'Video').length, activeColor: 'bg-cyan-600 text-white shadow-cyan-600/30' },
-                            { id: 'Podcast', label: 'Podcasts', icon: 'podcasts', count: pendingMediaApprovals.filter(m => m.mediaType === 'Podcast').length, activeColor: 'bg-pink-600 text-white shadow-pink-600/30' },
+                            { id: 'Article', label: 'Articles', icon: 'article', count: pendingMediaApprovals.filter(m => (m.mediaType || m.type || '').toLowerCase() === 'article').length, activeColor: 'bg-violet-600 text-white shadow-violet-600/30' },
+                            { id: 'Wiki', label: 'Wikis', icon: 'auto_stories', count: pendingMediaApprovals.filter(m => (m.mediaType || m.type || '').toLowerCase() === 'wiki').length, activeColor: 'bg-emerald-600 text-white shadow-emerald-600/30' },
+                            { id: 'Video', label: 'Videos', icon: 'videocam', count: pendingMediaApprovals.filter(m => (m.mediaType || m.type || '').toLowerCase() === 'video').length, activeColor: 'bg-cyan-600 text-white shadow-cyan-600/30' },
+                            { id: 'Podcast', label: 'Podcasts', icon: 'podcasts', count: pendingMediaApprovals.filter(m => (m.mediaType || m.type || '').toLowerCase() === 'podcast' || (m.mediaType || m.type || '').toLowerCase() === 'audio').length, activeColor: 'bg-pink-600 text-white shadow-pink-600/30' },
                         ].map((filterTab) => {
                             const isSelected = mediaTypeFilter === filterTab.id;
                             return (
@@ -11486,20 +11656,30 @@ export default function AdminConsole() {
                         })}
                     </div>
 
-                    {pendingMediaApprovals.filter(item => mediaTypeFilter === 'All' || item.mediaType === mediaTypeFilter).length > 0 ? (
+                    {pendingMediaApprovals.filter(item => {
+                        if (mediaTypeFilter === 'All') return true;
+                        const t = (item.mediaType || item.type || '').toLowerCase();
+                        if (mediaTypeFilter === 'Podcast') return t === 'podcast' || t === 'audio';
+                        return t === mediaTypeFilter.toLowerCase();
+                    }).length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {pendingMediaApprovals
-                                .filter(item => mediaTypeFilter === 'All' || item.mediaType === mediaTypeFilter)
+                                .filter(item => {
+                                    if (mediaTypeFilter === 'All') return true;
+                                    const t = (item.mediaType || item.type || '').toLowerCase();
+                                    if (mediaTypeFilter === 'Podcast') return t === 'podcast' || t === 'audio';
+                                    return t === mediaTypeFilter.toLowerCase();
+                                })
                                 .map((item) => (
                                 <div key={item.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3 shadow-xs hover:border-indigo-200 dark:hover:border-indigo-800/50 transition-all">
                                     <div className="flex items-center justify-between">
                                         <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
-                                            item.mediaType === 'Video' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20' : 
-                                            item.mediaType === 'Podcast' ? 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20' :
-                                            item.mediaType === 'Article' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20' :
+                                            (item.mediaType || item.type || '').toLowerCase() === 'video' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20' : 
+                                            (item.mediaType || item.type || '').toLowerCase() === 'podcast' || (item.mediaType || item.type || '').toLowerCase() === 'audio' ? 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20' :
+                                            (item.mediaType || item.type || '').toLowerCase() === 'article' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20' :
                                             'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
                                         }`}>
-                                            {item.mediaType} Submission
+                                            {item.mediaType || item.type || 'Media'} Submission
                                         </span>
                                         <span className="text-[11px] font-medium text-slate-400">
                                             {new Date(item.submittedDate).toLocaleString()}
@@ -11508,7 +11688,7 @@ export default function AdminConsole() {
 
                                     <div className="flex items-start gap-3">
                                         {/* Media thumbnail / visual preview */}
-                                        {item.mediaType === 'Video' || item.mediaType === 'Podcast' ? (
+                                        {(item.mediaType || item.type || '').toLowerCase() === 'video' || (item.mediaType || item.type || '').toLowerCase() === 'podcast' || (item.mediaType || item.type || '').toLowerCase() === 'audio' ? (
                                             <div 
                                                 className="relative group shrink-0 cursor-pointer"
                                                 onClick={() => setPreviewingMedia(item)}

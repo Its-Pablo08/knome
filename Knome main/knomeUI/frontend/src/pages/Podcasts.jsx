@@ -428,13 +428,14 @@ export default function Podcasts() {
                 const p = e.detail.newPodcast;
                 const newEpisode = {
                     id: p.podcastId || Date.now(),
+                    isActive: p.isActive !== false && p.isActive !== 0 && p.isActive !== 'false',
                     title: p.title,
                     description: p.description || '',
                     series: p.seriesTitle || 'Standalone Episode',
                     category: p.categoryName || 'General',
                     durationSeconds: p.durationSeconds || 0,
                     duration: p.durationSeconds ? `${Math.floor(p.durationSeconds / 60)}:${(p.durationSeconds % 60).toString().padStart(2, '0')}` : '00:00',
-                    date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                    date: new Date(p.uploadedDate || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                     author: p.uploaderFullName || currentUser?.fullName || currentUser?.name || 'Employee',
                     authorId: p.uploaderUserId || currentUser?.id,
                     thumbnail: p.coverImageUrl ? resolveMediaUrl(p.coverImageUrl) : 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&q=90&w=1600&h=1600',
@@ -445,7 +446,7 @@ export default function Podcasts() {
                     shares: 0,
                     views: 0
                 };
-                setPodcastEpisodes(prev => [newEpisode, ...prev.filter(x => x.id !== newEpisode.id)]);
+                setPodcastEpisodes(prev => [newEpisode, ...prev.filter(x => String(x.id) !== String(newEpisode.id))]);
             }
             fetchPodcastsData();
         };
@@ -477,11 +478,13 @@ export default function Podcasts() {
         };
 
         window.addEventListener('podcast-published', handleRefresh);
+        window.addEventListener('podcast-created', handleRefresh);
         window.addEventListener('podcast-deleted', handlePodcastDeleted);
         window.addEventListener('knome_content_moderated', handleContentModerated);
         window.addEventListener('storage', handleStorage);
         return () => {
             window.removeEventListener('podcast-published', handleRefresh);
+            window.removeEventListener('podcast-created', handleRefresh);
             window.removeEventListener('podcast-deleted', handlePodcastDeleted);
             window.removeEventListener('knome_content_moderated', handleContentModerated);
             window.removeEventListener('storage', handleStorage);
@@ -519,11 +522,17 @@ export default function Podcasts() {
             }
             // Tab filter
             if (activeTab === 'My Podcasts') {
-                if (currentUser?.name && !ep.author?.toLowerCase().includes(currentUser.name.toLowerCase())) {
+                const myName = (currentUser?.fullName || currentUser?.name || '').toLowerCase();
+                const myId = currentUser?.userId ?? currentUser?.id;
+                const authorMatches = myName && ep.author && (ep.author.toLowerCase().includes(myName) || myName.includes(ep.author.toLowerCase()));
+                const idMatches = myId && (Number(ep.authorId) === Number(myId) || String(ep.authorId) === String(myId));
+                if (!authorMatches && !idMatches) {
                     return false;
                 }
             } else if (activeTab === 'General' || activeTab === 'Tech' || activeTab === 'Leadership' || activeTab === 'Engineering') {
-                if (ep.category.toLowerCase() !== activeTab.toLowerCase()) {
+                const epCat = (ep.category || '').toLowerCase();
+                const tabCat = activeTab.toLowerCase();
+                if (epCat !== tabCat && !epCat.includes(tabCat)) {
                     return false;
                 }
             }
@@ -540,8 +549,12 @@ export default function Podcasts() {
                 if (!matchTitle && !matchAuthor && !matchSeries) return false;
             }
             // Category filter
-            if (filterCategory !== 'All' && ep.category.toLowerCase() !== filterCategory.toLowerCase()) {
-                return false;
+            if (filterCategory !== 'All') {
+                const epCat = (ep.category || '').toLowerCase();
+                const filterCat = filterCategory.toLowerCase();
+                if (epCat !== filterCat && !epCat.includes(filterCat)) {
+                    return false;
+                }
             }
             return true;
         });

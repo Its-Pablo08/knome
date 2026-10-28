@@ -48,7 +48,7 @@ public class KarmaController : KnomeControllerBase
     }
 
     [HttpPost("award")]
-    [Authorize(Roles = Roles.SystemAdmin)]
+    [Authorize(Roles = Roles.AllAdmins)]
     [ProducesResponseType(typeof(ApiResponse<KarmaBalanceDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> AwardKarma([FromBody] AwardKarmaDto dto)
     {

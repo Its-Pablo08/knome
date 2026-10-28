@@ -196,10 +196,14 @@ public class PodcastService : IPodcastService
         await _suspensionGuard.EnsureNotSuspendedAsync(currentUserId);
 
         var caller = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
-        var isCallerAdmin = caller != null && caller.Roles.Any(r => 
+        var isCallerAdmin = caller != null && (caller.Roles.Any(r => 
             r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" ||
             r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" ||
-            r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM");
+            r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM" ||
+            r.RoleName == Roles.Moderator || r.RoleCode == "MOD" ||
+            (r.RoleName != null && (r.RoleName.Contains("Admin") || r.RoleName.Contains("Moderator") || r.RoleName.Contains("Mod"))) ||
+            (r.RoleCode != null && (r.RoleCode.Contains("ADM") || r.RoleCode.Contains("MOD"))))
+            || (!string.IsNullOrEmpty(caller.Designation) && (caller.Designation.Contains("Admin") || caller.Designation.Contains("Moderator") || caller.Designation.Contains("Mod"))));
 
         var requireApproval = _systemSettingService != null
             ? await _systemSettingService.GetRequirePodcastApprovalAsync()

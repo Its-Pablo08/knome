@@ -16,12 +16,13 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
         ['Moderator'].includes(currentUser?.roleName) ||
         (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())));
 
-    // Moderators cannot publish directly; only System Admin can bypass approval
-    const isCurrentUserAdmin = !isModerator && (
-        ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
+    // Moderators and Administrators can publish podcasts directly without restrictions
+    const isCurrentUserAdmin = (
+        ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR', 'MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
         currentUser?.roleCode === 'SYSADM' ||
-        ['System Administrator', 'System Admin', 'HR Administrator', 'Community Administrator'].includes(currentUser?.roleName) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())))
+        currentUser?.roleCode === 'MOD' ||
+        ['System Administrator', 'System Admin', 'HR Administrator', 'Community Administrator', 'Moderator'].includes(currentUser?.roleName) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'CADM', 'HRADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR', 'MOD', 'MODERATOR'].includes(String(r?.roleCode || r?.roleName || r || '').toUpperCase())))
     );
 
     const [tab, setTab] = useState('upload');
@@ -351,8 +352,10 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
             };
 
             const approvalRequired = isPodcastApprovalRequired();
-            // Moderators and employees cannot publish directly; their podcasts must always be sent for approval
-            const shouldPublishImmediately = !isModerator && (isCurrentUserAdmin || !approvalRequired);
+            // Per enterprise governance policy, podcasts uploaded by employees or moderators
+            // must first appear in Media Approvals with a Pending status.
+            // Only if the approval policy is explicitly disabled (OFF) across the platform can it be published directly.
+            const shouldPublishImmediately = !approvalRequired;
 
             if (shouldPublishImmediately) {
                 const createdRes = await podcastsApi.create(podcastData);
@@ -360,6 +363,7 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
 
                 addToast("Podcast episode published successfully!", 'success');
                 window.dispatchEvent(new CustomEvent('podcast-published', { detail: { newPodcast: createdPodcast } }));
+                window.dispatchEvent(new CustomEvent('podcast-created', { detail: { newPodcast: createdPodcast } }));
             } else {
                 const authorName = currentUser?.fullName || currentUser?.name || 'Employee';
                 const authorAvatar = currentUser?.profilePhotoUrl || currentUser?.avatar || null;
@@ -368,6 +372,7 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
                 const pendingItem = {
                     id: `pending_podcast_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
                     mediaType: 'Podcast',
+                    type: 'podcast',
                     title: title.trim(),
                     description: description.trim(),
                     thumbnail: coverImageUrl,
@@ -398,12 +403,13 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
                 const existingPending = JSON.parse(localStorage.getItem('knome_pending_media_approvals') || '[]');
                 localStorage.setItem('knome_pending_media_approvals', JSON.stringify([pendingItem, ...existingPending]));
                 window.dispatchEvent(new CustomEvent('pending-media-updated', { detail: pendingItem }));
+                window.dispatchEvent(new CustomEvent('storage'));
 
                 const adminNotif = {
                     id: `notif_approval_${Date.now()}`,
                     type: 'media_approval',
                     category: 'System',
-                    text: `${authorName} uploaded podcast "${title.trim()}" awaiting your admin approval.`,
+                    text: `${authorName} uploaded podcast "${title.trim()}" awaiting moderator approval.`,
                     senderName: authorName,
                     senderAvatar: authorAvatar,
                     senderUserId: numericAuthorId || currentAuthorId,
@@ -418,7 +424,7 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
                 const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
                 localStorage.setItem('knome_notifications', JSON.stringify([adminNotif, ...existingNotifs]));
 
-                addToast(`Podcast "${title.trim()}" submitted successfully! It has been sent for approval before going live.`, 'success');
+                addToast(`Podcast "${title.trim()}" submitted successfully! It is now in Media Approvals with Pending status awaiting moderator approval.`, 'success');
             }
             
             setIsUploading(false);
@@ -678,7 +684,7 @@ export default function UploadPodcastModal({ isOpen, onClose }) {
                         onClick={handleUpload}
                         disabled={isUploading || isRecording}
                         className="px-8 py-2.5 bg-pink-500 text-white text-[13px] font-bold rounded-xl hover:bg-pink-600 transition-colors shadow-md shadow-pink-500/20 disabled:opacity-50">
-                        {isUploading ? 'Publishing...' : 'Publish Episode'}
+                        {isUploading ? (isPodcastApprovalRequired() ? 'Submitting...' : 'Publishing...') : (isPodcastApprovalRequired() ? 'Submit for Approval' : 'Publish Episode')}
                     </button>
                 </div>
             </div>

@@ -495,6 +495,10 @@ export const karmaApi = {
 
     /** GET /karma/leaderboard */
     getLeaderboard: (top = 10) => apiClient.get(`/karma/leaderboard?top=${top}`),
+
+    /** POST /karma/award */
+    awardKarma: (userId, activityType, pointsAwarded, relatedContentType = null, relatedContentId = null) =>
+        apiClient.post('/karma/award', { userId, activityType, pointsAwarded, relatedContentType, relatedContentId }),
 };
 
 // ─────────────────────────────────────────────
@@ -1944,4 +1948,6 @@ export const clipsApi = {
     addComment: (id, commentText, parentCommentId = null) =>
         apiClient.post(`/interactions/Clip/${id}/comments`, { commentText, parentCommentId })
 };
+
+
 
