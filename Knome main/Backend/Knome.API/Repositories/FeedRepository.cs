@@ -47,13 +47,14 @@ public class FeedRepository : IFeedRepository
             .Include(p => p.AuthorUser)
             .Include(p => p.PostAttachments)
             .Include(p => p.MentionedUsers)
-            .Where(p => p.CreatedDate >= retentionCutoff && p.Status != "Removed" && p.Status != "Deleted" && (string.IsNullOrEmpty(p.Status) || p.Status == "Published" || (p.Status == "Scheduled" && p.AuthorUserId == currentUserId)) &&
+            .Where(p => p.CreatedDate >= retentionCutoff && p.Status != "Removed" && p.Status != "Deleted" && 
+                        p.AudienceType != "Community" && p.AudienceType != "SpecificCommunities" && !p.CommunityPosts.Any() &&
+                        (string.IsNullOrEmpty(p.Status) || p.Status == "Published" || (p.Status == "Scheduled" && p.AuthorUserId == currentUserId)) &&
                         (p.AuthorUserId == currentUserId ||
                          p.AudienceType == AudienceTypes.Everyone ||
                          p.AudienceType == "Public" ||
                          string.IsNullOrEmpty(p.AudienceType) ||
                          ((p.AudienceType == "Connections" || p.AudienceType == "SpecificConnections") && p.MentionedUsers.Any(mu => mu.UserId == currentUserId)) ||
-                         ((p.AudienceType == "Community" || p.AudienceType == "SpecificCommunities") && communityPostIds.Contains(p.PostId)) ||
                          (followedUserIds.Contains(p.AuthorUserId) && (p.AudienceType == AudienceTypes.Everyone || p.AudienceType == "Public" || string.IsNullOrEmpty(p.AudienceType)))))
             .OrderByDescending(p => p.CreatedDate)
             .Take(limit)

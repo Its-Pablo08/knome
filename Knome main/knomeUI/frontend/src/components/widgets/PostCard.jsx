@@ -1090,10 +1090,6 @@ export default function PostCard({ post, onPostDeleted, searchQuery = '', isAuth
             const existingCommPosts = JSON.parse(localStorage.getItem(savedKey) || '[]');
             localStorage.setItem(savedKey, JSON.stringify([newCommFeedPost, ...existingCommPosts]));
 
-            try {
-                const globalPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
-                localStorage.setItem('knome_local_posts', JSON.stringify([newCommFeedPost, ...globalPosts]));
-            } catch (_) {}
 
             // 4. Dispatch storage and custom events for instant feed update
             window.dispatchEvent(new StorageEvent('storage', { key: savedKey }));

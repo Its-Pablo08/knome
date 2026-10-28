@@ -668,11 +668,6 @@ export default function CommunityView() {
             // Save to target community feed
             localStorage.setItem(savedPostsKey, JSON.stringify([crosspost, ...existingTargetPosts]));
             
-            // Also add to global posts cache
-            try {
-                const globalPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
-                localStorage.setItem('knome_local_posts', JSON.stringify([crosspost, ...globalPosts]));
-            } catch (_) {}
 
             // Dispatch storage and custom events for instant feed update across views
             window.dispatchEvent(new StorageEvent('storage', { key: savedPostsKey }));
@@ -2971,26 +2966,6 @@ export default function CommunityView() {
         const existingPosts = JSON.parse(localStorage.getItem(savedPostsKey) || '[]');
         safeSetStorage(savedPostsKey, [newPostItem, ...existingPosts]);
 
-        // Also save to global feed knome_local_posts
-        try {
-            const globalLocalPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
-            const feedItem = {
-                id: `comm_post_${newPostItem.id}`,
-                userId: currentUser?.userId || currentUser?.id || 1,
-                authorName: newPostItem.author,
-                authorAvatar: newPostItem.avatar,
-                authorRole: newPostItem.role,
-                content: newPostItem.content,
-                status: 'Published',
-                createdDate: new Date().toISOString(),
-                likesCount: 0,
-                commentsCount: 0,
-                attachments: [],
-                sharedCommunity: { id: targetId, name: community?.name || 'Community' },
-                sharedCommunityName: community?.name || 'Community'
-            };
-            safeSetStorage('knome_local_posts', [feedItem, ...globalLocalPosts]);
-        } catch (_) {}
 
         setPosts(prev => [newPostItem, ...prev]);
         setPostText('');

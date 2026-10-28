@@ -468,6 +468,12 @@ export const initMessengerSignalR = (userId, forceReconnect = false) => {
         }
     });
 
+    conn.on("NoticePeriodUpdated", (data) => {
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('knome:notice-period-updated', { detail: data }));
+        }
+    });
+
     conn.on("SystemConfigUpdated", (data) => {
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('knome:system-config-updated', { detail: data }));

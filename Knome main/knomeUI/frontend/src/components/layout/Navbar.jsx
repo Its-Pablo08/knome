@@ -17,6 +17,7 @@ import { subscribeToLiveMessages, initMessengerSignalR, userLoggingOut } from '.
 import { getKarmaLevelInfo } from '../../utils/karmaEngine';
 import { KarmaLevelMedal } from '../ui/KarmaBadge';
 import { isMessagingEnabled, saveSystemConfig, useSystemConfig, loadSystemApprovalSettingFromBackend } from '../../utils/systemConfig';
+import { saveNoticePeriodConfig } from '../../utils/noticePeriodManager';
 
 const DISCOVER_CATEGORIES = [
     { id: 'All', label: 'All', icon: 'grid_view' },
@@ -1111,7 +1112,14 @@ export default function Navbar() {
             } catch (err) {}
         };
 
-        // 3. System Config Real-time Update
+        // 3. Notice Period Real-time Update
+        const handleNoticePeriod = (e) => {
+            if (e?.detail && typeof e.detail === 'object') {
+                saveNoticePeriodConfig(e.detail);
+            }
+        };
+
+        // 4. System Config Real-time Update
         const handleSystemConfig = (e) => {
             const data = e.detail;
             if (data && typeof data === 'object') {

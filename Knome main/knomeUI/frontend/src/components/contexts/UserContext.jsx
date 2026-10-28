@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useCallback } fr
 import { apiClient } from '../../utils/apiClient';
 import { authApi, profileApi, karmaApi } from '../../utils/apiService';
 import { loadSystemApprovalSettingFromBackend } from '../../utils/systemConfig';
+import { syncNoticePeriodFromBackend } from '../../utils/noticePeriodManager';
 
 /**
  * Maps a human-readable roleName (from Admin UI dropdown) to the short role code
@@ -694,6 +695,7 @@ export const UserProvider = ({ children }) => {
             setCurrentUser(finalUser);
             setIsAuthenticated(true);
             loadSystemApprovalSettingFromBackend(true).catch(() => {});
+            syncNoticePeriodFromBackend().catch(() => {});
         } catch (error) {
             const errMsg = (error?.message || '').toLowerCase();
             const isSuspendedError = error?.isSuspended || errMsg.includes('suspended') || errMsg.includes('inactive') || errMsg.includes('forbidden') || error?.status === 403;
@@ -1136,6 +1138,7 @@ export const UserProvider = ({ children }) => {
                     setCurrentUser(localUser);
                     setIsAuthenticated(true);
                     loadSystemApprovalSettingFromBackend(true).catch(() => {});
+                    syncNoticePeriodFromBackend().catch(() => {});
                     setIsAuthLoading(false);
 
                     // If backend was offline during boot, automatically re-authenticate once backend finishes initializing

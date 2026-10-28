@@ -637,6 +637,9 @@ public static class ServiceCollectionExtensions
         // Suspension Guard (Phase 10.2) — reusable across content creation workflows
         services.AddScoped<ISuspensionGuard, SuspensionGuard>();
 
+        // Notice Period Governance Service — enforces post-scheduling restrictions for transitioning employees
+        services.AddScoped<INoticePeriodService, NoticePeriodService>();
+
         // Jobs & Notifications Module (Phase 11)
         services.AddScoped<IJobRepository, JobRepository>();
         services.AddScoped<IJobService, JobService>();

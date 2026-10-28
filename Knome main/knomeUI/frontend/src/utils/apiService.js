@@ -906,6 +906,26 @@ export const settingsApi = {
     getAllSettings: () => apiClient.get('/settings'),
 };
 
+// ─────────────────────────────────────────────
+//  NOTICE PERIOD GOVERNANCE (HR ADMIN)
+// ─────────────────────────────────────────────
+export const noticePeriodApi = {
+    /** GET /api/notice-period */
+    getConfig: () => apiClient.get('/notice-period'),
+
+    /** POST /api/notice-period/toggle-policy */
+    togglePolicy: (isEnabled) => apiClient.post('/notice-period/toggle-policy', { isEnabled: !!isEnabled }),
+
+    /** POST /api/notice-period/toggle-employee */
+    toggleEmployee: (data) => apiClient.post('/notice-period/toggle-employee', data),
+
+    /** GET /api/notice-period/check/{userId} */
+    checkUser: (userId) => apiClient.get(`/notice-period/check/${userId}`),
+
+    /** GET /api/notice-period/me */
+    checkMe: () => apiClient.get('/notice-period/me'),
+};
+
 
 
 
@@ -1236,8 +1256,10 @@ export const mapPost = (post) => {
         topReactionTypes: post.engagementSummary?.reactionSummary?.topReactionTypes || [],
         reactions: post.engagementSummary?.reactionSummary?.reactions || [],
         comments: Array.isArray(post.comments) ? post.comments : [],
-        communityName: post.communityName || post.sharedCommunityName || null,
-        sharedCommunityName: post.sharedCommunityName || post.communityName || null,
+        communityId: post.communityId || post.sharedCommunity?.id || (post.communityPosts && post.communityPosts[0]?.communityId) || null,
+        sharedCommunity: post.sharedCommunity || (post.communityId ? { id: post.communityId, name: post.communityName } : null),
+        communityName: post.communityName || post.sharedCommunityName || post.sharedCommunity?.name || null,
+        sharedCommunityName: post.sharedCommunityName || post.communityName || post.sharedCommunity?.name || null,
         sharedWithName: post.sharedWithName || (post.mentionedUsers && post.mentionedUsers.length > 0 ? post.mentionedUsers.map(u => u.fullName || u.name).join(', ') : null),
         sharedUsers: post.mentionedUsers || post.sharedUsers || [],
         mentionedUsers: post.mentionedUsers || [],
@@ -1555,9 +1577,10 @@ export const mapFeedItem = (item) => {
         title: item.title,
         content: item.contentText || item.textSummary || item.content,
         audienceType: item.audienceType || 'Everyone',
-        communityId: item.communityId || null,
-        communityName: item.communityName || null,
-        sharedCommunityName: item.communityName || null,
+        communityId: item.communityId || item.sharedCommunity?.id || null,
+        sharedCommunity: item.sharedCommunity || (item.communityId ? { id: item.communityId, name: item.communityName } : null),
+        communityName: item.communityName || item.sharedCommunityName || item.sharedCommunity?.name || null,
+        sharedCommunityName: item.sharedCommunityName || item.communityName || item.sharedCommunity?.name || null,
         sharedWithName: item.sharedWithName || null,
         audienceUserIds: item.audienceUserIds || [],
         attachments: mappedAttachments,

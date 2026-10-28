@@ -425,11 +425,6 @@ export default function ArticleShareModal({ isOpen, onClose, article, post, item
             const existingCommFeed = JSON.parse(localStorage.getItem(savedKey) || '[]');
             localStorage.setItem(savedKey, JSON.stringify([newFeedItem, ...existingCommFeed]));
 
-            // Also save to global feed cache
-            try {
-                const globalPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
-                localStorage.setItem('knome_local_posts', JSON.stringify([newFeedItem, ...globalPosts]));
-            } catch (_) {}
 
             // 4. Dispatch events for instantaneous UI updates across all open views
             window.dispatchEvent(new StorageEvent('storage', { key: savedKey }));
