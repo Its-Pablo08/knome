@@ -13,7 +13,7 @@ import { useConfirm } from '../contexts/ConfirmDialogContext';
 import * as signalR from '@microsoft/signalr';
 import { getHubUrl } from '../../utils/apiClient';
 import { formatNotificationDate, getTimeGroup, isNotificationForUser, isSelfNotification, parseNotificationContent } from '../../utils/notificationHelpers';
-import { subscribeToLiveMessages } from '../../utils/realtimeMessenger';
+import { subscribeToLiveMessages, initMessengerSignalR, userLoggingOut } from '../../utils/realtimeMessenger';
 import { getKarmaLevelInfo } from '../../utils/karmaEngine';
 import { KarmaLevelMedal } from '../ui/KarmaBadge';
 import { isMessagingEnabled, saveSystemConfig, useSystemConfig, loadSystemApprovalSettingFromBackend } from '../../utils/systemConfig';
@@ -1036,42 +1036,25 @@ export default function Navbar() {
         window.addEventListener('knome_new_notification', handleStorageChange);
         window.addEventListener('storage', handleStorageChange);
 
-        const token = localStorage.getItem('knome_jwt');
+        const token = localStorage.getItem('knome_jwt') || localStorage.getItem('accessToken') || localStorage.getItem('knome_token');
         const isLoggingOut = typeof window !== 'undefined' && sessionStorage.getItem('knome_logging_out') === 'true';
-        if (!token || !currentUser || isLoggingOut) return;
-
-        const protocol = (typeof window !== 'undefined' && window.location.protocol === 'https:') ? 'https:' : 'http:';
-        const host = (typeof window !== 'undefined' && window.location && window.location.hostname) ? window.location.hostname : 'localhost';
-        const hubUrl = getHubUrl ? getHubUrl() : `${protocol}//${host}:5096/hubs/notifications`;
-
-        const connection = new signalR.HubConnectionBuilder()
-            .withUrl(hubUrl, {
-                accessTokenFactory: () => localStorage.getItem('knome_jwt') || '',
-                transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling
-            })
-            .configureLogging(signalR.LogLevel.None)
-            .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-            .build();
-
-        connection.serverTimeoutInMilliseconds = 60000;
-        connection.keepAliveIntervalInMilliseconds = 15000;
-
-        let isStopped = false;
-        const stopConnection = () => {
-            isStopped = true;
+        let currentUid = Number(currentUser?.userId || currentUser?.id || 0);
+        if (!currentUid && typeof window !== 'undefined') {
             try {
-                connection.stop().catch(() => {});
+                const stored = JSON.parse(localStorage.getItem('userProfile') || localStorage.getItem('knome_user') || '{}');
+                currentUid = Number(stored.userId || stored.id || 0);
             } catch {}
-        };
+        }
+        if (!token || !currentUid || isLoggingOut) return;
 
-        const handleLogoutEvent = () => {
-            stopConnection();
-        };
-        window.addEventListener('knome:logout', handleLogoutEvent);
+        // Ensure unified, shared SignalR connection is active across all devices and pages
+        initMessengerSignalR(currentUid);
 
-        connection.on("ReceiveNotification", (notification) => {
-            if (isSelfNotification(notification, currentUser)) {
-                return; // Ignore self-triggered notification
+        // 1. In-app notifications handler
+        const handleLiveNotification = (e) => {
+            const notification = e.detail;
+            if (!notification || isSelfNotification(notification, currentUser)) {
+                return;
             }
             const mapped = mapNotificationItem(notification);
             mapped.createdDate = new Date().toISOString();
@@ -1083,36 +1066,6 @@ export default function Navbar() {
             const isMsg = notification.eventType === 'Message' || notification.notificationType === 'Message' || mapped.type === 'message';
             const senderId = Number(notification.relatedContentId || notification.referenceId || notification.senderUserId || 0);
             const isCurrentlyChatting = isMsg && senderId && window.__knome_active_chat_user_id === senderId;
-
-            // If it's a chat message, dispatch to live messenger pipeline
-            if (isMsg && senderId) {
-                let rawText = notification.message || notification.text || '';
-                const colonIdx = rawText.indexOf(': "');
-                if (colonIdx !== -1 && rawText.endsWith('"')) {
-                    rawText = rawText.substring(colonIdx + 3, rawText.length - 1);
-                }
-                const myId = Number(currentUser?.userId || currentUser?.id || 0);
-                const livePayload = {
-                    type: 'NEW_LIVE_MESSAGE',
-                    conversationId: `conv_${Math.min(myId, senderId)}_${Math.max(myId, senderId)}`,
-                    senderId,
-                    recipientId: myId,
-                    sender: {
-                        userId: senderId,
-                        fullName: notification.senderName || mapped.senderName || 'Employee',
-                        avatar: notification.senderAvatar || mapped.senderAvatar || null
-                    },
-                    message: {
-                        id: `notif_${notification.notificationId || Date.now()}`,
-                        senderId,
-                        senderName: notification.senderName || mapped.senderName || 'Employee',
-                        text: rawText,
-                        time: formatNotificationDate(notification.createdDate || new Date().toISOString()),
-                        timestamp: new Date(notification.createdDate || Date.now()).getTime()
-                    }
-                };
-                window.dispatchEvent(new CustomEvent('knome_live_message', { detail: livePayload }));
-            }
 
             setAllNotifs(prev => {
                 const filtered = prev.filter(item => String(item.id) !== String(mapped.id));
@@ -1126,25 +1079,28 @@ export default function Navbar() {
                 playChimeSound();
             }
             window.dispatchEvent(new CustomEvent('network-updated'));
-        });
+        };
 
-        connection.on("ReceiveDirectMessage", (data) => {
+        // 2. Direct message toast handler
+        const handleDirectMessageToast = (e) => {
             try {
-                const payload = typeof data === 'string' ? JSON.parse(data) : data;
-                if (!payload || !payload.message) return;
+                const payload = e.detail;
+                if (!payload) return;
                 const myId = Number(currentUser?.userId || currentUser?.id || 0);
-                if (Number(payload.recipientId) === myId && Number(payload.senderId) !== myId) {
-                    window.dispatchEvent(new CustomEvent('knome_live_message', { detail: payload }));
-                    if (window.__knome_active_chat_user_id !== Number(payload.senderId)) {
+                const senderId = Number(payload.senderId);
+                const receiverId = Number(payload.receiverId);
+
+                if (receiverId === myId && senderId !== myId) {
+                    if (window.__knome_active_chat_user_id !== senderId) {
                         const toastItem = {
                             id: `msg_toast_${Date.now()}`,
                             type: 'message',
                             eventType: 'Message',
-                            title: `Message from ${payload.sender?.fullName || 'Employee'}`,
-                            message: payload.message.text,
-                            senderName: payload.sender?.fullName || 'Employee',
-                            senderAvatar: payload.sender?.avatar || null,
-                            targetUrl: `/messages?userId=${payload.senderId}&name=${encodeURIComponent(payload.sender?.fullName || '')}`,
+                            title: `Message from ${payload.senderName || payload.sender?.fullName || 'Employee'}`,
+                            message: payload.content || payload.text || 'Sent an attachment',
+                            senderName: payload.senderName || payload.sender?.fullName || 'Employee',
+                            senderAvatar: payload.senderAvatarUrl || payload.sender?.avatar || null,
+                            targetUrl: `/messages?userId=${senderId}&name=${encodeURIComponent(payload.senderName || payload.sender?.fullName || '')}`,
                             time: 'Just now',
                             createdDate: new Date().toISOString()
                         };
@@ -1153,34 +1109,11 @@ export default function Navbar() {
                     }
                 }
             } catch (err) {}
-        });
+        };
 
-        connection.on("ReactionCountUpdated", (data) => {
-            window.dispatchEvent(new CustomEvent('knome:reaction-updated', { detail: data }));
-        });
-
-        connection.on("CommentCountUpdated", (data) => {
-            window.dispatchEvent(new CustomEvent('knome:comment-updated', { detail: data }));
-        });
-
-        connection.on("ShareCountUpdated", (data) => {
-            window.dispatchEvent(new CustomEvent('knome:share-updated', { detail: data }));
-        });
-
-        connection.on("ViewCountUpdated", (data) => {
-            window.dispatchEvent(new CustomEvent('knome:view-updated', { detail: data }));
-        });
-
-        connection.on("ClipEngagementUpdated", (data) => {
-            window.dispatchEvent(new CustomEvent('knome:clip-engagement-updated', { detail: data }));
-        });
-
-        connection.on("CommunityMembersUpdated", (data) => {
-            window.dispatchEvent(new CustomEvent('community-members-updated', { detail: data }));
-            window.dispatchEvent(new Event('storage'));
-        });
-
-        connection.on("SystemConfigUpdated", (data) => {
+        // 3. System Config Real-time Update
+        const handleSystemConfig = (e) => {
+            const data = e.detail;
             if (data && typeof data === 'object') {
                 const parseBool = (...keys) => {
                     for (const k of keys) {
@@ -1195,156 +1128,62 @@ export default function Navbar() {
                 const patch = {};
                 const reqApp = parseBool('requireApproval', 'RequireApproval');
                 if (reqApp !== undefined) patch.requireContentAndCommunityApproval = reqApp;
-
                 const reqComm = parseBool('requireCommunityApproval', 'RequireCommunityApproval');
                 if (reqComm !== undefined) patch.requireCommunityApproval = reqComm;
-
                 const reqArt = parseBool('requireArticleApproval', 'RequireArticleApproval');
                 if (reqArt !== undefined) patch.requireArticleApproval = reqArt;
-
                 const reqWiki = parseBool('requireWikiApproval', 'RequireWikiApproval');
                 if (reqWiki !== undefined) patch.requireWikiApproval = reqWiki;
-
                 const reqVid = parseBool('requireVideoApproval', 'RequireVideoApproval');
                 if (reqVid !== undefined) patch.requireVideoApproval = reqVid;
-
                 const reqPod = parseBool('requirePodcastApproval', 'RequirePodcastApproval');
                 if (reqPod !== undefined) patch.requirePodcastApproval = reqPod;
-
                 const enMsg = parseBool('enableMessaging', 'EnableMessaging');
                 if (enMsg !== undefined) patch.enableMessaging = enMsg;
-
                 const enEmail = parseBool('enableEmail', 'EnableEmail');
                 if (enEmail !== undefined) patch.enableEmail = enEmail;
-
                 const enPosts = parseBool('enablePosts', 'EnablePosts');
                 if (enPosts !== undefined) patch.enablePosts = enPosts;
-
                 const enArticles = parseBool('enableArticles', 'EnableArticles');
                 if (enArticles !== undefined) patch.enableArticles = enArticles;
-
                 const enClips = parseBool('enableClips', 'EnableClips');
                 if (enClips !== undefined) patch.enableClips = enClips;
-
                 const enWiki = parseBool('enableWiki', 'EnableWiki');
                 if (enWiki !== undefined) patch.enableWiki = enWiki;
-
                 const enVideos = parseBool('enableVideos', 'EnableVideos');
                 if (enVideos !== undefined) patch.enableVideos = enVideos;
-
                 const enPodcasts = parseBool('enablePodcasts', 'EnablePodcasts');
                 if (enPodcasts !== undefined) patch.enablePodcasts = enPodcasts;
 
                 saveSystemConfig(patch);
             }
-        });
-
-        connection.on("UserPresenceChanged", (data) => {
-            try {
-                const payload = typeof data === 'string' ? JSON.parse(data) : data;
-                if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('knome_user_presence_changed', { detail: payload }));
-                }
-            } catch {}
-        });
-
-        connection.on("UserTyping", (data) => {
-            try {
-                const payload = typeof data === 'string' ? JSON.parse(data) : data;
-                if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('knome_user_typing', { detail: payload }));
-                }
-            } catch {}
-        });
-
-        connection.on("MessageEdited", (data) => {
-            try {
-                const payload = typeof data === 'string' ? JSON.parse(data) : data;
-                if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('knome_message_edited', { detail: payload }));
-                }
-            } catch {}
-        });
-
-        connection.on("MessageDeleted", (data) => {
-            try {
-                const payload = typeof data === 'string' ? JSON.parse(data) : data;
-                if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('knome_message_deleted', { detail: payload }));
-                }
-            } catch {}
-        });
-
-        connection.on("MessageReactionUpdated", (data) => {
-            try {
-                const payload = typeof data === 'string' ? JSON.parse(data) : data;
-                if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('knome_message_reaction_updated', { detail: payload }));
-                }
-            } catch {}
-        });
-
-        connection.on("MessagesRead", (data) => {
-            try {
-                const payload = typeof data === 'string' ? JSON.parse(data) : data;
-                if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('knome_messages_read', { detail: payload }));
-                }
-            } catch {}
-        });
-
-        connection.on("BookmarkUpdated", (data) => {
-            if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('knome:bookmark-updated', { detail: data }));
-            }
-        });
-
-        connection.on("BroadcastUpdated", (data) => {
-            if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('knome:broadcast-updated', { detail: data }));
-            }
-        });
-
-        connection.on("BroadcastDeleted", (data) => {
-            if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('knome:broadcast-deleted', { detail: data }));
-            }
-        });
-
-        const joinGroup = () => {
-            const currentUid = currentUserRef.current?.userId || currentUserRef.current?.id || currentUser?.userId || currentUser?.id;
-            if (currentUid && connection.state === signalR.HubConnectionState.Connected) {
-                connection.invoke("JoinUserGroup", Number(currentUid)).catch(() => {});
-            }
         };
 
-        connection.start().then(() => {
-            if (isStopped) {
-                stopConnection();
-                return;
-            }
-            joinGroup();
-        }).catch(() => {
-            /* Silently ignore startup/re-negotiation traces */
-        });
+        // 4. Reconnect resync
+        const handleReconnected = () => {
+            fetchNotifications();
+            loadSystemApprovalSettingFromBackend(true).catch(() => {});
+        };
 
-        connection.onreconnected(() => {
-            if (!isStopped) {
-                fetchNotifications();
-                joinGroup();
-                loadSystemApprovalSettingFromBackend(true).catch(() => {});
-            }
-        });
+        const handleLogoutEvent = () => {
+            userLoggingOut(currentUid);
+        };
+
+        window.addEventListener('knome_notification_received', handleLiveNotification);
+        window.addEventListener('knome_receive_direct_message', handleDirectMessageToast);
+        window.addEventListener('knome:system-config-updated', handleSystemConfig);
+        window.addEventListener('knome_messenger_reconnected', handleReconnected);
+        window.addEventListener('knome:logout', handleLogoutEvent);
 
         // Periodic polling backup every 30 seconds to ensure notifications are never missed
         const notifInterval = setInterval(() => {
-            if (!isStopped && localStorage.getItem('knome_jwt')) {
+            if (localStorage.getItem('knome_jwt')) {
                 fetchNotifications();
             }
         }, 30000);
 
         const handleWindowFocus = () => {
-            if (!isStopped && localStorage.getItem('knome_jwt')) {
+            if (localStorage.getItem('knome_jwt')) {
                 fetchNotifications();
             }
         };
@@ -1355,11 +1194,14 @@ export default function Navbar() {
             window.removeEventListener('focus', handleWindowFocus);
             window.removeEventListener('community-invite-sent', handleCommunityInviteSent);
             window.removeEventListener('knome_notification_received', handleGenericNotificationReceived);
+            window.removeEventListener('knome_notification_received', handleLiveNotification);
+            window.removeEventListener('knome_receive_direct_message', handleDirectMessageToast);
+            window.removeEventListener('knome:system-config-updated', handleSystemConfig);
+            window.removeEventListener('knome_messenger_reconnected', handleReconnected);
             window.removeEventListener('notification-updated', handleStorageChange);
             window.removeEventListener('knome_new_notification', handleStorageChange);
             window.removeEventListener('storage', handleStorageChange);
             window.removeEventListener('knome:logout', handleLogoutEvent);
-            stopConnection();
         };
     }, [currentUser?.userId || currentUser?.id, currentUser?.employeeId]);
 

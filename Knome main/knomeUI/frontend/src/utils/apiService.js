@@ -1837,7 +1837,10 @@ export const messagesApi = {
         apiClient.delete(`/Messages/${messageId}?deleteForEveryone=${Boolean(deleteForEveryone)}`),
 
     /** GET /api/Messages/online-users */
-    getOnlineUsers: () => apiClient.get('/Messages/online-users')
+    getOnlineUsers: () => apiClient.get('/Messages/online-users'),
+
+    /** GET /api/Messages/online-status/{userId} */
+    getOnlineStatus: (userId) => apiClient.get(`/Messages/online-status/${userId}`)
 };
 
 // ─────────────────────────────────────────────
