@@ -17,6 +17,7 @@ import { subscribeToLiveMessages } from '../../utils/realtimeMessenger';
 import { getKarmaLevelInfo } from '../../utils/karmaEngine';
 import { KarmaLevelMedal } from '../ui/KarmaBadge';
 import { isMessagingEnabled, saveSystemConfig, useSystemConfig, loadSystemApprovalSettingFromBackend } from '../../utils/systemConfig';
+import { saveNoticePeriodConfig } from '../../utils/noticePeriodManager';
 
 const DISCOVER_CATEGORIES = [
     { id: 'All', label: 'All', icon: 'grid_view' },
@@ -1178,6 +1179,12 @@ export default function Navbar() {
         connection.on("CommunityMembersUpdated", (data) => {
             window.dispatchEvent(new CustomEvent('community-members-updated', { detail: data }));
             window.dispatchEvent(new Event('storage'));
+        });
+
+        connection.on("NoticePeriodUpdated", (data) => {
+            if (data && typeof data === 'object') {
+                saveNoticePeriodConfig(data);
+            }
         });
 
         connection.on("SystemConfigUpdated", (data) => {

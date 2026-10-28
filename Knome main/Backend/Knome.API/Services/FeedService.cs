@@ -56,6 +56,9 @@ public class FeedService : IFeedService
             foreach (var p in posts)
             {
                 var comm = commMap.TryGetValue(p.PostId, out var c) ? c : null;
+                if (comm != null || p.AudienceType == "Community" || p.AudienceType == "SpecificCommunities")
+                    continue; // Community posts must strictly only show inside their respective community
+
                 var sharedWith = (p.MentionedUsers != null && p.MentionedUsers.Any())
                     ? (p.MentionedUsers.Count == 1 ? p.MentionedUsers.First().FullName : $"{p.MentionedUsers.First().FullName} +{p.MentionedUsers.Count - 1} others")
                     : null;

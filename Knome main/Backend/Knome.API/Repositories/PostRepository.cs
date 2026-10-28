@@ -46,6 +46,9 @@ public class PostRepository : IPostRepository
             .Include(p => p.MentionedUsers)
             .Where(p => p.CreatedDate >= retentionCutoff && 
                         p.Status != "Removed" && p.Status != "Deleted" &&
+                        p.AudienceType != "Community" &&
+                        p.AudienceType != "SpecificCommunities" &&
+                        !p.CommunityPosts.Any() &&
                         (string.IsNullOrEmpty(p.Status) || 
                          p.Status == "Published" || 
                          (p.AuthorUserId == currentUserId)))
@@ -57,8 +60,7 @@ public class PostRepository : IPostRepository
                                      p.AudienceType == "Everyone" ||
                                      p.AudienceType == "Public" ||
                                      string.IsNullOrEmpty(p.AudienceType) ||
-                                     ((p.AudienceType == "Connections" || p.AudienceType == "SpecificConnections") && p.MentionedUsers.Any(mu => mu.UserId == currentUserId)) ||
-                                     p.AudienceType == "Community");
+                                     ((p.AudienceType == "Connections" || p.AudienceType == "SpecificConnections") && p.MentionedUsers.Any(mu => mu.UserId == currentUserId)));
         }
         else
         {
@@ -103,7 +105,10 @@ public class PostRepository : IPostRepository
             .Include(p => p.AuthorUser)
             .Include(p => p.PostAttachments)
             .Include(p => p.MentionedUsers)
-            .Where(p => p.AuthorUserId == authorUserId)
+            .Where(p => p.AuthorUserId == authorUserId &&
+                        p.AudienceType != "Community" &&
+                        p.AudienceType != "SpecificCommunities" &&
+                        !p.CommunityPosts.Any())
             .OrderByDescending(p => p.CreatedDate)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)

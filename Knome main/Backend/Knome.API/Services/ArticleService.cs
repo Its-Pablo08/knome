@@ -25,8 +25,17 @@ public class ArticleService : IArticleService
     private readonly IMapper _mapper;
     private readonly ISuspensionGuard _suspensionGuard;
     private readonly ISystemSettingService? _systemSettingService;
+    private readonly INoticePeriodService? _noticePeriodService;
 
-    public ArticleService(IArticleRepository repo, IContentInteractionService interactionService, IKarmaService karmaService, KnomeDbContext db, IMapper mapper, ISuspensionGuard suspensionGuard, ISystemSettingService? systemSettingService = null)
+    public ArticleService(
+        IArticleRepository repo, 
+        IContentInteractionService interactionService, 
+        IKarmaService karmaService, 
+        KnomeDbContext db, 
+        IMapper mapper, 
+        ISuspensionGuard suspensionGuard, 
+        ISystemSettingService? systemSettingService = null,
+        INoticePeriodService? noticePeriodService = null)
     {
         _repo = repo;
         _interactionService = interactionService;
@@ -35,6 +44,7 @@ public class ArticleService : IArticleService
         _mapper = mapper;
         _suspensionGuard = suspensionGuard;
         _systemSettingService = systemSettingService;
+        _noticePeriodService = noticePeriodService;
     }
 
     private async Task CheckIsAuthorOrAdminAsync(Article article, int currentUserId)
@@ -170,9 +180,12 @@ public class ArticleService : IArticleService
         }
 
         DateTime? scheduledDate = null;
-        if (dto.Status == ArticleStatuses.Scheduled && dto.ScheduledDate.HasValue)
+        if (dto.Status == ArticleStatuses.Scheduled || dto.ScheduledDate.HasValue)
         {
-            scheduledDate = KnomeTime.ToIst(dto.ScheduledDate.Value);
+            if (_noticePeriodService != null)
+                await _noticePeriodService.EnsureCanSchedulePostAsync(currentUserId);
+            if (dto.ScheduledDate.HasValue)
+                scheduledDate = KnomeTime.ToIst(dto.ScheduledDate.Value);
         }
 
         var isAlreadyDue = scheduledDate.HasValue && scheduledDate.Value <= KnomeTime.Now;
@@ -292,6 +305,12 @@ public class ArticleService : IArticleService
         article.CategoryId = dto.CategoryId;
 
         var oldStatus = article.Status;
+        if (dto.Status == ArticleStatuses.Scheduled || dto.ScheduledDate.HasValue)
+        {
+            if (_noticePeriodService != null)
+                await _noticePeriodService.EnsureCanSchedulePostAsync(currentUserId);
+        }
+
         if (dto.Status == ArticleStatuses.Scheduled && dto.ScheduledDate.HasValue)
         {
             var istScheduledDate = KnomeTime.ToIst(dto.ScheduledDate.Value);

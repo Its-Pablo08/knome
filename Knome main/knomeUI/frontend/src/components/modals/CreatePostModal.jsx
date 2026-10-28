@@ -18,6 +18,7 @@ import {
 import ImageCropModal from './ImageCropModal';
 import CustomDateTimePicker from '../widgets/CustomDateTimePicker';
 import HighlightText from '../ui/HighlightText';
+import { isUserInNoticePeriod, NOTICE_PERIOD_EVENT } from '../../utils/noticePeriodManager';
 
 const PREDEFINED_HASHTAGS = ['Announcement', 'Development', 'Design', 'Marketing', 'Help', 'Kudos', 'Team', 'Project'];
 
@@ -156,6 +157,33 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, draftT
     const [tempScheduleTime, setTempScheduleTime] = useState('');
     const [cropModalTarget, setCropModalTarget] = useState(null);
     const schedulePopoverRef = useRef(null);
+
+    // Notice Period Enforcement: blocks post-scheduling if employee is marked in notice period by HR Admin
+    const [, setNoticePeriodRevision] = useState(0);
+
+    // Compute dynamically on every render so it is NEVER stale regardless of when modal opens
+    const isNoticePeriodActive = isUserInNoticePeriod(currentUser);
+
+    useEffect(() => {
+        const handleNoticeUpdate = () => {
+            setNoticePeriodRevision(v => v + 1);
+        };
+
+        window.addEventListener(NOTICE_PERIOD_EVENT, handleNoticeUpdate);
+        window.addEventListener('storage', handleNoticeUpdate);
+        return () => {
+            window.removeEventListener(NOTICE_PERIOD_EVENT, handleNoticeUpdate);
+            window.removeEventListener('storage', handleNoticeUpdate);
+        };
+    }, []);
+
+    // Whenever notice period is active, modal opens, or user switches, immediately cancel and reset scheduling
+    useEffect(() => {
+        if (isNoticePeriodActive) {
+            setIsScheduling(false);
+            setScheduledTime('');
+        }
+    }, [isNoticePeriodActive, isOpen, currentUser]);
 
     const handleCropSave = (newBlob, newUrl, newFile) => {
         if (!cropModalTarget) return;
@@ -677,6 +705,11 @@ const FILE_LIMITS = {
     };
 
     const handleSubmit = async (status = 'Published') => {
+        // Enforce notice period restriction: prevent post scheduling
+        if (isNoticePeriodActive && status === 'Scheduled') {
+            status = 'Published';
+        }
+
         // Fast path for explicit Save as Draft
         if (status === 'Draft') {
             if (securityWarning || isPublishing) return;
@@ -916,10 +949,13 @@ const FILE_LIMITS = {
                         sharedWithNames: selectedConnections.map(c => c.name || c.fullName),
                         sharedWithName: payload.sharedWithName
                     };
-                    try {
-                        const existing = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
-                        localStorage.setItem('knome_local_posts', JSON.stringify([localPost, ...existing]));
-                    } catch (e) {}
+                    // Only save to global feed cache if it is NOT a community post
+                    if (!selectedCommunity?.id && payload.audienceType !== 'Community' && payload.audienceType !== 'SpecificCommunities') {
+                        try {
+                            const existing = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
+                            localStorage.setItem('knome_local_posts', JSON.stringify([localPost, ...existing]));
+                        } catch (e) {}
+                    }
                 }
             }
 
@@ -1695,8 +1731,23 @@ const FILE_LIMITS = {
                     )}
                 </div>
 
+                {/* Notice Period Restriction Banner */}
+                {isNoticePeriodActive && (
+                    <div className="px-4 py-2 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 border-t border-amber-200/80 dark:border-amber-800/60 flex items-center justify-between gap-2 shrink-0 animate-in fade-in duration-150">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="material-symbols-outlined text-[18px] text-amber-600 dark:text-amber-400 shrink-0">event_busy</span>
+                            <span className="text-xs font-semibold text-amber-900 dark:text-amber-200 truncate">
+                                Notice Period Policy Active: Post scheduling is disabled for your account by HR Admin.
+                            </span>
+                        </div>
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-200/80 dark:bg-amber-800/80 text-amber-950 dark:text-amber-100 font-extrabold shrink-0">
+                            Immediate Post Only
+                        </span>
+                    </div>
+                )}
+
                 {/* Active Scheduled Notification Bar */}
-                {scheduledTime && (
+                {scheduledTime && !isNoticePeriodActive && (
                     <div className="px-4 py-2 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 border-t border-amber-200/80 dark:border-amber-800/60 flex items-center justify-between gap-2 shrink-0 animate-in fade-in duration-150">
                         <div className="flex items-center gap-2 min-w-0">
                             <span className="material-symbols-outlined text-[18px] text-amber-600 dark:text-amber-400 animate-pulse shrink-0">schedule</span>
@@ -1783,6 +1834,15 @@ const FILE_LIMITS = {
                             }
                             return (
                                 <>
+                                    {isNoticePeriodActive && (
+                                        <div 
+                                            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700/60 text-[11px] font-bold shadow-2xs"
+                                            title="Notice Period restriction: Forward scheduling is disabled. Only immediate publishing is allowed."
+                                        >
+                                            <span className="material-symbols-outlined text-[15px] text-amber-600 dark:text-amber-400">event_busy</span>
+                                            <span>Notice Period (Scheduling Disabled)</span>
+                                        </div>
+                                    )}
                                     <button
                                         type="button"
                                         onClick={() => handleSubmit('Draft')}
@@ -1797,6 +1857,7 @@ const FILE_LIMITS = {
                                         data-schedule-trigger="true"
                                         type="button"
                                         onClick={() => {
+                                            if (isNoticePeriodActive) return;
                                             if (!isScheduling) {
                                                 setTempScheduleTime(scheduledTime || getLocalDatetimeInputValue(15));
                                                 setIsScheduling(true);
@@ -1804,27 +1865,33 @@ const FILE_LIMITS = {
                                                 setIsScheduling(false);
                                             }
                                         }}
-                                        disabled={isPublishing}
+                                        disabled={isPublishing || isNoticePeriodActive}
                                         className={`p-2 rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer relative shrink-0 ${
-                                            scheduledTime 
-                                                ? 'bg-amber-100 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 font-bold' 
-                                                : (isScheduling 
-                                                    ? 'bg-indigo-100 dark:bg-indigo-900/50 border-indigo-200 text-indigo-600' 
-                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                                  )
+                                            isNoticePeriodActive
+                                                ? 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'
+                                                : scheduledTime 
+                                                    ? 'bg-amber-100 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 font-bold' 
+                                                    : (isScheduling 
+                                                        ? 'bg-indigo-100 dark:bg-indigo-900/50 border-indigo-200 text-indigo-600' 
+                                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                                      )
                                         }`}
-                                        title={scheduledTime ? "Schedule active - click to edit" : (isScheduling ? "Close scheduler" : "Schedule publication")}
+                                        title={
+                                            isNoticePeriodActive
+                                                ? "Post scheduling is disabled while in Notice Period"
+                                                : (scheduledTime ? "Schedule active - click to edit" : (isScheduling ? "Close scheduler" : "Schedule publication"))
+                                        }
                                     >
                                         <span className="material-symbols-outlined text-[18px]">
-                                            {scheduledTime ? 'alarm_on' : 'schedule'}
+                                            {isNoticePeriodActive ? 'event_busy' : (scheduledTime ? 'alarm_on' : 'schedule')}
                                         </span>
-                                        {scheduledTime && (
+                                        {scheduledTime && !isNoticePeriodActive && (
                                             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 border-2 border-white dark:border-slate-800" />
                                         )}
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => handleSubmit(scheduledTime ? 'Scheduled' : 'Published')}
+                                        onClick={() => handleSubmit((scheduledTime && !isNoticePeriodActive) ? 'Scheduled' : 'Published')}
                                         disabled={!text.trim() || securityWarning || isPublishing}
                                         className={`px-5 py-2 rounded-xl text-[13px] font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap active:scale-95
                                             ${(!text.trim() || securityWarning || isPublishing)
@@ -1889,7 +1956,7 @@ const FILE_LIMITS = {
                 </div>
 
                 {/* Scheduling Modal Overlay - Centered & Never Cut Off */}
-                {isScheduling && (
+                {isScheduling && !isNoticePeriodActive && (
                     <div 
                         className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-slate-950/40 backdrop-blur-xs animate-in fade-in duration-150"
                         onClick={() => setIsScheduling(false)}

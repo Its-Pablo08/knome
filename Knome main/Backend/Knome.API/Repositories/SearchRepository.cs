@@ -294,7 +294,10 @@ public class SearchRepository : ISearchRepository
 
         if (!string.IsNullOrEmpty(ql))
         {
-            query = query.Where(p => (p.AudienceType == "Everyone" || p.AudienceType == "Community") && (
+            query = query.Where(p => (p.AudienceType == "Everyone" || p.AudienceType == "Public" || string.IsNullOrEmpty(p.AudienceType)) &&
+                p.AudienceType != "Community" &&
+                p.AudienceType != "SpecificCommunities" &&
+                !p.CommunityPosts.Any() && (
                 p.ContentText.ToLower().Contains(ql) ||
                 (!string.IsNullOrEmpty(cleanQ) && p.ContentText.ToLower().Contains(cleanQ)) ||
                 p.PostAttachments.Any(a => a.FileUrl.ToLower().Contains(ql) || (!string.IsNullOrEmpty(cleanQ) && a.FileUrl.ToLower().Contains(cleanQ)))
@@ -302,7 +305,10 @@ public class SearchRepository : ISearchRepository
         }
         else
         {
-            query = query.Where(p => p.AudienceType == "Everyone" || p.AudienceType == "Community");
+            query = query.Where(p => (p.AudienceType == "Everyone" || p.AudienceType == "Public" || string.IsNullOrEmpty(p.AudienceType)) &&
+                p.AudienceType != "Community" &&
+                p.AudienceType != "SpecificCommunities" &&
+                !p.CommunityPosts.Any());
         }
 
         if (!string.IsNullOrWhiteSpace(req.Author))

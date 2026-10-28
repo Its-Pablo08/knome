@@ -144,11 +144,21 @@ export default function Profile() {
     const resolvedAvatar = rawUserSource.profilePhotoUrl || rawUserSource.avatar || null;
     const resolvedRole = rawUserSource.designation || (Array.isArray(rawUserSource.roles) && rawUserSource.roles[0]) || rawUserSource.roleName || rawUserSource.role || 'Contributor';
     const resolvedDept = rawUserSource.departmentName || rawUserSource.department || 'General';
+    const resolvedEmpId = rawUserSource.employeeId ||
+        (isOwnProfile ? currentUser?.employeeId : null) ||
+        users.find(u => 
+            (u.userId && String(u.userId) === String(activeUserId)) || 
+            (u.id && String(u.id) === String(activeUserId)) ||
+            (u.name && u.name.toLowerCase() === resolvedName.toLowerCase()) ||
+            (u.fullName && u.fullName.toLowerCase() === resolvedName.toLowerCase())
+        )?.employeeId ||
+        (rawUserSource.id ? `MP0${rawUserSource.id}` : '');
 
     const displayUser = {
         ...rawUserSource,
         userId: targetUserId || rawUserSource.userId || rawUserSource.id || activeUserId,
         id: targetUserId || rawUserSource.userId || rawUserSource.id || activeUserId,
+        employeeId: resolvedEmpId,
         name: resolvedName,
         fullName: resolvedName,
         avatar: resolvedAvatar,
@@ -606,8 +616,20 @@ export default function Profile() {
                             : await profileApi.getUserPosts(currentProfileUserId, 1, 50);
                         const rawPosts = Array.isArray(postsRes) ? postsRes : (postsRes?.data || postsRes?.items || []);
                         const delPostIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
+                        const isCommunityPost = (p) => {
+                            if (!p) return false;
+                            const pIdStr = String(p.id || p.postId || '');
+                            return Boolean(
+                                p.communityId ||
+                                p.sharedCommunity ||
+                                p.sharedCommunityName ||
+                                p.audienceType === 'Community' ||
+                                p.audienceType === 'SpecificCommunities' ||
+                                pIdStr.startsWith('comm_post_')
+                            );
+                        };
                         const validPosts = rawPosts
-                            .filter(p => !delPostIds.includes(String(p.postId || p.id)) && p.status !== 'Removed' && p.status !== 'Deleted')
+                            .filter(p => !delPostIds.includes(String(p.postId || p.id)) && p.status !== 'Removed' && p.status !== 'Deleted' && !isCommunityPost(p))
                             .map(mapPost);
                         if (!isCancelled) {
                             setTabData(prev => ({ ...prev, posts: validPosts }));
@@ -1038,6 +1060,16 @@ export default function Profile() {
                                 <span className="text-slate-500 dark:text-slate-400 text-sm font-normal">
                                     ({displayUser?.pronouns || 'He/Him'})
                                 </span>
+                                {/* Employee ID Badge */}
+                                {resolvedEmpId && (
+                                    <span 
+                                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-2xs" 
+                                        title={`Employee ID: ${resolvedEmpId}`}
+                                    >
+                                        <span className="material-symbols-outlined text-[13px] text-slate-400">badge</span>
+                                        <span>Emp ID: {resolvedEmpId}</span>
+                                    </span>
+                                )}
                                 {/* Role / Designation tag */}
                                 {(displayUser?.roleName || displayUser?.role || displayUser?.designation) && (
                                     <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
@@ -1057,7 +1089,16 @@ export default function Profile() {
                             </div>
 
                             {/* Contact info and Connections Link */}
-                            <div className="flex items-center gap-1.5 mt-2 text-xs md:text-sm">
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2 text-xs md:text-sm">
+                                {resolvedEmpId && (
+                                    <>
+                                        <span className="font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                                            <span className="text-slate-400 font-normal">Employee ID:</span>
+                                            <span className="font-bold text-slate-800 dark:text-slate-200">{resolvedEmpId}</span>
+                                        </span>
+                                        <span className="text-slate-400 font-normal">·</span>
+                                    </>
+                                )}
                                 <button 
                                     type="button"
                                     onClick={() => setIsContactModalOpen(true)}
@@ -1277,6 +1318,40 @@ export default function Profile() {
                 {activeTab === 'About' && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 flex flex-col gap-6">
+                            {/* Employee Details Card */}
+                            <div className="rounded-2xl border shadow-sm p-6 glass card-lift bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                                <h3 className="text-[16px] font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-4">
+                                    <span className="material-symbols-outlined text-indigo-500">badge</span>
+                                    <span>Employee Details</span>
+                                </h3>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Employee ID</p>
+                                        <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-1 font-mono">
+                                            {resolvedEmpId || 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Designation</p>
+                                        <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={displayUser?.designation}>
+                                            {displayUser?.designation || 'Staff'}
+                                        </p>
+                                    </div>
+                                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Department</p>
+                                        <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={displayUser?.departmentName || displayUser?.department}>
+                                            {displayUser?.departmentName || displayUser?.department || 'General'}
+                                        </p>
+                                    </div>
+                                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Work Location</p>
+                                        <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={displayUser?.location}>
+                                            {displayUser?.location || 'Bhopal HQ'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Bio / About Me */}
                             <div className="rounded-2xl border shadow-sm p-6 glass card-lift">
                                 <div className="flex items-center justify-between mb-4">
@@ -2579,6 +2654,21 @@ export default function Profile() {
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                                 Contact Information
                             </h3>
+
+                            {/* Employee ID */}
+                            {resolvedEmpId && (
+                                <div className="flex items-start gap-3.5">
+                                    <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+                                        <span className="material-symbols-outlined text-[20px]">badge</span>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Employee ID</p>
+                                        <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-0.5 font-mono">
+                                            {resolvedEmpId}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Knome Profile Link */}
                             <div className="flex items-start gap-3.5">

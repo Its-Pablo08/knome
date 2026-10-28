@@ -50,11 +50,27 @@ export default function Posts() {
             const data = await postsApi.getPosts(null, null, 1, 100);
             let mapped = data ? data.map(mapPost) : [];
 
-            // Merge local fallback posts if any (only include explicit drafts saved via 'Save as Draft')
+            const isCommunityItem = (p) => {
+                if (!p) return false;
+                const pIdStr = String(p.id || p.postId || '');
+                return Boolean(
+                    p.communityId || 
+                    p.sharedCommunity || 
+                    p.sharedCommunityName || 
+                    p.audienceType === 'Community' || 
+                    p.audienceType === 'SpecificCommunities' ||
+                    pIdStr.startsWith('comm_post_')
+                );
+            };
+
+            // Merge local fallback posts if any (only include explicit drafts saved via 'Save as Draft', exclude community posts)
             try {
                 const deletedIds = JSON.parse(localStorage.getItem('knome_deleted_post_ids') || '[]').map(String);
                 const localPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
-                const cleanedLocalPosts = localPosts.filter(lp => lp.status !== 'Draft' || lp.savedAsDraft === true);
+                const cleanedLocalPosts = localPosts.filter(lp => {
+                    if (isCommunityItem(lp)) return false;
+                    return lp.status !== 'Draft' || lp.savedAsDraft === true;
+                });
                 if (cleanedLocalPosts.length !== localPosts.length) {
                     localStorage.setItem('knome_local_posts', JSON.stringify(cleanedLocalPosts));
                 }
@@ -123,6 +139,9 @@ export default function Posts() {
             // Filter posts based on publication schedule and draft privacy
             const currentUserIdStr = String(currentUser?.userId || currentUser?.id || '');
             const accessiblePosts = mapped.filter(p => {
+                // Community posts must strictly only show inside their respective community
+                if (isCommunityItem(p)) return false;
+
                 if (p.status === 'Draft') {
                     // Draft: author only
                     const authorIdStr = String(p.author?.id || p.authorId || p.userId || '');

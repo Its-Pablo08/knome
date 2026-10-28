@@ -133,15 +133,10 @@ export default function ClipShareModal({ isOpen, onClose, clip, onClipShared }) 
                     };
                     localStorage.setItem(savedPostsKey, JSON.stringify([newFeedPost, ...existingCommPosts]));
 
-                    // Also add to global knome_local_posts
-                    const globalLocalPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
-                    localStorage.setItem('knome_local_posts', JSON.stringify([newFeedPost, ...globalLocalPosts]));
-
                     window.dispatchEvent(new CustomEvent('community-posts-updated', { detail: { communityId: targetCommId } }));
                     window.dispatchEvent(new CustomEvent('community-post-created', { detail: { communityId: targetCommId } }));
                     window.dispatchEvent(new CustomEvent('post-created'));
                     window.dispatchEvent(new StorageEvent('storage', { key: savedPostsKey }));
-                    window.dispatchEvent(new StorageEvent('storage', { key: 'knome_local_posts' }));
                 } catch (cacheErr) {
                     console.warn('Local feed cache notice:', cacheErr);
                 }

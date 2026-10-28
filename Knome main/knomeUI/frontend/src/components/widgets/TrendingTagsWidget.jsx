@@ -49,7 +49,8 @@ export default function TrendingTagsWidget({ onTagClick }) {
                 try {
                     const localPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
                     localPosts.slice(0, 15).forEach(lp => {
-                        if (!postsList.some(p => String(p.id || p.postId) === String(lp.id || lp.postId))) {
+                        const isComm = Boolean(lp.communityId || lp.sharedCommunity || lp.sharedCommunityName || lp.audienceType === 'Community' || lp.audienceType === 'SpecificCommunities' || String(lp.id || lp.postId || '').startsWith('comm_post_'));
+                        if (!isComm && !postsList.some(p => String(p.id || p.postId) === String(lp.id || lp.postId))) {
                             postsList.push(lp);
                         }
                     });

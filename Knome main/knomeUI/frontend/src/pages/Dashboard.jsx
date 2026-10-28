@@ -201,10 +201,27 @@ export default function Dashboard() {
             const deletedArticleIds = JSON.parse(localStorage.getItem('knome_deleted_article_ids') || '[]').map(String);
             const deletedIds = [...deletedPostIds, ...deletedArticleIds];
 
-            // Merge local posts so locally created or shared posts survive refresh
+            const isCommunityItem = (item) => {
+                if (!item) return false;
+                const idStr = String(item.id || item.contentId || item.postId || item.articleId || '');
+                return Boolean(
+                    item.communityId || 
+                    item.sharedCommunity || 
+                    item.sharedCommunityName || 
+                    item.audienceType === 'Community' || 
+                    item.audienceType === 'SpecificCommunities' ||
+                    idStr.startsWith('comm_post_')
+                );
+            };
+
+            // Merge local posts so locally created or shared posts survive refresh (clean out community posts)
             try {
                 const localPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
-                localPosts.forEach(lp => {
+                const nonCommunityLocal = localPosts.filter(lp => !isCommunityItem(lp));
+                if (nonCommunityLocal.length !== localPosts.length) {
+                    localStorage.setItem('knome_local_posts', JSON.stringify(nonCommunityLocal));
+                }
+                nonCommunityLocal.forEach(lp => {
                     const lpIdStr = String(lp.id || lp.postId || '');
                     if (!deletedIds.includes(lpIdStr) && !mapped.some(m => String(m.id || m.contentId || m.postId) === lpIdStr)) {
                         const enrichedLp = { ...lp };
@@ -221,6 +238,8 @@ export default function Dashboard() {
                 const itemIdStr = String(item.id || item.contentId || item.postId || item.articleId || '');
                 if (deletedIds.includes(itemIdStr)) return false;
                 if (item.status === 'Removed' || item.status === 'Deleted') return false;
+                // Community posts must strictly only show inside their respective community
+                if (isCommunityItem(item)) return false;
                 const type = (item.type || item.contentType || '').toLowerCase();
                 if (type === 'video' || type === 'podcast') return false;
                 if ((type === 'post' || !type) && !isPostsEnabled) return false;

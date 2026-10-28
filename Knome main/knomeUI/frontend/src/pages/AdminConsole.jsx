@@ -17,6 +17,18 @@ import { addRestrictedWord } from '../utils/restrictedWords';
 import { getSystemConfig, saveSystemConfig, DEFAULT_SYSTEM_CONFIG } from '../utils/systemConfig';
 import { getContentTypeConfig } from '../utils/contentTypeConfig';
 import ContentTypeBadge from '../components/ui/ContentTypeBadge';
+import { 
+    getNoticePeriodConfig, 
+    saveNoticePeriodConfig, 
+    setNoticePeriodPolicyEnabled, 
+    isEmployeeMarkedInNotice, 
+    markEmployeeInNotice, 
+    unmarkEmployeeFromNotice, 
+    toggleEmployeeNoticeStatus, 
+    getMarkedEmployeesList,
+    NOTICE_PERIOD_CONFIG_KEY,
+    NOTICE_PERIOD_EVENT 
+} from '../utils/noticePeriodManager';
 
 const localRoleMap = {
     'Employee': 'EMP',
@@ -381,8 +393,8 @@ export default function AdminConsole() {
 
     // Hierarchical Domain Derived from Active Tab
     const activeDomain = useMemo(() => {
-        if (isSysAdmin && ['users', 'role_requests', 'suspension_requests'].includes(activeTab)) return 'moderation';
-        if (['users', 'role_requests'].includes(activeTab)) return 'governance';
+        if (isSysAdmin && ['users', 'role_requests', 'suspension_requests', 'notice_period'].includes(activeTab)) return 'moderation';
+        if (['users', 'role_requests', 'notice_period'].includes(activeTab)) return 'governance';
         if (activeTab === 'suspension_requests') return 'governance';
         if (['audit', 'serilog', 'analytics'].includes(activeTab)) return 'operations';
         if (activeTab === 'approval_policy') return isSysAdmin ? 'moderation' : 'governance';
@@ -399,13 +411,16 @@ export default function AdminConsole() {
         if (activeTab === 'role_requests') {
             setActiveTab(isSysAdmin ? 'moderation' : 'users');
         }
-        if (isSysAdmin && (activeTab === 'users' || activeTab === 'suspension_requests')) {
+        if (isSysAdmin && (activeTab === 'users' || activeTab === 'suspension_requests' || activeTab === 'notice_period')) {
             setActiveTab('moderation');
         }
         if (activeTab === 'suspension_requests' && !canManageSuspensions) {
             setActiveTab(isModerator ? 'moderation' : (isSysAdmin ? 'moderation' : 'users'));
         }
-    }, [activeTab, canManageSuspensions, isModerator, isSysAdmin]);
+        if (activeTab === 'notice_period' && (!isHrAdmin || isSysAdmin)) {
+            setActiveTab(isModerator ? 'moderation' : (isSysAdmin ? 'moderation' : 'users'));
+        }
+    }, [activeTab, canManageSuspensions, isModerator, isSysAdmin, isHrAdmin]);
 
     // Switch Domain and Auto-select First Tab in that Domain
     const handleDomainSelect = (domain) => {
@@ -466,6 +481,89 @@ export default function AdminConsole() {
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [selectedRoleFilter, setSelectedRoleFilter] = useState('All');
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
+    // ── Notice Period Management State (Role-specific: HR Admin Only) ──
+    const [noticePeriodConfig, setNoticePeriodConfig] = useState(() => getNoticePeriodConfig());
+    const [noticePeriodSearch, setNoticePeriodSearch] = useState('');
+    const [noticePeriodFilter, setNoticePeriodFilter] = useState('All'); // 'All' | 'InNotice' | 'Standard'
+    const [selectedNoticeUserKeys, setSelectedNoticeUserKeys] = useState([]);
+
+    useEffect(() => {
+        const handleNoticeConfigChange = () => {
+            setNoticePeriodConfig(getNoticePeriodConfig());
+        };
+        window.addEventListener(NOTICE_PERIOD_EVENT, handleNoticeConfigChange);
+        window.addEventListener('storage', handleNoticeConfigChange);
+        return () => {
+            window.removeEventListener(NOTICE_PERIOD_EVENT, handleNoticeConfigChange);
+            window.removeEventListener('storage', handleNoticeConfigChange);
+        };
+    }, []);
+
+    const markedNoticeCount = useMemo(() => {
+        return usersList.filter(u => isEmployeeMarkedInNotice(u)).length;
+    }, [usersList, noticePeriodConfig]);
+
+    const handleToggleNoticePolicy = (newVal) => {
+        if (!isHrAdmin || isSysAdmin) {
+            showToast('Access Denied: Only HR Administrators can configure Notice Period policies.', 'error');
+            return;
+        }
+        const updated = setNoticePeriodPolicyEnabled(newVal);
+        setNoticePeriodConfig(updated);
+        showToast(
+            newVal 
+                ? 'Notice Period Guard ENABLED: Forward post-scheduling is disabled for employees in notice period.' 
+                : 'Notice Period Guard DISABLED: Post-scheduling privileges restored for all employees.',
+            newVal ? 'warning' : 'info'
+        );
+    };
+
+    const handleToggleEmployeeNotice = (targetUser) => {
+        if (!isHrAdmin || isSysAdmin) {
+            showToast('Access Denied: Only HR Administrators can manage Notice Period assignments.', 'error');
+            return;
+        }
+        const isNowInNotice = toggleEmployeeNoticeStatus(targetUser, currentUser);
+        setNoticePeriodConfig(getNoticePeriodConfig());
+        const empName = targetUser.fullName || targetUser.name || 'Employee';
+        if (isNowInNotice) {
+            showToast(`Marked ${empName} as "In Notice Period". Post-scheduling has been disabled.`, 'warning');
+        } else {
+            showToast(`Removed ${empName} from Notice Period. Post-scheduling has been restored. ✨`, 'success');
+        }
+    };
+
+    const handleBulkMarkNotice = (markAsInNotice) => {
+        if (!isHrAdmin || isSysAdmin) {
+            showToast('Access Denied: Only HR Administrators can manage Notice Period assignments.', 'error');
+            return;
+        }
+        if (selectedNoticeUserKeys.length === 0) {
+            showToast('Please select at least one employee from the list.', 'warning');
+            return;
+        }
+
+        selectedNoticeUserKeys.forEach(key => {
+            const user = usersList.find(u => String(u.userId || u.id) === String(key) || (u.employeeId && u.employeeId === key));
+            if (user) {
+                if (markAsInNotice) {
+                    markEmployeeInNotice(user, currentUser);
+                } else {
+                    unmarkEmployeeFromNotice(user);
+                }
+            }
+        });
+
+        setNoticePeriodConfig(getNoticePeriodConfig());
+        setSelectedNoticeUserKeys([]);
+        showToast(
+            markAsInNotice 
+                ? `Marked ${selectedNoticeUserKeys.length} employee(s) as "In Notice Period". Post-scheduling disabled.` 
+                : `Removed ${selectedNoticeUserKeys.length} employee(s) from Notice Period. Post-scheduling restored. ✨`,
+            markAsInNotice ? 'warning' : 'success'
+        );
+    };
 
     // Suspend Modal Form State
     const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
@@ -5263,6 +5361,7 @@ export default function AdminConsole() {
                             {activeTab === 'moderation' ? 'Content Reports' :
                              activeTab === 'media_approvals' ? 'Media Approvals' :
                              activeTab === 'suspension_requests' ? 'Account Suspension Requests' :
+                             activeTab === 'notice_period' ? 'Notice Period Management' :
                              activeTab === 'approval_policy' ? (approvalSubTab === 'modules' ? 'Platform Feature Access Control' : 'Governance & Platform Approvals') :
                              activeTab === 'ai_moderation' ? 'AI Moderation Rules' :
                              activeTab === 'communities' ? 'Community Moderation' :
@@ -5616,6 +5715,31 @@ export default function AdminConsole() {
                                 }`}>
                                     {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
                                 </span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('notice_period')}
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
+                                    activeTab === 'notice_period'
+                                        ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
+                                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
+                                }`}
+                            >
+                                <span className={`material-symbols-outlined text-[17px] ${
+                                    activeTab === 'notice_period' ? 'text-white' : 'text-amber-500'
+                                }`}>event_busy</span>
+                                <span>Notice Period Management</span>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                                    activeTab === 'notice_period'
+                                        ? 'bg-white/20 text-white'
+                                        : noticePeriodConfig.isEnabled && markedNoticeCount > 0
+                                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300/80'
+                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                }`}>
+                                    {noticePeriodConfig.isEnabled ? (markedNoticeCount > 0 ? `${markedNoticeCount} Active` : 'ON') : 'OFF'}
+                                </span>
+                                {noticePeriodConfig.isEnabled && markedNoticeCount > 0 && (
+                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                )}
                             </button>
                         </>
                     )}
@@ -6295,7 +6419,7 @@ export default function AdminConsole() {
 
             {/* TAB 5: USER DIRECTORY FILTERS */}
             {activeTab === 'users' && !isSysAdmin && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 mb-5">
                     {/* 1. Active Accounts */}
                     <div 
                         onClick={() => { 
@@ -6457,6 +6581,35 @@ export default function AdminConsole() {
                         </div>
                         <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{suspendedUsersCount}</p>
                         <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">Suspended Accounts</p>
+                    </div>
+
+                    {/* 6. In Notice Period (HR Admin Governance) */}
+                    <div 
+                        onClick={() => { 
+                            setActiveTab('notice_period');
+                        }}
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
+                            markedNoticeCount > 0
+                                ? 'bg-gradient-to-br from-amber-50/70 via-white to-amber-50/30 dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 border-amber-500/60 ring-2 ring-amber-500/20 shadow-md scale-[1.01]' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
+                        }`}
+                        title="Click to manage Notice Period & Post-Scheduling"
+                    >
+                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="flex items-center justify-between mb-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50 flex items-center justify-center">
+                                <span className="material-symbols-outlined text-[19px]">event_busy</span>
+                            </div>
+                            <span className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border ${
+                                noticePeriodConfig.isEnabled 
+                                    ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-800/60' 
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                            }`}>
+                                {noticePeriodConfig.isEnabled ? 'Guard ON' : 'Guard OFF'}
+                            </span>
+                        </div>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{markedNoticeCount}</p>
+                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate mt-1.5">In Notice Period</p>
                     </div>
                 </div>
             )}
@@ -7332,6 +7485,12 @@ export default function AdminConsole() {
                                                                     <span className={`w-1.5 h-1.5 rounded-full transition-colors duration-200 ${statusCfg.dotClass} ${!isSusp ? 'animate-pulse' : ''}`}></span>
                                                                     <span>{statusCfg.label}</span>
                                                                 </span>
+                                                                {isEmployeeMarkedInNotice(u) && (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 w-fit" title={noticePeriodConfig.isEnabled ? "In Notice Period — Post Scheduling Disabled" : "In Notice Period (Policy Paused)"}>
+                                                                        <span className="material-symbols-outlined text-[12px] text-amber-500">event_busy</span>
+                                                                        <span>In Notice Period</span>
+                                                                    </span>
+                                                                )}
                                                                 {hasPendingSuspension && (
                                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 w-fit">
                                                                         <span className="material-symbols-outlined text-[12px] animate-pulse">hourglass_top</span>
@@ -7371,6 +7530,23 @@ export default function AdminConsole() {
                                                                 aria-label="Edit Role & Privileges"
                                                             >
                                                                 <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
+                                                            </button>
+                                                        )}
+                                                        {isHrAdmin && !isSysAdmin && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleToggleEmployeeNotice(u)}
+                                                                className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 cursor-pointer shadow-xs active:scale-95 ${
+                                                                    isEmployeeMarkedInNotice(u)
+                                                                        ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-200'
+                                                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-amber-50 hover:text-amber-600 border-slate-200/60 dark:border-slate-700'
+                                                                }`}
+                                                                title={isEmployeeMarkedInNotice(u) ? "In Notice Period: Click to remove and restore scheduling" : "Mark as In Notice Period (Disable Post Scheduling)"}
+                                                                aria-label="Toggle Notice Period"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[16px]">
+                                                                    {isEmployeeMarkedInNotice(u) ? 'event_busy' : 'timer_off'}
+                                                                </span>
                                                             </button>
                                                         )}
                                                         {(() => {
@@ -7821,6 +7997,435 @@ export default function AdminConsole() {
                             </div>
                         );
                     })()}
+                </div>
+            )}
+
+            {/* ─── TAB: NOTICE PERIOD MANAGEMENT (ROLE-SPECIFIC: HR ADMIN) ─── */}
+            {activeTab === 'notice_period' && isHrAdmin && !isSysAdmin && (
+                <div className="space-y-5">
+                    {/* Hero Header & Master Policy Guard Switch */}
+                    <div className="bg-gradient-to-br from-[#0c1838] via-[#12224d] to-[#1e1e4a] border border-indigo-900/40 rounded-3xl p-6 sm:p-7 text-white shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                        <div className="absolute bottom-0 left-1/3 -mb-10 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                            <div className="flex items-start gap-4">
+                                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shrink-0 shadow-lg shadow-amber-500/25 border border-amber-400/30">
+                                    <span className="material-symbols-outlined text-[32px]">event_busy</span>
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                        <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+                                            Notice Period Management
+                                        </h2>
+                                        <span className="px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30 flex items-center gap-1.5">
+                                            <span className="material-symbols-outlined text-[13px]">shield_person</span>
+                                            HR Admin Exclusive
+                                        </span>
+                                    </div>
+                                    <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+                                        Manage employee notice periods and governance restrictions. When enabled, transitioning personnel marked as <strong className="text-amber-300">"In Notice Period"</strong> are barred from forward post-scheduling. When unmarked or disabled, posting schedule privileges are restored immediately.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Master Policy Switch Card */}
+                            <div className="bg-white/10 dark:bg-slate-900/60 backdrop-blur-md border border-white/15 dark:border-white/10 rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-5 shrink-0 shadow-lg min-w-[280px]">
+                                <div>
+                                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-300 block mb-0.5">
+                                        Master Policy Enforcement
+                                    </span>
+                                    <p className="text-xs font-black text-white flex items-center gap-1.5">
+                                        <span className={`w-2 h-2 rounded-full ${noticePeriodConfig.isEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`}></span>
+                                        {noticePeriodConfig.isEnabled ? 'Post-Scheduling Guard ON' : 'Post-Scheduling Guard OFF'}
+                                    </p>
+                                    <span className="text-[10.5px] text-slate-300 block mt-0.5">
+                                        {noticePeriodConfig.isEnabled ? 'Restricting post-scheduling' : 'Privileges globally restored'}
+                                    </span>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleToggleNoticePolicy(!noticePeriodConfig.isEnabled)}
+                                    className={`relative inline-flex h-8 w-15 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none shadow-inner ${
+                                        noticePeriodConfig.isEnabled ? 'bg-amber-500 hover:bg-amber-400' : 'bg-slate-700 hover:bg-slate-600'
+                                    }`}
+                                    role="switch"
+                                    aria-checked={noticePeriodConfig.isEnabled}
+                                    title="Toggle Master Notice Period Post-Scheduling Guard"
+                                >
+                                    <span
+                                        className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                            noticePeriodConfig.isEnabled ? 'translate-x-7' : 'translate-x-0'
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* KPI Metrics Row */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">In Notice Period</span>
+                                <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-[19px]">event_busy</span>
+                                </div>
+                            </div>
+                            <p className="text-2xl font-black text-slate-900 dark:text-white leading-none">{markedNoticeCount}</p>
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-1.5 flex items-center gap-1">
+                                <span>Transitioning Personnel</span>
+                            </p>
+                        </div>
+
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Post Scheduling Guard</span>
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                                    noticePeriodConfig.isEnabled 
+                                        ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400' 
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                                }`}>
+                                    <span className="material-symbols-outlined text-[19px]">timer_off</span>
+                                </div>
+                            </div>
+                            <p className={`text-2xl font-black leading-none ${noticePeriodConfig.isEnabled ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                                {noticePeriodConfig.isEnabled ? 'RESTRICTED' : 'BYPASSED'}
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-1.5">
+                                {noticePeriodConfig.isEnabled ? 'Composer block enforced' : 'Policy disabled'}
+                            </p>
+                        </div>
+
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Standard Roster</span>
+                                <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-[19px]">check_circle</span>
+                                </div>
+                            </div>
+                            <p className="text-2xl font-black text-slate-900 dark:text-white leading-none">
+                                {Math.max(0, usersList.length - markedNoticeCount)}
+                            </p>
+                            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-1.5">
+                                Full Scheduling Privileges
+                            </p>
+                        </div>
+
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Organization Roster</span>
+                                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-[19px]">badge</span>
+                                </div>
+                            </div>
+                            <p className="text-2xl font-black text-slate-900 dark:text-white leading-none">{usersList.length}</p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-1.5">
+                                Total Monitored Accounts
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Operational Guidelines Card */}
+                    <div className="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/60 rounded-2xl p-4 sm:p-5 flex items-start gap-3.5">
+                        <span className="material-symbols-outlined text-[22px] text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">info</span>
+                        <div className="space-y-1 text-xs">
+                            <h4 className="font-bold text-amber-900 dark:text-amber-200">
+                                Notice Period Governance Guidelines
+                            </h4>
+                            <p className="text-amber-800 dark:text-amber-300/90 leading-relaxed">
+                                Selecting an employee and toggling them to <strong>"In Notice Period"</strong> immediately locks their post-scheduling option in the post composer (<span className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 py-0.5 rounded">CreatePostModal</span>). Any scheduled date inputs are cleared and disabled, while direct, immediate publishing remains available unless otherwise suspended. When notice period concludes or is revoked, toggle the switch off to restore scheduling instantly.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Employee Selection & Management Roster */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+                        {/* Table Controls Bar */}
+                        <div className="p-4 sm:p-5 border-b border-slate-200/70 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/30">
+                            <div className="flex items-center gap-2 flex-1 min-w-[260px] max-w-md">
+                                <div className="relative w-full">
+                                    <span className="material-symbols-outlined text-[17px] text-slate-400 absolute left-3 top-1/2 -translate-y-1/2">search</span>
+                                    <input
+                                        type="text"
+                                        value={noticePeriodSearch}
+                                        onChange={e => setNoticePeriodSearch(e.target.value)}
+                                        placeholder="Search employee by name, ID, role, department..."
+                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-2xs"
+                                    />
+                                    {noticePeriodSearch && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setNoticePeriodSearch('')}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                                        >
+                                            <span className="material-symbols-outlined text-[15px]">close</span>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Filter Pills & Bulk Action Buttons */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <div className="p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setNoticePeriodFilter('All')}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                            noticePeriodFilter === 'All'
+                                                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                                                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                        }`}
+                                    >
+                                        All ({usersList.length})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setNoticePeriodFilter('InNotice')}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                            noticePeriodFilter === 'InNotice'
+                                                ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
+                                                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                        }`}
+                                    >
+                                        In Notice ({markedNoticeCount})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setNoticePeriodFilter('Standard')}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                            noticePeriodFilter === 'Standard'
+                                                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                                                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                        }`}
+                                    >
+                                        Standard ({Math.max(0, usersList.length - markedNoticeCount)})
+                                    </button>
+                                </div>
+
+                                {selectedNoticeUserKeys.length > 0 && (
+                                    <div className="flex items-center gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleBulkMarkNotice(true)}
+                                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                                        >
+                                            <span className="material-symbols-outlined text-[15px]">event_busy</span>
+                                            <span>Mark In Notice ({selectedNoticeUserKeys.length})</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleBulkMarkNotice(false)}
+                                            className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                                        >
+                                            <span className="material-symbols-outlined text-[15px]">restore</span>
+                                            <span>Remove Notice</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Roster Table */}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse text-xs">
+                                <thead className="bg-slate-50/90 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200/80 dark:border-slate-800">
+                                    <tr>
+                                        <th className="px-5 py-3.5 w-12 text-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={
+                                                    usersList.length > 0 && 
+                                                    selectedNoticeUserKeys.length === usersList.length
+                                                }
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedNoticeUserKeys(usersList.map(u => String(u.userId || u.id || u.employeeId)));
+                                                    } else {
+                                                        setSelectedNoticeUserKeys([]);
+                                                    }
+                                                }}
+                                                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                                                title="Select / Deselect All Employees"
+                                            />
+                                        </th>
+                                        <th className="px-4 py-3.5">Employee & ID</th>
+                                        <th className="px-4 py-3.5">Designation & Department</th>
+                                        <th className="px-4 py-3.5">Role</th>
+                                        <th className="px-4 py-3.5">Notice Period Status</th>
+                                        <th className="px-4 py-3.5">Post-Scheduling Access</th>
+                                        <th className="px-5 py-3.5 text-right">Quick Toggle</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                    {(() => {
+                                        const query = noticePeriodSearch.trim().toLowerCase();
+                                        const displayed = usersList.filter(u => {
+                                            const isMarked = isEmployeeMarkedInNotice(u);
+                                            if (noticePeriodFilter === 'InNotice' && !isMarked) return false;
+                                            if (noticePeriodFilter === 'Standard' && isMarked) return false;
+
+                                            if (query) {
+                                                const name = String(u.fullName || u.name || '').toLowerCase();
+                                                const empId = String(u.employeeId || '').toLowerCase();
+                                                const email = String(u.email || '').toLowerCase();
+                                                const dept = String(u.department || u.departmentName || '').toLowerCase();
+                                                const desig = String(u.designation || '').toLowerCase();
+                                                const role = getUserAssignedRole(u).toLowerCase();
+                                                if (!name.includes(query) && !empId.includes(query) && !email.includes(query) && !dept.includes(query) && !desig.includes(query) && !role.includes(query)) {
+                                                    return false;
+                                                }
+                                            }
+                                            return true;
+                                        });
+
+                                        if (displayed.length === 0) {
+                                            return (
+                                                <tr>
+                                                    <td colSpan="7" className="text-center py-12 text-slate-500">
+                                                        <div className="flex flex-col items-center justify-center gap-2">
+                                                            <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-500 flex items-center justify-center">
+                                                                <span className="material-symbols-outlined text-2xl">person_search</span>
+                                                            </div>
+                                                            <p className="font-bold text-sm text-slate-700 dark:text-slate-300">No employees match criteria</p>
+                                                            <p className="text-xs text-slate-400">Try clearing filters or search term.</p>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        return displayed.map(u => {
+                                            const isMarked = isEmployeeMarkedInNotice(u);
+                                            const assignedRole = getUserAssignedRole(u);
+                                            const uKey = String(u.userId || u.id || u.employeeId);
+                                            const isSelected = selectedNoticeUserKeys.includes(uKey);
+                                            const uAvatar = u.avatar || u.profilePhotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName || u.name || 'U')}&background=f59e0b&color=fff&bold=true`;
+                                            const empIdDisplay = u.employeeId || (KNOWN_ROSTER_DETAILS[String(u.userId || u.id)] ? Object.keys(KNOWN_ROSTER_NAMES).find(k => KNOWN_ROSTER_NAMES[k] === (u.fullName || u.name)) : `EMP#${u.userId || u.id}`);
+
+                                            return (
+                                                <tr 
+                                                    key={uKey}
+                                                    className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors ${
+                                                        isMarked ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''
+                                                    }`}
+                                                >
+                                                    <td className="px-5 py-3.5 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setSelectedNoticeUserKeys(prev => [...prev, uKey]);
+                                                                } else {
+                                                                    setSelectedNoticeUserKeys(prev => prev.filter(k => k !== uKey));
+                                                                }
+                                                            }}
+                                                            className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3.5">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="relative shrink-0">
+                                                                <img
+                                                                    src={uAvatar}
+                                                                    alt={u.fullName || u.name}
+                                                                    className="w-9 h-9 rounded-xl object-cover ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-xs"
+                                                                />
+                                                                {isMarked && (
+                                                                    <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-500 border-2 border-white dark:border-slate-900" title="In Notice Period" />
+                                                                )}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                                                        {u.fullName || u.name}
+                                                                    </p>
+                                                                    {empIdDisplay && (
+                                                                        <span className="font-mono text-[10px] font-extrabold px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded border border-slate-200/60 dark:border-slate-700">
+                                                                            {empIdDisplay}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[200px]">
+                                                                    {u.email || `${(u.fullName || u.name || 'user').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3.5">
+                                                        <p className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">
+                                                            {u.designation || 'Staff Member'}
+                                                        </p>
+                                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                                                            <span className="material-symbols-outlined text-[13px] text-slate-400">apartment</span>
+                                                            <span>{u.department || u.departmentName || 'MPOnline Limited'}</span>
+                                                        </p>
+                                                    </td>
+                                                    <td className="px-4 py-3.5">
+                                                        <span className={`px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1 shadow-xs font-bold ${getRoleBadgeStyle(assignedRole)}`}>
+                                                            {assignedRole}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3.5">
+                                                        {isMarked ? (
+                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 shadow-xs">
+                                                                <span className="material-symbols-outlined text-[14px] text-amber-600">event_busy</span>
+                                                                <span>In Notice Period</span>
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                                <span>Standard Active</span>
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3.5">
+                                                        {isMarked ? (
+                                                            noticePeriodConfig.isEnabled ? (
+                                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-black bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60">
+                                                                    <span className="material-symbols-outlined text-[13px]">block</span>
+                                                                    <span>Scheduling Disabled</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60">
+                                                                    <span className="material-symbols-outlined text-[13px]">pause_circle</span>
+                                                                    <span>Policy Inactive</span>
+                                                                </span>
+                                                            )
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60">
+                                                                <span className="material-symbols-outlined text-[13px]">check</span>
+                                                                <span>Scheduling Allowed</span>
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-5 py-3.5 text-right">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleToggleEmployeeNotice(u)}
+                                                            className={`px-3.5 py-1.5 rounded-xl font-bold text-xs inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 ${
+                                                                isMarked
+                                                                    ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                                                                    : 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+                                                            }`}
+                                                            title={isMarked ? "Remove from notice period and restore post scheduling" : "Mark employee as In Notice Period to disable post-scheduling"}
+                                                        >
+                                                            <span className="material-symbols-outlined text-[15px]">
+                                                                {isMarked ? 'person_remove' : 'event_busy'}
+                                                            </span>
+                                                            <span>{isMarked ? 'Remove Notice' : 'Mark In Notice'}</span>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        });
+                                    })()}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -12859,6 +13464,43 @@ export default function AdminConsole() {
                                         : '👤 Standard Employee: Access to feed posting, media channels, communities collaboration, and karma rewards.'}
                                 </p>
                             </div>
+
+                            {/* Section: Notice Period Status (HR Admin Only) */}
+                            {isHrAdmin && !isSysAdmin && (
+                                <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/60 flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined text-[20px]">event_busy</span>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-xs font-black text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
+                                                Notice Period Governance
+                                            </h4>
+                                            <p className="text-[11px] text-amber-800 dark:text-amber-300/80">
+                                                {isEmployeeMarkedInNotice(selectedUserDetailsUser)
+                                                    ? 'Currently marked In Notice Period. Post scheduling is blocked.'
+                                                    : 'Standard active status. Post scheduling enabled.'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleToggleEmployeeNotice(selectedUserDetailsUser)}
+                                        className={`px-3.5 py-1.5 rounded-xl font-bold text-xs inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+                                            isEmployeeMarkedInNotice(selectedUserDetailsUser)
+                                                ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-300 border border-rose-300'
+                                                : 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[15px]">
+                                            {isEmployeeMarkedInNotice(selectedUserDetailsUser) ? 'person_remove' : 'event_busy'}
+                                        </span>
+                                        <span>
+                                            {isEmployeeMarkedInNotice(selectedUserDetailsUser) ? 'Remove Notice' : 'Mark In Notice'}
+                                        </span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>,

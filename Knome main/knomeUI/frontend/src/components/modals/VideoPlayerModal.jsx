@@ -174,8 +174,6 @@ export default function VideoPlayerModal({ isOpen, onClose, video, onVideoDelete
             const existing = JSON.parse(localStorage.getItem(savedKey) || '[]');
             localStorage.setItem(savedKey, JSON.stringify([newCommunityPost, ...existing]));
 
-            const globalPosts = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
-            localStorage.setItem('knome_local_posts', JSON.stringify([newCommunityPost, ...globalPosts]));
 
             window.dispatchEvent(new CustomEvent('community-post-created', { detail: { communityId: targetComm.id } }));
             window.dispatchEvent(new CustomEvent('post-created'));

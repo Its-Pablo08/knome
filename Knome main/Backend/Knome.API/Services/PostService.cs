@@ -24,8 +24,17 @@ public class PostService : IPostService
     private readonly IMapper _mapper;
     private readonly ISuspensionGuard _suspensionGuard;
     private readonly INotificationService _notificationService;
+    private readonly INoticePeriodService _noticePeriodService;
 
-    public PostService(IPostRepository repo, IContentInteractionService interactionService, IKarmaService karmaService, KnomeDbContext db, IMapper mapper, ISuspensionGuard suspensionGuard, INotificationService notificationService)
+    public PostService(
+        IPostRepository repo, 
+        IContentInteractionService interactionService, 
+        IKarmaService karmaService, 
+        KnomeDbContext db, 
+        IMapper mapper, 
+        ISuspensionGuard suspensionGuard, 
+        INotificationService notificationService,
+        INoticePeriodService noticePeriodService)
     {
         _repo = repo;
         _interactionService = interactionService;
@@ -34,6 +43,7 @@ public class PostService : IPostService
         _mapper = mapper;
         _suspensionGuard = suspensionGuard;
         _notificationService = notificationService;
+        _noticePeriodService = noticePeriodService;
     }
 
     private async Task CheckIsAuthorOrAdminAsync(Post post, int currentUserId)
@@ -123,6 +133,11 @@ public class PostService : IPostService
             throw new BadRequestException("Post content or attachments contain blocked URLs or restricted keywords.");
 
         DateTime? scheduledDate = null;
+        if (dto.Status == PostStatuses.Scheduled || dto.ScheduledDate.HasValue)
+        {
+            await _noticePeriodService.EnsureCanSchedulePostAsync(currentUserId);
+        }
+
         if (dto.Status == PostStatuses.Scheduled && dto.ScheduledDate.HasValue)
         {
             scheduledDate = KnomeTime.ToIst(dto.ScheduledDate.Value);
@@ -287,6 +302,11 @@ public class PostService : IPostService
         var previousStatus = post.Status;
         post.ContentText = dto.ContentText;
         post.AudienceType = dto.AudienceType;
+
+        if (dto.Status == PostStatuses.Scheduled || dto.ScheduledDate.HasValue)
+        {
+            await _noticePeriodService.EnsureCanSchedulePostAsync(currentUserId);
+        }
 
         if (dto.Status == PostStatuses.Scheduled && dto.ScheduledDate.HasValue)
         {
