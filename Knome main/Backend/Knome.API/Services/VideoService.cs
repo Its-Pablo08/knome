@@ -128,7 +128,7 @@ public class VideoService : IVideoService
             r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" ||
             r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM" ||
             r.RoleName == Roles.Moderator || r.RoleCode == "MOD" ||
-            (r.RoleName != null && (r.RoleName.Contains("Admin") || r.RoleName.Contains("Mod"))) ||
+            (r.RoleName != null && (r.RoleName.Contains("Admin") || r.RoleName.Contains("Moderator") || r.RoleName.Contains("Mod"))) ||
             (r.RoleCode != null && (r.RoleCode.Contains("ADM") || r.RoleCode.Contains("MOD"))));
 
         var requireApproval = _systemSettingService != null

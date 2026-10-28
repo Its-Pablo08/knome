@@ -495,6 +495,10 @@ export const karmaApi = {
 
     /** GET /karma/leaderboard */
     getLeaderboard: (top = 10) => apiClient.get(`/karma/leaderboard?top=${top}`),
+
+    /** POST /karma/award */
+    awardKarma: (userId, activityType, pointsAwarded, relatedContentType = null, relatedContentId = null) =>
+        apiClient.post('/karma/award', { userId, activityType, pointsAwarded, relatedContentType, relatedContentId }),
 };
 
 // ─────────────────────────────────────────────
@@ -1860,7 +1864,10 @@ export const messagesApi = {
         apiClient.delete(`/Messages/${messageId}?deleteForEveryone=${Boolean(deleteForEveryone)}`),
 
     /** GET /api/Messages/online-users */
-    getOnlineUsers: () => apiClient.get('/Messages/online-users')
+    getOnlineUsers: () => apiClient.get('/Messages/online-users'),
+
+    /** GET /api/Messages/online-status/{userId} */
+    getOnlineStatus: (userId) => apiClient.get(`/Messages/online-status/${userId}`)
 };
 
 // ─────────────────────────────────────────────
@@ -1944,4 +1951,6 @@ export const clipsApi = {
     addComment: (id, commentText, parentCommentId = null) =>
         apiClient.post(`/interactions/Clip/${id}/comments`, { commentText, parentCommentId })
 };
+
+
 

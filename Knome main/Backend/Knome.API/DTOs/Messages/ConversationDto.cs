@@ -25,4 +25,8 @@ public class ConversationDto
     public int UnreadCount { get; set; }
 
     public bool IsConnected { get; set; }
+
+    public bool IsOnline { get; set; }
+
+    public DateTime? PartnerLastSeen { get; set; }
 }
