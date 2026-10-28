@@ -1,5 +1,104 @@
 [
   {
+    "id": "pl_1790683183428_xcy0ajhz318",
+    "title": "oye",
+    "description": "hello",
+    "category": "Training & Tutorials",
+    "author": "Loveneesh Sharma",
+    "authorId": 1,
+    "authorDesignation": "HR Admin",
+    "thumbnail": "http://localhost:5096/uploads/media/media_2e5e42cd9d5448e98f8fdc8339feb8f6.jpg",
+    "videoIds": [
+      "20028"
+    ],
+    "type": "Series",
+    "createdDate": "2026-09-29",
+    "episodes": []
+  },
+  {
+    "id": "pl_yt_1790751276620_6yykxkm1z9",
+    "title": "YouTube Series (PLgUwDviBI)",
+    "description": "Imported Series (6 Episodes) created by Loveneesh Sharma.",
+    "category": "Training & Tutorials",
+    "author": "Loveneesh Sharma",
+    "authorId": 19,
+    "authorDesignation": "HR Admin",
+    "thumbnail": "https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&q=90&w=1200",
+    "videoIds": [
+      "yt_imp_PLgUwDviBIf0pjVqGatLnMU8Iyfs6MYD9G_ep_1",
+      "yt_imp_PLgUwDviBIf0pjVqGatLnMU8Iyfs6MYD9G_ep_2",
+      "yt_imp_PLgUwDviBIf0pjVqGatLnMU8Iyfs6MYD9G_ep_3",
+      "yt_imp_PLgUwDviBIf0pjVqGatLnMU8Iyfs6MYD9G_ep_4",
+      "yt_imp_PLgUwDviBIf0pjVqGatLnMU8Iyfs6MYD9G_ep_5",
+      "yt_imp_PLgUwDviBIf0pjVqGatLnMU8Iyfs6MYD9G_ep_6"
+    ],
+    "type": "Series",
+    "createdDate": "2026-09-30",
+    "episodes": []
+  },
+  {
+    "id": "pl_yt_1790753306435_k7c69y1c64",
+    "title": "takeUforward shorts",
+    "description": "Imported Series (7 Episodes) created by Loveneesh Sharma.",
+    "category": "Training & Tutorials",
+    "author": "Loveneesh Sharma",
+    "authorId": 19,
+    "authorDesignation": "HR Admin",
+    "thumbnail": "https://i2.ytimg.com/vi/AajeP_e_-oU/hqdefault.jpg",
+    "videoIds": [
+      "yt_imp_AajeP_e_-oU",
+      "yt_imp_Wsys6ThsAO0",
+      "yt_imp_DTDWwLSmRBk",
+      "yt_imp_EPx-ZDciIpc",
+      "yt_imp_worGgFJA1m0",
+      "yt_imp_0ADWhxoxzSQ",
+      "yt_imp_zxIaE_5_jl4"
+    ],
+    "type": "Series",
+    "createdDate": "2026-09-30",
+    "episodes": []
+  },
+  {
+    "id": "pl_yt_1790683392248_1nl8j8kpjc9",
+    "title": "System Design",
+    "description": "Imported Series (8 Episodes) created by Loveneesh Sharma.",
+    "category": "Training & Tutorials",
+    "author": "Loveneesh Sharma",
+    "authorId": 1,
+    "authorDesignation": "HR Admin",
+    "thumbnail": "https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&q=90&w=1200",
+    "videoIds": [
+      "yt_imp_pl_yt_1790683392248_1nl8j8kpjc9_1",
+      "yt_imp_pl_yt_1790683392248_1nl8j8kpjc9_2",
+      "yt_imp_pl_yt_1790683392248_1nl8j8kpjc9_3",
+      "yt_imp_pl_yt_1790683392248_1nl8j8kpjc9_4",
+      "yt_imp_pl_yt_1790683392248_1nl8j8kpjc9_5",
+      "yt_imp_pl_yt_1790683392248_1nl8j8kpjc9_6",
+      "yt_imp_pl_yt_1790683392248_1nl8j8kpjc9_7",
+      "yt_imp_pl_yt_1790683392248_1nl8j8kpjc9_8"
+    ],
+    "type": "Series",
+    "createdDate": "2026-09-29",
+    "episodes": []
+  },
+  {
+    "id": "pl_yt_1790771059994_itandkvtdt8",
+    "title": "NeetCode Podcast",
+    "description": "Imported Series (2 Episodes) created by Loveneesh Sharma.",
+    "category": "Leadership Updates",
+    "author": "Loveneesh Sharma",
+    "authorId": 19,
+    "authorDesignation": "HR Admin",
+    "thumbnail": "https://i4.ytimg.com/vi/s4EOVsBO7Ck/hqdefault.jpg",
+    "videoIds": [
+      "yt_imp_s4EOVsBO7Ck",
+      "yt_imp_Z8B4BSi35CI"
+    ],
+    "type": "Series",
+    "createdDate": "2026-09-30",
+    "episodes": []
+  },
+  {
     "id": "pl_1790683209503_7z4qkdbq4bn",
     "title": "testing-1",
     "description": "good",
