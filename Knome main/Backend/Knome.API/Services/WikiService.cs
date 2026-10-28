@@ -377,12 +377,18 @@ public class WikiService : IWikiService
         {
             var requestedStatus = string.IsNullOrWhiteSpace(dto.Status) ? "Published" : dto.Status;
             var finalStatus = requestedStatus;
-            if (requestedStatus != "Draft")
+
+            var caller = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
+            var isSysAdmin = caller != null && caller.Roles.Any(r => 
+                r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" ||
+                r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM");
+
+            // Whenever a Moderator or Employee creates a Wiki with Draft (or Published),
+            // it automatically appears in the Media Approval section with a Pending Approval status.
+            if (!isSysAdmin)
             {
-                var isUserAdmin = await IsAdministratorAsync(currentUserId);
-                if (!isUserAdmin)
+                if (requestedStatus == "Draft" || requestedStatus == "PendingApproval" || requestedStatus == "Published")
                 {
-                    // Whenever an Employee creates a Wiki, it is submitted to the Moderator for approval
                     finalStatus = "PendingApproval";
                 }
             }

@@ -162,12 +162,12 @@ const getFallbackPostContent = (report) => {
         || (!isGenericAuthor ? report.reportedUserName : null)
         || known?.authorName
         || (report.reportedUserId ? USER_NAME_FALLBACKS[report.reportedUserId] : null)
-        || (report.reportedUserId ? `User #${report.reportedUserId}` : 'Loveneesh Sharma');
+        || (report.reportedUserId ? `User #${report.reportedUserId}` : (report.reportedUserName || 'Content Author'));
 
     const resolvedAuthorId = cached?.authorUserId 
         || report.reportedUserId 
         || known?.authorUserId 
-        || 1;
+        || null;
 
     const isBoilerplateContent = !report.postContentSnippet ||
         report.postContentSnippet.includes('Content removed under admin governance policy') ||
@@ -370,7 +370,9 @@ export default function AdminConsole() {
         ? ((queryTab && queryTab !== 'role_requests') ? queryTab : 'users') 
         : (isModerator && !isSysAdmin)
             ? 'moderation'
-            : ((queryTab && queryTab !== 'role_requests') ? queryTab : (queryDomain === 'governance' ? 'users' : queryDomain === 'operations' ? 'audit' : 'moderation'));
+            : isSysAdmin
+                ? ((queryTab && !['role_requests', 'users', 'suspension_requests'].includes(queryTab)) ? queryTab : (queryDomain === 'operations' ? 'audit' : 'moderation'))
+                : ((queryTab && queryTab !== 'role_requests') ? queryTab : (queryDomain === 'governance' ? 'users' : queryDomain === 'operations' ? 'audit' : 'moderation'));
 
     const [activeTab, setActiveTab] = useState(defaultInitialTab);
     const [approvalSubTab, setApprovalSubTab] = useState('governance'); // 'governance' | 'modules'
@@ -379,6 +381,7 @@ export default function AdminConsole() {
 
     // Hierarchical Domain Derived from Active Tab
     const activeDomain = useMemo(() => {
+        if (isSysAdmin && ['users', 'role_requests', 'suspension_requests'].includes(activeTab)) return 'moderation';
         if (['users', 'role_requests'].includes(activeTab)) return 'governance';
         if (activeTab === 'suspension_requests') return 'governance';
         if (['audit', 'serilog', 'analytics'].includes(activeTab)) return 'operations';
@@ -394,12 +397,15 @@ export default function AdminConsole() {
 
     useEffect(() => {
         if (activeTab === 'role_requests') {
-            setActiveTab('users');
+            setActiveTab(isSysAdmin ? 'moderation' : 'users');
+        }
+        if (isSysAdmin && (activeTab === 'users' || activeTab === 'suspension_requests')) {
+            setActiveTab('moderation');
         }
         if (activeTab === 'suspension_requests' && !canManageSuspensions) {
-            setActiveTab(isModerator ? 'moderation' : 'users');
+            setActiveTab(isModerator ? 'moderation' : (isSysAdmin ? 'moderation' : 'users'));
         }
-    }, [activeTab, canManageSuspensions, isModerator]);
+    }, [activeTab, canManageSuspensions, isModerator, isSysAdmin]);
 
     // Switch Domain and Auto-select First Tab in that Domain
     const handleDomainSelect = (domain) => {
@@ -409,6 +415,9 @@ export default function AdminConsole() {
         }
         if (isHrAdmin && !isSysAdmin && domain !== 'governance' && domain !== 'moderation') {
             showToast('Access Restricted: Operations domain is restricted to System Administrators.', 'warning');
+            return;
+        }
+        if (isSysAdmin && domain === 'governance') {
             return;
         }
         if (domain === 'moderation') {
@@ -2127,6 +2136,7 @@ export default function AdminConsole() {
             const vidBlacklist = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]').map(String);
             const podBlacklist = JSON.parse(localStorage.getItem('knome_deleted_podcast_ids') || '[]').map(String);
             const clipBlacklist = JSON.parse(localStorage.getItem('knome_deleted_clip_ids') || '[]').map(String);
+            const wikiBlacklist = JSON.parse(localStorage.getItem('knome_deleted_wiki_ids') || '[]').map(String);
 
             // Group all reports by unique content ID: `${contentType}_${contentId}`
             const contentGroups = new Map();
@@ -2161,7 +2171,8 @@ export default function AdminConsole() {
                                       (cType.toLowerCase() === 'article' && artBlacklist.includes(cIdStr)) ||
                                       (cType.toLowerCase() === 'video' && vidBlacklist.includes(cIdStr)) ||
                                       (cType.toLowerCase() === 'podcast' && podBlacklist.includes(cIdStr)) ||
-                                      (cType.toLowerCase() === 'clip' && clipBlacklist.includes(cIdStr));
+                                      (cType.toLowerCase() === 'clip' && clipBlacklist.includes(cIdStr)) ||
+                                      (cType.toLowerCase() === 'wiki' && wikiBlacklist.includes(cIdStr));
 
                 // All unique report IDs associated with this content
                 const allReportIds = [...new Set(group.map(i => i.reportId).filter(Boolean))];
@@ -2170,7 +2181,10 @@ export default function AdminConsole() {
                 const reportersMap = new Map();
                 group.forEach(i => {
                     const rId = i.reporterUserId || 0;
-                    const rName = i.reporterFullName || (rId ? `User #${rId}` : 'Anonymous');
+                    const foundRepUser = rId ? usersList.find(u => Number(u.userId || u.id) === Number(rId)) : null;
+                    const rName = (!i.reporterFullName || i.reporterFullName === 'Unknown' || i.reporterFullName.startsWith('User #'))
+                        ? (foundRepUser?.fullName || i.reporterFullName || (rId ? `User #${rId}` : 'Reporter'))
+                        : (i.reporterFullName || foundRepUser?.fullName || (rId ? `User #${rId}` : 'Reporter'));
                     const rReason = i.reasonCode || 'Inappropriate';
                     const rDate = i.reportedDate ? new Date(i.reportedDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Recent';
                     if (!reportersMap.has(rId) || reportersMap.get(rId).fullName.startsWith('User #')) {
@@ -2183,7 +2197,7 @@ export default function AdminConsole() {
                     }
                 });
                 const allReporters = Array.from(reportersMap.values());
-                const primaryReporter = allReporters.find(rep => rep.userId === primaryItem.reporterUserId) || allReporters[0] || { userId: 0, fullName: 'Anonymous' };
+                const primaryReporter = allReporters.find(rep => rep.userId === primaryItem.reporterUserId) || allReporters[0] || { userId: primaryItem.reporterUserId || 0, fullName: primaryItem.reporterFullName || 'Reporter' };
                 const otherReportersCount = Math.max(0, allReporters.length - 1);
                 const allReportersText = `Reported ${group.length} time${group.length === 1 ? '' : 's'}:\n` +
                     allReporters.map(rep => `• ${rep.fullName} (ID: #${rep.userId}) - Reason: ${rep.reasonCode} (${rep.dateStr})`).join('\n');
@@ -2235,21 +2249,22 @@ export default function AdminConsole() {
                     cachedData = cache[`${cType}_${cId}`] || cache[`Post_${cId}`] || cache[cId] || null;
                 } catch {}
 
+                const resolvedAuthorUserId = primaryItem.reportedUserId || cachedData?.authorUserId || null;
+                const foundAuthorUser = resolvedAuthorUserId ? usersList.find(u => Number(u.userId || u.id) === Number(resolvedAuthorUserId)) : null;
+
                 const isGenericAuthor = !primaryItem.reportedUserName ||
                     primaryItem.reportedUserName.toLowerCase().includes('reported author') ||
                     primaryItem.reportedUserName.toLowerCase().includes('content author') ||
+                    primaryItem.reportedUserName.toLowerCase().includes('wiki author') ||
+                    primaryItem.reportedUserName.toLowerCase().includes('clip creator') ||
+                    primaryItem.reportedUserName.toLowerCase().includes('video creator') ||
+                    primaryItem.reportedUserName.toLowerCase().includes('podcast host') ||
                     primaryItem.reportedUserName === primaryItem.reporterFullName;
 
-                const fallbackKnownAuthor = {
-                    10049: 'Suresh verma',
-                    10050: 'Rohan Verma',
-                    10048: 'Aarav Sharma'
-                }[cId] || null;
-
                 const resolvedReportedAuthor = (!isGenericAuthor ? primaryItem.reportedUserName : null)
+                    || foundAuthorUser?.fullName
                     || cachedData?.authorName
-                    || fallbackKnownAuthor
-                    || (primaryItem.reportedUserId ? `User #${primaryItem.reportedUserId}` : 'Suresh verma');
+                    || (resolvedAuthorUserId ? `User #${resolvedAuthorUserId}` : (primaryItem.reportedUserName || 'Content Author'));
 
                 const isBoilerplateSnippet = !primaryItem.postContentSnippet ||
                     primaryItem.postContentSnippet.includes('Content removed under admin governance policy') ||
@@ -2273,6 +2288,12 @@ export default function AdminConsole() {
                 const rawDates = group.map(i => i.rawReportedDate || (i.reportedDate ? new Date(i.reportedDate).getTime() : 0)).filter(d => !isNaN(d) && d > 0);
                 const latestRawReportDate = rawDates.length > 0 ? Math.max(...rawDates) : Date.now();
 
+                const defaultCommunity = cType === 'Wiki' ? 'Wiki & Documentation' :
+                    (cType === 'Video' ? 'Video Library' :
+                    (cType === 'Podcast' ? 'Audio Room' :
+                    (cType === 'Clip' ? 'Clips' :
+                    (cType === 'Article' ? 'Knowledge Hub' : 'General Collaboration'))));
+
                 aggregatedList.push({
                     reportId: primaryItem.reportId || (Date.now() + Math.floor(Math.random() * 1000)),
                     allReportIds,
@@ -2282,11 +2303,11 @@ export default function AdminConsole() {
                     reporterFullName: primaryReporter.fullName,
                     otherReportersCount,
                     allReportersText,
-                    reportedUserId: primaryItem.reportedUserId || cachedData?.authorUserId || null,
+                    reportedUserId: resolvedAuthorUserId,
                     reportedUserName: resolvedReportedAuthor,
                     contentType: cType,
                     contentId: cId,
-                    communityName: primaryItem.communityName || 'Engineering & Tech',
+                    communityName: primaryItem.communityName || defaultCommunity,
                     reasonCode: primaryItem.reasonCode || 'Inappropriate',
                     severity: primaryItem.severity || scoreInfo.severity,
                     aiScore: scoreInfo.formattedScore,
@@ -2822,6 +2843,8 @@ export default function AdminConsole() {
                         await videosApi.delete(contentId);
                     } else if (cType === 'podcast') {
                         await podcastsApi.delete(contentId);
+                    } else if (cType === 'wiki') {
+                        await wikiApi.deleteWiki(contentId);
                     }
                 } catch (delErr) {
                     console.warn('Backend direct delete warning:', delErr);
@@ -2894,6 +2917,15 @@ export default function AdminConsole() {
                         clipBlacklist.push(cidStr);
                         localStorage.setItem('knome_deleted_clip_ids', JSON.stringify(clipBlacklist));
                     }
+                } else if (cType === 'wiki') {
+                    const wikiBlacklist = JSON.parse(localStorage.getItem('knome_deleted_wiki_ids') || '[]');
+                    if (!wikiBlacklist.includes(cidStr)) {
+                        wikiBlacklist.push(cidStr);
+                        localStorage.setItem('knome_deleted_wiki_ids', JSON.stringify(wikiBlacklist));
+                    }
+                    const localWikis = JSON.parse(localStorage.getItem('knome_local_wikis') || '[]');
+                    const filteredWikis = localWikis.filter(w => String(w.id || w.wikiId) !== cidStr);
+                    localStorage.setItem('knome_local_wikis', JSON.stringify(filteredWikis));
                 }
 
                 // Invalidate API cache so all next queries fetch fresh database truth
@@ -2908,6 +2940,7 @@ export default function AdminConsole() {
             window.dispatchEvent(new CustomEvent('video-deleted', { detail: { id: contentId, videoId: contentId } }));
             window.dispatchEvent(new CustomEvent('podcast-deleted', { detail: { id: contentId, podcastId: contentId } }));
             window.dispatchEvent(new CustomEvent('clip-deleted', { detail: { id: contentId, clipId: contentId } }));
+            window.dispatchEvent(new CustomEvent('wiki-deleted', { detail: { id: contentId, wikiId: contentId } }));
             window.dispatchEvent(new CustomEvent('knome_content_moderated', { detail: { contentId, contentType, actionType: 'Removed Content' } }));
             window.dispatchEvent(new Event('storage'));
         }
@@ -3227,6 +3260,30 @@ export default function AdminConsole() {
                 } else {
                     setPreviewPost(getFallbackPostContent(report));
                 }
+            } else if (report.contentType === 'Wiki') {
+                let wiki = null;
+                try {
+                    const res = await wikiApi.getWiki(report.contentId).catch(() => null);
+                    wiki = res?.data || res;
+                } catch (e) {}
+
+                if (wiki && (wiki.title || wiki.description || wiki.overviewContent)) {
+                    setPreviewPost({
+                        authorName: wiki.createdByUserName || wiki.createdByUser?.fullName || report.reportedUserName || 'Wiki Author',
+                        authorFullName: wiki.createdByUserName || wiki.createdByUser?.fullName || report.reportedUserName || 'Wiki Author',
+                        authorUserId: wiki.createdByUserId || wiki.createdByUser?.id || report.reportedUserId || null,
+                        authorDesignation: wiki.authorDesignation || 'Wiki Contributor',
+                        title: wiki.title || `Wiki #${report.contentId}`,
+                        content: wiki.description || (wiki.overviewContent ? wiki.overviewContent.replace(/<[^>]*>?/gm, '') : report.postContentSnippet),
+                        contentHtml: wiki.overviewContent,
+                        category: wiki.categoryName || 'Wiki Library',
+                        coverImageUrl: wiki.coverImageUrl,
+                        isWiki: true,
+                        createdDate: wiki.createdAt || report.reportedDate
+                    });
+                } else {
+                    setPreviewPost(getFallbackPostContent(report));
+                }
             } else {
                 let res = await postsApi.getById(report.contentId).catch(() => null);
                 if (!res) {
@@ -3238,15 +3295,15 @@ export default function AdminConsole() {
                 }
                 if (res) {
                     const targetAuthorId = res.authorUserId || res.authorId || res.userId || report.reportedUserId;
-                    const foundUser = usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId));
-                    const authorName = res.authorFullName || res.authorUser?.fullName || foundUser?.fullName || res.authorName || res.author?.name || report.reportedUserName || (targetAuthorId === 1 ? 'Loveneesh Sharma' : 'Reported Content Author');
+                    const foundUser = targetAuthorId ? usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId)) : null;
+                    const authorName = res.authorFullName || res.authorUser?.fullName || foundUser?.fullName || res.authorName || res.author?.name || report.reportedUserName || (targetAuthorId ? `User #${targetAuthorId}` : 'Reported Content Author');
                     const contentText = res.contentText || res.content || res.text || report.postContentSnippet;
                     setPreviewPost({
                         ...res,
                         authorName,
                         authorFullName: authorName,
                         authorUserId: targetAuthorId,
-                        authorDesignation: foundUser?.designation || res.authorDesignation || (targetAuthorId === 1 ? 'TPM' : 'Employee'),
+                        authorDesignation: foundUser?.designation || res.authorDesignation || 'Employee',
                         contentText,
                         content: contentText
                     });
@@ -3409,18 +3466,29 @@ export default function AdminConsole() {
             const empKey = targetUser?.employeeId ? targetUser.employeeId.toUpperCase() : null;
             const suspensionRole = isSysAdmin ? 'System Admin' : 'HR Admin';
             const suspensionActor = currentUser?.fullName || currentUser?.name || (isSysAdmin ? 'System Administrator' : 'HR Administrator');
+            const calculatedUntil = isPermanent ? null : (customDate ? new Date(customDate).toISOString() : new Date(Date.now() + (Number(days) || 7) * 24 * 60 * 60 * 1000).toISOString());
             savedSuspended[String(numericId)] = {
                 suspendedAt: new Date().toISOString(),
                 reason: reason || `Suspended by ${suspensionActor}`,
                 suspendedBy: suspensionActor,
-                suspendedByRole: suspensionRole
+                suspendedByRole: suspensionRole,
+                days: days,
+                isPermanent: isPermanent,
+                suspendedUntil: calculatedUntil
             };
             if (empKey) {
                 savedSuspended[empKey] = savedSuspended[String(numericId)];
             }
             localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
         } catch (e) {}
-        setUsersList(prev => prev.map(u => (Number(u.userId || u.id) === numericId || (targetUser?.employeeId && u.employeeId === targetUser.employeeId)) ? { ...u, isActive: false, isSuspended: true, status: 'Suspended' } : u));
+        setUsersList(prev => prev.map(u => (Number(u.userId || u.id) === numericId || (targetUser?.employeeId && u.employeeId === targetUser.employeeId)) ? { 
+            ...u, 
+            isActive: false, 
+            isSuspended: true, 
+            isPermanentlySuspended: isPermanent,
+            suspendedUntil: isPermanent ? null : (customDate ? new Date(customDate).toISOString() : new Date(Date.now() + (Number(days) || 7) * 24 * 60 * 60 * 1000).toISOString()),
+            status: 'Suspended' 
+        } : u));
         
         // Auto-approve any pending suspension requests for this target user
         setSuspensionRequests(prev => {
@@ -4426,7 +4494,7 @@ export default function AdminConsole() {
     const handleSaveConfigClick = () => {
         const changes = getPendingGovernanceChanges();
         setIsSaveSuccess(false);
-        if (false) {
+        if (changes.length === 0) {
             showToast('No changes to save.', 'info');
             return;
         }
@@ -5188,7 +5256,7 @@ export default function AdminConsole() {
                             className="text-slate-700 dark:text-slate-300 font-semibold cursor-pointer hover:text-blue-600 transition-colors"
                             onClick={() => handleDomainSelect(activeDomain)}
                         >
-                            {activeDomain === 'moderation' ? 'Content Moderation & Safety' : activeDomain === 'governance' ? 'User & Access Governance' : 'Operations & Compliance'}
+                            {activeDomain === 'moderation' ? 'Content Moderation & Safety' : activeDomain === 'governance' ? 'Admin Console & Governance' : 'Operations & Compliance'}
                         </span>
                         <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-slate-700">chevron_right</span>
                         <span className="text-blue-700 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/50 px-2.5 py-0.5 rounded-lg border border-blue-200/80 dark:border-blue-800/80 shadow-2xs">
@@ -5277,6 +5345,7 @@ export default function AdminConsole() {
                                             </div>
                                             <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-black">XLSX</span>
                                         </button>
+                                    {!isSysAdmin && (
                                         <button
                                             onClick={handleExportUsersExcel}
                                             className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 flex items-center justify-between cursor-pointer transition-colors"
@@ -5287,6 +5356,7 @@ export default function AdminConsole() {
                                             </div>
                                             <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-black">XLSX</span>
                                         </button>
+                                    )}
                                         <button
                                             onClick={handleExportAuditExcel}
                                             className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 flex items-center justify-between cursor-pointer transition-colors"
@@ -5325,6 +5395,7 @@ export default function AdminConsole() {
                                             </div>
                                             <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded font-black">CSV</span>
                                         </button>
+                                    {!isSysAdmin && (
                                         <button
                                             onClick={handleExportUsersCSV}
                                             className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-between cursor-pointer transition-colors"
@@ -5335,6 +5406,7 @@ export default function AdminConsole() {
                                             </div>
                                             <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded font-black">CSV</span>
                                         </button>
+                                    )}
                                         <button
                                             onClick={handleExportAuditCSV}
                                             className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-between cursor-pointer transition-colors"
@@ -5355,8 +5427,8 @@ export default function AdminConsole() {
 
             {/* ─── HIERARCHY TIER 1: FUNCTIONAL DOMAIN PILLARS (FOR SYSTEM ADMIN) ─── */}
             {isSysAdmin && (
-                /* Multi-Domain 3-Pillar Deck for System Admin */
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3.5">
+                /* Multi-Domain 2-Pillar Deck for System Admin */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3.5">
                     {/* Pillar 1: Content Moderation & Safety */}
                     <div 
                         onClick={() => handleDomainSelect('moderation')}
@@ -5415,58 +5487,7 @@ export default function AdminConsole() {
                         </div>
                     </div>
 
-                    {/* Pillar 2: User Governance & Access */}
-                    <div 
-                        onClick={() => handleDomainSelect('governance')}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group shadow-xs ${
-                            activeDomain === 'governance'
-                                ? 'bg-[#0c1838] text-white border-[#1e295a] ring-2 ring-purple-500/40 shadow-sm'
-                                : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-slate-200/90 dark:border-slate-800 hover:border-purple-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
-                    >
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${
-                                activeDomain === 'governance' 
-                                    ? 'bg-purple-900/60 text-white border border-purple-400/30' 
-                                    : 'bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50'
-                            }`}>
-                                <span className="material-symbols-outlined text-[22px]">admin_panel_settings</span>
-                            </div>
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 mb-0.5">
-                                    <span className={`text-[10px] font-black uppercase tracking-wider ${
-                                        activeDomain === 'governance' ? 'text-purple-200' : 'text-slate-400'
-                                    }`}>
-                                        DOMAIN 2
-                                    </span>
-                                </div>
-                                <h3 className={`font-extrabold text-xs sm:text-sm tracking-tight truncate ${
-                                    activeDomain === 'governance' ? 'text-white' : 'text-slate-900 dark:text-white'
-                                }`}>
-                                    User & Access Governance
-                                </h3>
-                                <p className={`text-[10px] sm:text-[11px] truncate ${
-                                    activeDomain === 'governance' ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'
-                                }`}>
-                                    Employee Accounts, Roles & Privileges
-                                </p>
-                            </div>
-                        </div>
-                        <div className="text-right shrink-0 pl-2">
-                            <span className={`text-lg sm:text-xl font-black block leading-none ${
-                                activeDomain === 'governance' ? 'text-white' : 'text-slate-900 dark:text-white'
-                            }`}>
-                                {usersList.length}
-                            </span>
-                            <span className={`text-[9px] font-bold uppercase tracking-wider ${
-                                activeDomain === 'governance' ? 'text-purple-300' : 'text-slate-400'
-                            }`}>
-                                USERS
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Pillar 3: System Operations & Compliance */}
+                    {/* Pillar 2: System Operations & Compliance */}
                     <div 
                         onClick={() => handleDomainSelect('operations')}
                         className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group shadow-xs ${
@@ -5488,7 +5509,7 @@ export default function AdminConsole() {
                                     <span className={`text-[10px] font-black uppercase tracking-wider ${
                                         activeDomain === 'operations' ? 'text-cyan-200' : 'text-slate-400'
                                     }`}>
-                                        DOMAIN 3
+                                        DOMAIN 2
                                     </span>
                                     {systemLogCounts.errors > 0 ? (
                                         <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white shadow-2xs">
@@ -5531,7 +5552,7 @@ export default function AdminConsole() {
             {/* ─── HIERARCHY TIER 2: FUNCTIONAL SUB-TABS (SCOPED TO ACTIVE DOMAIN) ─── */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-2.5 mb-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap py-0.5">
-                    {activeDomain === 'governance' && (
+                    {activeDomain === 'governance' && !isSysAdmin && (
                         <>
                             <button
                                 onClick={() => setActiveTab('users')}
@@ -6273,7 +6294,7 @@ export default function AdminConsole() {
             )}
 
             {/* TAB 5: USER DIRECTORY FILTERS */}
-            {activeTab === 'users' && (
+            {activeTab === 'users' && !isSysAdmin && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-5">
                     {/* 1. Active Accounts */}
                     <div 
@@ -6883,18 +6904,19 @@ export default function AdminConsole() {
                                                     <td className="px-3 py-2.5">
                                                         {(() => {
                                                             const targetAuthorId = r.reportedUserId;
-                                                            const foundUser = usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId));
+                                                            const foundUser = targetAuthorId ? usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId)) : null;
                                                             let authorName = r.reportedUserName;
                                                             if (!authorName || authorName.toLowerCase().includes('reported author') || authorName.toLowerCase().includes('content author')) {
-                                                                authorName = foundUser?.fullName || (targetAuthorId === 1 ? 'Loveneesh Sharma' : (targetAuthorId ? `User #${targetAuthorId}` : 'Loveneesh Sharma'));
+                                                                authorName = foundUser?.fullName || (targetAuthorId ? `User #${targetAuthorId}` : 'Author');
                                                             }
-                                                            const authorId = targetAuthorId || foundUser?.userId || 1;
                                                             return (
                                                                 <>
                                                                     <div className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[130px]" title={authorName}>
                                                                         <HighlightText text={authorName} query={searchQuery} />
                                                                     </div>
-                                                                    <div className="text-[10px] text-slate-400">ID: #{authorId}</div>
+                                                                    <div className="text-[10px] text-slate-400">
+                                                                        {targetAuthorId ? `ID: #${targetAuthorId}` : (foundUser ? `ID: #${foundUser.userId || foundUser.id}` : 'ID: -')}
+                                                                    </div>
                                                                 </>
                                                             );
                                                         })()}
@@ -7038,7 +7060,7 @@ export default function AdminConsole() {
             )}
 
             {/* ─── TAB 2: USER GOVERNANCE ─── */}
-            {activeTab === 'users' && (
+            {activeTab === 'users' && !isSysAdmin && (
                 <div className="space-y-4">
                     {/* Action Required: Pending Suspension Requests Banner for HR Admin */}
                     {canManageSuspensions && suspensionRequests.filter(r => r.status === 'Pending').length > 0 && (
@@ -10340,39 +10362,6 @@ export default function AdminConsole() {
                             </button>
                         </div>
                     </div>
-                    {false && (
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-sm shrink-0">
-                                    <span className="material-symbols-outlined text-[22px]">tune</span>
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-                                        Platform Feature Access Control (Module Toggles)
-                                    </h3>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        Configure individual module availability across Knome. When a feature is toggled OFF, navigation links are hidden, direct routes are blocked, and backend APIs are protected.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                                <button
-                                    type="button"
-                                    onClick={() => handleSetAllFeatures(true)}
-                                    className="px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 text-[11px] font-bold cursor-pointer transition-all"
-                                >
-                                    Enable All Features
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleSetAllFeatures(false)}
-                                    className="px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 text-[11px] font-bold cursor-pointer transition-all"
-                                >
-                                    Disable All Features
-                                </button>
-                            </div>
-                        </div>)}
 
                         {/* ── 6 INDEPENDENT FEATURE CARDS GRID ── */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -11711,15 +11700,15 @@ export default function AdminConsole() {
                                     {(() => {
                                         const repId = previewReport.reporterUserId || previewReport.reporterId || previewReport.requestedByUserId || (previewReport.reporters && previewReport.reporters[0]?.userId) || null;
                                         const foundUser = repId ? usersList.find(u => Number(u.userId || u.id) === Number(repId)) : null;
-                                        const repName = previewReport.reporterFullName || (previewReport.reporters && previewReport.reporters[0]?.fullName) || previewReport.requestedByName || foundUser?.fullName || (repId ? `Employee #${repId}` : 'Moderator');
-                                        const resolvedId = repId || foundUser?.userId || 1050;
+                                        const repName = previewReport.reporterFullName || (previewReport.reporters && previewReport.reporters[0]?.fullName) || previewReport.requestedByName || foundUser?.fullName || (repId ? `Employee #${repId}` : 'Reporter');
+                                        const resolvedId = repId || foundUser?.userId || null;
                                         return (
                                             <>
                                                 <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate" title={repName}>
                                                     {repName}
                                                 </p>
                                                 <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono font-medium mt-0.5">
-                                                    User ID: #{resolvedId}
+                                                    User ID: {resolvedId ? `#${resolvedId}` : '-'}
                                                 </p>
                                             </>
                                         );
@@ -11782,13 +11771,13 @@ export default function AdminConsole() {
                                         <div className="flex items-center gap-3">
                                             {(() => {
                                                 const targetAuthorId = previewPost.authorUserId || previewPost.authorId || previewPost.userId || previewReport.reportedUserId;
-                                                const foundUser = usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId));
+                                                const foundUser = targetAuthorId ? usersList.find(u => Number(u.userId || u.id) === Number(targetAuthorId)) : null;
                                                 let cleanAuthor = previewPost.authorFullName || previewPost.authorName || foundUser?.fullName || previewReport.reportedUserName;
                                                 if (!cleanAuthor || cleanAuthor.toLowerCase().includes('reported author') || cleanAuthor.toLowerCase().includes('content author')) {
-                                                    cleanAuthor = foundUser?.fullName || (targetAuthorId === 1 ? 'Loveneesh Sharma' : 'Employee');
+                                                    cleanAuthor = foundUser?.fullName || (targetAuthorId ? `User #${targetAuthorId}` : 'Content Author');
                                                 }
                                                 const initial = (cleanAuthor[0] || 'U').toUpperCase();
-                                                const designation = foundUser?.designation || previewPost.authorDesignation || (cleanAuthor === 'Loveneesh Sharma' ? 'TPM' : (cleanAuthor === 'Suresh verma' ? 'software developer' : (cleanAuthor === 'Rohan Verma' ? 'HR Specialist' : 'Employee')));
+                                                const designation = foundUser?.designation || previewPost.authorDesignation || 'Employee';
                                                 const rawDate = previewPost.createdDate || previewPost.createdAt || previewReport.reportedDate;
                                                 const formattedDate = rawDate ? new Date(rawDate).toLocaleDateString() : new Date().toLocaleDateString();
                                                 return (
@@ -11952,6 +11941,45 @@ export default function AdminConsole() {
                                                     className="text-xs text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1 hover:underline cursor-pointer"
                                                 >
                                                     <span>Open Full Article in Hub</span>
+                                                    <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                                                </button>
+                                            </div>
+                                            {previewPost.title && (
+                                                <h4 className="text-base font-black text-slate-900 dark:text-white">
+                                                    {previewPost.title}
+                                                </h4>
+                                            )}
+                                            {previewPost.coverImageUrl && (
+                                                <img
+                                                    src={resolveMediaUrl(previewPost.coverImageUrl)}
+                                                    alt={previewPost.title || 'Cover'}
+                                                    className="w-full h-44 object-cover rounded-xl border border-slate-200 dark:border-slate-800"
+                                                />
+                                            )}
+                                            {previewPost.contentHtml && (
+                                                <div 
+                                                    className="text-xs text-slate-600 dark:text-slate-300 line-clamp-4 leading-relaxed bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800"
+                                                    dangerouslySetInnerHTML={{ __html: previewPost.contentHtml }}
+                                                />
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Wiki Preview if Content is Wiki */}
+                                    {(previewPost.isWiki || previewReport.contentType === 'Wiki') && (
+                                        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold text-[10px] uppercase tracking-wider">
+                                                    {previewPost.category || 'Wiki Library'}
+                                                </span>
+                                                <button
+                                                    onClick={() => {
+                                                        setIsPreviewOpen(false);
+                                                        navigate(`/wiki/view?id=${previewReport.contentId}`);
+                                                    }}
+                                                    className="text-xs text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                                                >
+                                                    <span>Open Full Wiki in Reader</span>
                                                     <span className="material-symbols-outlined text-[14px]">open_in_new</span>
                                                 </button>
                                             </div>
@@ -12308,8 +12336,8 @@ export default function AdminConsole() {
                                         <button
                                             onClick={() => {
                                                 setIsPreviewOpen(false);
-                                                const targetUserId = previewPost?.authorUserId || previewPost?.userId || previewPost?.authorId || previewReport.reportedUserId || previewReport.reporterUserId;
-                                                const targetUserName = previewPost?.authorFullName || previewPost?.authorName || previewPost?.fullName || previewReport.reportedUserName || previewReport.reporterFullName;
+                                                const targetUserId = previewPost?.authorUserId || previewPost?.userId || previewPost?.authorId || previewReport.reportedUserId || null;
+                                                const targetUserName = previewPost?.authorFullName || previewPost?.authorName || previewPost?.fullName || previewReport.reportedUserName || (targetUserId ? `User #${targetUserId}` : 'Reported Author');
                                                 const targetUser = usersList.find(u => Number(u.userId || u.id) === Number(targetUserId)) || {
                                                     userId: targetUserId,
                                                     fullName: targetUserName,

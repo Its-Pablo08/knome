@@ -28,8 +28,8 @@ export default function ReportModal({ isOpen, onClose, targetType = 'Post', targ
         try {
             const formattedType = targetType.charAt(0).toUpperCase() + targetType.slice(1);
             const numericId = typeof targetId === 'number' ? targetId : parseInt(String(targetId).replace(/\D/g, ''), 10);
-            const activeReporterUserId = currentUser?.userId || currentUser?.id || 1050;
-            const activeReporterName = currentUser?.fullName || currentUser?.name || 'Vilash Deshmukh';
+            const activeReporterUserId = currentUser?.userId || currentUser?.id || 0;
+            const activeReporterName = currentUser?.fullName || currentUser?.name || (activeReporterUserId ? `User #${activeReporterUserId}` : 'Reporter');
 
             // Cache report details with content snippet and author for admin preview modal
             try {
@@ -75,7 +75,11 @@ export default function ReportModal({ isOpen, onClose, targetType = 'Post', targ
 
             if (!isNaN(numericId) && numericId > 0 && !String(targetId).startsWith('yt_')) {
                 try {
-                    await interactionsApi.reportContent(formattedType, numericId, { reasonCode: selectedCode });
+                    await interactionsApi.reportContent(formattedType, numericId, { 
+                        reasonCode: selectedCode,
+                        details: details || '',
+                        description: details || ''
+                    });
                     // Backend confirmed: prune temporary local fallback copy so it doesn't cause dual-entry duplicates
                     try {
                         const existing = JSON.parse(localStorage.getItem('knome_moderation_reports') || '[]');
@@ -86,6 +90,19 @@ export default function ReportModal({ isOpen, onClose, targetType = 'Post', targ
                     console.warn("Backend report API note (saved in local moderation queue):", apiErr);
                 }
             }
+
+            try {
+                window.dispatchEvent(new CustomEvent('content-reported', { 
+                    detail: { contentType: formattedType, contentId: numericId || targetId } 
+                }));
+                window.dispatchEvent(new CustomEvent('knome:new-notification', {
+                    detail: {
+                        title: 'Content Reported',
+                        message: `A report has been submitted for this ${targetType.toLowerCase()}.`,
+                        type: 'moderation'
+                    }
+                }));
+            } catch {}
 
             setIsSuccess(true);
             setTimeout(() => {

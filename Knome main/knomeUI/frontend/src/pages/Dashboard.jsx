@@ -452,7 +452,7 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    {/* HR Organization Announcement Banner (FR-DB-05) - Supports Up to 3 Broadcasts */}
+                    {/* HR Organization Announcement Banner (FR-DB-05) - Supports Up to 3 Broadcasts (Verified) */}
                     {announcements && announcements.length > 0 && announcements[activeBroadcastIndex] && (() => {
                         const broadcast = announcements[activeBroadcastIndex];
                         const headline = broadcast.title || broadcast.message || 'Organization Announcement';
@@ -597,21 +597,21 @@ export default function Dashboard() {
 
                     {/* HR Admin Prompt when No Broadcast is Active */}
                     {(!announcements || announcements.length === 0) && isHrOrSysAdmin && (
-                        <div className="relative overflow-hidden p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-dashed border-amber-500/30 dark:border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs backdrop-blur-sm">
-                            <div className="flex items-center gap-3.5">
-                                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
-                                    <span className="material-symbols-outlined text-[24px]" style={{fontVariationSettings: "'FILL' 1"}}>campaign</span>
+                        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/5 border border-dashed border-amber-500/30 flex items-center justify-between gap-3 shadow-2xs">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                    <span className="material-symbols-outlined text-[20px]" style={{fontVariationSettings: "'FILL' 1"}}>campaign</span>
                                 </div>
                                 <div>
-                                    <div className="flex items-center gap-2 mb-0.5">
-                                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2.5 py-0.5 rounded-full">
-                                            HR Broadcast System
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-md">
+                                            HR Admin Broadcast
                                         </span>
                                         <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
                                             No Active Organization Broadcast
                                         </span>
                                     </div>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                                         Publish company-wide announcements, town halls, or urgent notices to all MPOnline employees.
                                     </p>
                                 </div>
@@ -621,9 +621,9 @@ export default function Dashboard() {
                                     setEditingBroadcastData(null);
                                     setIsBroadcastModalOpen(true);
                                 }}
-                                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-1.5 cursor-pointer shrink-0 hover:scale-[1.02] active:scale-95"
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all shadow-xs shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer shrink-0"
                             >
-                                <span className="material-symbols-outlined text-[17px]">campaign</span>
+                                <span className="material-symbols-outlined text-[16px]">campaign</span>
                                 <span>Create Broadcast</span>
                             </button>
                         </div>
