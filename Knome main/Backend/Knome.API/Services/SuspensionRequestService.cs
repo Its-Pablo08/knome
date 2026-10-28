@@ -83,19 +83,8 @@ public class SuspensionRequestService : ISuspensionRequestService
             throw new BadRequestException("System Administrators cannot be suspended.");
         }
 
-        // Check if employee is already suspended
-        bool isAlreadySuspended = !targetUser.IsActive || targetUser.IsPermanentlySuspended || (targetUser.SuspendedUntil.HasValue && targetUser.SuspendedUntil.Value > KnomeTime.Now);
-        if (isAlreadySuspended)
-        {
-            throw new BadRequestException($"Employee '{targetUser.FullName}' is already suspended.");
-        }
-
-        // Check for duplicate pending suspension requests
-        bool hasPendingRequest = await _repo.HasPendingRequestAsync(dto.TargetUserId);
-        if (hasPendingRequest)
-        {
-            throw new BadRequestException($"A suspension request for '{targetUser.FullName}' is already pending HR review.");
-        }
+        // Allow moderators to submit unlimited suspension requests for any user and any content,
+        // without restricting the number of requests per user or whether they already have pending reviews.
 
         // 2. Fetch requester user
         var requesterUser = await _db.Users
@@ -283,20 +272,7 @@ public class SuspensionRequestService : ISuspensionRequestService
         request.ReviewedByRole = reviewerUser.Roles.FirstOrDefault()?.RoleName ?? "HR Administrator";
         await _repo.UpdateAsync(request);
 
-        // Auto-resolve any other pending requests for this same target user
-        var duplicatePending = await _db.SuspensionRequests
-            .Where(r => r.TargetUserId == request.TargetUserId && r.RequestId != requestId && r.Status == "Pending")
-            .ToListAsync();
-        foreach (var dup in duplicatePending)
-        {
-            dup.Status = "Approved";
-            dup.ReviewedAt = KnomeTime.Now;
-            dup.ReviewedByUserId = reviewerUserId;
-            dup.ReviewedByName = reviewerUser.FullName;
-            dup.ReviewedByRole = reviewerUser.Roles.FirstOrDefault()?.RoleName ?? "HR Administrator";
-            dup.RejectionReason = null;
-            await _repo.UpdateAsync(dup);
-        }
+        // Multiple suspension requests are maintained independently without overwriting previous requests
 
         // 3. Notify requester
         try

@@ -759,12 +759,10 @@ export default function AdminConsole() {
         };
     }, [syncSuspensionRequestsFromBackend]);
 
-    // Auto-sync suspension requests when activeTab is suspension_requests or governance
+    // Auto-sync suspension requests when activeTab changes or updates
     useEffect(() => {
-        if (canManageSuspensions) {
-            syncSuspensionRequestsFromBackend();
-        }
-    }, [activeTab, canManageSuspensions, syncSuspensionRequestsFromBackend]);
+        syncSuspensionRequestsFromBackend();
+    }, [activeTab, syncSuspensionRequestsFromBackend]);
 
     // Live background polling (every 6 seconds) for cross-session/InPrivate real-time updates
     useEffect(() => {
@@ -3458,12 +3456,8 @@ export default function AdminConsole() {
 
         // If caller is NOT an HR Administrator or System Administrator (i.e. Moderator),
         // account suspensions MUST NOT execute directly. Instead, route to HR Administrator for approval.
+        // Unlimited suspension requests are allowed per user and content without duplicate blocking.
         if (!canManageSuspensions) {
-            const alreadyPending = suspensionRequests.some(r => Number(r.targetUserId) === numericId && r.status === 'Pending');
-            if (alreadyPending) {
-                showToast(`A suspension request for ${resolvedName} is already pending HR review.`, 'warning');
-                return;
-            }
 
             let savedRequest = null;
             try {
@@ -3588,18 +3582,7 @@ export default function AdminConsole() {
             status: 'Suspended' 
         } : u));
         
-        // Auto-approve any pending suspension requests for this target user
-        setSuspensionRequests(prev => {
-            const updated = prev.map(r => (Number(r.targetUserId) === numericId && r.status === 'Pending') ? {
-                ...r,
-                status: 'Approved',
-                reviewedAt: new Date().toISOString(),
-                reviewedBy: currentUser?.fullName || 'HR Administrator',
-                reviewedByRole: 'HR Administrator'
-            } : r);
-            localStorage.setItem('knome_suspension_requests', JSON.stringify(updated));
-            return updated;
-        });
+        // Each suspension request retains its independent review status without overwriting previous requests
 
         setIsSuspendModalOpen(false);
         setSelectedUserToSuspend(null);
@@ -7293,7 +7276,7 @@ export default function AdminConsole() {
                                 type="text"
                                 value={userSearchTerm}
                                 onChange={e => setUserSearchTerm(e.target.value)}
-                                placeholder="Search employee, email, role, dept..."
+                                placeholder="Search employee, email, role, IOU..."
                                 className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs transition-all"
                             />
                             {userSearchTerm && (
@@ -7337,7 +7320,7 @@ export default function AdminConsole() {
                                 <tr>
                                     <th className="px-5 py-3.5">User #</th>
                                     <th className="px-4 py-3.5">Employee Name & Email</th>
-                                    <th className="px-4 py-3.5">Designation & Dept</th>
+                                    <th className="px-4 py-3.5">Designation & IOU</th>
                                     <th className="px-4 py-3.5">Assigned Role</th>
                                     <th className="px-4 py-3.5">Karma Score</th>
                                     <th className="px-4 py-3.5">Status</th>
@@ -7788,12 +7771,12 @@ export default function AdminConsole() {
                                                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-300 dark:border-amber-800/60">
                                                         {req.duration === 'custom' ? `Until ${req.customDate}` : (req.duration === 'indefinite' ? 'Indefinite' : `${req.durationDays || 7} Days`)}
                                                     </span>
-                                                    {req.reportId && (
+                                                    {(req.reportId || req.contentId) && (
                                                         <button
                                                             type="button"
                                                             onClick={() => {
                                                                 const foundReport = reports.find(r => Number(r.reportId) === Number(req.reportId) || (r.allReportIds && r.allReportIds.includes(Number(req.reportId)))) || {
-                                                                    reportId: req.reportId,
+                                                                    reportId: req.reportId || 0,
                                                                     contentId: req.contentId,
                                                                     contentType: req.contentType || 'Post',
                                                                     reasonCode: req.category || req.reason || 'Violation of community guidelines',
@@ -7812,7 +7795,7 @@ export default function AdminConsole() {
                                                             title="Inspect reported violation & content"
                                                         >
                                                             <span className="material-symbols-outlined text-[13px]">visibility</span>
-                                                            <span>Report #{req.reportId}</span>
+                                                            <span>{req.reportId ? `Report #${req.reportId}` : `${req.contentType || 'Content'} #${req.contentId}`}</span>
                                                         </button>
                                                     )}
                                                     <span className="text-[11px] text-slate-400">
@@ -7890,18 +7873,18 @@ export default function AdminConsole() {
                                                     </div>
                                                 </div>
 
-                                                {/* Attached Moderation Report Evidence Strip */}
-                                                {req.reportId && (
+                                                {/* Attached Moderation Report / Content Evidence Strip */}
+                                                {(req.reportId || req.contentId || req.contentType) && (
                                                     <div className="mt-2.5 p-2.5 rounded-lg bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 flex items-center justify-between gap-2">
                                                         <div className="min-w-0">
                                                             <div className="flex items-center gap-1.5 flex-wrap">
                                                                 <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
                                                                     <span className="material-symbols-outlined text-[14px] text-indigo-600">policy</span>
-                                                                    Moderation Report #{req.reportId}
+                                                                    {req.reportId ? `Moderation Report #${req.reportId}` : 'Reported Content Evidence'}
                                                                 </span>
                                                                 {req.contentType && (
                                                                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold uppercase">
-                                                                        {req.contentType}
+                                                                        {req.contentType} {req.contentId ? `#${req.contentId}` : ''}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -7914,6 +7897,13 @@ export default function AdminConsole() {
                                                                         </p>
                                                                     );
                                                                 }
+                                                                if (req.fullReason) {
+                                                                    return (
+                                                                        <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-1 italic mt-0.5">
+                                                                            "{req.fullReason}"
+                                                                        </p>
+                                                                    );
+                                                                }
                                                                 return null;
                                                             })()}
                                                         </div>
@@ -7921,7 +7911,7 @@ export default function AdminConsole() {
                                                             type="button"
                                                             onClick={() => {
                                                                 const foundReport = reports.find(r => Number(r.reportId) === Number(req.reportId) || (r.allReportIds && r.allReportIds.includes(Number(req.reportId)))) || {
-                                                                    reportId: req.reportId,
+                                                                    reportId: req.reportId || 0,
                                                                     contentId: req.contentId,
                                                                     contentType: req.contentType || 'Post',
                                                                     reasonCode: req.category || req.reason || 'Violation of community guidelines',
