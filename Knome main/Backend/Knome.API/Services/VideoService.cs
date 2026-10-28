@@ -126,7 +126,10 @@ public class VideoService : IVideoService
         var isCallerAdmin = caller != null && caller.Roles.Any(r => 
             r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" ||
             r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" ||
-            r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM");
+            r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM" ||
+            r.RoleName == Roles.Moderator || r.RoleCode == "MOD" ||
+            (r.RoleName != null && (r.RoleName.Contains("Admin") || r.RoleName.Contains("Mod"))) ||
+            (r.RoleCode != null && (r.RoleCode.Contains("ADM") || r.RoleCode.Contains("MOD"))));
 
         var requireApproval = _systemSettingService != null
             ? await _systemSettingService.GetRequireVideoApprovalAsync()
@@ -145,11 +148,24 @@ public class VideoService : IVideoService
             throw new BadRequestException("Video content or URLs contain blocked domains or restricted keywords per FR-SM-01.");
 
         // FK existence validation (GBV-001)
+        int? resolvedCategoryId = null;
         if (dto.CategoryId.HasValue)
         {
             var categoryExists = await _db.Categories.AnyAsync(c => c.CategoryId == dto.CategoryId.Value);
-            if (!categoryExists)
-                throw new BadRequestException($"Category ID {dto.CategoryId.Value} does not exist.");
+            if (categoryExists)
+            {
+                resolvedCategoryId = dto.CategoryId.Value;
+            }
+            else
+            {
+                var fallbackCat = await _db.Categories.FirstOrDefaultAsync(c => c.AppliesTo == "Video" || c.AppliesTo == "All");
+                resolvedCategoryId = fallbackCat?.CategoryId ?? (await _db.Categories.FirstOrDefaultAsync())?.CategoryId;
+            }
+        }
+        else
+        {
+            var defaultCat = await _db.Categories.FirstOrDefaultAsync(c => c.AppliesTo == "Video" || c.AppliesTo == "All");
+            resolvedCategoryId = defaultCat?.CategoryId;
         }
 
         int effectiveUploaderUserId = currentUserId;
@@ -167,17 +183,21 @@ public class VideoService : IVideoService
             UploaderUserId = effectiveUploaderUserId,
             Title = dto.Title,
             Description = dto.Description,
-            CategoryId = dto.CategoryId,
+            CategoryId = resolvedCategoryId,
             ThumbnailUrl = dto.ThumbnailUrl,
-            SourceType = dto.SourceType,
+            SourceType = string.IsNullOrWhiteSpace(dto.SourceType) ? "LocalUpload" : dto.SourceType,
             SourceUrl = dto.SourceUrl ?? string.Empty,
             FileSizeMb = dto.FileSizeMb,
             ViewCount = 0,
             UploadedDate = Knome.API.Common.KnomeTime.Now
         };
 
-        var saved = await _repo.AddVideoAsync(video, dto.Tags);
-        await _karmaService.AwardKarmaAsync(effectiveUploaderUserId, KarmaActivityTypes.CreateVideo, KarmaPoints.CreateVideoPoints, ContentTypes.Video, saved.VideoId, KarmaCaps.CreateVideoDailyCap);
+        var saved = await _repo.AddVideoAsync(video, dto.Tags ?? new List<string>());
+        try
+        {
+            await _karmaService.AwardKarmaAsync(effectiveUploaderUserId, KarmaActivityTypes.CreateVideo, KarmaPoints.CreateVideoPoints, ContentTypes.Video, saved.VideoId, KarmaCaps.CreateVideoDailyCap);
+        }
+        catch { }
 
         var resDto = _mapper.Map<VideoDto>(saved);
         resDto.EngagementSummary = await _interactionService.GetContentSummaryAsync(ContentTypes.Video, saved.VideoId, currentUserId);

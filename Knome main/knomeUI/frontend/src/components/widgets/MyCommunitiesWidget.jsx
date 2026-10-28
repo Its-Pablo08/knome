@@ -10,7 +10,6 @@ export default function MyCommunitiesWidget() {
     const navigate = useNavigate();
     const [communities, setCommunities] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isExpanded, setIsExpanded] = useState(false);
 
     const loadCommunities = async (isSilent = false) => {
         if (!isSilent && communities.length === 0) {
@@ -118,7 +117,7 @@ export default function MyCommunitiesWidget() {
         };
     }, [currentUser?.id]);
 
-    const visibleCommunities = isExpanded ? communities : communities.slice(0, 3);
+    const visibleCommunities = communities.slice(0, 7);
 
     return (
         <div className="rounded-2xl p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -128,8 +127,11 @@ export default function MyCommunitiesWidget() {
                         <span className="material-symbols-outlined text-[18px] text-indigo-500" style={{fontVariationSettings:"'FILL' 1"}}>groups</span>
                         Enterprise Communities
                         {communities.length > 0 && (
-                            <span className="text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 px-1.5 py-0.2 rounded-full">
-                                {communities.length}
+                            <span 
+                                className="text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 px-1.5 py-0.2 rounded-full"
+                                title={`Showing top ${Math.min(communities.length, 7)} of ${communities.length} joined communities`}
+                            >
+                                {Math.min(communities.length, 7)}
                             </span>
                         )}
                     </h3>
@@ -167,8 +169,8 @@ export default function MyCommunitiesWidget() {
                                         alt={community.name} 
                                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300 bg-slate-200" 
                                         onError={(e) => { 
-                                            e.target.onerror = null; 
-                                            e.target.src = FALLBACK_COMM_BANNER; 
+                                             e.target.onerror = null; 
+                                             e.target.src = FALLBACK_COMM_BANNER; 
                                         }}
                                     />
                                     <div className="absolute inset-0 bg-slate-900/10"></div>
@@ -200,16 +202,14 @@ export default function MyCommunitiesWidget() {
                             </div>
                         ))}
 
-                        {communities.length > 3 && (
-                            <button
-                                onClick={() => setIsExpanded(prev => !prev)}
-                                className="w-full py-2 px-3 mt-0.5 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors flex items-center justify-center gap-1 cursor-pointer border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900/40"
+                        {communities.length > 7 && (
+                            <Link
+                                to="/communities"
+                                className="w-full py-2.5 px-3 mt-1 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900/40"
                             >
-                                <span>{isExpanded ? 'Show Less' : `Show More (${communities.length - 3})`}</span>
-                                <span className="material-symbols-outlined text-[18px]">
-                                    {isExpanded ? 'expand_less' : 'expand_more'}
-                                </span>
-                            </button>
+                                <span>View All {communities.length} Communities</span>
+                                <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                            </Link>
                         )}
                     </>
                 )}

@@ -272,7 +272,8 @@ export default function Videos() {
     }, []);
 
     useEffect(() => {
-        fetchVideos(false);
+        invalidateVideosCache();
+        fetchVideos(true);
         loadViewsMap();
         loadAllSavedVideos();
     }, [loadAllSavedVideos]);
@@ -289,8 +290,14 @@ export default function Videos() {
         };
 
         const onPlaylistUpdated = () => handleSync(true);
+        const onVideoPublished = () => {
+            invalidateVideosCache();
+            fetchVideos(true);
+        };
+
         const onStorage = (e) => {
-            if (e.key === 'knome_video_playlists_v1' || e.key === 'knome_imported_yt_videos') {
+            if (e.key === 'knome_video_playlists_v1' || e.key === 'knome_imported_yt_videos' || e.key === 'knome_video_published_timestamp') {
+                invalidateVideosCache();
                 handleSync(true);
                 fetchVideos(true);
             }
@@ -320,6 +327,8 @@ export default function Videos() {
         };
 
         window.addEventListener('knome_playlist_updated', onPlaylistUpdated);
+        window.addEventListener('video-published', onVideoPublished);
+        window.addEventListener('knome_video_published', onVideoPublished);
         window.addEventListener('storage', onStorage);
         window.addEventListener('video-deleted', onVideoDeleted);
         window.addEventListener('knome_content_moderated', onContentModerated);
@@ -328,6 +337,8 @@ export default function Videos() {
 
         return () => {
             window.removeEventListener('knome_playlist_updated', onPlaylistUpdated);
+            window.removeEventListener('video-published', onVideoPublished);
+            window.removeEventListener('knome_video_published', onVideoPublished);
             window.removeEventListener('storage', onStorage);
             window.removeEventListener('video-deleted', onVideoDeleted);
             window.removeEventListener('knome_content_moderated', onContentModerated);
@@ -619,16 +630,27 @@ export default function Videos() {
 
 
 
-    // Auto-open video from notification URL params or saved session
+    // Auto-open video from notification URL params or navigation state
+    const autoOpenedTargetRef = useRef(null);
     useEffect(() => {
         const params = new URLSearchParams(location.search);
-        const tId = params.get('id') || params.get('videoId') || location.state?.videoId || (typeof window !== 'undefined' ? sessionStorage.getItem('knome_active_video_id') : null);
+        const urlId = params.get('id') || params.get('videoId') || location.state?.videoId;
         const tTitle = params.get('title') || location.state?.videoTitle;
         const tUrl = params.get('url') || location.state?.videoUrl;
 
-        if (!isLoading && (tId || tTitle)) {
+        // If no explicit video ID, title, or URL in search/state, do not auto-open or scroll
+        if (!urlId && !tTitle && !tUrl) {
+            return;
+        }
+
+        const targetKey = urlId || tTitle || tUrl;
+        if (autoOpenedTargetRef.current === targetKey) {
+            return;
+        }
+
+        if (!isLoading) {
             let found = null;
-            if (tId) found = videos.find(v => (v.id || '').toString() === tId.toString());
+            if (urlId) found = videos.find(v => (v.id || '').toString() === urlId.toString());
             if (!found && tTitle) {
                 const tl = tTitle.toLowerCase().replace(/^[📹🎥🎬]\s*/, '').trim();
                 found = videos.find(v => {
@@ -636,10 +658,10 @@ export default function Videos() {
                     return vt === tl || vt.includes(tl) || tl.includes(vt);
                 });
             }
-            if (!found && tId && Array.isArray(playlists)) {
+            if (!found && urlId && Array.isArray(playlists)) {
                 for (const pl of playlists) {
                     if (Array.isArray(pl.episodes)) {
-                        const ep = pl.episodes.find(e => String(e.id) === String(tId));
+                        const ep = pl.episodes.find(e => String(e.id) === String(urlId));
                         if (ep) { found = ep; break; }
                     }
                 }
@@ -648,7 +670,7 @@ export default function Videos() {
                 for (const pl of sharedPlaylistsData) {
                     if (Array.isArray(pl.episodes)) {
                         const ep = pl.episodes.find(e => {
-                            if (tId && String(e.id) === String(tId)) return true;
+                            if (urlId && String(e.id) === String(urlId)) return true;
                             if (tTitle) {
                                 const et = (e.title || '').toLowerCase().replace(/^[📹🎥🎬]\s*/, '').trim();
                                 const targetTl = tTitle.toLowerCase().replace(/^[📹🎥🎬]\s*/, '').trim();
@@ -661,16 +683,20 @@ export default function Videos() {
                 }
             }
             if (found) {
-                setActiveVideo(found);
+                autoOpenedTargetRef.current = targetKey;
+                if (!activeVideo || String(activeVideo.id) !== String(found.id)) {
+                    setActiveVideo(found);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
                 try {
                     sessionStorage.setItem('knome_active_video_id', String(found.id));
                     sessionStorage.setItem('knome_active_video_data', JSON.stringify(found));
                     window.history.replaceState(null, '', `/videos?id=${encodeURIComponent(found.id)}`);
                 } catch (_) {}
-                window.scrollTo({ top: 0, behavior: 'smooth' });
             } else if (tTitle || tUrl) {
+                autoOpenedTargetRef.current = targetKey;
                 const customVid = {
-                    id: tId || `notif_${Date.now()}`,
+                    id: urlId || `notif_${Date.now()}`,
                     title: tTitle || 'Shared Video',
                     description: 'Video shared with you.',
                     thumbnail: 'https://images.unsplash.com/photo-1540317580384-e5d43616b9aa?auto=format&fit=crop&q=90&w=1600&h=900',
@@ -682,8 +708,10 @@ export default function Videos() {
                     sourceType: 'File',
                     views: '0', likes: 0, date: 'Today'
                 };
-                setActiveVideo(customVid);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                if (!activeVideo || String(activeVideo.id) !== String(customVid.id)) {
+                    setActiveVideo(customVid);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
             }
         }
     }, [location.search, location.state, videos, isLoading, playlists]);
@@ -1613,7 +1641,7 @@ export default function Videos() {
             )}
 
 
-            <main className="flex-1 w-full min-w-0 flex flex-col gap-6 pb-6">
+            <div className="flex-1 w-full min-w-0 flex flex-col gap-6 pb-6">
 
                 {/* ── PAGE TITLE & HERO HEADER ── */}
                 <div className="relative rounded-2xl overflow-hidden mb-2 shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between text-left px-6 py-7 md:px-8 md:py-8 gap-6">
@@ -2186,7 +2214,7 @@ export default function Videos() {
                     </div>
                 )}
 
-            </main>
+            </div>
 
             {/* Edit Series / Playlist Modal */}
             {editingPlaylist && (

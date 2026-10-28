@@ -140,6 +140,41 @@ public class MediaController : KnomeControllerBase
                 }));
             }
 
+            // Vimeo Match
+            var vimeoMatch = System.Text.RegularExpressions.Regex.Match(url, @"(?:vimeo\.com\/)(?:video\/)?(\d+)");
+            if (vimeoMatch.Success)
+            {
+                var vimeoId = vimeoMatch.Groups[1].Value;
+                using var client = new System.Net.Http.HttpClient();
+                client.Timeout = TimeSpan.FromSeconds(6);
+                client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                var oembedJson = await client.GetStringAsync($"https://vimeo.com/api/oembed.json?url=https://vimeo.com/{vimeoId}");
+                using var doc = System.Text.Json.JsonDocument.Parse(oembedJson);
+                int durationSeconds = 0;
+                if (doc.RootElement.TryGetProperty("duration", out var durProp))
+                {
+                    durationSeconds = durProp.GetInt32();
+                }
+                string? title = null;
+                if (doc.RootElement.TryGetProperty("title", out var titleProp))
+                {
+                    title = titleProp.GetString();
+                }
+                string? thumbnailUrl = null;
+                if (doc.RootElement.TryGetProperty("thumbnail_url", out var thumbProp))
+                {
+                    thumbnailUrl = thumbProp.GetString();
+                }
+
+                return Ok(ApiResponse<object>.SuccessResponse(200, "Vimeo info retrieved successfully.", new
+                {
+                    videoId = vimeoId,
+                    durationSeconds,
+                    title,
+                    thumbnailUrl
+                }));
+            }
+
             return Ok(ApiResponse<object>.SuccessResponse(200, "Unrecognized platform.", new { durationSeconds = 0 }));
         }
         catch (Exception ex)

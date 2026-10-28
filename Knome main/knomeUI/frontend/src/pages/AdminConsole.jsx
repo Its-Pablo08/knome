@@ -11,7 +11,7 @@ import useScrollLoading from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import SuspendUserModal from '../components/modals/SuspendUserModal';
 import CreateCommunityModal from '../components/modals/CreateCommunityModal';
-import ApprovalLogsModal from '../components/modals/ApprovalLogsModal';
+import ApprovalLogsModal, { parseLogTimestampEpoch } from '../components/modals/ApprovalLogsModal';
 import HighlightText from '../components/ui/HighlightText';
 import { addRestrictedWord } from '../utils/restrictedWords';
 import { getSystemConfig, saveSystemConfig, DEFAULT_SYSTEM_CONFIG } from '../utils/systemConfig';
@@ -1451,13 +1451,47 @@ export default function AdminConsole() {
                     ? parseInt(targetAuthorId.trim(), 10)
                     : null;
 
-            if (mediaItem.mediaType === 'Video' && mediaItem.dto) {
-                const postDto = {
+            if (mediaItem.mediaType === 'Video') {
+                const categoryId = mediaItem.dto?.categoryId 
+                    ? parseInt(mediaItem.dto.categoryId, 10) 
+                    : (mediaItem.categoryId ? parseInt(mediaItem.categoryId, 10) : (
+                        mediaItem.category === 'Townhalls' ? 14 :
+                        mediaItem.category === 'Engineering Tech Talks' ? 15 :
+                        mediaItem.category === 'Leadership Updates' ? 16 : 13
+                    ));
+                const postDto = mediaItem.dto ? {
                     ...mediaItem.dto,
+                    categoryId: categoryId || 13,
+                    uploaderUserId: numericAuthorId || mediaItem.dto.uploaderUserId
+                } : {
+                    title: mediaItem.title,
+                    description: mediaItem.description || '',
+                    categoryId: categoryId || 13,
+                    thumbnailUrl: mediaItem.thumbnail || mediaItem.thumbnailUrl,
+                    sourceType: mediaItem.sourceType || 'LocalUpload',
+                    sourceUrl: mediaItem.sourceUrl || mediaItem.url,
+                    fileSizeMb: mediaItem.fileSizeMb || null,
+                    tags: mediaItem.tags || ['Video'],
                     uploaderUserId: numericAuthorId
                 };
-                await apiClient.post('/videos', postDto).catch(() => {});
-                window.dispatchEvent(new CustomEvent('video-published'));
+                let createdVideo = null;
+                try {
+                    createdVideo = await apiClient.post('/videos', postDto);
+                } catch (videoErr) {
+                    console.error("Failed to approve and publish video to database:", videoErr);
+                }
+                if (mediaItem.duration && mediaItem.duration !== '00:00' && !mediaItem.duration.includes('detecting')) {
+                    try {
+                        const durationMap = JSON.parse(localStorage.getItem('knome_video_durations') || '{}');
+                        if (postDto.sourceUrl) durationMap[postDto.sourceUrl] = mediaItem.duration;
+                        if (postDto.title) durationMap[postDto.title] = mediaItem.duration;
+                        if (createdVideo?.videoId) durationMap[createdVideo.videoId] = mediaItem.duration;
+                        localStorage.setItem('knome_video_durations', JSON.stringify(durationMap));
+                    } catch (e) {}
+                }
+                window.dispatchEvent(new CustomEvent('video-published', { detail: createdVideo }));
+                window.dispatchEvent(new CustomEvent('knome_video_published', { detail: createdVideo }));
+                localStorage.setItem('knome_video_published_timestamp', String(Date.now()));
             } else if (mediaItem.mediaType === 'Podcast' && (mediaItem.podcastData || mediaItem.dto)) {
                 const payload = mediaItem.podcastData || mediaItem.dto;
                 const postPodcast = {
@@ -1693,15 +1727,38 @@ export default function AdminConsole() {
 
         for (const m of currentList) {
             try {
-                if (m.mediaType === 'Video' && m.dto) {
+                if (m.mediaType === 'Video') {
                     const rawAuthorId = m.authorId || m.dto?.uploaderUserId;
                     const numericAuthorId = (typeof rawAuthorId === 'number' && Number.isInteger(rawAuthorId) && rawAuthorId > 0)
                         ? rawAuthorId
                         : (typeof rawAuthorId === 'string' && /^\d+$/.test(rawAuthorId.trim()))
                             ? parseInt(rawAuthorId.trim(), 10)
                             : null;
-                    const postDto = { ...m.dto, uploaderUserId: numericAuthorId };
-                    await apiClient.post('/videos', postDto).catch(() => {});
+                    const categoryId = m.dto?.categoryId 
+                        ? parseInt(m.dto.categoryId, 10) 
+                        : (m.categoryId ? parseInt(m.categoryId, 10) : (
+                            m.category === 'Townhalls' ? 14 :
+                            m.category === 'Engineering Tech Talks' ? 15 :
+                            m.category === 'Leadership Updates' ? 16 : 13
+                        ));
+                    const postDto = m.dto ? {
+                        ...m.dto,
+                        categoryId: categoryId || 13,
+                        uploaderUserId: numericAuthorId || m.dto.uploaderUserId
+                    } : {
+                        title: m.title,
+                        description: m.description || '',
+                        categoryId: categoryId || 13,
+                        thumbnailUrl: m.thumbnail || m.thumbnailUrl,
+                        sourceType: m.sourceType || 'LocalUpload',
+                        sourceUrl: m.sourceUrl || m.url,
+                        fileSizeMb: m.fileSizeMb || null,
+                        tags: m.tags || ['Video'],
+                        uploaderUserId: numericAuthorId
+                    };
+                    await apiClient.post('/videos', postDto).catch((err) => {
+                        console.error("Failed to batch publish video:", err);
+                    });
                 } else if (m.mediaType === 'Podcast' && (m.podcastData || m.dto)) {
                     const payload = m.podcastData || m.dto;
                     const rawAuthorId = m.authorId || payload?.uploaderUserId;
@@ -1744,6 +1801,8 @@ export default function AdminConsole() {
             } catch (e) {}
         }
         window.dispatchEvent(new CustomEvent('video-published'));
+        window.dispatchEvent(new CustomEvent('knome_video_published'));
+        localStorage.setItem('knome_video_published_timestamp', String(Date.now()));
         window.dispatchEvent(new CustomEvent('podcast-published'));
         window.dispatchEvent(new CustomEvent('article-published'));
         window.dispatchEvent(new CustomEvent('wiki-published'));
@@ -1914,19 +1973,24 @@ export default function AdminConsole() {
             localSaved = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
         } catch (e) {}
 
-        const sourceList = Array.isArray(auditTrail) && auditTrail.length > 0
-            ? auditTrail
-            : (Array.isArray(localSaved) && localSaved.length > 0 ? localSaved : defaultApprovalLogs);
+        // Combine auditTrail state, localStorage trail, and baseline default seeds so no recent decision is lost
+        const allCandidates = [
+            ...(Array.isArray(auditTrail) ? auditTrail : []),
+            ...(Array.isArray(localSaved) ? localSaved : []),
+            ...defaultApprovalLogs
+        ];
 
-        const seenIds = new Set();
-        const combined = [...sourceList, ...defaultApprovalLogs].filter(item => {
+        const seenKeys = new Set();
+        const combined = [];
+        for (const item of allCandidates) {
+            if (!item) continue;
             const idKey = String(item.id || item.target || '');
-            if (!idKey || seenIds.has(idKey)) return false;
-            seenIds.add(idKey);
-            return true;
-        });
+            if (!idKey || seenKeys.has(idKey)) continue;
+            seenKeys.add(idKey);
+            combined.push(item);
+        }
 
-        return combined.map(item => {
+        const mapped = combined.map(item => {
             const act = item.action || '';
             const tgt = item.target || '';
             const tgtLower = tgt.toLowerCase();
@@ -1974,10 +2038,15 @@ export default function AdminConsole() {
                 }
             }
 
+            const epoch = parseLogTimestampEpoch(item);
+            const resolvedTimestamp = epoch > 0 ? new Date(epoch).toISOString() : (item.timestamp || new Date().toISOString());
+            const resolvedTime = item.time || (epoch > 0 ? new Date(epoch).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }));
+
             return {
                 id: item.id || `log_${Math.random()}`,
-                time: item.time || new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
-                timestamp: item.timestamp || new Date().toISOString(),
+                time: resolvedTime,
+                timestamp: resolvedTimestamp,
+                epoch: epoch,
                 moderator: item.moderator || 'System Admin',
                 moderatorRole: item.moderatorRole || (item.moderator?.toLowerCase().includes('mod') ? 'Moderator' : 'Administrator'),
                 action: act,
@@ -1990,6 +2059,16 @@ export default function AdminConsole() {
                 color: item.color || (outcome === 'Approved' ? 'text-emerald-500 font-bold' : outcome === 'Rejected' ? 'text-rose-500 font-bold' : 'text-slate-600')
             };
         });
+
+        // Strictly sort descending by timestamp (most recent records first)
+        mapped.sort((a, b) => {
+            const timeA = parseLogTimestampEpoch(a);
+            const timeB = parseLogTimestampEpoch(b);
+            if (timeB !== timeA) return timeB - timeA;
+            return String(b.id || '').localeCompare(String(a.id || ''));
+        });
+
+        return mapped;
     };
 
     const getCurrentSectionLogsCount = () => {
@@ -2575,10 +2654,14 @@ export default function AdminConsole() {
 
     // Helper to log audit entries into state, localStorage, and SQL Server DB
     const logAuditEntry = async (action, targetDetails, color = 'text-indigo-600', targetType = 'System', targetId = 0) => {
+        const now = new Date();
         const newLog = {
             id: `log_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-            time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+            time: now.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+            timestamp: now.toISOString(),
+            epoch: now.getTime(),
             moderator: currentUser?.name || 'System Admin',
+            moderatorRole: isModerator ? 'Moderator' : 'System Admin',
             action: action,
             target: targetDetails,
             color: color
@@ -2630,9 +2713,16 @@ export default function AdminConsole() {
                         }
                     }
 
+                    const rawTime = log.timestamp || log.actionDate || log.createdAt;
+                    const parsedEpoch = rawTime ? new Date(rawTime).getTime() : 0;
+                    const safeTime = (!isNaN(parsedEpoch) && parsedEpoch > 0) ? new Date(parsedEpoch).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+                    const safeTimestamp = (!isNaN(parsedEpoch) && parsedEpoch > 0) ? new Date(parsedEpoch).toISOString() : new Date().toISOString();
+
                     return {
-                        id: log.auditId || log.logId || Math.random(),
-                        time: log.timestamp ? new Date(log.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+                        id: log.auditId || log.logId || `log_${Math.random()}`,
+                        time: safeTime,
+                        timestamp: safeTimestamp,
+                        epoch: (!isNaN(parsedEpoch) && parsedEpoch > 0) ? parsedEpoch : Date.now(),
                         moderator: log.actorName || log.actorFullName || 'System Admin',
                         action: log.action || 'SystemAction',
                         target: detailsText,
@@ -2641,16 +2731,22 @@ export default function AdminConsole() {
                 });
             } else {
                 apiLogs = [
-                    { id: 101, time: '08/04/26, 05:20 PM', moderator: 'System Admin', action: 'UserActivated', target: 'Reactivated Employee #EMP100 (Mayur Bansal)', color: 'text-emerald-500 font-bold' },
-                    { id: 102, time: '08/04/26, 05:15 PM', moderator: 'System Admin', action: 'UserSuspended', target: 'Suspended Employee #EMP100 (Mayur Bansal) - Reason: Compliance Policy Violation', color: 'text-rose-500 font-black' },
-                    { id: 103, time: '07/27/26, 12:43 PM', moderator: 'System Admin', action: 'ReportLogged', target: 'Logged Copyright Report #10 for Post #10072', color: 'text-amber-500 font-bold' },
-                    { id: 104, time: '07/24/26, 12:31 PM', moderator: 'Sourabh Sahu', action: 'ContentReport', target: 'Submitted report on Post #10071', color: 'text-slate-500' },
-                    { id: 105, time: '07/13/26, 07:00 AM', moderator: 'System Admin', action: 'ReviewReport', target: 'Reviewed Report #1 - Action: None', color: 'text-emerald-500 font-bold' }
+                    { id: 101, time: '08/04/26, 05:20 PM', timestamp: '2026-08-04T11:50:00.000Z', epoch: new Date('2026-08-04T11:50:00.000Z').getTime(), moderator: 'System Admin', action: 'UserActivated', target: 'Reactivated Employee #EMP100 (Mayur Bansal)', color: 'text-emerald-500 font-bold' },
+                    { id: 102, time: '08/04/26, 05:15 PM', timestamp: '2026-08-04T11:45:00.000Z', epoch: new Date('2026-08-04T11:45:00.000Z').getTime(), moderator: 'System Admin', action: 'UserSuspended', target: 'Suspended Employee #EMP100 (Mayur Bansal) - Reason: Compliance Policy Violation', color: 'text-rose-500 font-black' },
+                    { id: 103, time: '07/27/26, 12:43 PM', timestamp: '2026-07-27T07:13:00.000Z', epoch: new Date('2026-07-27T07:13:00.000Z').getTime(), moderator: 'System Admin', action: 'ReportLogged', target: 'Logged Copyright Report #10 for Post #10072', color: 'text-amber-500 font-bold' },
+                    { id: 104, time: '07/24/26, 12:31 PM', timestamp: '2026-07-24T07:01:00.000Z', epoch: new Date('2026-07-24T07:01:00.000Z').getTime(), moderator: 'Sourabh Sahu', action: 'ContentReport', target: 'Submitted report on Post #10071', color: 'text-slate-500' },
+                    { id: 105, time: '07/13/26, 07:00 AM', timestamp: '2026-07-13T01:30:00.000Z', epoch: new Date('2026-07-13T01:30:00.000Z').getTime(), moderator: 'System Admin', action: 'ReviewReport', target: 'Reviewed Report #1 - Action: None', color: 'text-emerald-500 font-bold' }
                 ];
             }
 
             const existingIds = new Set(apiLogs.map(l => String(l.id)));
             const merged = [...savedLocalLogs.filter(l => !existingIds.has(String(l.id))), ...apiLogs];
+            merged.sort((a, b) => {
+                const timeA = parseLogTimestampEpoch(a);
+                const timeB = parseLogTimestampEpoch(b);
+                if (timeB !== timeA) return timeB - timeA;
+                return String(b.id || '').localeCompare(String(a.id || ''));
+            });
             setAuditTrail(merged);
         } catch (err) {
             console.error("Failed to load audit logs", err);
@@ -4801,11 +4897,15 @@ export default function AdminConsole() {
         setTimeout(() => {
             setIsAiBatchAuditing(false);
             showToast(`Batch AI Audit completed: ${reports.length} content items verified against current ${configState.aiToxicityThreshold || 80}% sensitivity threshold.`);
+            const now = new Date();
             setAuditTrail(prev => [
                 {
-                    id: Date.now(),
-                    time: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+                    id: `log_batch_${Date.now()}`,
+                    time: now.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+                    timestamp: now.toISOString(),
+                    epoch: now.getTime(),
                     moderator: currentUser?.name || 'System Admin',
+                    moderatorRole: isModerator ? 'Moderator' : 'System Admin',
                     action: 'AIBatchAudit',
                     target: `Batch scanned ${reports.length} content reports at ${configState.aiToxicityThreshold || 80}% sensitivity threshold`,
                     color: 'text-cyan-500'

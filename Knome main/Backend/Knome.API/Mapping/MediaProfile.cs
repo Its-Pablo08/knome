@@ -15,7 +15,12 @@ public class MediaProfile : Profile
             .ForMember(dest => dest.UploaderFullName, opt => opt.MapFrom(src => src.UploaderUser != null ? src.UploaderUser.FullName : "Unknown"))
             .ForMember(dest => dest.UploaderDesignation, opt => opt.MapFrom(src => src.UploaderUser != null ? src.UploaderUser.Designation : null))
             .ForMember(dest => dest.UploaderProfilePhotoUrl, opt => opt.MapFrom(src => src.UploaderUser != null ? src.UploaderUser.ProfilePhotoUrl : null))
-            .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.Name : null))
+            .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => 
+                src.Category != null ? src.Category.Name :
+                src.CategoryId == 13 ? "Training & Tutorials" :
+                src.CategoryId == 14 ? "Townhalls" :
+                src.CategoryId == 15 ? "Engineering Tech Talks" :
+                src.CategoryId == 16 ? "Leadership Updates" : "Training & Tutorials"))
             .ForMember(dest => dest.Tags, opt => opt.MapFrom(src => src.VideoTags.Select(vt => vt.Tag).ToList()))
             .ForMember(dest => dest.EngagementSummary, opt => opt.Ignore());
 

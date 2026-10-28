@@ -146,6 +146,16 @@ export function invalidateVideosCache() {
     cachedVideosTimestamp = 0;
 }
 
+if (typeof window !== 'undefined') {
+    window.addEventListener('video-published', () => invalidateVideosCache());
+    window.addEventListener('knome_video_published', () => invalidateVideosCache());
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'knome_video_published_timestamp') {
+            invalidateVideosCache();
+        }
+    });
+}
+
 export function getCachedPlaylists() {
     return cachedPlaylists;
 }
@@ -166,7 +176,7 @@ export async function getVideos(forceFresh = false) {
     inFlightVideosPromise = (async () => {
         try {
             const [videosRes, postsRes, articlesRes] = await Promise.all([
-                apiClient.get('/videos').catch(() => []),
+                apiClient.get('/videos?pageSize=100').catch(() => []),
                 apiClient.get('/posts').catch(() => []),
                 apiClient.get('/articles').catch(() => [])
             ]);
@@ -218,7 +228,7 @@ export async function getVideos(forceFresh = false) {
                 videosRes.forEach(v => {
                     const srcUrl = v.sourceUrl ? resolveMediaUrl(v.sourceUrl) : null;
                     const title = v.title || 'Untitled Video';
-                    const category = v.categoryName || 'General';
+                    const category = v.categoryName || (v.categoryId === 13 ? 'Training & Tutorials' : v.categoryId === 14 ? 'Townhalls' : v.categoryId === 15 ? 'Engineering Tech Talks' : v.categoryId === 16 ? 'Leadership Updates' : 'Training & Tutorials');
                     const date = new Date(v.uploadedDate || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
                     const resolvedAuthor = resolveVideoAuthor(
@@ -230,13 +240,22 @@ export async function getVideos(forceFresh = false) {
                         v.uploaderDesignation
                     );
 
+                    let customDuration = v.duration;
+                    if (!customDuration) {
+                        try {
+                            const dMap = JSON.parse(localStorage.getItem('knome_video_durations') || '{}');
+                            customDuration = (v.sourceUrl && dMap[v.sourceUrl]) || (srcUrl && dMap[srcUrl]) || (v.videoId && dMap[v.videoId]) || (title && dMap[title]) || null;
+                        } catch (e) {}
+                    }
+                    const resolvedDuration = customDuration || (v.fileSizeMb ? `${v.fileSizeMb} MB` : 'Video Session');
+
                     addIfUnique({
                         id: v.videoId ? v.videoId.toString() : `video_${Date.now()}_${Math.random()}`,
                         videoId: v.videoId,
                         title,
                         description: generateVideoDescription(title, category, resolvedAuthor.author, date, v.description),
                         thumbnail: (v.thumbnailUrl || v.thumbnail) ? resolveMediaUrl(v.thumbnailUrl || v.thumbnail) : 'https://images.unsplash.com/photo-1540317580384-e5d43616b9aa?auto=format&fit=crop&q=90&w=1600&h=900',
-                        duration: v.fileSizeMb ? `${v.fileSizeMb} MB` : 'Video Session',
+                        duration: resolvedDuration,
                         views: v.viewCount > 1000 ? (v.viewCount / 1000).toFixed(1) + 'k' : (v.viewCount || 0).toString(),
                         likes: v.engagementSummary?.reactionSummary?.likeCount ?? v.engagementSummary?.reactionSummary?.totalCount ?? v.engagementSummary?.totalReactions ?? 0,
                         dislikes: v.engagementSummary?.reactionSummary?.dislikeCount ?? 0,

@@ -38,7 +38,7 @@ export default function Layout({ children }) {
                     isFullScreenPage ? 'h-full min-h-0 overflow-hidden' : ''
                 } flex gap-4 lg:gap-6 mx-auto flex-1 min-w-0`}>
                     {!isNoSidebarPage && <Sidebar />}
-                    <main className="flex-1 flex flex-col min-w-0 min-h-0 w-full h-full overflow-hidden">
+                    <main className={`flex-1 flex flex-col min-w-0 w-full ${isFullScreenPage ? 'min-h-0 h-full overflow-hidden' : ''}`}>
                         <PageLoader>
                             {children}
                         </PageLoader>

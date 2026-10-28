@@ -25,6 +25,155 @@ const dataUrlToFile = (dataUrl, filename = 'thumbnail.jpg') => {
     }
 };
 
+// Format seconds into MM:SS or HH:MM:SS
+const formatDuration = (totalSeconds) => {
+    if (!totalSeconds || isNaN(totalSeconds) || totalSeconds <= 0) return '00:00';
+    const total = Math.round(totalSeconds);
+    const hrs = Math.floor(total / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    if (hrs > 0) {
+        return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
+// Client-side YouTube duration detector using YouTube IFrame API
+const fetchYouTubeDurationClient = (vId) => {
+    return new Promise((resolve) => {
+        let isDone = false;
+        const done = (dur) => {
+            if (isDone) return;
+            isDone = true;
+            resolve(dur && !isNaN(dur) && isFinite(dur) && dur > 0 ? Math.round(dur) : null);
+        };
+
+        const timeout = setTimeout(() => done(null), 5000);
+
+        const initPlayer = () => {
+            if (!window.YT || !window.YT.Player) {
+                done(null);
+                return;
+            }
+
+            let mount = document.getElementById('temp_yt_detector_modal');
+            if (!mount) {
+                mount = document.createElement('div');
+                mount.id = 'temp_yt_detector_modal';
+                mount.style.cssText = 'position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;opacity:0;pointer-events:none;z-index:-1;';
+                document.body.appendChild(mount);
+            }
+
+            const targetDiv = document.createElement('div');
+            mount.appendChild(targetDiv);
+
+            let player = null;
+            const cleanup = () => {
+                clearTimeout(timeout);
+                try { if (player && player.destroy) player.destroy(); } catch (e) {}
+                try { if (targetDiv.parentNode) targetDiv.parentNode.removeChild(targetDiv); } catch (e) {}
+            };
+
+            try {
+                player = new window.YT.Player(targetDiv, {
+                    videoId: vId,
+                    playerVars: {
+                        autoplay: 1,
+                        mute: 1,
+                        controls: 0,
+                        disablekb: 1,
+                        fs: 0,
+                        playsinline: 1
+                    },
+                    events: {
+                        onReady: (e) => {
+                            const d = e.target.getDuration();
+                            if (d && d > 0) {
+                                cleanup();
+                                done(d);
+                            }
+                        },
+                        onStateChange: (e) => {
+                            const d = e.target.getDuration();
+                            if (d && d > 0) {
+                                cleanup();
+                                done(d);
+                            }
+                        },
+                        onError: () => {
+                            cleanup();
+                            done(null);
+                        }
+                    }
+                });
+            } catch (err) {
+                cleanup();
+                done(null);
+            }
+        };
+
+        if (window.YT && window.YT.Player) {
+            initPlayer();
+        } else {
+            if (!document.getElementById('yt-iframe-api-script')) {
+                const tag = document.createElement('script');
+                tag.id = 'yt-iframe-api-script';
+                tag.src = "https://www.youtube.com/iframe_api";
+                document.head.appendChild(tag);
+            }
+            const prevCallback = window.onYouTubeIframeAPIReady;
+            window.onYouTubeIframeAPIReady = () => {
+                if (prevCallback) prevCallback();
+                initPlayer();
+            };
+        }
+    });
+};
+
+// Robust exact duration detector for video elements (handles Chromium Infinity bug)
+const getExactVideoDuration = (video) => {
+    return new Promise((resolve) => {
+        let settled = false;
+        const done = (dur) => {
+            if (settled) return;
+            settled = true;
+            resolve(dur && !isNaN(dur) && isFinite(dur) && dur > 0 ? dur : 0);
+        };
+
+        const timer = setTimeout(() => {
+            if (!settled) {
+                const d = video.duration;
+                done(d && !isNaN(d) && isFinite(d) ? d : 0);
+            }
+        }, 3500);
+
+        const check = () => {
+            const d = video.duration;
+            if (d && !isNaN(d) && isFinite(d) && d > 0) {
+                clearTimeout(timer);
+                done(d);
+            } else if (d === Infinity) {
+                video.currentTime = 1e101;
+                video.ontimeupdate = () => {
+                    video.ontimeupdate = null;
+                    const real = video.duration;
+                    video.currentTime = 0;
+                    clearTimeout(timer);
+                    done(real && isFinite(real) ? real : 0);
+                };
+            }
+        };
+
+        video.onloadedmetadata = check;
+        video.ondurationchange = check;
+        video.onloadeddata = check;
+        video.onerror = () => {
+            clearTimeout(timer);
+            done(0);
+        };
+    });
+};
+
 export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
     const { currentUser } = useUser();
     const { addToast } = useToast();
@@ -54,6 +203,8 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
     const [videoFile, setVideoFile] = useState(null);
     const [videoDuration, setVideoDuration] = useState('');
     const [durationSeconds, setDurationSeconds] = useState(0);
+    const [isDetectingDuration, setIsDetectingDuration] = useState(false);
+    const [isManualDurationEdit, setIsManualDurationEdit] = useState(false);
     const [thumbnailFile, setThumbnailFile] = useState(null);
     const [thumbnailPreview, setThumbnailPreview] = useState('');
     const [isAutoThumbnail, setIsAutoThumbnail] = useState(false);
@@ -167,44 +318,34 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
             setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
         }
 
-        setVideoDuration('Calculating...');
+        setVideoDuration('Auto-detecting duration...');
+        setIsDetectingDuration(true);
         
         // Auto-detect video duration from video file metadata
         const tempVideo = document.createElement('video');
         tempVideo.preload = 'metadata';
         const objectUrl = URL.createObjectURL(file);
         tempVideo.src = objectUrl;
-        tempVideo.onloadedmetadata = () => {
-            if (tempVideo.duration && !isNaN(tempVideo.duration)) {
-                const totalSeconds = Math.floor(tempVideo.duration);
-                const minutes = Math.floor(totalSeconds / 60);
-                const seconds = totalSeconds % 60;
-                const formatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                setVideoDuration(formatted);
-                setDurationSeconds(totalSeconds);
-            } else {
-                setVideoDuration('00:00');
-            }
-            try {
-                tempVideo.pause();
-                tempVideo.removeAttribute('src');
-                tempVideo.load();
-            } catch (e) {}
-            setTimeout(() => {
-                try { URL.revokeObjectURL(objectUrl); } catch (e) {}
-            }, 2000);
-        };
-        tempVideo.onerror = () => {
-            try {
-                tempVideo.pause();
-                tempVideo.removeAttribute('src');
-                tempVideo.load();
-            } catch (e) {}
-            setTimeout(() => {
-                try { URL.revokeObjectURL(objectUrl); } catch (e) {}
-            }, 2000);
-            setVideoDuration('Unknown');
-        };
+
+        const totalDuration = await getExactVideoDuration(tempVideo);
+        if (totalDuration > 0) {
+            const totalSec = Math.round(totalDuration);
+            setVideoDuration(formatDuration(totalSec));
+            setDurationSeconds(totalSec);
+        } else {
+            setVideoDuration('00:00');
+            setDurationSeconds(0);
+        }
+        setIsDetectingDuration(false);
+
+        try {
+            tempVideo.pause();
+            tempVideo.removeAttribute('src');
+            tempVideo.load();
+        } catch (e) {}
+        setTimeout(() => {
+            try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+        }, 2000);
 
         // Automatically extract thumbnail frame directly from the selected video
         const extracted = await extractVideoThumbnail(file);
@@ -240,61 +381,162 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
             cleanUrl = iframeMatch[1].trim();
         }
         setSourceUrlInput(cleanUrl);
-        if (!cleanUrl) return;
+        if (!cleanUrl) {
+            setVideoDuration('');
+            setDurationSeconds(0);
+            setIsDetectingDuration(false);
+            return;
+        }
 
-        // 1. YouTube Video Match
-        let ytMatch = cleanUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/);
+        // 1. YouTube Match (Regular video, Shorts, youtu.be, or embed)
+        let ytMatch = cleanUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))((\w|-){11})/);
         if (ytMatch && ytMatch[1]) {
             const vId = ytMatch[1];
             const ytThumb = `https://img.youtube.com/vi/${vId}/hqdefault.jpg`;
             setThumbnailPreview(ytThumb);
             setThumbnailFile(null);
             setIsAutoThumbnail(true);
-            setVideoDuration('05:30');
-            setDurationSeconds(330);
+            setVideoDuration('Auto-detecting duration...');
+            setIsDetectingDuration(true);
 
-            // Fetch YouTube oEmbed metadata for title & description & thumbnail
+            let detectedSec = null;
+
+            // Step A: Call backend video-info endpoint to parse exact duration from YouTube
+            try {
+                const infoRes = await apiClient.get(`/media/video-info?url=${encodeURIComponent(cleanUrl)}`);
+                const info = infoRes?.data || infoRes;
+                if (info && info.durationSeconds > 0) {
+                    detectedSec = info.durationSeconds;
+                    if (info.title && !title.trim()) {
+                        setTitle(info.title.slice(0, 200));
+                        if (!description) {
+                            setDescription(`${info.title}\n\nUploaded via Enterprise Video Portal.`.slice(0, 1000));
+                        }
+                    }
+                    if (info.thumbnailUrl) {
+                        setThumbnailPreview(info.thumbnailUrl);
+                    }
+                }
+            } catch (err) {
+                console.warn("Backend video-info fetch notice:", err);
+            }
+
+            // Step B: Fallback to client-side YouTube IFrame API if backend was offline or blocked
+            if (detectedSec === null || detectedSec <= 0) {
+                try {
+                    const clientDur = await fetchYouTubeDurationClient(vId);
+                    if (clientDur && clientDur > 0) {
+                        detectedSec = clientDur;
+                    }
+                } catch (err) {
+                    console.warn("Client YouTube API duration notice:", err);
+                }
+            }
+
+            // Step C: Fetch oEmbed metadata for title & description if not populated
             try {
                 const res = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${vId}`);
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.title) {
+                    if (data.title && !title.trim()) {
                         setTitle(data.title.slice(0, 200));
                         if (!description) {
                             setDescription(`${data.title}\n\nUploaded via Enterprise Video Portal. Channel: ${data.author_name || 'YouTube'}`.slice(0, 1000));
                         }
                     }
-                    if (data.thumbnail_url) {
+                    if (data.thumbnail_url && !thumbnailPreview) {
                         setThumbnailPreview(data.thumbnail_url);
                     }
                 }
             } catch (err) {
                 console.warn("oEmbed fetch notice:", err);
             }
+
+            if (detectedSec && detectedSec > 0) {
+                setDurationSeconds(detectedSec);
+                setVideoDuration(formatDuration(detectedSec));
+            } else {
+                setVideoDuration('00:00');
+                setDurationSeconds(0);
+            }
+            setIsDetectingDuration(false);
             return;
         }
 
-        // 2. Direct MP4/Video Link Match
+        // 2. Vimeo Match
+        let vimeoMatch = cleanUrl.match(/(?:vimeo\.com\/)(?:video\/)?(\d+)/);
+        if (vimeoMatch && vimeoMatch[1]) {
+            const vimeoId = vimeoMatch[1];
+            setVideoDuration('Auto-detecting duration...');
+            setIsDetectingDuration(true);
+
+            let detectedSec = null;
+            try {
+                const res = await fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${vimeoId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.duration && data.duration > 0) {
+                        detectedSec = Math.round(data.duration);
+                    }
+                    if (data.title && !title.trim()) {
+                        setTitle(data.title.slice(0, 200));
+                        if (!description) {
+                            setDescription(`${data.title}\n\nUploaded via Enterprise Video Portal. Author: ${data.author_name || 'Vimeo'}`.slice(0, 1000));
+                        }
+                    }
+                    if (data.thumbnail_url) {
+                        setThumbnailPreview(data.thumbnail_url);
+                        setThumbnailFile(null);
+                        setIsAutoThumbnail(true);
+                    }
+                }
+            } catch (err) {
+                console.warn("Vimeo oEmbed fetch notice:", err);
+            }
+
+            if (!detectedSec) {
+                try {
+                    const infoRes = await apiClient.get(`/media/video-info?url=${encodeURIComponent(cleanUrl)}`);
+                    const info = infoRes?.data || infoRes;
+                    if (info && info.durationSeconds > 0) {
+                        detectedSec = info.durationSeconds;
+                    }
+                } catch (e) {}
+            }
+
+            if (detectedSec && detectedSec > 0) {
+                setDurationSeconds(detectedSec);
+                setVideoDuration(formatDuration(detectedSec));
+            } else {
+                setVideoDuration('00:00');
+                setDurationSeconds(0);
+            }
+            setIsDetectingDuration(false);
+            return;
+        }
+
+        // 3. Direct MP4/Video Link Match
         if (cleanUrl.match(/\.(mp4|webm|ogg|mov|mkv)(\?.*)?$/i) || cleanUrl.includes('/uploads/') || cleanUrl.includes('/Media/')) {
-            setVideoDuration('Auto-detecting...');
+            setVideoDuration('Auto-detecting duration...');
+            setIsDetectingDuration(true);
             const tempVid = document.createElement('video');
             tempVid.crossOrigin = 'anonymous';
             tempVid.preload = 'metadata';
             tempVid.muted = true;
             tempVid.src = cleanUrl;
 
-            tempVid.onloadedmetadata = () => {
-                if (tempVid.duration && !isNaN(tempVid.duration)) {
-                    const totalSec = Math.floor(tempVid.duration);
-                    const min = Math.floor(totalSec / 60);
-                    const sec = totalSec % 60;
-                    const formatted = `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
-                    setVideoDuration(formatted);
-                    setDurationSeconds(totalSec);
-                }
-                tempVid.currentTime = Math.min(2, (tempVid.duration || 0) * 0.15);
-            };
+            const totalDuration = await getExactVideoDuration(tempVid);
+            if (totalDuration > 0) {
+                const totalSec = Math.round(totalDuration);
+                setVideoDuration(formatDuration(totalSec));
+                setDurationSeconds(totalSec);
+            } else {
+                setVideoDuration('00:00');
+                setDurationSeconds(0);
+            }
+            setIsDetectingDuration(false);
 
+            tempVid.currentTime = Math.min(2, (totalDuration || 0) * 0.15);
             tempVid.onseeked = () => {
                 try {
                     const canvas = document.createElement('canvas');
@@ -313,20 +555,30 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
                     setIsAutoThumbnail(true);
                 } catch (e) {}
             };
-
-            tempVid.onerror = () => {
-                setVideoDuration('04:15');
-                setDurationSeconds(255);
-            };
             return;
         }
 
-        // 3. Fallback for OneDrive / MS Stream / General Embed Links
+        // 4. Fallback for OneDrive / MS Stream / General Embed Links
         setThumbnailPreview('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80');
         setThumbnailFile(null);
         setIsAutoThumbnail(true);
-        setVideoDuration('04:45');
-        setDurationSeconds(285);
+        setVideoDuration('Auto-detecting duration...');
+        setIsDetectingDuration(true);
+
+        const probeVid = document.createElement('video');
+        probeVid.preload = 'metadata';
+        probeVid.muted = true;
+        probeVid.src = cleanUrl;
+        const probed = await getExactVideoDuration(probeVid);
+        if (probed && probed > 0) {
+            const sec = Math.round(probed);
+            setVideoDuration(formatDuration(sec));
+            setDurationSeconds(sec);
+        } else {
+            setVideoDuration('00:00');
+            setDurationSeconds(0);
+        }
+        setIsDetectingDuration(false);
     };
 
     const handleUpload = async () => {
@@ -465,6 +717,16 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
                 uploaderUserId: numericUploaderId
             };
 
+            // Cache resolved duration for this video URL & title
+            if (videoDuration && videoDuration !== '00:00' && !videoDuration.includes('detecting')) {
+                try {
+                    const durationMap = JSON.parse(localStorage.getItem('knome_video_durations') || '{}');
+                    if (finalVideoUrl) durationMap[finalVideoUrl] = videoDuration;
+                    if (safeTitle) durationMap[safeTitle] = videoDuration;
+                    localStorage.setItem('knome_video_durations', JSON.stringify(durationMap));
+                } catch (e) {}
+            }
+
             const approvalRequired = isVideoApprovalRequired();
             // Moderators and employees cannot publish directly; their videos must always be sent for approval
             const shouldPublishImmediately = !isModerator && (isCurrentUserAdmin || !approvalRequired);
@@ -473,6 +735,8 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
                 await apiClient.post('/videos', dto);
                 addToast("Video uploaded and published successfully!", 'success');
                 window.dispatchEvent(new CustomEvent('video-published'));
+                window.dispatchEvent(new CustomEvent('knome_video_published'));
+                localStorage.setItem('knome_video_published_timestamp', String(Date.now()));
             } else {
                 const categoryLabel = category === '13' ? 'Training & Tutorials' : category === '14' ? 'Townhalls' : category === '15' ? 'Engineering Tech Talks' : 'Leadership Updates';
                 const pendingItem = {
@@ -796,15 +1060,85 @@ export default function UploadVideoModal({ isOpen, onClose, onVideoUploaded }) {
                             <div>
                                 <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider flex items-center justify-between">
                                     <span>Video Duration</span>
-                                    <span className="text-[10px] text-cyan-600 dark:text-cyan-400 font-extrabold uppercase bg-cyan-500/10 px-2 py-0.5 rounded">Auto-Detected</span>
+                                    {isDetectingDuration ? (
+                                        <span className="text-[10px] text-cyan-600 dark:text-cyan-400 font-extrabold uppercase bg-cyan-500/10 px-2 py-0.5 rounded flex items-center gap-1.5 animate-pulse">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-ping"></span>
+                                            Auto-Detecting...
+                                        </span>
+                                    ) : isManualDurationEdit ? (
+                                        <span className="text-[10px] text-amber-600 dark:text-amber-400 font-extrabold uppercase bg-amber-500/10 px-2 py-0.5 rounded">
+                                            Manual Override
+                                        </span>
+                                    ) : videoDuration && videoDuration !== '00:00' ? (
+                                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold uppercase bg-emerald-500/10 px-2 py-0.5 rounded flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[12px]">check_circle</span>
+                                            Auto-Detected
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase bg-slate-500/10 px-2 py-0.5 rounded">
+                                            Pending Video
+                                        </span>
+                                    )}
                                 </label>
-                                <div className="w-full bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between select-none">
-                                    <div className="flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-[18px] text-cyan-500">schedule</span>
-                                        <span>{videoDuration || (videoFile ? 'Calculating duration...' : 'Select a video file to auto-detect duration')}</span>
+
+                                {isDetectingDuration ? (
+                                    <div className="w-full bg-cyan-500/5 dark:bg-cyan-500/10 border border-cyan-500/30 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-cyan-600 dark:text-cyan-400 flex items-center justify-between animate-pulse">
+                                        <div className="flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+                                            <span className="text-xs">Fetching exact duration from video metadata...</span>
+                                        </div>
                                     </div>
-                                    <span className="material-symbols-outlined text-[16px] text-slate-400">lock</span>
-                                </div>
+                                ) : isManualDurationEdit ? (
+                                    <div className="w-full bg-white dark:bg-slate-900 border-2 border-cyan-500 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-900 dark:text-white flex items-center justify-between shadow-sm">
+                                        <div className="flex items-center gap-2 flex-1">
+                                            <span className="material-symbols-outlined text-[18px] text-cyan-500">schedule</span>
+                                            <input 
+                                                type="text" 
+                                                value={videoDuration} 
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setVideoDuration(val);
+                                                    const parts = val.split(':').map(Number);
+                                                    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                                                        setDurationSeconds(parts[0] * 60 + parts[1]);
+                                                    } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+                                                        setDurationSeconds(parts[0] * 3600 + parts[1] * 60 + parts[2]);
+                                                    }
+                                                }}
+                                                placeholder="MM:SS or HH:MM:SS" 
+                                                className="bg-transparent border-none outline-none font-bold text-slate-900 dark:text-white text-sm w-full"
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setIsManualDurationEdit(false)}
+                                            className="px-2.5 py-1 bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-xs"
+                                        >
+                                            Done
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="w-full bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between select-none">
+                                        <div className="flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[18px] text-cyan-500">schedule</span>
+                                            <span className={videoDuration && videoDuration !== '00:00' ? "font-bold text-base tracking-wider text-slate-900 dark:text-white" : "text-xs font-medium text-slate-400 dark:text-slate-500"}>
+                                                {videoDuration || (sourceTab === 'direct' ? 'Select a video file to auto-detect duration' : 'Enter URL above to auto-detect duration')}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <button 
+                                                type="button"
+                                                onClick={() => setIsManualDurationEdit(true)}
+                                                className="p-1 text-slate-400 hover:text-cyan-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                                                title="Edit duration manually"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">edit</span>
+                                            </button>
+                                            <span className="material-symbols-outlined text-[16px] text-slate-400" title="Locked to auto-detection">lock</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div>

@@ -33,7 +33,7 @@ public class VideoController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.Fil
 
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponse<List<VideoDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetVideos([FromQuery] int? categoryId, [FromQuery] string? tag, [FromQuery] string? search, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetVideos([FromQuery] int? categoryId, [FromQuery] string? tag, [FromQuery] string? search, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 100)
     {
         await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableVideosKey, "Videos");
         var videos = await _videoService.GetVideosAsync(categoryId, tag, search, pageNumber, pageSize, GetCurrentUserId());

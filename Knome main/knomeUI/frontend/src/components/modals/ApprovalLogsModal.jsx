@@ -2,6 +2,76 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 
+/**
+ * Robust timestamp-to-epoch millisecond resolver.
+ * Handles ISO strings, formatted strings ("Oct 22, 2026, 06:15 PM"),
+ * locale date strings ("08/04/26, 05:20 PM"), numeric epochs, and timestamp-embedded IDs.
+ */
+export const parseLogTimestampEpoch = (item) => {
+    if (!item) return 0;
+
+    // 1. If explicit epoch number provided
+    if (typeof item.epoch === 'number' && !isNaN(item.epoch) && item.epoch > 0) {
+        return item.epoch;
+    }
+
+    // 2. If item.timestamp is available (ISO string, epoch number or epoch string)
+    if (item.timestamp) {
+        if (typeof item.timestamp === 'number' && !isNaN(item.timestamp)) {
+            return item.timestamp;
+        }
+        const parsed = new Date(item.timestamp).getTime();
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+        const num = Number(item.timestamp);
+        if (!isNaN(num) && num > 1000000000) return num;
+    }
+
+    // 3. Try parsing item.time (e.g. "Oct 22, 2026, 06:15 PM" or "08/04/26, 05:20 PM")
+    if (item.time && typeof item.time === 'string') {
+        const directParsed = new Date(item.time).getTime();
+        if (!isNaN(directParsed) && directParsed > 0) return directParsed;
+
+        // Handle numeric slash/dash formats: MM/DD/YY or DD/MM/YY with time
+        const match = item.time.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})(?:,?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?)?/);
+        if (match) {
+            let [_, p1, p2, yr, hr = '0', min = '0', sec = '0', meridiem] = match;
+            let year = parseInt(yr, 10);
+            if (year < 100) year += 2000;
+            let hour = parseInt(hr, 10);
+            const minute = parseInt(min, 10);
+            const second = parseInt(sec, 10);
+            if (meridiem) {
+                if (/pm/i.test(meridiem) && hour < 12) hour += 12;
+                if (/am/i.test(meridiem) && hour === 12) hour = 0;
+            }
+            let month = parseInt(p1, 10) - 1;
+            let day = parseInt(p2, 10);
+            if (month > 11) {
+                day = parseInt(p1, 10);
+                month = parseInt(p2, 10) - 1;
+            }
+            const d = new Date(year, month, day, hour, minute, second);
+            if (!isNaN(d.getTime())) return d.getTime();
+        }
+    }
+
+    // 4. Fallback: extract millisecond epoch from item.id if present (e.g. log_comm_1793... or 1793...)
+    if (item.id) {
+        const idStr = String(item.id);
+        const match = idStr.match(/\b(1\d{11,12})\b/);
+        if (match) {
+            const epoch = parseInt(match[1], 10);
+            if (!isNaN(epoch) && epoch > 0) return epoch;
+        }
+        const numId = Number(item.id);
+        if (!isNaN(numId) && numId > 0 && numId < 1000000) {
+            return 1700000000000 + numId * 1000;
+        }
+    }
+
+    return 0;
+};
+
 export default function ApprovalLogsModal({
     isOpen,
     onClose,
@@ -18,7 +88,7 @@ export default function ApprovalLogsModal({
     const [reviewerFilter, setReviewerFilter] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
 
-    // ── Sorting & Pagination State ──
+    // ── Sorting & Pagination State (Default to most recent timestamp first) ──
     const [sortColumn, setSortColumn] = useState('timestamp'); // 'timestamp' | 'title' | 'moderator' | 'outcome'
     const [sortDirection, setSortDirection] = useState('desc'); // 'asc' | 'desc'
     const [currentPage, setCurrentPage] = useState(1);
@@ -30,7 +100,7 @@ export default function ApprovalLogsModal({
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isJsonViewExpanded, setIsJsonViewExpanded] = useState(false);
 
-    // Synchronize initial section when modal opens
+    // Synchronize initial section and reset to recent order when modal opens
     useEffect(() => {
         if (isOpen) {
             setSectionFilter(initialSection || 'all');
@@ -39,6 +109,8 @@ export default function ApprovalLogsModal({
             setDateRangeFilter('all');
             setReviewerFilter('All');
             setSearchTerm('');
+            setSortColumn('timestamp');
+            setSortDirection('desc');
             setCurrentPage(1);
             setSelectedAuditLog(null);
         }
@@ -142,8 +214,8 @@ export default function ApprovalLogsModal({
         if (dateRangeFilter !== 'all') {
             const now = Date.now();
             list = list.filter(l => {
-                const itemTime = new Date(l.timestamp || l.time || 0).getTime();
-                if (isNaN(itemTime) || itemTime === 0) return true;
+                const itemTime = parseLogTimestampEpoch(l);
+                if (!itemTime || isNaN(itemTime) || itemTime === 0) return true;
                 const diffDays = (now - itemTime) / (1000 * 60 * 60 * 24);
                 if (dateRangeFilter === 'today') return diffDays <= 1;
                 if (dateRangeFilter === '7days') return diffDays <= 7;
@@ -171,12 +243,12 @@ export default function ApprovalLogsModal({
             });
         }
 
-        // ── Sorting ──
+        // ── Sorting: strictly respect recent order (newest first by default) ──
         list.sort((a, b) => {
             let valA, valB;
             if (sortColumn === 'timestamp') {
-                valA = new Date(a.timestamp || a.time || 0).getTime();
-                valB = new Date(b.timestamp || b.time || 0).getTime();
+                valA = parseLogTimestampEpoch(a);
+                valB = parseLogTimestampEpoch(b);
             } else if (sortColumn === 'title') {
                 valA = String(a.title || a.target || '').toLowerCase();
                 valB = String(b.title || b.target || '').toLowerCase();
@@ -187,13 +259,18 @@ export default function ApprovalLogsModal({
                 valA = String(a.outcome || '').toLowerCase();
                 valB = String(b.outcome || '').toLowerCase();
             } else {
-                valA = 0;
-                valB = 0;
+                valA = parseLogTimestampEpoch(a);
+                valB = parseLogTimestampEpoch(b);
             }
 
             if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
             if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
-            return 0;
+
+            // Deterministic secondary sort: break ties using most recent timestamp or descending ID
+            const epochA = parseLogTimestampEpoch(a);
+            const epochB = parseLogTimestampEpoch(b);
+            if (epochB !== epochA) return epochB - epochA;
+            return String(b.id || '').localeCompare(String(a.id || ''));
         });
 
         return list;
