@@ -142,4 +142,21 @@ public class MessagesController : KnomeControllerBase
         var activeIds = Knome.API.Hubs.NotificationHub.GetActiveOnlineUserIds();
         return Ok(ApiResponse<List<int>>.SuccessResponse(200, "Online users retrieved successfully.", activeIds));
     }
+
+    /// <summary>
+    /// Retrieves online status and last seen for a specific user.
+    /// </summary>
+    [HttpGet("online-status/{userId:int}")]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    public IActionResult GetOnlineStatus([FromRoute] int userId)
+    {
+        var isOnline = Knome.API.Hubs.NotificationHub.IsUserOnline(userId);
+        var lastSeen = Knome.API.Hubs.NotificationHub.GetUserLastSeen(userId);
+        return Ok(ApiResponse<object>.SuccessResponse(200, "User status retrieved.", new
+        {
+            userId,
+            isOnline,
+            lastSeen
+        }));
+    }
 }

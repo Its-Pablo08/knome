@@ -371,6 +371,29 @@ export default function Messages() {
 
     // ── Real-Time Online Presence State ──
     const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+    const [userLastSeenMap, setUserLastSeenMap] = useState({});
+
+    const formatLastSeen = (lastSeenDate) => {
+        if (!lastSeenDate) return null;
+        try {
+            const dt = new Date(lastSeenDate);
+            if (isNaN(dt.getTime())) return null;
+            const now = new Date();
+            const isToday = dt.toDateString() === now.toDateString();
+            const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            if (isToday) {
+                return `Last seen today at ${timeStr}`;
+            }
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            if (dt.toDateString() === yesterday.toDateString()) {
+                return `Last seen yesterday at ${timeStr}`;
+            }
+            return `Last seen ${dt.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${timeStr}`;
+        } catch {
+            return null;
+        }
+    };
 
     // ── Real API Conversations & Messages State ──
     const [conversations, setConversations] = useState([]);
@@ -460,8 +483,8 @@ export default function Messages() {
         const rawContent = m.content || m.text || '';
         const cleanContent = (rawContent === '\u200B' || rawContent === ' ') ? '' : rawContent;
         return {
-            id: m.messageId,
-            messageId: m.messageId,
+            id: m.messageId || m.id,
+            messageId: m.messageId || m.id,
             senderId: Number(m.senderId),
             senderName: m.senderName || '',
             receiverId: Number(m.receiverId),
@@ -469,6 +492,7 @@ export default function Messages() {
             text: cleanContent,
             attachments: Array.isArray(parsedAttachments) ? parsedAttachments : [],
             isRead: Boolean(m.isRead),
+            isDelivered: Boolean(m.isDelivered || m.isRead),
             isEdited: Boolean(m.isEdited),
             isDeleted: Boolean(m.isDeleted),
             parentMessageId: m.parentMessageId,
@@ -542,6 +566,7 @@ export default function Messages() {
         };
         initMessengerSignalR(currentUserId).then(loadOnline);
         loadOnline();
+        const onlinePollInterval = setInterval(loadOnline, 12000);
 
         // 1. New live message received
         const handleLiveMessage = (e) => {
@@ -553,6 +578,7 @@ export default function Messages() {
 
             // Format incoming message
             const newMsg = formatMessageItem(data);
+            if (!newMsg) return;
 
             // Update active conversation history if currently open
             if (activePartnerId && (senderId === activePartnerId || receiverId === activePartnerId)) {
@@ -583,18 +609,42 @@ export default function Messages() {
                     return [...prev, newMsg];
                 });
 
-                // Mark read if looking at this chat and message was sent by partner
+                // Mark read immediately if looking at this chat and message was sent by partner
                 if (senderId === activePartnerId) {
                     messagesApi.markAsRead(activePartnerId).catch(() => {});
                 }
             }
 
-            // Refresh conversations list to update sidebar preview and unread count
+            // Immediately update sidebar conversation preview and unread count in state
+            const convPartnerId = senderId === currentUserId ? receiverId : senderId;
+            setConversations(prev => {
+                const existingIdx = prev.findIndex(c => Number(c.partnerId) === convPartnerId);
+                const displaySummary = newMsg.text || (newMsg.attachments?.length ? (newMsg.attachments.length === 1 ? `📎 ${newMsg.attachments[0].name || 'Attachment'}` : `📎 ${newMsg.attachments.length} Attachments`) : 'Attachment');
+                const shouldIncrementUnread = receiverId === currentUserId && activePartnerId !== senderId;
+
+                if (existingIdx !== -1) {
+                    const existing = prev[existingIdx];
+                    const updatedConv = {
+                        ...existing,
+                        lastMessage: displaySummary || existing.lastMessage,
+                        lastMessageTime: newMsg.time,
+                        lastMessageTimestamp: newMsg.timestamp,
+                        unreadCount: shouldIncrementUnread ? (existing.unreadCount || 0) + 1 : (activePartnerId === senderId ? 0 : existing.unreadCount)
+                    };
+                    const rest = prev.filter((_, idx) => idx !== existingIdx);
+                    return [updatedConv, ...rest];
+                }
+                return prev;
+            });
+
+            // Silently sync conversation list with server
             fetchConversations(true);
 
-            // Play audio chime if received from partner
+            // Play audio chime if received from partner and not actively chatting
             if (receiverId === currentUserId && senderId !== currentUserId) {
-                playMessageChime();
+                if (activePartnerId !== senderId) {
+                    playMessageChime();
+                }
             }
         };
 
@@ -656,17 +706,21 @@ export default function Messages() {
             }
         };
 
-        // 6. Messages marked as read by other user
+        // 6. Messages marked as read by other user or synced across my sessions
         const handleMessagesRead = (e) => {
             const data = e.detail;
             if (!data) return;
-            if (activePartnerId && Number(data.partnerId) === activePartnerId) {
+            const partnerId = Number(data.partnerId || data.PartnerId);
+            if (activePartnerId && partnerId === activePartnerId) {
                 setActiveHistory(prev => prev.map(m => {
                     if (Number(m.senderId) === currentUserId) {
-                        return { ...m, isRead: true };
+                        return { ...m, isRead: true, isDelivered: true };
                     }
                     return m;
                 }));
+            }
+            if (partnerId) {
+                setConversations(prev => prev.map(c => Number(c.partnerId) === partnerId ? { ...c, unreadCount: 0 } : c));
             }
         };
 
@@ -674,16 +728,36 @@ export default function Messages() {
         const handlePresenceChanged = (e) => {
             const data = e.detail;
             if (!data) return;
-            const uId = Number(data.userId);
+            const uId = Number(data.userId || data.UserId);
+            const isOnline = Boolean(data.isOnline ?? data.IsOnline);
+            const lastSeen = data.lastSeen || data.LastSeen || null;
+
             setOnlineUserIds(prev => {
                 const next = new Set(prev);
-                if (data.isOnline) {
+                if (isOnline) {
                     next.add(uId);
                 } else {
                     next.delete(uId);
                 }
                 return next;
             });
+
+            if (lastSeen) {
+                setUserLastSeenMap(prev => ({
+                    ...prev,
+                    [uId]: lastSeen
+                }));
+            }
+
+            // If partner came online, mark messages sent to them as delivered
+            if (isOnline && activePartnerId === uId) {
+                setActiveHistory(prev => prev.map(m => {
+                    if (Number(m.senderId) === currentUserId && !m.isRead) {
+                        return { ...m, isDelivered: true };
+                    }
+                    return m;
+                }));
+            }
         };
 
         window.addEventListener('knome_receive_direct_message', handleLiveMessage);
@@ -702,6 +776,7 @@ export default function Messages() {
             window.removeEventListener('knome_user_typing', handleUserTyping);
             window.removeEventListener('knome_messages_read', handleMessagesRead);
             window.removeEventListener('knome_user_presence_changed', handlePresenceChanged);
+            clearInterval(onlinePollInterval);
             if (partnerTypingTimerRef.current) clearTimeout(partnerTypingTimerRef.current);
             if (typingDebounceTimerRef.current) clearTimeout(typingDebounceTimerRef.current);
         };
@@ -718,6 +793,14 @@ export default function Messages() {
             const res = await messagesApi.getConversations();
             const list = res?.data || (Array.isArray(res) ? res : []);
             setConversations(list);
+            list.forEach(c => {
+                if (c.partnerId && c.partnerLastSeen) {
+                    setUserLastSeenMap(prev => ({ ...prev, [Number(c.partnerId)]: c.partnerLastSeen }));
+                }
+                if (c.partnerId && c.isOnline) {
+                    setOnlineUserIds(prev => new Set([...prev, Number(c.partnerId)]));
+                }
+            });
             try {
                 localStorage.setItem(`knome_cached_conversations_${currentUserId}`, JSON.stringify(list));
             } catch (_) {}
@@ -756,6 +839,39 @@ export default function Messages() {
     useEffect(() => {
         fetchConversations();
     }, [fetchConversations]);
+
+    // ── Fetch Active Partner Presence / Last-Seen Immediately on Select & Sync Periodically ──
+    useEffect(() => {
+        if (!activePartnerId) return;
+
+        const checkPresence = () => {
+            messagesApi.getOnlineStatus(activePartnerId).then(res => {
+                const status = (res && res.data !== undefined) ? res.data : res;
+                if (status && typeof status === 'object') {
+                    const isOnline = Boolean(status.isOnline);
+                    setOnlineUserIds(prev => {
+                        const next = new Set(prev);
+                        if (isOnline) {
+                            next.add(Number(activePartnerId));
+                        } else {
+                            next.delete(Number(activePartnerId));
+                        }
+                        return next;
+                    });
+                    if (status.lastSeen) {
+                        setUserLastSeenMap(prev => ({
+                            ...prev,
+                            [Number(activePartnerId)]: status.lastSeen
+                        }));
+                    }
+                }
+            }).catch(() => {});
+        };
+
+        checkPresence();
+        const intervalId = setInterval(checkPresence, 10000);
+        return () => clearInterval(intervalId);
+    }, [activePartnerId]);
 
     // ── Fetch Message History for Active Conversation ──
     const fetchActiveHistory = useCallback(async (partnerId, isSilent = false) => {
@@ -1879,7 +1995,7 @@ export default function Messages() {
                                         ) : (
                                             <span className="inline-flex items-center gap-1 text-slate-400 font-medium">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
-                                                <span>Offline</span>
+                                                <span>{formatLastSeen(userLastSeenMap[activePartner?.userId] || activePartnerSummary?.partnerLastSeen) || 'Offline'}</span>
                                             </span>
                                         )}
                                     </div>
@@ -2301,8 +2417,12 @@ export default function Messages() {
                                                         <span className="material-symbols-outlined text-[14px] text-cyan-500 font-bold" title="Read">
                                                             done_all
                                                         </span>
+                                                    ) : msg.isDelivered ? (
+                                                        <span className="material-symbols-outlined text-[13px] text-slate-400 font-bold" title="Delivered">
+                                                            done_all
+                                                        </span>
                                                     ) : (
-                                                        <span className="material-symbols-outlined text-[13px] text-slate-400" title="Delivered">
+                                                        <span className="material-symbols-outlined text-[13px] text-slate-400" title="Sent">
                                                             done
                                                         </span>
                                                     )

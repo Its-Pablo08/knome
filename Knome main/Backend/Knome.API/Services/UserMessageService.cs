@@ -92,7 +92,9 @@ public class UserMessageService : IUserMessageService
                 LastMessageTime = msg.CreatedDate.ToLocalTime().ToString("hh:mm tt"),
                 LastMessageTimestamp = timestampMs,
                 UnreadCount = unreadCount,
-                IsConnected = isConnected
+                IsConnected = isConnected,
+                IsOnline = NotificationHub.IsUserOnline(partner.UserId),
+                PartnerLastSeen = NotificationHub.GetUserLastSeen(partner.UserId)
             });
         }
 
@@ -119,6 +121,7 @@ public class UserMessageService : IUserMessageService
                     ReceiverAvatarUrl = msg.Receiver?.ProfilePhotoUrl,
                     AttachmentsJson = msg.AttachmentsJson,
                     IsRead = msg.IsRead,
+                    IsDelivered = msg.IsRead || NotificationHub.IsUserOnline(msg.ReceiverId),
                     ReadDate = msg.ReadDate,
                     CreatedDate = msg.CreatedDate,
                     ParentMessageId = msg.ParentMessageId,
@@ -297,6 +300,7 @@ public class UserMessageService : IUserMessageService
         resultDto.ParentSenderName = parentSenderName;
         resultDto.IsEdited = false;
         resultDto.IsDeleted = false;
+        resultDto.IsDelivered = NotificationHub.IsUserOnline(dto.ReceiverId);
         resultDto.Reactions = new List<MessageReactionDto>();
 
         // Broadcast real-time SignalR event to both receiver and sender
@@ -558,12 +562,18 @@ public class UserMessageService : IUserMessageService
     {
         await _messageRepo.MarkMessagesAsReadAsync(currentUserId, otherUserId);
 
-        // Broadcast read receipt to other user
+        // Broadcast read receipt to other user and current user's other sessions
         try
         {
             await _hubContext.Clients.Group($"User_{otherUserId}").SendAsync("MessagesRead", new
             {
                 partnerId = currentUserId,
+                readDate = DateTime.UtcNow
+            });
+
+            await _hubContext.Clients.Group($"User_{currentUserId}").SendAsync("MessagesRead", new
+            {
+                partnerId = otherUserId,
                 readDate = DateTime.UtcNow
             });
         }

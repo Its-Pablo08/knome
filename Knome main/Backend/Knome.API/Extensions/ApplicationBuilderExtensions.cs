@@ -138,7 +138,7 @@ public static class ApplicationBuilderExtensions
         app.MapControllers();
 
         // Map SignalR Hubs
-        app.MapHub<NotificationHub>("/hubs/notifications");
+        app.MapHub<NotificationHub>("/hubs/notifications").RequireCors(ApiConstants.CorsPolicyName);
 
         // Initialize Database Tables if missing (Wiki and UserMessages)
         try

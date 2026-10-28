@@ -25,6 +25,8 @@ public class UserMessageDto
 
     public bool IsRead { get; set; }
 
+    public bool IsDelivered { get; set; }
+
     public DateTime? ReadDate { get; set; }
 
     public DateTime CreatedDate { get; set; }

@@ -1363,20 +1363,6 @@ export default function Clips() {
                                                             >
                                                                 <span className="material-symbols-outlined text-sm">{isMuted ? 'volume_off' : 'volume_up'}</span>
                                                             </button>
-                                                            {!clip.isMyClip && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setSelectedClipForModal(clip);
-                                                                        setIsReportOpen(true);
-                                                                    }}
-                                                                    className="p-2 rounded-xl bg-black/40 backdrop-blur-md text-white/80 hover:text-rose-400 hover:bg-black/60 transition cursor-pointer"
-                                                                    title="Report Clip"
-                                                                >
-                                                                    <span className="material-symbols-outlined text-sm">flag</span>
-                                                                </button>
-                                                            )}
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
@@ -1500,20 +1486,22 @@ export default function Clips() {
                                                         </div>
 
                                                         {/* Report Button */}
-                                                        <div className="flex flex-col items-center">
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedClipForModal(clip);
-                                                                    setIsReportOpen(true);
-                                                                }}
-                                                                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-rose-500/80 hover:text-white flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer group/report"
-                                                                title="Report Clip"
-                                                            >
-                                                                <span className="material-symbols-outlined text-2xl text-rose-400 group-hover/report:text-white transition-colors">flag</span>
-                                                            </button>
-                                                        </div>
+                                                        {!clip.isMyClip && (
+                                                            <div className="flex flex-col items-center">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedClipForModal(clip);
+                                                                        setIsReportOpen(true);
+                                                                    }}
+                                                                    className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-rose-500/80 hover:text-white flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer group/report"
+                                                                    title="Report Clip"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-2xl text-rose-400 group-hover/report:text-white transition-colors">flag</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
 
                                                     </div>
 
@@ -1606,30 +1594,6 @@ export default function Clips() {
                             </div>
                         );
                     })
-                )}
-
-                {/* Desktop Floating Up / Down Quick Navigation Buttons */}
-                {!isLoading && clips.length > 1 && (
-                    <div className="hidden md:flex flex-col gap-2 absolute right-4 lg:right-6 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
-                        <button
-                            type="button"
-                            disabled={activeIndex === 0}
-                            onClick={() => scrollToClip(activeIndex - 1)}
-                            className="w-10 h-10 rounded-full bg-white/95 hover:bg-white text-slate-700 hover:text-slate-900 border border-slate-200 shadow-xl backdrop-blur-md flex items-center justify-center transition disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer"
-                            title="Previous Clip (Up Arrow)"
-                        >
-                            <span className="material-symbols-outlined text-xl">keyboard_arrow_up</span>
-                        </button>
-                        <button
-                            type="button"
-                            disabled={activeIndex === clips.length - 1}
-                            onClick={() => scrollToClip(activeIndex + 1)}
-                            className="w-10 h-10 rounded-full bg-white/95 hover:bg-white text-slate-700 hover:text-slate-900 border border-slate-200 shadow-xl backdrop-blur-md flex items-center justify-center transition disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer"
-                            title="Next Clip (Down Arrow)"
-                        >
-                            <span className="material-symbols-outlined text-xl">keyboard_arrow_down</span>
-                        </button>
-                    </div>
                 )}
 
             </main>

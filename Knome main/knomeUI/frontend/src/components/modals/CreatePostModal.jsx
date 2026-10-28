@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useUser } from '../contexts/UserContext';
 import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmDialogContext';
 import { postsApi, mediaApi, communitiesApi, profileApi, notificationsApi, formatToDDMMYYYY } from '../../utils/apiService';
 import { apiClient } from '../../utils/apiClient';
 import { checkRestrictedContent, syncRestrictedWordsFromBackend, addRestrictedWord } from '../../utils/restrictedWords';
@@ -56,6 +57,7 @@ export const formatScheduleDisplay = (dateInput) => {
 export default function CreatePostModal({ isOpen, onClose, onPostCreated, draftToEdit = null }) {
     const { currentUser, users, awardRuleKarma, refreshKarma } = useUser();
     const { addToast } = useToast();
+    const confirm = useConfirm();
     const currentUserId = currentUser?.userId || currentUser?.id;
     
     // Core post form state
@@ -487,7 +489,14 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, draftT
     };
 
     const handleDiscardDraft = async () => {
-        if (!window.confirm('Discard this post? All progress will be removed.')) return;
+        const ok = await confirm({
+            title: 'Discard Draft',
+            message: 'Are you sure you want to discard this post? All progress will be removed.',
+            confirmText: 'Discard Draft',
+            cancelText: 'Keep Editing',
+            variant: 'danger'
+        });
+        if (!ok) return;
         setIsDiscarding(true);
         try {
             if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);

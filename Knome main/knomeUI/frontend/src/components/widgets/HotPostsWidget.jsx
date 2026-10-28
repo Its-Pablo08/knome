@@ -162,11 +162,21 @@ export default function HotPostsWidget() {
                                     <p className="text-[11px] font-bold text-slate-500 truncate pr-2">
                                         {post.author}
                                     </p>
-                                    <div className="flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md shrink-0"
-                                        style={{background: 'rgba(2,132,199,0.1)', color: '#0284C7', border: '1px solid rgba(2,132,199,0.2)'}}>
-                                        <span className="material-symbols-outlined text-[12px]">trending_up</span>
-                                        {post.score.toLocaleString()}
-                                    </div>
+                                    {post.score > 0 ? (
+                                        <div className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
+                                            style={{background: 'rgba(249,115,22,0.1)', color: '#ea580c', border: '1px solid rgba(249,115,22,0.25)'}}
+                                            title="Trending conversation with active interactions">
+                                            <span className="material-symbols-outlined text-[12px]" style={{fontVariationSettings: "'FILL' 1"}}>local_fire_department</span>
+                                            <span>Trending</span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
+                                            style={{background: 'rgba(2,132,199,0.1)', color: '#0284C7', border: '1px solid rgba(2,132,199,0.2)'}}
+                                            title="Active discussion">
+                                            <span className="material-symbols-outlined text-[12px]">trending_up</span>
+                                            <span>Active</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -471,141 +471,148 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    {/* HR Organization Announcement Banner (FR-DB-05) - Supports Up to 3 Broadcasts */}
-                    {announcements && announcements.length > 0 && announcements[activeBroadcastIndex] && (
-                        <div 
-                            onMouseEnter={() => setIsBroadcastHovered(true)}
-                            onMouseLeave={() => setIsBroadcastHovered(false)}
-                            className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/30 flex flex-col gap-3 shadow-xs animate-in fade-in duration-300"
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-start gap-3 flex-1 min-w-0">
-                                    <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-                                        <span className="material-symbols-outlined text-[20px]" style={{fontVariationSettings: "'FILL' 1"}}>campaign</span>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                                            <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white px-2 py-0.5 rounded-md">
-                                                HR Broadcast #{activeBroadcastIndex + 1}
-                                            </span>
-                                            <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                                                • Organization Announcement
-                                            </span>
-                                            {announcements.length > 1 && (
-                                                <span className="text-[10px] font-bold text-amber-700/70 dark:text-amber-300/70 bg-amber-500/10 px-2 py-0.2 rounded-full">
-                                                    {activeBroadcastIndex + 1} of {announcements.length}
+                    {/* HR Organization Announcement Banner (FR-DB-05) - Supports Up to 3 Broadcasts (Verified) */}
+                    {announcements && announcements.length > 0 && announcements[activeBroadcastIndex] && (() => {
+                        const broadcast = announcements[activeBroadcastIndex];
+                        const headline = broadcast.title || broadcast.message || 'Organization Announcement';
+                        const bodyContent = broadcast.content || broadcast.details || (broadcast.title && broadcast.message && broadcast.title !== broadcast.message ? broadcast.message : '');
+
+                        return (
+                            <div 
+                                onMouseEnter={() => setIsBroadcastHovered(true)}
+                                onMouseLeave={() => setIsBroadcastHovered(false)}
+                                className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/30 flex flex-col gap-3 shadow-xs animate-in fade-in duration-300"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                                        <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                            <span className="material-symbols-outlined text-[20px]" style={{fontVariationSettings: "'FILL' 1"}}>campaign</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                                <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white px-2 py-0.5 rounded-md">
+                                                    HR Broadcast {announcements.length > 1 ? `#${activeBroadcastIndex + 1}` : ''}
                                                 </span>
+                                                <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                                                    • Organization Announcement
+                                                </span>
+                                                {announcements.length > 1 && (
+                                                    <span className="text-[10px] font-bold text-amber-700/70 dark:text-amber-300/70 bg-amber-500/10 px-2 py-0.2 rounded-full">
+                                                        {activeBroadcastIndex + 1} of {announcements.length}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <h4 className="text-sm font-black text-slate-900 dark:text-white leading-snug">
+                                                {headline}
+                                            </h4>
+                                            {bodyContent && (
+                                                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 font-medium leading-relaxed">
+                                                    {bodyContent}
+                                                </p>
                                             )}
                                         </div>
-                                        <h4 className="text-sm font-black text-slate-900 dark:text-white leading-snug">
-                                            {announcements[activeBroadcastIndex].title || announcements[activeBroadcastIndex].message}
-                                        </h4>
-                                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 font-medium leading-relaxed">
-                                            {announcements[activeBroadcastIndex].content || announcements[activeBroadcastIndex].details || announcements[activeBroadcastIndex].message}
-                                        </p>
                                     </div>
-                                </div>
 
-                                {/* HR Admin & System Admin Actions */}
-                                <div className="flex items-center gap-1.5 shrink-0 self-start">
-                                    {isHrOrSysAdmin && (
-                                        <>
-                                            <button
-                                                onClick={() => {
-                                                    setEditingBroadcastData(announcements[activeBroadcastIndex]);
-                                                    setIsBroadcastModalOpen(true);
-                                                }}
-                                                className="px-2.5 py-1 rounded-lg text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 transition-all flex items-center gap-1 cursor-pointer"
-                                                title="Edit this broadcast announcement"
-                                            >
-                                                <span className="material-symbols-outlined text-[15px]">edit</span>
-                                                <span>Edit</span>
-                                            </button>
-                                            <button
-                                                onClick={async () => {
-                                                    const target = announcements[activeBroadcastIndex];
-                                                    const targetId = target?.id || target?.Id || target?.notificationId;
-                                                    if (!targetId) return;
-
-                                                    // Optimistically remove from UI immediately
-                                                    setAnnouncements(prev => prev.filter(a => (a.id || a.Id || a.notificationId) !== targetId));
-
-                                                    try {
-                                                        await notificationsApi.broadcasts.delete(targetId);
-                                                        window.dispatchEvent(new CustomEvent('knome:broadcast-updated'));
-                                                        window.dispatchEvent(new CustomEvent('knome:broadcast-deleted', { detail: { id: targetId } }));
-                                                    } catch (e) {
-                                                        console.error('Failed to remove broadcast:', e);
-                                                        loadAnnouncements();
-                                                    }
-                                                }}
-                                                className="p-1 rounded-lg text-amber-700/60 dark:text-amber-300/60 hover:text-rose-600 hover:bg-rose-500/15 transition-all cursor-pointer"
-                                                title="Remove announcement"
-                                            >
-                                                <span className="material-symbols-outlined text-[17px]">delete</span>
-                                            </button>
-                                            {announcements.length < 3 && (
+                                    {/* HR Admin & System Admin Actions */}
+                                    <div className="flex items-center gap-1.5 shrink-0 self-start">
+                                        {isHrOrSysAdmin && (
+                                            <>
                                                 <button
                                                     onClick={() => {
-                                                        setEditingBroadcastData(null);
+                                                        setEditingBroadcastData(broadcast);
                                                         setIsBroadcastModalOpen(true);
                                                     }}
-                                                    className="px-2 py-1 rounded-lg text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 transition-all flex items-center gap-0.5 cursor-pointer"
-                                                    title="Add another broadcast (up to 3)"
+                                                    className="px-2.5 py-1 rounded-lg text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 transition-all flex items-center gap-1 cursor-pointer"
+                                                    title="Edit this broadcast announcement"
                                                 >
-                                                    <span className="material-symbols-outlined text-[15px]">add</span>
-                                                    <span>Add ({announcements.length}/3)</span>
+                                                    <span className="material-symbols-outlined text-[15px]">edit</span>
+                                                    <span>Edit</span>
                                                 </button>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-                            </div>
+                                                <button
+                                                    onClick={async () => {
+                                                        const targetId = broadcast?.id || broadcast?.Id || broadcast?.notificationId;
+                                                        if (!targetId) return;
 
-                            {/* Multi-Broadcast Pagination & Navigation Controls */}
-                            {announcements.length > 1 && (
-                                <div className="flex items-center justify-between pt-2 border-t border-amber-500/20 text-xs">
-                                    <div className="flex items-center gap-1.5">
-                                        {announcements.map((_, dotIdx) => (
+                                                        // Optimistically remove from UI immediately
+                                                        setAnnouncements(prev => prev.filter(a => (a.id || a.Id || a.notificationId) !== targetId));
+
+                                                        try {
+                                                            await notificationsApi.broadcasts.delete(targetId);
+                                                            window.dispatchEvent(new CustomEvent('knome:broadcast-updated'));
+                                                            window.dispatchEvent(new CustomEvent('knome:broadcast-deleted', { detail: { id: targetId } }));
+                                                        } catch (e) {
+                                                            console.error('Failed to remove broadcast:', e);
+                                                            loadAnnouncements();
+                                                        }
+                                                    }}
+                                                    className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                                    title="Remove announcement"
+                                                >
+                                                    <span className="material-symbols-outlined text-[17px]">delete</span>
+                                                </button>
+                                                {announcements.length < 3 && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingBroadcastData(null);
+                                                            setIsBroadcastModalOpen(true);
+                                                        }}
+                                                        className="px-2 py-1 rounded-lg text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                                                        title="Add another broadcast (up to 3)"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[15px]">add</span>
+                                                        <span>Add ({announcements.length}/3)</span>
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Multi-Broadcast Pagination & Navigation Controls */}
+                                {announcements.length > 1 && (
+                                    <div className="flex items-center justify-between pt-2 border-t border-amber-500/20 text-xs">
+                                        <div className="flex items-center gap-1.5">
+                                            {announcements.map((_, dotIdx) => (
+                                                <button
+                                                    key={dotIdx}
+                                                    type="button"
+                                                    onClick={() => setActiveBroadcastIndex(dotIdx)}
+                                                    className={`transition-all rounded-full cursor-pointer ${
+                                                        dotIdx === activeBroadcastIndex 
+                                                            ? 'w-5 h-1.5 bg-amber-500 shadow-xs' 
+                                                            : 'w-1.5 h-1.5 bg-amber-500/30 hover:bg-amber-500/60'
+                                                    }`}
+                                                    title={`View Announcement #${dotIdx + 1}`}
+                                                />
+                                            ))}
+                                        </div>
+
+                                        <div className="flex items-center gap-1">
                                             <button
-                                                key={dotIdx}
                                                 type="button"
-                                                onClick={() => setActiveBroadcastIndex(dotIdx)}
-                                                className={`transition-all rounded-full cursor-pointer ${
-                                                    dotIdx === activeBroadcastIndex 
-                                                        ? 'w-5 h-1.5 bg-amber-500 shadow-xs' 
-                                                        : 'w-1.5 h-1.5 bg-amber-500/30 hover:bg-amber-500/60'
-                                                }`}
-                                                title={`View Announcement #${dotIdx + 1}`}
-                                            />
-                                        ))}
+                                                onClick={() => setActiveBroadcastIndex(prev => (prev - 1 + announcements.length) % announcements.length)}
+                                                className="p-1 rounded-lg hover:bg-amber-500/15 text-amber-700 dark:text-amber-300 cursor-pointer transition-colors"
+                                                title="Previous broadcast"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+                                            </button>
+                                            <span className="text-[11px] font-bold text-amber-700/80 dark:text-amber-300/80 px-1">
+                                                {activeBroadcastIndex + 1} / {announcements.length}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveBroadcastIndex(prev => (prev + 1) % announcements.length)}
+                                                className="p-1 rounded-lg hover:bg-amber-500/15 text-amber-700 dark:text-amber-300 cursor-pointer transition-colors"
+                                                title="Next broadcast"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                                            </button>
+                                        </div>
                                     </div>
-
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveBroadcastIndex(prev => (prev - 1 + announcements.length) % announcements.length)}
-                                            className="p-1 rounded-lg hover:bg-amber-500/15 text-amber-700 dark:text-amber-300 cursor-pointer transition-colors"
-                                            title="Previous broadcast"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">chevron_left</span>
-                                        </button>
-                                        <span className="text-[11px] font-bold text-amber-700/80 dark:text-amber-300/80 px-1">
-                                            {activeBroadcastIndex + 1} / {announcements.length}
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveBroadcastIndex(prev => (prev + 1) % announcements.length)}
-                                            className="p-1 rounded-lg hover:bg-amber-500/15 text-amber-700 dark:text-amber-300 cursor-pointer transition-colors"
-                                            title="Next broadcast"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     {/* HR Admin Prompt when No Broadcast is Active */}
                     {(!announcements || announcements.length === 0) && isHrOrSysAdmin && (
