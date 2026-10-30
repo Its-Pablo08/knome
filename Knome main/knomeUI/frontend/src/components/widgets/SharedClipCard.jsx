@@ -65,8 +65,8 @@ export const resolveClipInfo = (post) => {
     let clipId = sc.clipId || sc.id || post.clipId || post.sharedClipId || null;
     const text = typeof post.contentText === 'string' ? post.contentText : (typeof post.content === 'string' ? post.content : '');
     if (!clipId && text) {
-        const idMatch = text.match(/\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i) ||
-            (typeof post.link === 'string' ? post.link.match(/\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i) : null);
+        const idMatch = text.match(/\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i) || 
+                        (typeof post.link === 'string' ? post.link.match(/\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i) : null);
         if (idMatch) clipId = idMatch[1];
     }
 
@@ -119,18 +119,18 @@ export const resolveClipInfo = (post) => {
     const hashtags = sc.hashtags || post.clipHashtags || post.hashtags || null;
 
     // 4. Sharer Info
-    const rawSharerName = sc.sharerName || sc.authorName || post.authorFullName || post.authorName ||
-        authorObj?.fullName || authorObj?.name || (typeof post.author === 'string' ? post.author : '') ||
-        'Colleague';
+    const rawSharerName = sc.sharerName || sc.authorName || post.authorFullName || post.authorName || 
+                          authorObj?.fullName || authorObj?.name || (typeof post.author === 'string' ? post.author : '') || 
+                          'Colleague';
     const sharerName = extractString(rawSharerName, 'Colleague');
 
-    const rawSharerAvatar = sc.sharerAvatar || post.authorProfilePhotoUrl || post.authorAvatar ||
-        authorObj?.avatar || authorObj?.profilePhotoUrl || post.avatar || null;
+    const rawSharerAvatar = sc.sharerAvatar || post.authorProfilePhotoUrl || post.authorAvatar || 
+                            authorObj?.avatar || authorObj?.profilePhotoUrl || post.avatar || null;
     const sharerAvatar = (typeof rawSharerAvatar === 'string' && rawSharerAvatar.trim()) ? rawSharerAvatar.trim() : null;
 
-    const rawSharerRole = sc.sharerRole || post.authorDesignation || post.authorRole ||
-        authorObj?.designation || authorObj?.role || post.role ||
-        'Enterprise Contributor';
+    const rawSharerRole = sc.sharerRole || post.authorDesignation || post.authorRole || 
+                          authorObj?.designation || authorObj?.role || post.role || 
+                          'Enterprise Contributor';
     const sharerRole = extractString(rawSharerRole, 'Enterprise Contributor');
 
     return {
@@ -172,7 +172,7 @@ export default function SharedClipCard({ post }) {
                 setClipDetails(found);
                 return;
             }
-        } catch { }
+        } catch {}
 
         if (typeof clipsApi?.getById === 'function') {
             clipsApi.getById(cid).then(res => {
@@ -180,7 +180,7 @@ export default function SharedClipCard({ post }) {
                 if (data && (data.clipId || data.id) && isMounted) {
                     setClipDetails(data);
                 }
-            }).catch(() => { });
+            }).catch(() => {});
         }
 
         return () => { isMounted = false; };
@@ -204,7 +204,7 @@ export default function SharedClipCard({ post }) {
     const effectiveThumb = resolveMediaUrl(clipDetails?.thumbnailUrl || clipInfo.thumbnailUrl) || clipDetails?.thumbnailUrl || clipInfo.thumbnailUrl;
     const effectiveDuration = clipDetails?.durationSeconds || clipDetails?.duration || clipInfo.duration;
     const durationLabel = formatClipDuration(effectiveDuration);
-
+    
     // Clean and prepare description snippet
     const rawDesc = clipDetails?.description || clipInfo.description || (typeof post?.contentText === 'string' ? post.contentText : (typeof post?.content === 'string' ? post.content : ''));
     let cleanDesc = '';
@@ -237,7 +237,7 @@ export default function SharedClipCard({ post }) {
             aria-label={`Watch shared clip: ${effectiveTitle}`}
         >
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 sm:gap-4">
-
+                
                 {/* Thumbnail Preview */}
                 <div className="relative w-full sm:w-44 md:w-48 h-40 sm:h-32 rounded-xl overflow-hidden bg-slate-900 shrink-0 border border-slate-200/60 dark:border-slate-800/80 shadow-xs">
                     {effectiveThumb ? (

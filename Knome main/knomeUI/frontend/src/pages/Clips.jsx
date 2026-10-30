@@ -193,7 +193,7 @@ export default function Clips() {
                                 }
                             });
                         }
-                    } catch (e) { }
+                    } catch (e) {}
                 }
             }
             return Array.from(map.values());
@@ -234,7 +234,7 @@ export default function Clips() {
                 }));
                 localStorage.setItem('knome_saved_items_custom', JSON.stringify([...nonClipItems, ...clipItems]));
                 window.dispatchEvent(new StorageEvent('storage', { key: 'knome_saved_items_custom' }));
-            } catch (e) { }
+            } catch (e) {}
 
             window.dispatchEvent(new CustomEvent('knome_clips_bookmarks_updated', { detail: savedList }));
         } catch (e) {
@@ -257,7 +257,7 @@ export default function Clips() {
             const existing = getUserUploadedClipsLocal();
             const updated = [newClip, ...existing.filter(c => String(c.clipId) !== String(newClip.clipId))];
             localStorage.setItem('knome_my_uploaded_clips', JSON.stringify(updated));
-        } catch (e) { }
+        } catch (e) {}
     }, [getUserUploadedClipsLocal]);
 
     // Synchronize refs
@@ -281,7 +281,7 @@ export default function Clips() {
                 try {
                     const res = await clipsApi.getMyClips(1, 50);
                     backendMyClips = Array.isArray(res) ? res : (res?.data || []);
-                } catch (e) { }
+                } catch (e) {}
 
                 const localMyClips = getUserUploadedClipsLocal();
                 const myMap = new Map();
@@ -310,7 +310,7 @@ export default function Clips() {
                         : await clipsApi.getFeed(1, 100);
                     const allClips = Array.isArray(res) ? res : (res?.data || []);
                     backendSaved = allClips.filter(c => Boolean(c.isBookmarkedByCurrentUser));
-                } catch (e) { }
+                } catch (e) {}
 
                 const localSaved = getSavedClipsLocal();
                 const savedMap = new Map();
@@ -554,7 +554,7 @@ export default function Clips() {
                 try {
                     vid.pause();
                     vid.currentTime = 0;
-                } catch (e) { }
+                } catch (e) {}
             }
         });
 
@@ -569,7 +569,7 @@ export default function Clips() {
                         func: 'pauseVideo',
                         args: []
                     }), '*');
-                } catch (e) { }
+                } catch (e) {}
             }
         });
 
@@ -595,7 +595,7 @@ export default function Clips() {
                     }
                     setIsPlaying(true);
                     setIsBuffering(false);
-                } catch (e) { }
+                } catch (e) {}
             }
         } else {
             const vid = videoRefs.current[activeIndex];
@@ -659,7 +659,7 @@ export default function Clips() {
                     }));
                 }
             })
-            .catch(() => { });
+            .catch(() => {});
 
         if (!recordedViewsRef.current.has(idStr)) {
             recordedViewsRef.current.add(idStr);
@@ -678,7 +678,7 @@ export default function Clips() {
                 .then((res) => {
                     const newCount = res?.viewCount ?? (typeof res === 'number' ? res : null);
                     if (newCount !== null && newCount !== undefined && newCount > 0) {
-                        setClips(prev => prev.map(c =>
+                        setClips(prev => prev.map(c => 
                             String(c.clipId) === idStr ? { ...c, viewCount: newCount } : c
                         ));
                     }
@@ -840,7 +840,7 @@ export default function Clips() {
             if (vid.paused) {
                 vid.play()
                     .then(() => setIsPlaying(true))
-                    .catch(() => { });
+                    .catch(() => {});
             } else {
                 vid.pause();
                 setIsPlaying(false);
@@ -953,7 +953,7 @@ export default function Clips() {
                 delete map[`clip_${idStr}`];
                 delete map[idStr];
                 localStorage.setItem('knome_item_category_map', JSON.stringify(map));
-            } catch (e) { }
+            } catch (e) {}
 
             setClips(prev => {
                 if (feedTab === 'Saved') {
@@ -1048,7 +1048,7 @@ export default function Clips() {
             localStorage.setItem('knome_my_uploaded_clips', JSON.stringify(uploaded.filter(c => String(c.clipId) !== idStr)));
             const saved = getSavedClipsLocal();
             setSavedClipsLocal(saved.filter(c => String(c.clipId) !== idStr));
-        } catch (e) { }
+        } catch (e) {}
 
         setClips(prev => prev.filter(c => String(c.clipId) !== idStr));
         addToast('Clip deleted successfully.', 'info');
@@ -1058,10 +1058,10 @@ export default function Clips() {
 
     return (
         <div className="h-full w-full bg-white text-slate-800 flex flex-col select-none rounded-2xl overflow-hidden shadow-sm border border-slate-200">
-
+            
             {/* Top Bar Header */}
             <header className="shrink-0 px-4 sm:px-6 py-2.5 bg-white/95 backdrop-blur-md border-b border-slate-200 flex items-center justify-between gap-4 z-40">
-
+                
                 {/* Brand & Feed Sub-tabs */}
                 <div className="flex items-center gap-3 sm:gap-6 overflow-x-auto no-scrollbar">
                     <div className="flex items-center gap-2 shrink-0">
@@ -1085,10 +1085,11 @@ export default function Clips() {
                                     activeIndexRef.current = 0;
                                     if (containerRef.current) containerRef.current.scrollTop = 0;
                                 }}
-                                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition font-semibold cursor-pointer ${feedTab === tab.id
+                                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition font-semibold cursor-pointer ${
+                                    feedTab === tab.id
                                         ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md shadow-pink-500/25'
                                         : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
-                                    }`}
+                                }`}
                             >
                                 <span className="material-symbols-outlined text-sm">{tab.icon}</span>
                                 <span>{tab.label}</span>
@@ -1241,7 +1242,7 @@ export default function Clips() {
                                                                             func: 'playVideo',
                                                                             args: []
                                                                         }), '*');
-                                                                    } catch (e) { }
+                                                                    } catch (e) {}
                                                                 }
                                                             }
                                                         }}
@@ -1354,157 +1355,159 @@ export default function Clips() {
                                                             <span className="material-symbols-outlined text-sm">delete</span>
                                                         </button>
                                                     )}
-                                                    <button
-                                                        type="button"
-                                                        onClick={toggleMute}
-                                                        className="p-2 rounded-xl bg-black/40 backdrop-blur-md text-white/80 hover:text-white transition cursor-pointer"
-                                                        title={isMuted ? "Unmute" : "Mute"}
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">{isMuted ? 'volume_off' : 'volume_up'}</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const el = document.getElementById(`clip-card-${index}`);
-                                                            if (el) {
-                                                                if (!document.fullscreenElement) el.requestFullscreen().catch(() => { });
-                                                                else document.exitFullscreen().catch(() => { });
-                                                            }
-                                                        }}
-                                                        className="p-2 rounded-xl bg-black/40 backdrop-blur-md text-white/80 hover:text-white transition cursor-pointer"
-                                                        title="Fullscreen"
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">fullscreen</span>
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Right Floating Action Overlay Bar */}
-                                            <div className="absolute right-3 bottom-14 flex flex-col items-center gap-4 z-30 pointer-events-auto">
-
-                                                {/* Creator Avatar & Profile Shortcut */}
-                                                <div className="relative mb-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            navigate(`/profile/${clip.createdByUserId}`);
-                                                        }}
-                                                        className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-pink-500 to-rose-500 shadow-xl overflow-hidden transition hover:scale-105 active:scale-95 cursor-pointer"
-                                                        title={`View ${clip.creatorName}'s profile`}
-                                                    >
-                                                        <img
-                                                            src={resolveMediaUrl(clip.creatorAvatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(clip.creatorName || 'User')}&background=ec4899&color=fff`}
-                                                            alt={clip.creatorName}
-                                                            className="w-full h-full object-cover rounded-full"
-                                                        />
-                                                    </button>
-                                                </div>
-
-                                                {/* Like Button */}
-                                                <div className="flex flex-col items-center">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleLike(clip);
-                                                        }}
-                                                        className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer ${clip.isLikedByCurrentUser
-                                                                ? 'bg-rose-500/30 text-rose-500 scale-110'
-                                                                : 'bg-black/50 text-white hover:bg-rose-500/20 hover:text-rose-400'
-                                                            }`}
-                                                        title="Like Clip"
-                                                    >
-                                                        <span className={`material-symbols-outlined text-2xl ${clip.isLikedByCurrentUser ? 'font-fill text-rose-500' : ''}`}>
-                                                            favorite
-                                                        </span>
-                                                    </button>
-                                                    <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
-                                                        {clip.likesCount || 0}
-                                                    </span>
-                                                </div>
-
-                                                {/* Comments Drawer Button */}
-                                                <div className="flex flex-col items-center">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedClipForModal(clip);
-                                                            setIsCommentsOpen(true);
-                                                        }}
-                                                        className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70 flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer"
-                                                        title="Comments"
-                                                    >
-                                                        <span className="material-symbols-outlined text-2xl">chat_bubble</span>
-                                                    </button>
-                                                    <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
-                                                        {clip.commentsCount || 0}
-                                                    </span>
-                                                </div>
-
-                                                {/* Share Modal Button */}
-                                                <div className="flex flex-col items-center">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedClipForModal(clip);
-                                                            setIsShareOpen(true);
-                                                        }}
-                                                        className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70 flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer"
-                                                        title="Share Clip"
-                                                    >
-                                                        <span className="material-symbols-outlined text-2xl">share</span>
-                                                    </button>
-                                                    <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
-                                                        {clip.sharesCount || 0}
-                                                    </span>
-                                                </div>
-
-                                                {/* Bookmark / Save Button — High-reliability dual local & backend save */}
-                                                <div className="flex flex-col items-center">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleBookmark(clip);
-                                                        }}
-                                                        className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer ${clip.isBookmarkedByCurrentUser
-                                                                ? 'bg-amber-500 text-white ring-2 ring-amber-400/50 shadow-amber-500/30'
-                                                                : 'bg-black/50 text-white hover:bg-black/70 hover:text-amber-400'
-                                                            }`}
-                                                        title={clip.isBookmarkedByCurrentUser ? 'Saved' : 'Save Clip'}
-                                                    >
-                                                        <span className={`material-symbols-outlined text-2xl ${clip.isBookmarkedByCurrentUser ? 'font-fill text-white' : ''}`}>
-                                                            bookmark
-                                                        </span>
-                                                    </button>
-                                                </div>
-
-                                                {/* Report Button */}
-                                                {!clip.isMyClip && (
-                                                    <div className="flex flex-col items-center">
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedClipForModal(clip);
-                                                                setIsReportOpen(true);
-                                                            }}
-                                                            className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-rose-500/80 hover:text-white flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer group/report"
-                                                            title="Report Clip"
-                                                        >
-                                                            <span className="material-symbols-outlined text-2xl text-rose-400 group-hover/report:text-white transition-colors">flag</span>
-                                                        </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={toggleMute}
+                                                                className="p-2 rounded-xl bg-black/40 backdrop-blur-md text-white/80 hover:text-white transition cursor-pointer"
+                                                                title={isMuted ? "Unmute" : "Mute"}
+                                                            >
+                                                                <span className="material-symbols-outlined text-sm">{isMuted ? 'volume_off' : 'volume_up'}</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const el = document.getElementById(`clip-card-${index}`);
+                                                                    if (el) {
+                                                                        if (!document.fullscreenElement) el.requestFullscreen().catch(() => {});
+                                                                        else document.exitFullscreen().catch(() => {});
+                                                                    }
+                                                                }}
+                                                                className="p-2 rounded-xl bg-black/40 backdrop-blur-md text-white/80 hover:text-white transition cursor-pointer"
+                                                                title="Fullscreen"
+                                                            >
+                                                                <span className="material-symbols-outlined text-sm">fullscreen</span>
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                )}
 
-                                            </div>
+                                                    {/* Right Floating Action Overlay Bar */}
+                                                    <div className="absolute right-3 bottom-14 flex flex-col items-center gap-4 z-30 pointer-events-auto">
+                                                        
+                                                        {/* Creator Avatar & Profile Shortcut */}
+                                                        <div className="relative mb-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    navigate(`/profile/${clip.createdByUserId}`);
+                                                                }}
+                                                                className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-pink-500 to-rose-500 shadow-xl overflow-hidden transition hover:scale-105 active:scale-95 cursor-pointer"
+                                                                title={`View ${clip.creatorName}'s profile`}
+                                                            >
+                                                                <img
+                                                                    src={resolveMediaUrl(clip.creatorAvatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(clip.creatorName || 'User')}&background=ec4899&color=fff`}
+                                                                    alt={clip.creatorName}
+                                                                    className="w-full h-full object-cover rounded-full"
+                                                                />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Like Button */}
+                                                        <div className="flex flex-col items-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleLike(clip);
+                                                                }}
+                                                                className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer ${
+                                                                    clip.isLikedByCurrentUser
+                                                                        ? 'bg-rose-500/30 text-rose-500 scale-110'
+                                                                        : 'bg-black/50 text-white hover:bg-rose-500/20 hover:text-rose-400'
+                                                                }`}
+                                                                title="Like Clip"
+                                                            >
+                                                                <span className={`material-symbols-outlined text-2xl ${clip.isLikedByCurrentUser ? 'font-fill text-rose-500' : ''}`}>
+                                                                    favorite
+                                                                </span>
+                                                            </button>
+                                                            <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
+                                                                {clip.likesCount || 0}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Comments Drawer Button */}
+                                                        <div className="flex flex-col items-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedClipForModal(clip);
+                                                                    setIsCommentsOpen(true);
+                                                                }}
+                                                                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70 flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer"
+                                                                title="Comments"
+                                                            >
+                                                                <span className="material-symbols-outlined text-2xl">chat_bubble</span>
+                                                            </button>
+                                                            <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
+                                                                {clip.commentsCount || 0}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Share Modal Button */}
+                                                        <div className="flex flex-col items-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedClipForModal(clip);
+                                                                    setIsShareOpen(true);
+                                                                }}
+                                                                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70 flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer"
+                                                                title="Share Clip"
+                                                            >
+                                                                <span className="material-symbols-outlined text-2xl">share</span>
+                                                            </button>
+                                                            <span className="text-[11px] font-bold mt-1 text-white drop-shadow">
+                                                                {clip.sharesCount || 0}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Bookmark / Save Button — High-reliability dual local & backend save */}
+                                                        <div className="flex flex-col items-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleBookmark(clip);
+                                                                }}
+                                                                className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer ${
+                                                                    clip.isBookmarkedByCurrentUser
+                                                                        ? 'bg-amber-500 text-white ring-2 ring-amber-400/50 shadow-amber-500/30'
+                                                                        : 'bg-black/50 text-white hover:bg-black/70 hover:text-amber-400'
+                                                                }`}
+                                                                title={clip.isBookmarkedByCurrentUser ? 'Saved' : 'Save Clip'}
+                                                            >
+                                                                <span className={`material-symbols-outlined text-2xl ${clip.isBookmarkedByCurrentUser ? 'font-fill text-white' : ''}`}>
+                                                                    bookmark
+                                                                </span>
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Report Button */}
+                                                        {!clip.isMyClip && (
+                                                            <div className="flex flex-col items-center">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedClipForModal(clip);
+                                                                        setIsReportOpen(true);
+                                                                    }}
+                                                                    className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-rose-500/80 hover:text-white flex items-center justify-center transition active:scale-90 shadow-xl cursor-pointer group/report"
+                                                                    title="Report Clip"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-2xl text-rose-400 group-hover/report:text-white transition-colors">flag</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                    </div>
 
                                             {/* Bottom Information Overlay */}
                                             <div className="absolute inset-x-0 bottom-0 p-5 pr-20 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-20 flex flex-col gap-2 pointer-events-none">
-
+                                                
                                                 {/* Author Line */}
                                                 <div className="flex items-center gap-2 pointer-events-auto">
                                                     <button
@@ -1535,10 +1538,10 @@ export default function Clips() {
                                                                 key={tIdx}
                                                                 type="button"
                                                                 onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const clean = tag.startsWith('#') ? tag : `#${tag}`;
-                                                                    setSelectedHashtag(clean);
-                                                                    setSearchParams({ tag: clean });
+                                                                  e.stopPropagation();
+                                                                  const clean = tag.startsWith('#') ? tag : `#${tag}`;
+                                                                  setSelectedHashtag(clean);
+                                                                  setSearchParams({ tag: clean });
                                                                 }}
                                                                 className="text-pink-400 hover:text-pink-300 text-xs font-bold transition cursor-pointer"
                                                             >

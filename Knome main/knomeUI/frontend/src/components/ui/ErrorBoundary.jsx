@@ -16,7 +16,7 @@ export default class ErrorBoundary extends Component {
 
     componentDidCatch(error, errorInfo) {
         console.warn('ErrorBoundary captured render error:', error, errorInfo);
-
+        
         // If an error occurred during an in-flight logout, complete the redirection smoothly
         const isLoggingOut = typeof window !== 'undefined' && sessionStorage.getItem('knome_logging_out') === 'true';
         if (isLoggingOut) {

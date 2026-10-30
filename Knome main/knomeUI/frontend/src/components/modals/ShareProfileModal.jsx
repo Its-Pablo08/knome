@@ -9,7 +9,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
     const { currentUser, users: contextUsers } = useUser();
     const [mode, setMode] = useState('menu'); // 'menu' | 'userSearch' | 'communitySelect'
     const [copied, setCopied] = useState(false);
-
+    
     // User search state
     const [userSearchQuery, setUserSearchQuery] = useState('');
     const [allPlatformUsers, setAllPlatformUsers] = useState([]);
@@ -139,7 +139,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                     const rawDept = u.departmentName || u.DepartmentName || u.department || u.Department || '';
 
                     const matchedDetails = (uId && KNOWN_ROSTER_DETAILS[String(uId)]) || (empId && KNOWN_ROSTER_DETAILS[empId.toUpperCase()]);
-                    const matchedInitial = (INITIAL_USERS || []).find(iu =>
+                    const matchedInitial = (INITIAL_USERS || []).find(iu => 
                         (uId && String(iu.userId || iu.id) === String(uId)) ||
                         (empId && iu.employeeId && String(iu.employeeId).toUpperCase() === String(empId).toUpperCase())
                     );
@@ -154,7 +154,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                     const finalRole = (matchedDetails?.roleName) || u.roleName || u.RoleName || u.role || u.Role || matchedInitial?.roleName || 'Employee';
                     const finalAvatar = u.profilePhotoUrl || u.ProfilePhotoUrl || u.avatar || u.authorProfilePhotoUrl || matchedInitial?.avatar || null;
 
-                    const existsIndex = merged.findIndex(m =>
+                    const existsIndex = merged.findIndex(m => 
                         (uId && String(m.userId || m.id) === String(uId)) ||
                         (empId && m.employeeId && String(m.employeeId).toUpperCase() === String(empId).toUpperCase()) ||
                         (finalName && finalName !== 'Employee' && m.name && m.name.toLowerCase() === finalName.toLowerCase())
@@ -281,7 +281,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                 audience: 'Everyone',
                 tags: ['ProfileShare', 'Network']
             });
-        } catch (_) { }
+        } catch (_) {}
 
         // Save to custom feed posts for immediate local visibility
         const existingFeed = JSON.parse(localStorage.getItem('knome_custom_feed_posts') || '[]');
@@ -333,7 +333,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
 
         try {
             await interactionsApi.shareContent('Profile', user.userId || user.id || 1, 'Community', isNaN(commIdNum) ? 1 : commIdNum);
-        } catch (_) { }
+        } catch (_) {}
 
         // Persist to backend database as well
         try {
@@ -393,7 +393,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                 },
                 ...globalPosts
             ]));
-        } catch (_) { }
+        } catch (_) {}
 
         // Dispatch storage & custom events for instant reactivity in CommunityView
         window.dispatchEvent(new StorageEvent('storage', { key: savedPostsKey }));
@@ -417,10 +417,10 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
         try {
             for (const targetUser of selectedUsers) {
                 const targetId = targetUser.id || targetUser.userId;
-
+                
                 // 1. Send backend share interaction
-                await interactionsApi.shareContent('Profile', user.userId || user.id || 1, 'User', targetId).catch(() => { });
-
+                await interactionsApi.shareContent('Profile', user.userId || user.id || 1, 'User', targetId).catch(() => {});
+                
                 // 2. Create backend notification
                 await notificationsApi.create({
                     recipientUserId: targetId,
@@ -428,7 +428,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                     message: `${senderName} shared ${userName}'s profile with you!`,
                     relatedContentType: 'Profile',
                     referenceId: user.userId || user.id || 1
-                }).catch(() => { });
+                }).catch(() => {});
 
                 // 3. Persist local notification so target user sees it immediately in Navbar
                 const existingNotifs = JSON.parse(localStorage.getItem('knome_notifications') || '[]');
@@ -478,7 +478,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
             <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-
+                
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
                     <div className="flex items-center gap-2">
@@ -491,7 +491,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                             {mode === 'menu' ? 'Share Profile' : mode === 'userSearch' ? 'Share with Users' : 'Share to Community'}
                         </h3>
                     </div>
-                    <button
+                    <button 
                         onClick={onClose}
                         className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     >
@@ -501,7 +501,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
 
                 {/* Body */}
                 <div className="p-6 space-y-4">
-
+                    
                     {/* User Mini Card */}
                     <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-3.5">
                         <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white font-bold text-lg flex items-center justify-center shrink-0 shadow-sm overflow-hidden">
@@ -520,7 +520,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                     {mode === 'menu' && (
                         <div className="space-y-2.5 pt-1">
                             {/* Option 1: Share to Community */}
-                            <button
+                            <button 
                                 onClick={() => setMode('communitySelect')}
                                 className="flex items-center justify-between w-full p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 hover:bg-cyan-500/10 dark:hover:bg-cyan-500/10 border border-slate-200/60 dark:border-slate-700/60 transition-all text-left group cursor-pointer"
                             >
@@ -536,7 +536,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                             </button>
 
                             {/* Option 2: Share with Users */}
-                            <button
+                            <button 
                                 onClick={() => setMode('userSearch')}
                                 className="flex items-center justify-between w-full p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 hover:bg-purple-500/10 dark:hover:bg-purple-500/10 border border-slate-200/60 dark:border-slate-700/60 transition-all text-left group cursor-pointer"
                             >
@@ -578,7 +578,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                                         className="w-full pl-9 pr-8 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-cyan-500"
                                     />
                                     {communitySearchQuery && (
-                                        <button
+                                        <button 
                                             onClick={() => setCommunitySearchQuery('')}
                                             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                                         >
@@ -601,10 +601,11 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                                                 <div
                                                     key={cId}
                                                     onClick={() => setSelectedCommunityId(prev => String(prev) === cId ? '' : cId)}
-                                                    className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 group ${isSelected
-                                                            ? 'border-cyan-500 bg-cyan-50/80 dark:bg-cyan-950/40 ring-2 ring-cyan-500/20 shadow-sm'
+                                                    className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 group ${
+                                                        isSelected 
+                                                            ? 'border-cyan-500 bg-cyan-50/80 dark:bg-cyan-950/40 ring-2 ring-cyan-500/20 shadow-sm' 
                                                             : 'border-slate-200/60 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:border-slate-300 dark:hover:border-slate-700'
-                                                        }`}
+                                                    }`}
                                                 >
                                                     <div className="flex items-center gap-3 min-w-0 flex-1">
                                                         <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-slate-200/60 dark:border-slate-700/60 bg-cyan-100 dark:bg-cyan-950/40 relative">
@@ -644,10 +645,11 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                                                     </div>
 
                                                     <div className="shrink-0 flex items-center justify-center pl-1">
-                                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${isSelected
-                                                                ? 'bg-cyan-600 text-white shadow-xs'
+                                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                                                            isSelected 
+                                                                ? 'bg-cyan-600 text-white shadow-xs' 
                                                                 : 'border-2 border-slate-300 dark:border-slate-600 group-hover:border-cyan-400'
-                                                            }`}>
+                                                        }`}>
                                                             {isSelected && (
                                                                 <span className="material-symbols-outlined text-[13px] font-black">check</span>
                                                             )}
@@ -682,7 +684,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                         <div className="space-y-4 pt-1">
                             <div className="relative">
                                 <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
-                                <input
+                                <input 
                                     type="text"
                                     placeholder="Search colleague by name..."
                                     value={userSearchQuery}
@@ -708,13 +710,14 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                                         const isSelected = selectedUsers.some(u => String(u.id || u.userId) === String(targetId));
 
                                         return (
-                                            <div
-                                                key={targetId}
+                                            <div 
+                                                key={targetId} 
                                                 onClick={() => toggleSelectUser(targetUser)}
-                                                className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${isSelected
-                                                        ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800/60 text-purple-600 dark:text-purple-300'
+                                                className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${
+                                                    isSelected 
+                                                        ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800/60 text-purple-600 dark:text-purple-300' 
                                                         : 'bg-slate-50/60 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200/50 dark:border-slate-700/50'
-                                                    }`}
+                                                }`}
                                             >
                                                 <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
                                                     <img src={targetAvatar} alt={targetName} className="w-8 h-8 rounded-full object-cover shrink-0 shadow-xs" />
@@ -730,10 +733,11 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
                                                     </div>
                                                 </div>
 
-                                                <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all shrink-0 ${isSelected
-                                                        ? 'bg-purple-600 border-purple-600 text-white shadow-xs'
+                                                <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all shrink-0 ${
+                                                    isSelected 
+                                                        ? 'bg-purple-600 border-purple-600 text-white shadow-xs' 
                                                         : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
-                                                    }`}>
+                                                }`}>
                                                     {isSelected && (
                                                         <svg className="w-3.5 h-3.5 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />

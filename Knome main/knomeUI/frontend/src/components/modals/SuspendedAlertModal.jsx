@@ -34,14 +34,14 @@ export default function SuspendedAlertModal({ isOpen, user, onOk, reason, suspen
                         else if (/hr\s*admin/i.test(entry.reason)) rawRole = 'HR Admin';
                     }
                 }
-            } catch (e) { }
+            } catch (e) {}
         }
 
         // 3. Check localStorage knome_suspension_requests
         if (!rawRole) {
             try {
                 const reqs = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
-                const found = reqs.find(r =>
+                const found = reqs.find(r => 
                     (uid && Number(r.targetUserId) === Number(uid)) ||
                     (empId && String(r.targetEmployeeId || '').toUpperCase() === empId)
                 );
@@ -49,7 +49,7 @@ export default function SuspendedAlertModal({ isOpen, user, onOk, reason, suspen
                     rawRole = found.reviewedByRole || found.reviewedByName || found.requestedByRole || '';
                     rawName = found.reviewedByName || found.reviewedBy || '';
                 }
-            } catch (e) { }
+            } catch (e) {}
         }
 
         // 4. Check reason prop text
@@ -81,7 +81,7 @@ export default function SuspendedAlertModal({ isOpen, user, onOk, reason, suspen
     return (
         <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
             {/* Modal Dialog Card */}
-            <div
+            <div 
                 role="alertdialog"
                 aria-modal="true"
                 aria-labelledby="suspend-alert-title"
@@ -106,7 +106,7 @@ export default function SuspendedAlertModal({ isOpen, user, onOk, reason, suspen
                 </div>
 
                 {/* Modal Title */}
-                <h2
+                <h2 
                     id="suspend-alert-title"
                     className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-snug mb-2"
                 >
