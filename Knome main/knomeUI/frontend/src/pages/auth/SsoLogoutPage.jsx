@@ -12,7 +12,7 @@ import { useUser } from '../../components/contexts/UserContext';
 export default function SsoLogoutPage() {
     const [searchParams] = useSearchParams();
     const { logout } = useUser();
-    const [status, setStatus] = useState('Logging out of Knome...');
+    const [status, setStatus] = useState('Logging out of TechnoSocial...');
 
     useEffect(() => {
         const doLogout = async () => {

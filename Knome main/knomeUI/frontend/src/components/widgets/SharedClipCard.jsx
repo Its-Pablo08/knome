@@ -46,7 +46,7 @@ export const resolveClipInfo = (post) => {
     if (!post) {
         return {
             clipId: null,
-            title: 'Knome Clip',
+            title: 'TechnoSocial Clip',
             thumbnailUrl: null,
             videoUrl: null,
             duration: null,
@@ -65,8 +65,8 @@ export const resolveClipInfo = (post) => {
     let clipId = sc.clipId || sc.id || post.clipId || post.sharedClipId || null;
     const text = typeof post.contentText === 'string' ? post.contentText : (typeof post.content === 'string' ? post.content : '');
     if (!clipId && text) {
-        const idMatch = text.match(/\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i) || 
-                        (typeof post.link === 'string' ? post.link.match(/\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i) : null);
+        const idMatch = text.match(/\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i) ||
+            (typeof post.link === 'string' ? post.link.match(/\/clips(?:\?id=|\/)([a-zA-Z0-9_-]+)/i) : null);
         if (idMatch) clipId = idMatch[1];
     }
 
@@ -79,7 +79,7 @@ export const resolveClipInfo = (post) => {
     if (!rawTitle && post.title && typeof post.title === 'string' && (post.title.includes('Clip') || post.type === 'clip_share')) {
         rawTitle = post.title.replace(/^🎬\s*(?:Shared Clip:\s*)?/i, '').replace(/"/g, '').trim();
     }
-    const title = extractString(rawTitle, 'Knome Clip');
+    const title = extractString(rawTitle, 'TechnoSocial Clip');
 
     // 3. Thumbnail & Video Url
     let thumbnailUrl = sc.thumbnailUrl || sc.thumbnail || post.clipThumbnail || post.thumbnailUrl || post.thumbnail || null;
@@ -119,18 +119,18 @@ export const resolveClipInfo = (post) => {
     const hashtags = sc.hashtags || post.clipHashtags || post.hashtags || null;
 
     // 4. Sharer Info
-    const rawSharerName = sc.sharerName || sc.authorName || post.authorFullName || post.authorName || 
-                          authorObj?.fullName || authorObj?.name || (typeof post.author === 'string' ? post.author : '') || 
-                          'Colleague';
+    const rawSharerName = sc.sharerName || sc.authorName || post.authorFullName || post.authorName ||
+        authorObj?.fullName || authorObj?.name || (typeof post.author === 'string' ? post.author : '') ||
+        'Colleague';
     const sharerName = extractString(rawSharerName, 'Colleague');
 
-    const rawSharerAvatar = sc.sharerAvatar || post.authorProfilePhotoUrl || post.authorAvatar || 
-                            authorObj?.avatar || authorObj?.profilePhotoUrl || post.avatar || null;
+    const rawSharerAvatar = sc.sharerAvatar || post.authorProfilePhotoUrl || post.authorAvatar ||
+        authorObj?.avatar || authorObj?.profilePhotoUrl || post.avatar || null;
     const sharerAvatar = (typeof rawSharerAvatar === 'string' && rawSharerAvatar.trim()) ? rawSharerAvatar.trim() : null;
 
-    const rawSharerRole = sc.sharerRole || post.authorDesignation || post.authorRole || 
-                          authorObj?.designation || authorObj?.role || post.role || 
-                          'Enterprise Contributor';
+    const rawSharerRole = sc.sharerRole || post.authorDesignation || post.authorRole ||
+        authorObj?.designation || authorObj?.role || post.role ||
+        'Enterprise Contributor';
     const sharerRole = extractString(rawSharerRole, 'Enterprise Contributor');
 
     return {
@@ -172,7 +172,7 @@ export default function SharedClipCard({ post }) {
                 setClipDetails(found);
                 return;
             }
-        } catch {}
+        } catch { }
 
         if (typeof clipsApi?.getById === 'function') {
             clipsApi.getById(cid).then(res => {
@@ -180,7 +180,7 @@ export default function SharedClipCard({ post }) {
                 if (data && (data.clipId || data.id) && isMounted) {
                     setClipDetails(data);
                 }
-            }).catch(() => {});
+            }).catch(() => { });
         }
 
         return () => { isMounted = false; };
@@ -200,11 +200,11 @@ export default function SharedClipCard({ post }) {
         }
     };
 
-    const effectiveTitle = clipDetails?.title || clipInfo.title || 'Knome Clip';
+    const effectiveTitle = clipDetails?.title || clipInfo.title || 'TechnoSocial Clip';
     const effectiveThumb = resolveMediaUrl(clipDetails?.thumbnailUrl || clipInfo.thumbnailUrl) || clipDetails?.thumbnailUrl || clipInfo.thumbnailUrl;
     const effectiveDuration = clipDetails?.durationSeconds || clipDetails?.duration || clipInfo.duration;
     const durationLabel = formatClipDuration(effectiveDuration);
-    
+
     // Clean and prepare description snippet
     const rawDesc = clipDetails?.description || clipInfo.description || (typeof post?.contentText === 'string' ? post.contentText : (typeof post?.content === 'string' ? post.content : ''));
     let cleanDesc = '';
@@ -237,7 +237,7 @@ export default function SharedClipCard({ post }) {
             aria-label={`Watch shared clip: ${effectiveTitle}`}
         >
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 sm:gap-4">
-                
+
                 {/* Thumbnail Preview */}
                 <div className="relative w-full sm:w-44 md:w-48 h-40 sm:h-32 rounded-xl overflow-hidden bg-slate-900 shrink-0 border border-slate-200/60 dark:border-slate-800/80 shadow-xs">
                     {effectiveThumb ? (
@@ -253,7 +253,7 @@ export default function SharedClipCard({ post }) {
                     ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-indigo-900 via-pink-950 to-slate-950 p-2 text-center">
                             <span className="material-symbols-outlined text-pink-400 text-3xl mb-1">movie_filter</span>
-                            <span className="text-[10px] font-bold text-slate-300">Knome Clip</span>
+                            <span className="text-[10px] font-bold text-slate-300">TechnoSocial Clip</span>
                         </div>
                     )}
 
@@ -288,7 +288,7 @@ export default function SharedClipCard({ post }) {
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                             <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-950/40 border border-pink-200 dark:border-pink-800/40 px-2 py-0.5 rounded-md inline-flex items-center gap-1 shadow-2xs">
                                 <span className="material-symbols-outlined text-[13px]">movie_filter</span>
-                                <span>KNOME CLIP</span>
+                                <span>TECHNOSOCIAL CLIP</span>
                             </span>
                             {durationLabel ? (
                                 <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">

@@ -148,7 +148,7 @@ export default function ReportModal({ isOpen, onClose, targetType = 'Post', targ
                                 <span className="material-symbols-outlined text-[32px]">check_circle</span>
                             </div>
                             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Report Submitted</h3>
-                            <p className="text-[13px] text-slate-500 max-w-[250px]">Our moderation team will review this {targetType.toLowerCase()} shortly. Thank you for keeping Knome safe.</p>
+                            <p className="text-[13px] text-slate-500 max-w-[250px]">Our moderation team will review this {targetType.toLowerCase()} shortly. Thank you for keeping TechnoSocial safe.</p>
                         </div>
                     ) : (
                         <>

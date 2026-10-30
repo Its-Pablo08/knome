@@ -112,11 +112,10 @@ export default function MessageWikiCard({ wikiId, isMe, navigate }) {
     // Loading Skeleton
     if (isLoading) {
         return (
-            <div className={`mt-2 rounded-2xl p-2.5 sm:p-3 border animate-pulse select-none max-w-md ${
-                isMe
+            <div className={`mt-2 rounded-2xl p-2.5 sm:p-3 border animate-pulse select-none max-w-md ${isMe
                     ? 'bg-black/20 border-white/20'
                     : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700'
-            }`}>
+                }`}>
                 <div className="flex items-center gap-3">
                     <div className="w-16 h-18 sm:w-20 sm:h-22 rounded-xl bg-slate-300/40 dark:bg-slate-700/60 shrink-0" />
                     <div className="flex-1 space-y-2 min-w-0">
@@ -134,11 +133,10 @@ export default function MessageWikiCard({ wikiId, isMe, navigate }) {
         return (
             <div
                 onClick={handleOpenWiki}
-                className={`mt-2 rounded-2xl overflow-hidden border transition-all duration-200 cursor-pointer group shadow-sm select-none max-w-md ${
-                    isMe
+                className={`mt-2 rounded-2xl overflow-hidden border transition-all duration-200 cursor-pointer group shadow-sm select-none max-w-md ${isMe
                         ? 'bg-black/25 hover:bg-black/35 border-amber-400/40 text-white'
                         : 'bg-amber-50/90 dark:bg-amber-950/40 hover:bg-amber-100/90 dark:hover:bg-amber-900/50 border-amber-200 dark:border-amber-800 text-slate-900 dark:text-white'
-                }`}
+                    }`}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOpenWiki(e); }}
@@ -178,11 +176,10 @@ export default function MessageWikiCard({ wikiId, isMe, navigate }) {
     return (
         <div
             onClick={handleOpenWiki}
-            className={`mt-2 rounded-2xl overflow-hidden border transition-all duration-200 cursor-pointer group shadow-sm select-none max-w-md ${
-                isMe
+            className={`mt-2 rounded-2xl overflow-hidden border transition-all duration-200 cursor-pointer group shadow-sm select-none max-w-md ${isMe
                     ? 'bg-black/25 hover:bg-black/35 border-white/25 text-white backdrop-blur-xs'
                     : 'bg-slate-50 dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-850 border-slate-200 dark:border-slate-700 hover:border-cyan-500/60 dark:hover:border-cyan-500/60 text-slate-900 dark:text-white'
-            }`}
+                }`}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOpenWiki(e); }}
@@ -222,7 +219,7 @@ export default function MessageWikiCard({ wikiId, isMe, navigate }) {
                     <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 dark:text-cyan-300 border border-cyan-500/30">
                             <span className="material-symbols-outlined text-[11px]">menu_book</span>
-                            Knome Wiki
+                            TechnoSocial Wiki
                         </span>
                         <span className={`text-[10.5px] truncate flex items-center gap-1 ${isMe ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'}`}>
                             • {author}
@@ -235,16 +232,14 @@ export default function MessageWikiCard({ wikiId, isMe, navigate }) {
                     </div>
 
                     {/* Wiki Title */}
-                    <p className={`text-xs sm:text-[13.5px] font-bold line-clamp-1 leading-snug group-hover:text-cyan-400 transition-colors ${
-                        isMe ? 'text-white' : 'text-slate-900 dark:text-slate-100'
-                    }`}>
+                    <p className={`text-xs sm:text-[13.5px] font-bold line-clamp-1 leading-snug group-hover:text-cyan-400 transition-colors ${isMe ? 'text-white' : 'text-slate-900 dark:text-slate-100'
+                        }`}>
                         {title}
                     </p>
 
                     {/* Short Description */}
-                    <p className={`text-[11px] line-clamp-2 mt-0.5 leading-relaxed ${
-                        isMe ? 'text-white/75' : 'text-slate-500 dark:text-slate-400'
-                    }`}>
+                    <p className={`text-[11px] line-clamp-2 mt-0.5 leading-relaxed ${isMe ? 'text-white/75' : 'text-slate-500 dark:text-slate-400'
+                        }`}>
                         {description}
                     </p>
 

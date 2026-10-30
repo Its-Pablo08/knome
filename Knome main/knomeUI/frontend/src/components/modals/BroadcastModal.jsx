@@ -108,7 +108,7 @@ export default function BroadcastModal({ isOpen, onClose, initialData = null, br
             icon: 'build',
             label: 'System Maintenance',
             title: 'Scheduled Portal Maintenance',
-            message: 'Knome and internal services will undergo scheduled infrastructure maintenance this Saturday between 11:00 PM and 2:00 AM IST.'
+            message: 'TechnoSocial and internal services will undergo scheduled infrastructure maintenance this Saturday between 11:00 PM and 2:00 AM IST.'
         },
         {
             icon: 'policy',

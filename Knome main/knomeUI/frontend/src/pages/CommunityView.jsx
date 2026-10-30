@@ -46,7 +46,7 @@ const ENTERPRISE_CHANNELS_SEED = {
         category: 'UI/UX & Design Systems',
         adminContact: 'Meghna Tiwari (Design Lead)',
         description: 'Design system specifications, user research findings, interactive prototypes, and UI/UX design reviews across enterprise portals.',
-        rules: ['1. Share constructive design critique.', '2. Adhere to the Knome & MPOnline design system tokens.', '3. Credit design resources appropriately.'],
+        rules: ['1. Share constructive design critique.', '2. Adhere to the TechnoSocial & MPOnline design system tokens.', '3. Credit design resources appropriately.'],
         faq: [
             { q: 'Can non-designers join?', a: 'Yes! Product managers, frontend engineers, and stakeholders are welcome.' }
         ]
@@ -7404,7 +7404,7 @@ export default function CommunityView() {
                                                         Official Architecture Document
                                                     </span>
                                                     <h4 className="text-xl font-bold text-slate-900 dark:text-white mt-1">System Architecture & Integration Overview</h4>
-                                                    <p className="text-xs text-slate-500 mt-0.5">MPOnline Limited Enterprise Knowledge Platform (Knome)</p>
+                                                    <p className="text-xs text-slate-500 mt-0.5">MPOnline Limited Enterprise Knowledge Platform (TechnoSocial)</p>
                                                 </div>
                                             </div>
 
@@ -7415,7 +7415,7 @@ export default function CommunityView() {
                                                         1. Platform Core Architecture
                                                     </h5>
                                                     <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                                                        Knome operates on a decoupled modern architecture combining ASP.NET Core 10 on the backend with Microsoft SQL Server, Serilog partitioned audit streaming, and a high-performance React/Vite web application client.
+                                                        TechnoSocial operates on a decoupled modern architecture combining ASP.NET Core 10 on the backend with Microsoft SQL Server, Serilog partitioned audit streaming, and a high-performance React/Vite web application client.
                                                     </p>
                                                 </div>
 
@@ -7564,7 +7564,7 @@ export default function CommunityView() {
                                                 {[
                                                     { name: 'src/components/ui/DesignSystem.tsx', size: '42 KB', type: 'TypeScript' },
                                                     { name: 'src/styles/theme.config.css', size: '18 KB', type: 'CSS' },
-                                                    { name: 'public/assets/logos/knome_brand.svg', size: '120 KB', type: 'SVG' },
+                                                    { name: 'public/assets/logos/technosocial_brand.svg', size: '120 KB', type: 'SVG' },
                                                     { name: 'README_SETUP_GUIDE.md', size: '8 KB', type: 'Markdown' }
                                                 ].map((item, idx) => (
                                                     <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 text-xs">

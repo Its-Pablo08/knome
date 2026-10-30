@@ -1,15 +1,15 @@
-// Role-Based User Manuals & Enterprise PDF Generation Pipeline for MPOnline Knome
+// Role-Based User Manuals & Enterprise PDF Generation Pipeline for MPOnline TechnoSocial
 // Provides structured operational manuals, standard operating procedures (SOPs), and PDF export.
 
 export const ROLE_USER_MANUALS = {
     employee: {
         roleKey: 'employee',
         title: 'Standard Employee User Manual',
-        docId: 'MPO-KNOME-SOP-EMP-2026',
+        docId: 'MPO-TECHNOSOCIAL-SOP-EMP-2026',
         version: 'v2.4 (2026)',
         classification: 'Internal Workplace Guide',
         lastUpdated: 'September 2026',
-        executiveSummary: 'This manual provides comprehensive standard operating procedures for all MPOnline employees using the Knome Enterprise Knowledge Platform. It covers daily knowledge publishing, articles, multimedia learning channels, community collaboration, post scheduling, DPDP Act privacy safeguards, and karma gamification progression.',
+        executiveSummary: 'This manual provides comprehensive standard operating procedures for all MPOnline employees using the TechnoSocial Enterprise Knowledge Platform. It covers daily knowledge publishing, articles, multimedia learning channels, community collaboration, post scheduling, DPDP Act privacy safeguards, and karma gamification progression.',
         chapters: [
             {
                 chapterNumber: 1,
@@ -19,7 +19,7 @@ export const ROLE_USER_MANUALS = {
                 sections: [
                     {
                         heading: '1.1 Employee Profile Setup',
-                        content: 'Your Knome profile represents your professional identity within MPOnline. Keep your profile up to date by navigating to your Profile page and clicking "Edit Profile".',
+                        content: 'Your TechnoSocial profile represents your professional identity within MPOnline. Keep your profile up to date by navigating to your Profile page and clicking "Edit Profile".',
                         points: [
                             'Designation & Department: Automatically synchronized with MPOnline HRMS records.',
                             'Professional Bio: Summarize your role, core responsibilities, and technical domains.',
@@ -29,7 +29,7 @@ export const ROLE_USER_MANUALS = {
                     },
                     {
                         heading: '1.2 DPDP Act 2023 Privacy Controls',
-                        content: 'In strict compliance with the Digital Personal Data Protection (DPDP) Act 2023, Knome provides self-service data privacy toggles under Edit Profile:',
+                        content: 'In strict compliance with the Digital Personal Data Protection (DPDP) Act 2023, TechnoSocial provides self-service data privacy toggles under Edit Profile:',
                         points: [
                             'Bio Visibility: Toggle whether your personal summary is visible organization-wide or restricted.',
                             'Profile Photo Visibility: Configure avatar display preferences for departmental vs organization-wide views.',
@@ -56,7 +56,7 @@ export const ROLE_USER_MANUALS = {
                     },
                     {
                         heading: '2.2 Attachment Capacities & Media Formats',
-                        content: 'Knome supports high-capacity enterprise file attachments directly inside feed posts:',
+                        content: 'TechnoSocial supports high-capacity enterprise file attachments directly inside feed posts:',
                         points: [
                             'Images: JPEG, PNG, WebP up to 25MB per image.',
                             'Videos: MP4, MOV, WebM up to 500MB with built-in streaming preview.',
@@ -83,7 +83,7 @@ export const ROLE_USER_MANUALS = {
                 sections: [
                     {
                         heading: '3.1 How Post Scheduling Works',
-                        content: 'Knome features an enterprise-grade background scheduling engine allowing you to compose content today and publish at optimal engagement times.',
+                        content: 'TechnoSocial features an enterprise-grade background scheduling engine allowing you to compose content today and publish at optimal engagement times.',
                         steps: [
                             'While composing a post or writing an article, click the Clock (Schedule) icon.',
                             'Choose a quick preset (+1 Min, Tonight 8 PM, Tomorrow 9 AM) or select a custom date and time.',
@@ -116,7 +116,7 @@ export const ROLE_USER_MANUALS = {
                             'Lists: Ordered numbered lists and unordered bulleted checklists.',
                             'Formatting: Blockquotes for highlights and code blocks for technical snippets.',
                             'Cover Banners: High-resolution header images that display prominently in article discovery cards.',
-                            'Read Time Computation: Knome automatically calculates estimated reading minutes based on word count.'
+                            'Read Time Computation: TechnoSocial automatically calculates estimated reading minutes based on word count.'
                         ]
                     },
                     {
@@ -202,7 +202,7 @@ export const ROLE_USER_MANUALS = {
                 sections: [
                     {
                         heading: '8.1 Code of Conduct',
-                        content: 'All interactions on Knome must remain professional, respectful, and constructive. Discriminatory remarks, harassment, unauthorized distribution of confidential client records, or deliberate misinformation will result in disciplinary action.'
+                        content: 'All interactions on TechnoSocial must remain professional, respectful, and constructive. Discriminatory remarks, harassment, unauthorized distribution of confidential client records, or deliberate misinformation will result in disciplinary action.'
                     },
                     {
                         heading: '8.2 Reporting Inappropriate Content',
@@ -216,7 +216,7 @@ export const ROLE_USER_MANUALS = {
     communityAdmin: {
         roleKey: 'communityAdmin',
         title: 'Community Administrator Governance Manual',
-        docId: 'MPO-KNOME-SOP-CADM-2026',
+        docId: 'MPO-TECHNOSOCIAL-SOP-CADM-2026',
         version: 'v2.2 (2026)',
         classification: 'Channel Administration SOP',
         lastUpdated: 'September 2026',
@@ -272,7 +272,7 @@ export const ROLE_USER_MANUALS = {
                 sections: [
                     {
                         heading: '3.1 The 3-Pinned Posts Rule',
-                        content: 'To prevent feed clutter, Knome limits pinned announcements to a maximum of 3 active posts per community at any time.',
+                        content: 'To prevent feed clutter, TechnoSocial limits pinned announcements to a maximum of 3 active posts per community at any time.',
                         points: [
                             'To pin a post: Click the three-dots (...) menu on the relevant post and select "Pin Post".',
                             'Pinned posts display with a distinctive banner at the top of the community feed.',
@@ -305,7 +305,7 @@ export const ROLE_USER_MANUALS = {
                 sections: [
                     {
                         heading: '5.1 Community-Level Suspension vs Global System Suspension',
-                        content: 'Knome maintains a strict two-tier suspension architecture:',
+                        content: 'TechnoSocial maintains a strict two-tier suspension architecture:',
                         points: [
                             'Community Suspension: Restricts an employee from posting, commenting, or interacting strictly inside your specific community. The employee retains full platform access across other communities and company feeds.',
                             'Global System Suspension: Reserved exclusively for System Administrators for severe organization-wide violations.'
@@ -328,11 +328,11 @@ export const ROLE_USER_MANUALS = {
     hrAdmin: {
         roleKey: 'hrAdmin',
         title: 'HR Administrator Operations Manual',
-        docId: 'MPO-KNOME-SOP-HR-2026',
+        docId: 'MPO-TECHNOSOCIAL-SOP-HR-2026',
         version: 'v2.1 (2026)',
         classification: 'HR Governance & Operations SOP',
         lastUpdated: 'September 2026',
-        executiveSummary: 'This manual establishes operational protocols for HR Administrators on the Knome platform. It details end-to-end workflows for managing internal job openings, publishing organization-wide notification broadcasts, reviewing employee community proposals, and monitoring workforce analytics.',
+        executiveSummary: 'This manual establishes operational protocols for HR Administrators on the TechnoSocial platform. It details end-to-end workflows for managing internal job openings, publishing organization-wide notification broadcasts, reviewing employee community proposals, and monitoring workforce analytics.',
         chapters: [
             {
                 chapterNumber: 1,
@@ -432,11 +432,11 @@ export const ROLE_USER_MANUALS = {
     moderator: {
         roleKey: 'moderator',
         title: 'Moderator Content Safety & Media Approvals Manual',
-        docId: 'MPO-KNOME-SOP-MOD-2026',
+        docId: 'MPO-TECHNOSOCIAL-SOP-MOD-2026',
         version: 'v1.0 (2026)',
         classification: 'Content Moderation & Media Safety SOP',
         lastUpdated: 'October 2026',
-        executiveSummary: 'This standard operating procedure defines protocols for Knome Content Moderators. It governs investigations of reported posts and comments, remediation actions, author notifications, reporter confidentiality safeguards, and evaluating employee video and podcast submissions before public or departmental distribution.',
+        executiveSummary: 'This standard operating procedure defines protocols for TechnoSocial Content Moderators. It governs investigations of reported posts and comments, remediation actions, author notifications, reporter confidentiality safeguards, and evaluating employee video and podcast submissions before public or departmental distribution.',
         chapters: [
             {
                 chapterNumber: 1,
@@ -495,11 +495,11 @@ export const ROLE_USER_MANUALS = {
     systemAdmin: {
         roleKey: 'systemAdmin',
         title: 'System Administrator Security & Master Governance Manual',
-        docId: 'MPO-KNOME-SOP-SYS-2026',
+        docId: 'MPO-TECHNOSOCIAL-SOP-SYS-2026',
         version: 'v3.0 (2026)',
         classification: 'Master Security & Governance SOP',
         lastUpdated: 'September 2026',
-        executiveSummary: 'This master standard operating procedure governs System Administrators on Knome. It defines protocols for user identity & role assignment, global account suspensions, content moderation queues, reporter identity confidentiality, immutable audit logging, and master rules/FAQ editing.',
+        executiveSummary: 'This master standard operating procedure governs System Administrators on TechnoSocial. It defines protocols for user identity & role assignment, global account suspensions, content moderation queues, reporter identity confidentiality, immutable audit logging, and master rules/FAQ editing.',
         chapters: [
             {
                 chapterNumber: 1,
@@ -509,7 +509,7 @@ export const ROLE_USER_MANUALS = {
                 sections: [
                     {
                         heading: '1.1 System Authority & Accountability',
-                        content: 'System Administrators hold top-level administrative authority across MPOnline Knome. You are responsible for ensuring high availability, bulletproof cybersecurity, strict access governance, and impartial content moderation.'
+                        content: 'System Administrators hold top-level administrative authority across MPOnline TechnoSocial. You are responsible for ensuring high availability, bulletproof cybersecurity, strict access governance, and impartial content moderation.'
                     },
                     {
                         heading: '1.2 Operational Rules',
@@ -614,13 +614,13 @@ export const ROLE_USER_MANUALS = {
 };
 
 /**
- * Enterprise PDF Exporter for Knome Role Manuals
+ * Enterprise PDF Exporter for TechnoSocial Role Manuals
  * Generates a clean, vector-rendered printable document in a hidden iframe and triggers window.print().
  */
 export function printRoleManualPdf(roleKey, manualData, roleFaqs = [], roleMeta = {}) {
     const manual = manualData || ROLE_USER_MANUALS[roleKey] || ROLE_USER_MANUALS.employee;
     const title = roleMeta.title || manual.title;
-    const docId = manual.docId || `MPO-KNOME-SOP-${roleKey.toUpperCase()}-2026`;
+    const docId = manual.docId || `MPO-TECHNOSOCIAL-SOP-${roleKey.toUpperCase()}-2026`;
     const currentDate = new Date().toLocaleDateString('en-IN', {
         day: '2-digit',
         month: 'long',
@@ -724,13 +724,13 @@ export function printRoleManualPdf(roleKey, manualData, roleFaqs = [], roleMeta 
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>MPOnline_Knome_${title.replace(/\s+/g, '_')}_User_Manual_2026</title>
+    <title>MPOnline_TechnoSocial_${title.replace(/\s+/g, '_')}_User_Manual_2026</title>
     <style>
         @page {
             size: A4 portrait;
             margin: 18mm 15mm 18mm 15mm;
             @bottom-center {
-                content: "MPOnline Limited • Knome Platform Standard Operating Procedure • Page " counter(page);
+                content: "MPOnline Limited • TechnoSocial Platform Standard Operating Procedure • Page " counter(page);
                 font-size: 9px;
                 color: #64748b;
             }
@@ -819,7 +819,7 @@ export function printRoleManualPdf(roleKey, manualData, roleFaqs = [], roleMeta 
                     MPOnline Limited • Government of Madhya Pradesh & TCS Joint Venture
                 </div>
                 <h1 class="doc-title">${title}</h1>
-                <div class="doc-subtitle">Knome Enterprise Knowledge Platform • Standard Operating Procedure (SOP)</div>
+                <div class="doc-subtitle">TechnoSocial Enterprise Knowledge Platform • Standard Operating Procedure (SOP)</div>
                 <div style="margin-top: 6px;">
                     <span class="meta-pill">Document ID: ${docId}</span>
                     <span class="meta-pill">Version: ${manual.version}</span>
@@ -829,7 +829,7 @@ export function printRoleManualPdf(roleKey, manualData, roleFaqs = [], roleMeta 
             </td>
             <td style="vertical-align: top; text-align: right; width: 140px;">
                 <div style="display: inline-block; background: #0f172a; color: #ffffff; padding: 6px 12px; border-radius: 6px; font-weight: 900; font-size: 13px; letter-spacing: 0.5px;">
-                    KNOME
+                    TECHNOSOCIAL
                 </div>
                 <div style="font-size: 9px; color: #64748b; margin-top: 4px; font-weight: 600;">
                     MPOnline Knowledge System

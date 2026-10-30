@@ -1011,7 +1011,7 @@ export default function SavedContent() {
                                                 </div>
                                             )}
                                             <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                                                <HighlightText text={extractText(item.authorName || item.authorFullName || 'Knome Member')} query={searchQuery} />
+                                                <HighlightText text={extractText(item.authorName || item.authorFullName || 'TechnoSocial Member')} query={searchQuery} />
                                             </span>
                                             {item.authorRole && (
                                                 <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">

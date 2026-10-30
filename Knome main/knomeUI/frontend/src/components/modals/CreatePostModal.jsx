@@ -2020,7 +2020,7 @@ const FILE_LIMITS = {
                                             Schedule Publication
                                         </h4>
                                         <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
-                                            Automated Knome platform delivery
+                                            Automated TechnoSocial platform delivery
                                         </p>
                                     </div>
                                 </div>

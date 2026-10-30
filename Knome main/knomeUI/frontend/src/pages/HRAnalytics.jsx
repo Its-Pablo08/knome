@@ -177,9 +177,9 @@ export default function HRAnalytics() {
         return (
             <main className="flex-1 p-margin-page bg-background flex flex-col items-center justify-center min-h-[60vh] text-center">
                 <h1 className="text-2xl font-bold text-red-500 mb-2">Authentication Required</h1>
-                <p className="text-slate-500 max-w-md">Please sign in to your Knome workforce account to view enterprise analytics.</p>
+                <p className="text-slate-500 max-w-md">Please sign in to your TechnoSocial workforce account to view enterprise analytics.</p>
                 <Link to="/" className="mt-4 px-4 py-2 bg-electric-blue text-white rounded-lg font-bold text-sm">
-                    Return to Knome
+                    Return to TechnoSocial
                 </Link>
             </main>
         );
@@ -292,12 +292,12 @@ export default function HRAnalytics() {
         let headers = [];
         let rows = [];
         const currentReport = reportsList.find(r => r.id === activeReport);
-        let filename = `knome_${(currentReport?.name || activeReport).toLowerCase().replace(/\s+/g, '_')}_report`;
+        let filename = `technosocial_${(currentReport?.name || activeReport).toLowerCase().replace(/\s+/g, '_')}_report`;
 
         if (activeReport === 'RPT-01') {
             headers = ['Metric', 'Live Value', 'Description'];
             rows = [
-                ['Total Registered Employees', totalUsersCount.toLocaleString(), 'Total accounts registered in Knome DB'],
+                ['Total Registered Employees', totalUsersCount.toLocaleString(), 'Total accounts registered in TechnoSocial DB'],
                 ['Active Platform Users', activeUsersCount.toLocaleString(), 'Users currently active and enabled'],
                 ['Suspended Accounts', suspendedUsersCount.toLocaleString(), 'Restricted or deactivated accounts'],
                 ['Total Karma Points Distributed', `${totalKarmaDistributed.toLocaleString()} Points`, 'Total engagement karma recorded'],
@@ -472,7 +472,7 @@ export default function HRAnalytics() {
             {loading && (
                 <div className="py-12 flex flex-col items-center justify-center text-slate-400">
                     <div className="w-10 h-10 border-4 border-electric-blue border-t-transparent rounded-full animate-spin mb-3"></div>
-                    <p className="text-xs font-semibold">Syncing live analytics metrics from Knome platform...</p>
+                    <p className="text-xs font-semibold">Syncing live analytics metrics from TechnoSocial platform...</p>
                 </div>
             )}
 

@@ -17,14 +17,14 @@ import { addRestrictedWord } from '../utils/restrictedWords';
 import { getSystemConfig, saveSystemConfig, DEFAULT_SYSTEM_CONFIG } from '../utils/systemConfig';
 import { getContentTypeConfig } from '../utils/contentTypeConfig';
 import ContentTypeBadge from '../components/ui/ContentTypeBadge';
-import { 
-    getNoticePeriodConfig, 
-    saveNoticePeriodConfig, 
-    setNoticePeriodPolicyEnabled, 
-    isEmployeeMarkedInNotice, 
-    markEmployeeInNotice, 
-    unmarkEmployeeFromNotice, 
-    toggleEmployeeNoticeStatus, 
+import {
+    getNoticePeriodConfig,
+    saveNoticePeriodConfig,
+    setNoticePeriodPolicyEnabled,
+    isEmployeeMarkedInNotice,
+    markEmployeeInNotice,
+    unmarkEmployeeFromNotice,
+    toggleEmployeeNoticeStatus,
     getMarkedEmployeesList,
     NOTICE_PERIOD_CONFIG_KEY,
     NOTICE_PERIOD_EVENT,
@@ -70,7 +70,7 @@ const getFallbackPostContent = (report) => {
     try {
         const cacheObj = JSON.parse(localStorage.getItem('knome_reported_posts_cache') || '{}');
         cached = cacheObj[`${report.contentType}_${report.contentId}`] || cacheObj[`Post_${report.contentId}`] || cacheObj[report.contentId] || null;
-    } catch {}
+    } catch { }
 
     const KNOWN_REPORTED_POSTS = {
         10130: {
@@ -155,8 +155,8 @@ const getFallbackPostContent = (report) => {
 
     const known = KNOWN_REPORTED_POSTS[report.contentId] || null;
 
-    const isGenericAuthor = !report.reportedUserName || 
-        report.reportedUserName.toLowerCase().includes('reported author') || 
+    const isGenericAuthor = !report.reportedUserName ||
+        report.reportedUserName.toLowerCase().includes('reported author') ||
         report.reportedUserName.toLowerCase().includes('content author');
 
     const USER_NAME_FALLBACKS = {
@@ -173,15 +173,15 @@ const getFallbackPostContent = (report) => {
         1057: 'Deepak Simrodia'
     };
 
-    const resolvedAuthor = cached?.authorName 
+    const resolvedAuthor = cached?.authorName
         || (!isGenericAuthor ? report.reportedUserName : null)
         || known?.authorName
         || (report.reportedUserId ? USER_NAME_FALLBACKS[report.reportedUserId] : null)
         || (report.reportedUserId ? `User #${report.reportedUserId}` : (report.reportedUserName || 'Content Author'));
 
-    const resolvedAuthorId = cached?.authorUserId 
-        || report.reportedUserId 
-        || known?.authorUserId 
+    const resolvedAuthorId = cached?.authorUserId
+        || report.reportedUserId
+        || known?.authorUserId
         || null;
 
     const isBoilerplateContent = !report.postContentSnippet ||
@@ -191,10 +191,10 @@ const getFallbackPostContent = (report) => {
         report.postContentSnippet.startsWith('Reported Harassment content for Post') ||
         report.postContentSnippet.startsWith('Reported ');
 
-    const resolvedContent = cached?.content 
+    const resolvedContent = cached?.content
         || (!isBoilerplateContent ? report.postContentSnippet : null)
         || known?.content
-        || report.postContentSnippet 
+        || report.postContentSnippet
         || `Flagged content for ${report.contentType} #${report.contentId}. Flagged for internal moderation review.`;
 
     return {
@@ -334,7 +334,7 @@ export const renderScoreBadge = (aiScore, reasonCode, snippet) => {
     }
 
     return (
-        <span 
+        <span
             title={`AI Auto-Detection Score: ${formattedScore} (Auto-detected from reason '${reasonCode || 'General'}' and content heuristics)`}
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-bold whitespace-nowrap ${badgeClass}`}
         >
@@ -352,16 +352,16 @@ export default function AdminConsole() {
 
     // Strict Role-Based Authorization — Console access for System Admins and Content Moderators
     const isSysAdmin = ['SYSADM', 'SYSTEM ADMIN', 'SYSTEM ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
-                       ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
-                       (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMINISTRATOR', 'SYSTEMADMIN', 'SYSTEM ADMIN'].includes(String(r || '').toUpperCase())));
+        ['SYSTEM ADMINISTRATOR', 'SYSTEM ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['SYSADM', 'SYSTEM ADMINISTRATOR', 'SYSTEMADMIN', 'SYSTEM ADMIN'].includes(String(r || '').toUpperCase())));
 
     const isModerator = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
-                        ['MODERATOR'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
-                        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r || '').toUpperCase())));
+        ['MODERATOR'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['MOD', 'MODERATOR'].includes(String(r || '').toUpperCase())));
 
     const isHrAdmin = ['HRADM', 'HR ADMIN', 'HR ADMINISTRATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
-                      ['HR ADMINISTRATOR', 'HR ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
-                      (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['HRADM', 'HR ADMINISTRATOR', 'HRADMIN', 'HR ADMIN'].includes(String(r || '').toUpperCase())));
+        ['HR ADMINISTRATOR', 'HR ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => ['HRADM', 'HR ADMINISTRATOR', 'HRADMIN', 'HR ADMIN'].includes(String(r || '').toUpperCase())));
 
     const isAuthorized = isSysAdmin || isHrAdmin || isModerator;
     const canManageSuspensions = isHrAdmin || isSysAdmin;
@@ -381,8 +381,8 @@ export default function AdminConsole() {
     const queryTab = searchParams.get('tab');
 
     // Default activeTab
-    const defaultInitialTab = (isHrAdmin && !isSysAdmin) 
-        ? ((queryTab && queryTab !== 'role_requests') ? queryTab : 'users') 
+    const defaultInitialTab = (isHrAdmin && !isSysAdmin)
+        ? ((queryTab && queryTab !== 'role_requests') ? queryTab : 'users')
         : (isModerator && !isSysAdmin)
             ? 'moderation'
             : isSysAdmin
@@ -463,7 +463,7 @@ export default function AdminConsole() {
     const [reports, setReports] = useState([]);
     const [isLoadingReports, setIsLoadingReports] = useState(false);
     const [selectedReportIds, setSelectedReportIds] = useState([]);
-    
+
     // Filters Toolbar State
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
@@ -472,7 +472,7 @@ export default function AdminConsole() {
     const [communityFilter, setCommunityFilter] = useState('All');
     const [dateRangeFilter, setDateRangeFilter] = useState('All');
     const [moderatorFilter, setModeratorFilter] = useState('All');
-    
+
     // Active Metric Card Selection State
     const [activeMetricCard, setActiveMetricCard] = useState('total');
 
@@ -507,8 +507,8 @@ export default function AdminConsole() {
         const handleNoticeConfigChange = () => {
             setNoticePeriodConfig(getNoticePeriodConfig());
         };
-        syncNoticePeriodFromBackend().catch(() => {});
-        const handleFocusNoticeSync = () => syncNoticePeriodFromBackend().catch(() => {});
+        syncNoticePeriodFromBackend().catch(() => { });
+        const handleFocusNoticeSync = () => syncNoticePeriodFromBackend().catch(() => { });
         window.addEventListener('knome:notice-period-updated', handleNoticeConfigChange);
         window.addEventListener('focus', handleFocusNoticeSync);
         window.addEventListener(NOTICE_PERIOD_EVENT, handleNoticeConfigChange);
@@ -554,8 +554,8 @@ export default function AdminConsole() {
         const updated = setNoticePeriodPolicyEnabled(newVal);
         setNoticePeriodConfig(updated);
         showToast(
-            newVal 
-                ? 'Notice Period Guard ENABLED: Forward post-scheduling is disabled for employees in notice period.' 
+            newVal
+                ? 'Notice Period Guard ENABLED: Forward post-scheduling is disabled for employees in notice period.'
                 : 'Notice Period Guard DISABLED: Post-scheduling privileges restored for all employees.',
             newVal ? 'warning' : 'info'
         );
@@ -606,8 +606,8 @@ export default function AdminConsole() {
         }
         setSelectedNoticeUserKeys([]);
         showToast(
-            markAsInNotice 
-                ? `Marked ${selectedNoticeUserKeys.length} employee(s) as "In Notice Period". Post-scheduling disabled.` 
+            markAsInNotice
+                ? `Marked ${selectedNoticeUserKeys.length} employee(s) as "In Notice Period". Post-scheduling disabled.`
                 : `Removed ${selectedNoticeUserKeys.length} employee(s) from Notice Period. Post-scheduling restored. ✨`,
             markAsInNotice ? 'warning' : 'success'
         );
@@ -673,7 +673,7 @@ export default function AdminConsole() {
         try {
             const stored = JSON.parse(localStorage.getItem('knome_pending_role_requests') || localStorage.getItem('eh_role_requests') || '[]');
             if (Array.isArray(stored) && stored.length > 0) return stored;
-        } catch (e) {}
+        } catch (e) { }
         return [
             { requestId: 101, employeeId: 'MPO118', fullName: 'Raman Kumar', email: 'raman.kumar@mponline.gov.in', departmentName: 'HR', designation: 'Software Engineer', requestedRoleCode: 'CADM', status: 'Pending', assignedRoleName: 'Community Admin', createdAt: new Date(Date.now() - 3600000 * 2).toISOString() },
             { requestId: 102, employeeId: 'MPO119', fullName: 'Rishabh Pandey', email: 'rishabh.pandey@mponline.gov.in', departmentName: 'Information Technology', designation: 'Software Engineer', requestedRoleCode: 'CADM', status: 'Pending', assignedRoleName: 'Community Admin', createdAt: new Date(Date.now() - 3600000 * 4).toISOString() },
@@ -694,7 +694,7 @@ export default function AdminConsole() {
         try {
             const stored = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
             if (Array.isArray(stored) && stored.length > 0) return stored;
-        } catch (e) {}
+        } catch (e) { }
         return [];
     });
     const [suspensionRequestStatusFilter, setSuspensionRequestStatusFilter] = useState('All');
@@ -735,7 +735,7 @@ export default function AdminConsole() {
             try {
                 const stored = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
                 if (Array.isArray(stored)) localRequests = stored;
-            } catch (e) {}
+            } catch (e) { }
 
             const requestMap = new Map();
             // Local items first
@@ -753,13 +753,13 @@ export default function AdminConsole() {
             setSuspensionRequests(mergedList);
             try {
                 localStorage.setItem('knome_suspension_requests', JSON.stringify(mergedList));
-            } catch (e) {}
+            } catch (e) { }
 
             // Synchronize usersList state with any approved suspensions
             let activeOverrides = {};
             try {
                 activeOverrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
-            } catch (e) {}
+            } catch (e) { }
 
             const approvedUserIds = new Set(
                 mergedList.filter(r => {
@@ -842,7 +842,7 @@ export default function AdminConsole() {
             if (Array.isArray(localMembers) && localMembers.length > 0) {
                 return localMembers.length;
             }
-        } catch (e) {}
+        } catch (e) { }
         if (typeof comm === 'object' && (comm.membersCount !== undefined || comm.memberCount !== undefined)) {
             return comm.membersCount || comm.memberCount || 1;
         }
@@ -852,7 +852,7 @@ export default function AdminConsole() {
     // Helper to resolve the user's actual assigned role accurately (Strictly Single Role)
     const getUserAssignedRole = (u) => {
         if (!u) return 'Employee';
-        
+
         // 0. Check localStorage role overrides first (authoritative saved edits)
         try {
             const overrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
@@ -870,7 +870,7 @@ export default function AdminConsole() {
                 if (firstNonEmp) return firstNonEmp;
                 return 'Employee';
             }
-        } catch (e) {}
+        } catch (e) { }
 
         // 1. Check explicit roleName on user
         if (u.roleName) {
@@ -897,7 +897,7 @@ export default function AdminConsole() {
         // 3. Check role requests approved in localStorage (knome_pending_role_requests / eh_role_requests)
         try {
             const roleReqs = JSON.parse(localStorage.getItem('knome_pending_role_requests') || localStorage.getItem('eh_role_requests') || '[]');
-            const req = roleReqs.find(r => 
+            const req = roleReqs.find(r =>
                 (u.employeeId && r.employeeId && r.employeeId.toUpperCase() === u.employeeId.toUpperCase()) ||
                 (u.userId && String(r.userId || r.id) === String(u.userId)) ||
                 (u.id && String(r.userId || r.id) === String(u.id)) ||
@@ -911,7 +911,7 @@ export default function AdminConsole() {
                 if (str.includes('community') || str.includes('cadm')) return 'Community Admin';
                 return req.assignedRoleName;
             }
-        } catch (e) {}
+        } catch (e) { }
 
         // 4. Check user context or local role code
         if (u.role) {
@@ -1079,7 +1079,7 @@ export default function AdminConsole() {
             id: 'seed_pending_article_1',
             mediaType: 'Article',
             title: 'Enterprise Microservices Observability with OpenTelemetry',
-            description: 'A comprehensive technical overview of implementing distributed tracing, Serilog integration, and correlation IDs across Knome services.',
+            description: 'A comprehensive technical overview of implementing distributed tracing, Serilog integration, and correlation IDs across TechnoSocial services.',
             thumbnail: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=90&w=1200',
             category: 'Architecture',
             authorName: 'Amit Saxena',
@@ -1168,12 +1168,12 @@ export default function AdminConsole() {
     const refreshPendingCommunityApprovals = async () => {
         try {
             const res = await communitiesApi.getPending({ noCache: true });
-            const apiPending = Array.isArray(res) 
-                ? res 
-                : (Array.isArray(res?.data) 
-                    ? res.data 
-                    : (Array.isArray(res?.data?.data) 
-                        ? res.data.data 
+            const apiPending = Array.isArray(res)
+                ? res
+                : (Array.isArray(res?.data)
+                    ? res.data
+                    : (Array.isArray(res?.data?.data)
+                        ? res.data.data
                         : []));
             if (Array.isArray(apiPending)) {
                 const mapped = apiPending.map(c => ({
@@ -1201,19 +1201,19 @@ export default function AdminConsole() {
                     const approvedCustomIds = new Set(approvedCustomComms.filter(c => c.status === 'Approved' || c.isApproved).map(c => String(c.id)));
                     const approvedCustomNames = new Set(approvedCustomComms.filter(c => c.status === 'Approved' || c.isApproved).map(c => (c.name || '').toLowerCase().trim()));
 
-                    const preservedLocal = localList.filter(l => 
+                    const preservedLocal = localList.filter(l =>
                         !approvedCustomIds.has(String(l.id)) &&
                         !approvedCustomNames.has((l.name || '').toLowerCase().trim()) &&
                         l.status !== 'Approved' &&
                         l.status !== 'Rejected' &&
-                        !activeApiIds.has(String(l.id)) && 
+                        !activeApiIds.has(String(l.id)) &&
                         !activeApiNames.has((l.name || '').toLowerCase().trim())
                     );
                     const merged = [...mapped, ...preservedLocal];
                     localStorage.setItem('knome_pending_community_approvals', JSON.stringify(merged));
                     setPendingCommunityApprovals(merged);
                     return;
-                } catch (_) {}
+                } catch (_) { }
 
                 setPendingCommunityApprovals(mapped);
                 return;
@@ -1249,7 +1249,7 @@ export default function AdminConsole() {
             if (modified) {
                 localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
             }
-        } catch (e) {}
+        } catch (e) { }
     }, []);
 
     useEffect(() => {
@@ -1276,7 +1276,7 @@ export default function AdminConsole() {
         try {
             await communitiesApi.approve(comm.id);
             if (Array.isArray(comm.invitedUserIds) && comm.invitedUserIds.length > 0) {
-                await communitiesApi.addMembers(comm.id, comm.invitedUserIds).catch(() => {});
+                await communitiesApi.addMembers(comm.id, comm.invitedUserIds).catch(() => { });
             }
         } catch (apiErr) {
             console.warn('Backend community approve failed, continuing with fallback:', apiErr);
@@ -1312,7 +1312,7 @@ export default function AdminConsole() {
         try {
             const customUsers = JSON.parse(localStorage.getItem('knome_custom_users') || '[]');
             if (Array.isArray(customUsers)) allUsersPool.push(...customUsers);
-        } catch (err) {}
+        } catch (err) { }
 
         if (Array.isArray(comm.invitedUserIds) && comm.invitedUserIds.length > 0) {
             comm.invitedUserIds.forEach(tId => {
@@ -1335,7 +1335,7 @@ export default function AdminConsole() {
                             { id: comm.id, name: comm.name, status: 'joined', joinedAt: new Date().toISOString() },
                             ...targetUserJoined.filter(c => String(c.id) !== String(comm.id))
                         ]));
-                    } catch (err) {}
+                    } catch (err) { }
                 }
             });
         }
@@ -1404,7 +1404,7 @@ export default function AdminConsole() {
         try {
             const existing = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
             localStorage.setItem('knome_audit_trail', JSON.stringify([commLog, ...existing]));
-        } catch (e) {}
+        } catch (e) { }
 
         showToast(`✨ Community "${comm.name}" has been approved and published live!`);
         refreshPendingCommunityApprovals();
@@ -1481,7 +1481,7 @@ export default function AdminConsole() {
         try {
             const existing = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
             localStorage.setItem('knome_audit_trail', JSON.stringify([commRejectLog, ...existing]));
-        } catch (e) {}
+        } catch (e) { }
 
         showToast(`Community request for "${comm.name}" was rejected.`);
         refreshPendingCommunityApprovals();
@@ -1521,12 +1521,12 @@ export default function AdminConsole() {
             const itemMediaType = (mediaItem.mediaType || mediaItem.type || '').toLowerCase();
 
             if (itemMediaType === 'video') {
-                const categoryId = mediaItem.dto?.categoryId 
-                    ? parseInt(mediaItem.dto.categoryId, 10) 
+                const categoryId = mediaItem.dto?.categoryId
+                    ? parseInt(mediaItem.dto.categoryId, 10)
                     : (mediaItem.categoryId ? parseInt(mediaItem.categoryId, 10) : (
                         mediaItem.category === 'Townhalls' ? 14 :
-                        mediaItem.category === 'Engineering Tech Talks' ? 15 :
-                        mediaItem.category === 'Leadership Updates' ? 16 : 13
+                            mediaItem.category === 'Engineering Tech Talks' ? 15 :
+                                mediaItem.category === 'Leadership Updates' ? 16 : 13
                     ));
                 const postDto = mediaItem.dto ? {
                     ...mediaItem.dto,
@@ -1556,7 +1556,7 @@ export default function AdminConsole() {
                         if (postDto.title) durationMap[postDto.title] = mediaItem.duration;
                         if (createdVideo?.videoId) durationMap[createdVideo.videoId] = mediaItem.duration;
                         localStorage.setItem('knome_video_durations', JSON.stringify(durationMap));
-                    } catch (e) {}
+                    } catch (e) { }
                 }
                 window.dispatchEvent(new CustomEvent('video-published', { detail: createdVideo }));
                 window.dispatchEvent(new CustomEvent('knome_video_published', { detail: createdVideo }));
@@ -1641,7 +1641,7 @@ export default function AdminConsole() {
                     try {
                         const existingImp = JSON.parse(localStorage.getItem('knome_imported_yt_videos') || '[]');
                         localStorage.setItem('knome_imported_yt_videos', JSON.stringify([...mediaItem.customVideos, ...existingImp]));
-                    } catch (e) {}
+                    } catch (e) { }
                 }
                 const approvedSeries = {
                     ...mediaItem.seriesData,
@@ -1663,8 +1663,8 @@ export default function AdminConsole() {
             localStorage.setItem('knome_pending_media_approvals', JSON.stringify(updated));
             const itemTypeLower = (mediaItem.mediaType || mediaItem.type || '').toLowerCase();
             const ruleKey = (itemTypeLower === 'video') ? 'VIDEO' :
-                            (itemTypeLower === 'podcast' || itemTypeLower === 'audio') ? 'PODCAST' :
-                            (itemTypeLower === 'article') ? 'ARTICLE' : 'WIKI';
+                (itemTypeLower === 'podcast' || itemTypeLower === 'audio') ? 'PODCAST' :
+                    (itemTypeLower === 'article') ? 'ARTICLE' : 'WIKI';
             const defaultPoints = 8; // Official Karma rule: +8 pts per approved submission (Max 24 pts/day)
 
             // 1. Award Karma Points ONLY to the user who submitted (Idempotent: credited exactly once)
@@ -1675,7 +1675,7 @@ export default function AdminConsole() {
             if (!alreadyAwarded && targetAuthorId) {
                 localStorage.setItem(karmaAwardKey, new Date().toISOString());
                 if (awardRuleKarma) {
-                    const res = awardRuleKarma(targetAuthorId, ruleKey, { 
+                    const res = awardRuleKarma(targetAuthorId, ruleKey, {
                         customTitle: `Approved ${mediaItem.mediaType || 'Media'}: "${mediaItem.title}"`,
                         overridePoints: 8
                     });
@@ -1687,7 +1687,7 @@ export default function AdminConsole() {
                 // For non-podcasts, also persist to backend database if numericAuthorId exists
                 // (Note: for Podcasts, backend CreatePodcastAsync already awarded points in database upon publication)
                 if (numericAuthorId && ruleKey !== 'PODCAST' && karmaApi?.awardKarma) {
-                    karmaApi.awardKarma(numericAuthorId, `Approved ${mediaItem.mediaType || 'Media'}`, 8, mediaItem.mediaType, mediaItem.id).catch(() => {});
+                    karmaApi.awardKarma(numericAuthorId, `Approved ${mediaItem.mediaType || 'Media'}`, 8, mediaItem.mediaType, mediaItem.id).catch(() => { });
                 }
 
                 window.dispatchEvent(new CustomEvent('karma-updated', {
@@ -1735,7 +1735,7 @@ export default function AdminConsole() {
             try {
                 const existing = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
                 localStorage.setItem('knome_audit_trail', JSON.stringify([approvedLog, ...existing]));
-            } catch (e) {}
+            } catch (e) { }
 
             showToast(`✅ ${mediaItem.mediaType} "${mediaItem.title}" approved & published! +${pointsAwarded} Karma awarded to ${mediaItem.authorName || 'Author'}.`);
         } catch (err) {
@@ -1758,7 +1758,7 @@ export default function AdminConsole() {
                     tags: mediaItem.tags || mediaItem.dto?.tags || [],
                     attachmentUrls: mediaItem.dto?.attachmentUrls || []
                 };
-                await apiClient.put(`/articles/${articleId}`, updateDto).catch(() => {});
+                await apiClient.put(`/articles/${articleId}`, updateDto).catch(() => { });
                 window.dispatchEvent(new CustomEvent('article-rejected'));
             } else if (mediaItem.mediaType === 'Wiki') {
                 const wikiId = mediaItem.wikiId || mediaItem.dto?.wikiId || (typeof mediaItem.id === 'string' ? mediaItem.id.replace('pending_wiki_', '') : mediaItem.id);
@@ -1771,7 +1771,7 @@ export default function AdminConsole() {
                     tags: mediaItem.tags || mediaItem.dto?.tags || [],
                     changeSummary: 'Rejected by Moderator'
                 };
-                await wikiApi.updateWiki(wikiId, updatePayload).catch(() => {});
+                await wikiApi.updateWiki(wikiId, updatePayload).catch(() => { });
                 window.dispatchEvent(new CustomEvent('wiki-rejected'));
             }
 
@@ -1822,7 +1822,7 @@ export default function AdminConsole() {
         try {
             const existing = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
             localStorage.setItem('knome_audit_trail', JSON.stringify([rejectedLog, ...existing]));
-        } catch (e) {}
+        } catch (e) { }
 
         showToast(`Rejected ${mediaItem.mediaType} "${mediaItem.title}"`);
     };
@@ -1861,12 +1861,12 @@ export default function AdminConsole() {
                         : null;
 
                 if (itemMediaType === 'video' && (m.dto || m.videoData || m.sourceUrl)) {
-                    const categoryId = m.dto?.categoryId 
-                        ? parseInt(m.dto.categoryId, 10) 
+                    const categoryId = m.dto?.categoryId
+                        ? parseInt(m.dto.categoryId, 10)
                         : (m.categoryId ? parseInt(m.categoryId, 10) : (
                             m.category === 'Townhalls' ? 14 :
-                            m.category === 'Engineering Tech Talks' ? 15 :
-                            m.category === 'Leadership Updates' ? 16 : 13
+                                m.category === 'Engineering Tech Talks' ? 15 :
+                                    m.category === 'Leadership Updates' ? 16 : 13
                         ));
                     const postDto = m.dto ? {
                         ...m.dto,
@@ -1941,7 +1941,7 @@ export default function AdminConsole() {
                         tags: m.tags || m.dto?.tags || [],
                         attachmentUrls: m.dto?.attachmentUrls || []
                     };
-                    await apiClient.put(`/articles/${articleId}`, updateDto).catch(() => {});
+                    await apiClient.put(`/articles/${articleId}`, updateDto).catch(() => { });
                 } else if (m.mediaType === 'Wiki') {
                     const wikiId = m.wikiId || m.dto?.wikiId || (typeof m.id === 'string' ? m.id.replace('pending_wiki_', '') : m.id);
                     const updatePayload = {
@@ -1953,7 +1953,7 @@ export default function AdminConsole() {
                         tags: m.tags || m.dto?.tags || [],
                         changeSummary: 'Approved and published by Moderator'
                     };
-                    await wikiApi.updateWiki(wikiId, updatePayload).catch(() => {});
+                    await wikiApi.updateWiki(wikiId, updatePayload).catch(() => { });
                 }
 
                 // Award Karma points to original author exactly once
@@ -1964,8 +1964,8 @@ export default function AdminConsole() {
                         ? parseInt(batchTargetAuthorId.trim(), 10)
                         : null;
                 const batchRuleKey = (itemMediaType === 'video') ? 'VIDEO' :
-                                     (itemMediaType === 'podcast' || itemMediaType === 'audio') ? 'PODCAST' :
-                                     (itemMediaType === 'article') ? 'ARTICLE' : 'WIKI';
+                    (itemMediaType === 'podcast' || itemMediaType === 'audio') ? 'PODCAST' :
+                        (itemMediaType === 'article') ? 'ARTICLE' : 'WIKI';
                 const batchKarmaKey = `knome_media_karma_awarded_${m.id}`;
                 if (!localStorage.getItem(batchKarmaKey) && batchTargetAuthorId) {
                     localStorage.setItem(batchKarmaKey, new Date().toISOString());
@@ -1978,15 +1978,15 @@ export default function AdminConsole() {
                         addKarmaPointsToUser(batchTargetAuthorId, 8, `Approved ${m.mediaType || 'Media'}: "${m.title}"`);
                     }
                     if (batchNumericAuthorId && batchRuleKey !== 'PODCAST' && karmaApi?.awardKarma) {
-                        karmaApi.awardKarma(batchNumericAuthorId, `Approved ${m.mediaType || 'Media'}`, 8, m.mediaType, m.id).catch(() => {});
+                        karmaApi.awardKarma(batchNumericAuthorId, `Approved ${m.mediaType || 'Media'}`, 8, m.mediaType, m.id).catch(() => { });
                     }
                     window.dispatchEvent(new CustomEvent('karma-updated', {
                         detail: { userId: batchTargetAuthorId, points: 8, ruleKey: batchRuleKey }
                     }));
                 }
 
-                await mediaApi.removePendingApproval(m.id).catch(() => {});
-            } catch (e) {}
+                await mediaApi.removePendingApproval(m.id).catch(() => { });
+            } catch (e) { }
         }
         window.dispatchEvent(new CustomEvent('video-published'));
         window.dispatchEvent(new CustomEvent('knome_video_published'));
@@ -2023,7 +2023,7 @@ export default function AdminConsole() {
         try {
             const existing = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
             localStorage.setItem('knome_audit_trail', JSON.stringify([batchLog, ...existing]));
-        } catch (e) {}
+        } catch (e) { }
     };
 
     // ─── APPROVAL LOGS HELPERS & SELECTORS (SCOPED TO SELECTED SECTION) ───
@@ -2166,7 +2166,7 @@ export default function AdminConsole() {
         let localSaved = [];
         try {
             localSaved = JSON.parse(localStorage.getItem('knome_audit_trail') || '[]');
-        } catch (e) {}
+        } catch (e) { }
 
         // Combine auditTrail state, localStorage trail, and baseline default seeds so no recent decision is lost
         const allCandidates = [
@@ -2305,7 +2305,7 @@ export default function AdminConsole() {
         // 4. Search Filter
         if (approvalLogsSearchTerm.trim()) {
             const q = approvalLogsSearchTerm.trim().toLowerCase();
-            list = list.filter(l => 
+            list = list.filter(l =>
                 (l.target && l.target.toLowerCase().includes(q)) ||
                 (l.moderator && l.moderator.toLowerCase().includes(q)) ||
                 (l.action && l.action.toLowerCase().includes(q)) ||
@@ -2363,7 +2363,7 @@ export default function AdminConsole() {
                     remainingDeleted.forEach(id => deletedIds.add(id));
                 }
             }
-            
+
             setCommunityChannels(() => {
                 const existingMap = new Map();
 
@@ -2378,12 +2378,12 @@ export default function AdminConsole() {
                             const isPriv = item.isPrivate || commType.includes('private');
 
                             // Check stored moderation policy from localStorage or assign default
-                            const savedPolicy = localStorage.getItem(`knome_community_policy_${cId}`) 
+                            const savedPolicy = localStorage.getItem(`knome_community_policy_${cId}`)
                                 || (isPriv ? 'Strict' : (isOrg ? 'Standard' : 'Standard'));
 
                             const commName = item.name || '';
                             const commNameLower = commName.toLowerCase();
-                            
+
                             // Determine appropriate icon
                             let icon = 'forum';
                             if (commNameLower.includes('sql') || commNameLower.includes('db')) icon = 'database';
@@ -2394,13 +2394,13 @@ export default function AdminConsole() {
                             else if (isPriv) icon = 'lock';
 
                             // Dynamic reports count from loaded reports
-                            const commReports = (reports || []).filter(r => 
-                                String(r.communityId) === cId || 
+                            const commReports = (reports || []).filter(r =>
+                                String(r.communityId) === cId ||
                                 (r.communityName && r.communityName.toLowerCase() === commNameLower)
                             ).length;
 
                             // Moderator: use locally saved override if any, otherwise API creator/owner
-                            const savedMod = localStorage.getItem(`knome_community_mod_${cId}`) 
+                            const savedMod = localStorage.getItem(`knome_community_mod_${cId}`)
                                 || item.createdByUserName || item.ownerFullName || item.creatorName || 'System Admin';
 
                             existingMap.set(cId, {
@@ -2435,7 +2435,7 @@ export default function AdminConsole() {
                             const isPriv = commType.includes('private');
                             const savedPolicy = localStorage.getItem(`knome_community_policy_${cId}`) || (isPriv ? 'Strict' : 'Standard');
 
-                            const savedMod = localStorage.getItem(`knome_community_mod_${cId}`) 
+                            const savedMod = localStorage.getItem(`knome_community_mod_${cId}`)
                                 || c.creatorName || c.createdBy || 'System Admin';
 
                             existingMap.set(cId, {
@@ -2482,7 +2482,7 @@ export default function AdminConsole() {
             try {
                 localReports = JSON.parse(localStorage.getItem('knome_moderation_reports') || '[]');
                 if (!Array.isArray(localReports)) localReports = [];
-            } catch {}
+            } catch { }
 
             // Prune ephemeral local reports if the backend API already contains records for that content
             if (apiItems.length > 0 && localReports.length > 0) {
@@ -2496,7 +2496,7 @@ export default function AdminConsole() {
                     try {
                         localStorage.setItem('knome_moderation_reports', JSON.stringify(prunedLocal));
                         localReports = prunedLocal;
-                    } catch {}
+                    } catch { }
                 }
             }
 
@@ -2538,11 +2538,11 @@ export default function AdminConsole() {
                 const cIdStr = String(cId);
 
                 const isBlacklisted = (cType.toLowerCase() === 'post' && postBlacklist.includes(cIdStr)) ||
-                                      (cType.toLowerCase() === 'article' && artBlacklist.includes(cIdStr)) ||
-                                      (cType.toLowerCase() === 'video' && vidBlacklist.includes(cIdStr)) ||
-                                      (cType.toLowerCase() === 'podcast' && podBlacklist.includes(cIdStr)) ||
-                                      (cType.toLowerCase() === 'clip' && clipBlacklist.includes(cIdStr)) ||
-                                      (cType.toLowerCase() === 'wiki' && wikiBlacklist.includes(cIdStr));
+                    (cType.toLowerCase() === 'article' && artBlacklist.includes(cIdStr)) ||
+                    (cType.toLowerCase() === 'video' && vidBlacklist.includes(cIdStr)) ||
+                    (cType.toLowerCase() === 'podcast' && podBlacklist.includes(cIdStr)) ||
+                    (cType.toLowerCase() === 'clip' && clipBlacklist.includes(cIdStr)) ||
+                    (cType.toLowerCase() === 'wiki' && wikiBlacklist.includes(cIdStr));
 
                 // All unique report IDs associated with this content
                 const allReportIds = [...new Set(group.map(i => i.reportId).filter(Boolean))];
@@ -2617,7 +2617,7 @@ export default function AdminConsole() {
                 try {
                     const cache = JSON.parse(localStorage.getItem('knome_reported_posts_cache') || '{}');
                     cachedData = cache[`${cType}_${cId}`] || cache[`Post_${cId}`] || cache[cId] || null;
-                } catch {}
+                } catch { }
 
                 const resolvedAuthorUserId = primaryItem.reportedUserId || cachedData?.authorUserId || null;
                 const foundAuthorUser = resolvedAuthorUserId ? usersList.find(u => Number(u.userId || u.id) === Number(resolvedAuthorUserId)) : null;
@@ -2660,9 +2660,9 @@ export default function AdminConsole() {
 
                 const defaultCommunity = cType === 'Wiki' ? 'Wiki & Documentation' :
                     (cType === 'Video' ? 'Video Library' :
-                    (cType === 'Podcast' ? 'Audio Room' :
-                    (cType === 'Clip' ? 'Clips' :
-                    (cType === 'Article' ? 'Knowledge Hub' : 'General Collaboration'))));
+                        (cType === 'Podcast' ? 'Audio Room' :
+                            (cType === 'Clip' ? 'Clips' :
+                                (cType === 'Article' ? 'Knowledge Hub' : 'General Collaboration'))));
 
                 aggregatedList.push({
                     reportId: primaryItem.reportId || (Date.now() + Math.floor(Math.random() * 1000)),
@@ -2705,7 +2705,7 @@ export default function AdminConsole() {
                     setReports(fallbackLocal);
                     return;
                 }
-            } catch {}
+            } catch { }
             setReports([]);
         } finally {
             setIsLoadingReports(false);
@@ -2726,7 +2726,7 @@ export default function AdminConsole() {
 
             // Merge canonical roster from INITIAL_USERS so all platform employees (including Mayur Bansal and Vilash Deshmukh) are present
             INITIAL_USERS.forEach(initU => {
-                const exists = allMerged.some(u => 
+                const exists = allMerged.some(u =>
                     (initU.employeeId && u.employeeId && initU.employeeId.toUpperCase() === u.employeeId.toUpperCase()) ||
                     (initU.userId && String(initU.userId) === String(u.userId || u.id)) ||
                     (initU.id && String(initU.id) === String(u.userId || u.id))
@@ -2741,7 +2741,7 @@ export default function AdminConsole() {
                 const ehStored = JSON.parse(localStorage.getItem('eh_demo_employees') || '[]');
                 if (Array.isArray(ehStored)) {
                     ehStored.forEach(emp => {
-                        const exists = allMerged.some(u => 
+                        const exists = allMerged.some(u =>
                             (emp.employeeId && u.employeeId && emp.employeeId.toUpperCase() === u.employeeId.toUpperCase()) ||
                             (emp.id && String(emp.id) === String(u.userId || u.id))
                         );
@@ -2765,18 +2765,18 @@ export default function AdminConsole() {
                         }
                     });
                 }
-            } catch (e) {}
+            } catch (e) { }
 
             // Load all confirmed suspended accounts from localStorage and approved suspension requests
             let savedSuspended = {};
             try {
                 savedSuspended = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
-            } catch (e) {}
+            } catch (e) { }
 
             let userOverrides = {};
             try {
                 userOverrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
-            } catch (e) {}
+            } catch (e) { }
 
             const approvedSuspUserIds = new Set();
             const approvedSuspEmpIds = new Set();
@@ -2789,7 +2789,7 @@ export default function AdminConsole() {
                         if (r.targetEmployeeId) approvedSuspEmpIds.add(String(r.targetEmployeeId).toUpperCase());
                     }
                 });
-            } catch (e) {}
+            } catch (e) { }
 
             const mapped = allMerged.map(u => {
                 const uidNum = Number(u.userId || u.id);
@@ -2815,10 +2815,10 @@ export default function AdminConsole() {
                     approvedSuspEmpIds.has(empUpper)
                 );
                 const isUserSuspended = isExplicitlySuspended || (!isExplicitlyActive && (
-                    isSuspendedInStorage || 
-                    uWithOverride.isSuspended === true || 
-                    uWithOverride.isPermanentlySuspended === true || 
-                    uWithOverride.isActive === false || 
+                    isSuspendedInStorage ||
+                    uWithOverride.isSuspended === true ||
+                    uWithOverride.isPermanentlySuspended === true ||
+                    uWithOverride.isActive === false ||
                     (uWithOverride.status || '').toLowerCase() === 'suspended'
                 ));
 
@@ -2891,7 +2891,7 @@ export default function AdminConsole() {
                 const items = Array.isArray(res) ? res : (res.items || []);
                 apiLogs = items.map(log => {
                     let detailsText = log.target || log.details || log.targetDetails || log.entityName;
-                    
+
                     if (!detailsText) {
                         if (log.action === 'ActivateUser' || log.action === 'UserActivated') {
                             detailsText = `Reactivated Employee ${log.entityName || log.target || 'User'}`;
@@ -3014,13 +3014,13 @@ export default function AdminConsole() {
             return;
         }
         try {
-            await adminApi.approveRoleRequest(requestId, roleName).catch(() => {});
-            
+            await adminApi.approveRoleRequest(requestId, roleName).catch(() => { });
+
             // Optimistically update local state & localStorage for all matching records
             setRoleRequests(prev => {
-                const updated = prev.map(r => 
+                const updated = prev.map(r =>
                     (r.requestId === requestId || (empId && r.employeeId?.toUpperCase() === empId.toUpperCase()))
-                        ? { ...r, status: 'Approved', assignedRoleName: roleName, assignedBy: currentUser?.name || (isSysAdmin ? 'System Admin' : 'HR Admin') } 
+                        ? { ...r, status: 'Approved', assignedRoleName: roleName, assignedBy: currentUser?.name || (isSysAdmin ? 'System Admin' : 'HR Admin') }
                         : r
                 );
                 localStorage.setItem('knome_pending_role_requests', JSON.stringify(updated));
@@ -3029,14 +3029,14 @@ export default function AdminConsole() {
                     const ehStored = localStorage.getItem('eh_demo_employees');
                     if (ehStored && empId) {
                         const parsed = JSON.parse(ehStored);
-                        const updatedEmps = parsed.map(e => 
+                        const updatedEmps = parsed.map(e =>
                             e.employeeId.toUpperCase() === empId.toUpperCase()
                                 ? { ...e, roles: [roleName], roleStatus: 'Approved', hasApprovedRole: true }
                                 : e
                         );
                         localStorage.setItem('eh_demo_employees', JSON.stringify(updatedEmps));
                     }
-                } catch (e) {}
+                } catch (e) { }
                 return updated;
             });
 
@@ -3056,8 +3056,8 @@ export default function AdminConsole() {
             return;
         }
         try {
-            await adminApi.rejectRoleRequest(requestId, 'Rejected by ' + (isSysAdmin ? 'System Admin' : 'HR Admin')).catch(() => {});
-            
+            await adminApi.rejectRoleRequest(requestId, 'Rejected by ' + (isSysAdmin ? 'System Admin' : 'HR Admin')).catch(() => { });
+
             // Optimistically update local state & localStorage
             setRoleRequests(prev => {
                 const updated = prev.map(r => r.requestId === requestId ? { ...r, status: 'Rejected', assignedBy: currentUser?.name || (isSysAdmin ? 'System Admin' : 'HR Admin') } : r);
@@ -3204,8 +3204,8 @@ export default function AdminConsole() {
         const isDelete = actionType === 'Removed Content' || actionType === 'Delete';
         const isReinstate = actionType === 'Reinstate';
         const newStatus = isDismiss ? 'Dismissed' : (isReinstate ? 'Reviewed' : 'Action Taken');
-        const actionTakenText = isDismiss 
-            ? 'Dismissed' 
+        const actionTakenText = isDismiss
+            ? 'Dismissed'
             : (isReinstate ? 'Reinstated Content' : 'Deleted');
 
         const targetReport = reports.find(r => r.reportId === reportId || (contentId && String(r.contentId) === String(contentId) && String(r.contentType || '').toLowerCase() === String(contentType || '').toLowerCase()));
@@ -3214,7 +3214,7 @@ export default function AdminConsole() {
         try {
             for (const repId of idsToResolve) {
                 if (typeof repId === 'number' && repId < 1000000000) {
-                    await interactionsApi.resolveReport(repId, isDismiss || isReinstate ? 'Dismiss' : 'Removed Content', `Resolved by ${currentUser?.name || 'Moderator'}`).catch(() => {});
+                    await interactionsApi.resolveReport(repId, isDismiss || isReinstate ? 'Dismiss' : 'Removed Content', `Resolved by ${currentUser?.name || 'Moderator'}`).catch(() => { });
                 }
             }
             if (isDelete && contentId) {
@@ -3259,7 +3259,7 @@ export default function AdminConsole() {
                 return lr;
             });
             localStorage.setItem('knome_moderation_reports', JSON.stringify(updatedLocalReports));
-        } catch (e) {}
+        } catch (e) { }
 
         // Persistent removal across all views and sessions if action is Delete / Removed Content
         if (isDelete && contentId) {
@@ -3470,7 +3470,7 @@ export default function AdminConsole() {
         let initialReport = { ...(report || {}) };
 
         // Match against existing fetched reports in state if available
-        const matched = reports.find(r => 
+        const matched = reports.find(r =>
             (report?.reportId && Number(r.reportId) === Number(report.reportId)) ||
             (report?.reportId && Array.isArray(r.allReportIds) && r.allReportIds.includes(Number(report.reportId))) ||
             (report?.contentId && String(r.contentId) === String(report.contentId) && String(r.contentType || '').toLowerCase() === String(report.contentType || '').toLowerCase())
@@ -3547,7 +3547,7 @@ export default function AdminConsole() {
                             );
                         }
                     }
-                } catch (e) {}
+                } catch (e) { }
 
                 // Fallback: check localStorage if API didn't find it
                 if (!foundVid) {
@@ -3586,7 +3586,7 @@ export default function AdminConsole() {
                 try {
                     const res = await clipsApi.getById(report.contentId).catch(() => null);
                     clip = res?.data || res;
-                } catch (e) {}
+                } catch (e) { }
 
                 if (clip) {
                     const targetAuthorId = clip.uploaderUserId || clip.authorUserId || report.reportedUserId;
@@ -3615,7 +3615,7 @@ export default function AdminConsole() {
                 try {
                     const res = await podcastsApi.getById(report.contentId).catch(() => null);
                     pod = res?.data || res;
-                } catch (e) {}
+                } catch (e) { }
 
                 if (!pod) {
                     const allPodcasts = JSON.parse(localStorage.getItem('knome_custom_podcasts') || '[]');
@@ -3658,7 +3658,7 @@ export default function AdminConsole() {
                 try {
                     const res = await articlesApi.getById(report.contentId).catch(() => null);
                     art = res?.data || res;
-                } catch (e) {}
+                } catch (e) { }
 
                 if (art && (art.title || art.contentHtml || art.content)) {
                     setPreviewPost({
@@ -3682,7 +3682,7 @@ export default function AdminConsole() {
                 try {
                     const res = await wikiApi.getWiki(report.contentId).catch(() => null);
                     wiki = res?.data || res;
-                } catch (e) {}
+                } catch (e) { }
 
                 if (wiki && (wiki.title || wiki.description || wiki.overviewContent)) {
                     setPreviewPost({
@@ -3708,7 +3708,7 @@ export default function AdminConsole() {
                         const allLocal = JSON.parse(localStorage.getItem('knome_local_posts') || '[]');
                         const found = allLocal.find(p => String(p.id || p.postId) === String(report.contentId));
                         if (found) res = found;
-                    } catch {}
+                    } catch { }
                 }
                 if (res) {
                     const targetAuthorId = res.authorUserId || res.authorId || res.userId || report.reportedUserId;
@@ -3745,7 +3745,7 @@ export default function AdminConsole() {
 
         let numericId = userObj ? Number(userObj.userId || userObj.id) : Number(suspendUserId);
         if (isNaN(numericId) || numericId <= 0) {
-            const found = usersList.find(u => 
+            const found = usersList.find(u =>
                 String(u.employeeId || '').toUpperCase() === String(suspendUserId || userObj?.employeeId).toUpperCase() ||
                 (u.fullName && u.fullName.toLowerCase() === String(suspendUserId || userObj?.fullName).toLowerCase()) ||
                 (u.name && u.name.toLowerCase() === String(suspendUserId || userObj?.name).toLowerCase())
@@ -3767,7 +3767,7 @@ export default function AdminConsole() {
         // Block self-suspension by system administrator
         const loggedInUid = Number(currentUser?.userId || currentUser?.id);
         const loggedInEmpId = (currentUser?.employeeId || '').toUpperCase();
-        if ((numericId && loggedInUid && numericId === loggedInUid) || 
+        if ((numericId && loggedInUid && numericId === loggedInUid) ||
             (targetUser?.employeeId && loggedInEmpId && targetUser.employeeId.toUpperCase() === loggedInEmpId)) {
             showToast('You cannot suspend your own administrative account.');
             setIsSuspendModalOpen(false);
@@ -3846,7 +3846,7 @@ export default function AdminConsole() {
                 const existing = JSON.parse(localStorage.getItem('knome_suspension_requests') || '[]');
                 const updatedList = [finalRecord, ...existing.filter(r => String(r.requestId) !== String(finalRecord.requestId))];
                 localStorage.setItem('knome_suspension_requests', JSON.stringify(updatedList));
-            } catch (e) {}
+            } catch (e) { }
 
             window.dispatchEvent(new CustomEvent('knome_suspension_request_created', { detail: finalRecord }));
 
@@ -3893,16 +3893,16 @@ export default function AdminConsole() {
                 savedSuspended[empKey] = savedSuspended[String(numericId)];
             }
             localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
-        } catch (e) {}
-        setUsersList(prev => prev.map(u => (Number(u.userId || u.id) === numericId || (targetUser?.employeeId && u.employeeId === targetUser.employeeId)) ? { 
-            ...u, 
-            isActive: false, 
-            isSuspended: true, 
+        } catch (e) { }
+        setUsersList(prev => prev.map(u => (Number(u.userId || u.id) === numericId || (targetUser?.employeeId && u.employeeId === targetUser.employeeId)) ? {
+            ...u,
+            isActive: false,
+            isSuspended: true,
             isPermanentlySuspended: isPermanent,
             suspendedUntil: isPermanent ? null : (customDate ? new Date(customDate).toISOString() : new Date(Date.now() + (Number(days) || 7) * 24 * 60 * 60 * 1000).toISOString()),
-            status: 'Suspended' 
+            status: 'Suspended'
         } : u));
-        
+
         // Each suspension request retains its independent review status without overwriting previous requests
 
         setIsSuspendModalOpen(false);
@@ -3960,7 +3960,7 @@ export default function AdminConsole() {
                 savedSuspended[empKey] = savedSuspended[String(targetUserId)];
             }
             localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
-        } catch (e) {}
+        } catch (e) { }
 
         setUsersList(prev => prev.map(u => (Number(u.userId || u.id) === targetUserId || (req.targetEmployeeId && u.employeeId === req.targetEmployeeId)) ? { ...u, isActive: false, isSuspended: true, status: 'Suspended' } : u));
 
@@ -3975,7 +3975,7 @@ export default function AdminConsole() {
         setSuspensionRequests(updatedRequests);
         try {
             localStorage.setItem('knome_suspension_requests', JSON.stringify(updatedRequests));
-        } catch (e) {}
+        } catch (e) { }
 
         if (req.requestedByUserId && req.requestedByUserId > 0) {
             try {
@@ -3985,8 +3985,8 @@ export default function AdminConsole() {
                     message: `Your suspension request for ${targetName} was approved by HR Administrator ${currentUser?.fullName || 'HR Admin'}. The account has been suspended.__KNOME_PAYLOAD__${JSON.stringify({ requestId: req.requestId, status: 'Approved', targetUserId })}`,
                     relatedContentType: 'SuspensionRequest',
                     referenceId: targetUserId
-                }).catch(() => {});
-            } catch (e) {}
+                }).catch(() => { });
+            } catch (e) { }
         }
 
         logAuditEntry(
@@ -4032,7 +4032,7 @@ export default function AdminConsole() {
         setSuspensionRequests(updatedRequests);
         try {
             localStorage.setItem('knome_suspension_requests', JSON.stringify(updatedRequests));
-        } catch (e) {}
+        } catch (e) { }
 
         if (req.requestedByUserId && req.requestedByUserId > 0) {
             try {
@@ -4042,8 +4042,8 @@ export default function AdminConsole() {
                     message: `Your suspension request for ${targetName} was rejected by HR Administrator ${currentUser?.fullName || 'HR Admin'}. Note: ${rejectionNote}__KNOME_PAYLOAD__${JSON.stringify({ requestId: req.requestId, status: 'Rejected', targetUserId: Number(req.targetUserId), rejectionReason: rejectionNote })}`,
                     relatedContentType: 'SuspensionRequest',
                     referenceId: Number(req.targetUserId)
-                }).catch(() => {});
-            } catch (e) {}
+                }).catch(() => { });
+            } catch (e) { }
         }
 
         logAuditEntry(
@@ -4065,11 +4065,11 @@ export default function AdminConsole() {
         const targetName = user.fullName || user.name || `Employee #${targetId}`;
 
         // Check if user is currently suspended or inactive
-        const isCurrentlySuspended = user.isSuspended === true || 
-                                     user.isPermanentlySuspended === true || 
-                                     user.isActive === false || 
-                                     (user.status || '').toLowerCase() === 'suspended' ||
-                                     (user.suspendedUntil && new Date(user.suspendedUntil) > new Date());
+        const isCurrentlySuspended = user.isSuspended === true ||
+            user.isPermanentlySuspended === true ||
+            user.isActive === false ||
+            (user.status || '').toLowerCase() === 'suspended' ||
+            (user.suspendedUntil && new Date(user.suspendedUntil) > new Date());
 
         // If user is currently active (not suspended), clicking triggers the SuspendUserModal
         if (!isCurrentlySuspended) {
@@ -4089,14 +4089,14 @@ export default function AdminConsole() {
         // 1. Instant optimistic update to local usersList state so the UI responds immediately with zero lag
         setUsersList(prev => prev.map(u => {
             const match = (targetId && Number(u.userId || u.id) === targetId) ||
-                          (targetEmpId && String(u.employeeId || '').toUpperCase() === targetEmpId);
-            return match ? { 
-                ...u, 
-                isActive: true, 
-                isSuspended: false, 
-                isPermanentlySuspended: false, 
-                suspendedUntil: null, 
-                status: 'Active' 
+                (targetEmpId && String(u.employeeId || '').toUpperCase() === targetEmpId);
+            return match ? {
+                ...u,
+                isActive: true,
+                isSuspended: false,
+                isPermanentlySuspended: false,
+                suspendedUntil: null,
+                status: 'Active'
             } : u;
         }));
 
@@ -4106,27 +4106,27 @@ export default function AdminConsole() {
             if (targetId) delete savedSuspended[String(targetId)];
             if (targetEmpId) delete savedSuspended[targetEmpId];
             localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
-        } catch (e) {}
+        } catch (e) { }
 
         // 3. Mark any suspension requests for this user as 'Reactivated' in state & localStorage
         setSuspensionRequests(prev => {
             const updated = prev.map(r => {
                 const match = (targetId && Number(r.targetUserId) === targetId) ||
-                              (targetEmpId && String(r.targetEmployeeId || '').toUpperCase() === targetEmpId);
+                    (targetEmpId && String(r.targetEmployeeId || '').toUpperCase() === targetEmpId);
                 if (match && (r.status === 'Approved' || r.status === 'Pending')) {
-                    return { 
-                        ...r, 
-                        status: 'Reactivated', 
+                    return {
+                        ...r,
+                        status: 'Reactivated',
                         reviewedAt: new Date().toISOString(),
-                        reactivatedAt: new Date().toISOString(), 
-                        reactivatedBy: currentUser?.fullName || 'HR Administrator' 
+                        reactivatedAt: new Date().toISOString(),
+                        reactivatedBy: currentUser?.fullName || 'HR Administrator'
                     };
                 }
                 return r;
             });
             try {
                 localStorage.setItem('knome_suspension_requests', JSON.stringify(updated));
-            } catch (e) {}
+            } catch (e) { }
             return updated;
         });
 
@@ -4147,7 +4147,7 @@ export default function AdminConsole() {
                 userOverrides[targetEmpId] = { ...(userOverrides[targetEmpId] || {}), ...overridePayload };
             }
             localStorage.setItem('knome_user_overrides', JSON.stringify(userOverrides));
-        } catch (e) {}
+        } catch (e) { }
 
         // 5. Update UserContext state
         if (toggleUserActiveStatus && !isNaN(targetId)) {
@@ -4156,11 +4156,11 @@ export default function AdminConsole() {
 
         // 6. Broadcast event across tabs/listeners
         try {
-            window.dispatchEvent(new CustomEvent('knome_user_activated', { 
-                detail: { userId: targetId, employeeId: targetEmpId, name: targetName } 
+            window.dispatchEvent(new CustomEvent('knome_user_activated', {
+                detail: { userId: targetId, employeeId: targetEmpId, name: targetName }
             }));
             window.dispatchEvent(new Event('storage'));
-        } catch (e) {}
+        } catch (e) { }
 
         showToast(`User ${targetName} is now Active and moved to the Active Accounts directory. ✨`, 'success');
 
@@ -4333,7 +4333,7 @@ export default function AdminConsole() {
 
         try {
             apiClient.clearCache();
-        } catch {}
+        } catch { }
 
         try {
             const numericId = Number(roleUserId);
@@ -4367,7 +4367,7 @@ export default function AdminConsole() {
             roleOverrides[String(roleUserId)] = rolesToAssign;
             if (targetUser?.employeeId) roleOverrides[targetUser.employeeId.toUpperCase()] = rolesToAssign;
             localStorage.setItem('knome_role_overrides', JSON.stringify(roleOverrides));
-        } catch (e) {}
+        } catch (e) { }
 
         const roleCodeMap = {
             'System Admin': 'SYSADM',
@@ -4381,12 +4381,12 @@ export default function AdminConsole() {
         };
 
         // Update the local AdminConsole users table
-        setUsersList(prev => prev.map(u => (String(u.userId) === String(roleUserId) || String(u.id) === String(roleUserId) || (targetUser && targetUser.employeeId && u.employeeId === targetUser.employeeId)) ? { 
-            ...u, 
-            roleName: primaryRole, 
-            assignedRole: primaryRole, 
+        setUsersList(prev => prev.map(u => (String(u.userId) === String(roleUserId) || String(u.id) === String(roleUserId) || (targetUser && targetUser.employeeId && u.employeeId === targetUser.employeeId)) ? {
+            ...u,
+            roleName: primaryRole,
+            assignedRole: primaryRole,
             role: roleCodeMap[primaryRole] || 'EMP',
-            roles: rolesToAssign 
+            roles: rolesToAssign
         } : u));
 
         // ── Update global UserContext usersList so Navbar Switch User dropdown
@@ -4400,10 +4400,10 @@ export default function AdminConsole() {
             updateUserRoleInList(targetUser.email, rolesToAssign);
         }
 
-        const isCurrentUser = (currentUser?.userId && String(currentUser.userId) === String(roleUserId)) || 
-                              (currentUser?.id && String(currentUser.id) === String(roleUserId)) ||
-                              (currentUser?.employeeId && targetUser?.employeeId && currentUser.employeeId.toUpperCase() === targetUser.employeeId.toUpperCase());
-        
+        const isCurrentUser = (currentUser?.userId && String(currentUser.userId) === String(roleUserId)) ||
+            (currentUser?.id && String(currentUser.id) === String(roleUserId)) ||
+            (currentUser?.employeeId && targetUser?.employeeId && currentUser.employeeId.toUpperCase() === targetUser.employeeId.toUpperCase());
+
         try {
             const overrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
             const targetKeys = [
@@ -4416,7 +4416,7 @@ export default function AdminConsole() {
             ].filter(Boolean);
             targetKeys.forEach(k => { overrides[k] = rolesToAssign; });
             localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
-        } catch {}
+        } catch { }
 
         setIsRoleModalOpen(false);
         showToast(`Role for ${roleUserName} updated to '${primaryRole}'.${isCurrentUser ? ' Your permissions have been updated!' : ''}`);
@@ -4436,7 +4436,7 @@ export default function AdminConsole() {
         try {
             const raw = localStorage.getItem(`knome_user_privileges_${u.userId || u.id}`);
             if (raw) storedPrivileges = JSON.parse(raw);
-        } catch {}
+        } catch { }
 
         setEditingUser(u);
         setEditForm({
@@ -4472,7 +4472,7 @@ export default function AdminConsole() {
     const handleTogglePrivilegeInModal = (privilegeKey) => {
         setEditForm(prev => {
             const exists = prev.privileges.includes(privilegeKey);
-            const newPrivs = exists 
+            const newPrivs = exists
                 ? prev.privileges.filter(k => k !== privilegeKey)
                 : [...prev.privileges, privilegeKey];
             return { ...prev, privileges: newPrivs };
@@ -4704,8 +4704,8 @@ export default function AdminConsole() {
     const handleToggleApprovalPolicy = async () => {
         const cur = configState.requireContentAndCommunityApproval !== false;
         const next = !cur;
-        setConfigState(prev => ({ 
-            ...prev, 
+        setConfigState(prev => ({
+            ...prev,
             requireContentAndCommunityApproval: next,
             requireCommunityApproval: next,
             requireArticleApproval: next,
@@ -4997,7 +4997,7 @@ export default function AdminConsole() {
         setIsAiAnalyzing(true);
         setTimeout(() => {
             const lower = text.toLowerCase();
-            
+
             // 1. Toxicity detection
             const toxicWords = ['idiot', 'idiots', 'fools', 'stupid', 'fired', 'humiliated', 'trash', 'useless', 'incompetent', 'hate', 'harass', 'kill', 'shut up', 'moron', 'dumb', 'loser', 'scam'];
             let toxicHits = 0;
@@ -5008,7 +5008,7 @@ export default function AdminConsole() {
                     detectedToxicKeywords.push(w);
                 }
             });
-            
+
             let toxicityScore = 4;
             if (toxicHits > 0) {
                 toxicityScore = Math.min(99, 65 + (toxicHits * 10));
@@ -5020,7 +5020,7 @@ export default function AdminConsole() {
             const hasPassword = /password\s*=\s*[^;\s]+/i.test(text);
             const hasSalary = /(salary|ctc|compensation|payroll)\s*(is|:|=)?\s*(rs\.?|inr|\$)?\s*[\d,]+/i.test(text);
             const hasAadhaar = /\b\d{4}\s\d{4}\s\d{4}\b/.test(text);
-            
+
             const detectedPiiKeywords = [];
             if (hasPan) detectedPiiKeywords.push('Indian PAN Format');
             if (hasAwsKey) detectedPiiKeywords.push('AWS Access Key (AKIA...)');
@@ -5054,7 +5054,7 @@ export default function AdminConsole() {
 
             if (autoQuarantine && (toxicityScore >= 95 || (deepScan && piiScore >= 95))) {
                 status = 'QUARANTINED';
-                decisionReason = toxicityScore >= 95 
+                decisionReason = toxicityScore >= 95
                     ? `Critical Toxicity (${toxicityScore}%) exceeds extreme threshold (95%). Content immediately suppressed from public feed before manual review.`
                     : `Severe PII / Credential Leak (${piiScore}%) detected with Deep Scan enabled. Post auto-quarantined immediately.`;
             } else if (toxicityScore >= threshold || (deepScan && piiScore >= 70) || spamScore >= 75) {
@@ -5096,7 +5096,7 @@ export default function AdminConsole() {
 
         if (autoQuarantine && (toxicityScore >= 95 || (deepScan && piiScore >= 95))) {
             status = 'QUARANTINED';
-            decisionReason = toxicityScore >= 95 
+            decisionReason = toxicityScore >= 95
                 ? `Critical Toxicity (${toxicityScore}%) exceeds extreme threshold (95%). Content immediately suppressed from public feed before manual review.`
                 : `Severe PII / Credential Leak (${piiScore}%) detected with Deep Scan enabled. Post auto-quarantined immediately.`;
         } else if (toxicityScore >= threshold || (deepScan && piiScore >= 70) || spamScore >= 75) {
@@ -5181,23 +5181,23 @@ export default function AdminConsole() {
 
     // Filter reports logic
     const filteredReports = reports.filter(r => {
-        const matchesStatus = statusFilter === 'All' || 
+        const matchesStatus = statusFilter === 'All' ||
             (statusFilter === 'Pending' && r.status === 'Pending') ||
             (statusFilter === 'Reviewed' && (r.status === 'Reviewed' || r.status === 'Action Taken' || r.status === 'Resolved') && r.status !== 'Dismissed' && (!r.actionTaken || !r.actionTaken.toLowerCase().includes('dismiss'))) ||
             (statusFilter === 'Dismissed' && (r.status === 'Dismissed' || (r.actionTaken && r.actionTaken.toLowerCase().includes('dismiss')))) ||
             (statusFilter === 'Action Taken' && (r.status === 'Action Taken' || r.status === 'Resolved' || (r.actionTaken && r.actionTaken.toLowerCase().includes('remove'))));
 
         const matchesReason = reasonFilter === 'All' || (r.reasonCode && r.reasonCode.toLowerCase() === reasonFilter.toLowerCase());
-        
-        const matchesSeverity = severityFilter === 'All' || 
+
+        const matchesSeverity = severityFilter === 'All' ||
             (severityFilter === 'High' && (r.severity === 'High' || r.severity === 'Critical')) ||
             (r.severity && r.severity.toLowerCase() === severityFilter.toLowerCase());
 
-        const matchesCommunity = communityFilter === 'All' || 
+        const matchesCommunity = communityFilter === 'All' ||
             (r.communityName && r.communityName.toLowerCase().includes(communityFilter.toLowerCase()));
 
-        const matchesModerator = moderatorFilter === 'All' || 
-            (moderatorFilter === 'Unassigned' && (!r.moderatorUserId && !r.moderatorFullName)) || 
+        const matchesModerator = moderatorFilter === 'All' ||
+            (moderatorFilter === 'Unassigned' && (!r.moderatorUserId && !r.moderatorFullName)) ||
             (r.moderatorFullName && r.moderatorFullName.toLowerCase().includes(moderatorFilter.toLowerCase()));
 
         const todayStr = new Date().toLocaleDateString();
@@ -5210,14 +5210,14 @@ export default function AdminConsole() {
                 r.reportedDate?.toLowerCase().includes('today')
             ));
 
-        const matchesSearch = !searchQuery || 
-                              String(r.reportId).includes(searchQuery) ||
-                              String(r.contentId).includes(searchQuery) ||
-                              (r.reporterFullName && r.reporterFullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                              (r.reportedUserName && r.reportedUserName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                              (r.reasonCode && r.reasonCode.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                              (r.communityName && r.communityName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                              (r.postContentSnippet && r.postContentSnippet.toLowerCase().includes(searchQuery.toLowerCase()));
+        const matchesSearch = !searchQuery ||
+            String(r.reportId).includes(searchQuery) ||
+            String(r.contentId).includes(searchQuery) ||
+            (r.reporterFullName && r.reporterFullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (r.reportedUserName && r.reportedUserName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (r.reasonCode && r.reasonCode.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (r.communityName && r.communityName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (r.postContentSnippet && r.postContentSnippet.toLowerCase().includes(searchQuery.toLowerCase()));
 
         return matchesStatus && matchesReason && matchesSeverity && matchesCommunity && matchesModerator && matchesDateRange && matchesSearch;
     });
@@ -5259,7 +5259,7 @@ export default function AdminConsole() {
         if (activeUserSearchTerm === 'suspended') return isSusp;
         if (activeUserSearchTerm === 'inactive') return !isSusp && (u.isActive === false || (u.status || '').toLowerCase() === 'inactive');
         if (activeUserSearchTerm === 'active') return !isSusp && u.isActive === true;
-        
+
         // When filtering specifically by specific role cards
         if (activeUserSearchTerm === 'moderator' || activeUserSearchTerm === 'moderators') {
             const assigned = (u.roleName || getUserAssignedRole(u) || '').toLowerCase();
@@ -5278,8 +5278,8 @@ export default function AdminConsole() {
         if (activeUserSearchTerm === 'admin') {
             const assigned = (u.roleName || getUserAssignedRole(u) || '').toLowerCase();
             const rolesList = getUserRolesList(u).map(r => String(r).toLowerCase());
-            const hasAdminRole = assigned.includes('admin') || assigned.includes('adm') || 
-                                 rolesList.some(r => r.includes('admin') || r.includes('adm'));
+            const hasAdminRole = assigned.includes('admin') || assigned.includes('adm') ||
+                rolesList.some(r => r.includes('admin') || r.includes('adm'));
             const isPureEmployee = rolesList.length === 1 && rolesList[0] === 'employee';
             return hasAdminRole && !isPureEmployee;
         }
@@ -5454,12 +5454,12 @@ export default function AdminConsole() {
     // Filtered Community Channels based on Search and Policy Filter (Strict, Standard, Relaxed)
     const filteredCommunities = useMemo(() => {
         return communityChannels.filter(c => {
-            const matchesSearch = !searchQuery || 
-                c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                c.category?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+            const matchesSearch = !searchQuery ||
+                c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                c.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 c.mod?.toLowerCase().includes(searchQuery.toLowerCase());
-            
-            const matchesPolicy = communityPolicyFilter === 'All' || 
+
+            const matchesPolicy = communityPolicyFilter === 'All' ||
                 c.status?.toLowerCase() === communityPolicyFilter.toLowerCase();
 
             return matchesSearch && matchesPolicy;
@@ -5499,7 +5499,7 @@ export default function AdminConsole() {
         const rows = filteredReports.map(r => [
             r.reportId, r.reporterUserId, r.reporterFullName, r.reportedUserId || 'N/A', r.contentType, r.contentId, r.communityName || 'General', r.reasonCode, r.severity || 'Medium', r.aiScore || 'N/A', r.status, r.moderatorFullName || 'Unassigned', r.actionTaken || 'None', r.reportedDate
         ]);
-        exportToExcelFile(headers, rows, 'Content Reports', 'Knome_ContentReports');
+        exportToExcelFile(headers, rows, 'Content Reports', 'TechnoSocial_ContentReports');
         setIsExportOpen(false);
         showToast('Exported Content Reports to Excel (.xlsx) successfully.');
     };
@@ -5509,7 +5509,7 @@ export default function AdminConsole() {
         const rows = usersList.map(u => [
             u.userId || u.id, u.employeeId || 'N/A', u.fullName || u.name, u.designation || 'Staff', u.department || u.departmentName || 'MPOnline', u.roleName || 'Employee', u.isActive ? 'Active' : 'Suspended', u.karmaPoints || 0
         ]);
-        exportToExcelFile(headers, rows, 'Users Directory', 'Knome_UsersDirectory');
+        exportToExcelFile(headers, rows, 'Users Directory', 'TechnoSocial_UsersDirectory');
         setIsExportOpen(false);
         showToast('Exported Users Directory to Excel (.xlsx) successfully.');
     };
@@ -5519,7 +5519,7 @@ export default function AdminConsole() {
         const rows = auditTrail.map(a => [
             a.id, a.time, a.moderator, a.action, a.target
         ]);
-        exportToExcelFile(headers, rows, 'Audit Log', 'Knome_AuditLog');
+        exportToExcelFile(headers, rows, 'Audit Log', 'TechnoSocial_AuditLog');
         setIsExportOpen(false);
         showToast('Exported Audit Log to Excel (.xlsx) successfully.');
     };
@@ -5529,7 +5529,7 @@ export default function AdminConsole() {
         const rows = communityChannels.map(c => [
             c.id, c.name, c.category, c.type, c.status, c.mod, getCommunityMemberCount(c), c.reportsCount || 0
         ]);
-        exportToExcelFile(headers, rows, 'Communities', 'Knome_CommunitiesModeration');
+        exportToExcelFile(headers, rows, 'Communities', 'TechnoSocial_CommunitiesModeration');
         setIsExportOpen(false);
         showToast('Exported Communities to Excel (.xlsx) successfully.');
     };
@@ -5619,16 +5619,14 @@ export default function AdminConsole() {
         <main className="flex-grow p-3 md:p-5 min-h-screen bg-[#f4f7fb] dark:bg-slate-950 relative text-slate-800 dark:text-slate-100 font-sans">
             {/* Action Toast Notification */}
             {actionToast && (
-                <div className={`fixed top-20 right-6 z-[110] px-4 py-2.5 text-white rounded-xl shadow-2xl border text-xs font-bold flex items-center gap-2.5 animate-in fade-in zoom-in ${
-                    actionToastType === 'error'
+                <div className={`fixed top-20 right-6 z-[110] px-4 py-2.5 text-white rounded-xl shadow-2xl border text-xs font-bold flex items-center gap-2.5 animate-in fade-in zoom-in ${actionToastType === 'error'
                         ? 'bg-rose-950 border-rose-800'
                         : actionToastType === 'warning'
-                        ? 'bg-amber-950 border-amber-800'
-                        : 'bg-slate-900 border-slate-700'
-                }`}>
-                    <span className={`material-symbols-outlined text-[18px] ${
-                        actionToastType === 'error' ? 'text-rose-400' : actionToastType === 'warning' ? 'text-amber-400' : 'text-emerald-400'
+                            ? 'bg-amber-950 border-amber-800'
+                            : 'bg-slate-900 border-slate-700'
                     }`}>
+                    <span className={`material-symbols-outlined text-[18px] ${actionToastType === 'error' ? 'text-rose-400' : actionToastType === 'warning' ? 'text-amber-400' : 'text-emerald-400'
+                        }`}>
                         {actionToastType === 'error' ? 'error' : actionToastType === 'warning' ? 'warning' : 'check_circle'}
                     </span>
                     <span>{actionToast}</span>
@@ -5640,7 +5638,7 @@ export default function AdminConsole() {
                 {/* Left: Hierarchical Breadcrumbs & Title */}
                 <div>
                     <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 mb-2 flex-wrap">
-                        <Link 
+                        <Link
                             to="/"
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 group shadow-2xs"
                             title="Return to Hub / Feed"
@@ -5651,14 +5649,14 @@ export default function AdminConsole() {
                         <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-slate-700">chevron_right</span>
                         <Link to="/" className="hover:text-slate-900 dark:hover:text-white transition-colors">Home</Link>
                         <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-slate-700">chevron_right</span>
-                        <span 
+                        <span
                             className="hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors"
                             onClick={() => (isModerator && !isSysAdmin) ? setActiveTab('moderation') : isSysAdmin ? setActiveTab('moderation') : setActiveTab('users')}
                         >
                             {(isModerator && !isSysAdmin) ? 'Moderation Console' : 'Admin Console'}
                         </span>
                         <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-slate-700">chevron_right</span>
-                        <span 
+                        <span
                             className="text-slate-700 dark:text-slate-300 font-semibold cursor-pointer hover:text-blue-600 transition-colors"
                             onClick={() => handleDomainSelect(activeDomain)}
                         >
@@ -5667,17 +5665,17 @@ export default function AdminConsole() {
                         <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-slate-700">chevron_right</span>
                         <span className="text-blue-700 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/50 px-2.5 py-0.5 rounded-lg border border-blue-200/80 dark:border-blue-800/80 shadow-2xs">
                             {activeTab === 'moderation' ? 'Content Reports' :
-                             activeTab === 'media_approvals' ? 'Media Approvals' :
-                             activeTab === 'suspension_requests' ? 'Account Suspension Requests' :
-                             activeTab === 'notice_period' ? 'Notice Period Management' :
-                             activeTab === 'approval_policy' ? (approvalSubTab === 'modules' ? 'Platform Feature Access Control' : 'Governance & Platform Approvals') :
-                             activeTab === 'ai_moderation' ? 'AI Moderation Rules' :
-                             activeTab === 'communities' ? 'Community Moderation' :
-                             activeTab === 'users' ? 'User Directory' :
-                             activeTab === 'role_requests' ? 'Role Elevation Requests' :
-                             activeTab === 'audit' ? 'Audit Trail' :
-                             activeTab === 'serilog' ? 'Server Logs (Serilog)' :
-                             activeTab === 'analytics' ? 'Platform Analytics' : activeTab}
+                                activeTab === 'media_approvals' ? 'Media Approvals' :
+                                    activeTab === 'suspension_requests' ? 'Account Suspension Requests' :
+                                        activeTab === 'notice_period' ? 'Notice Period Management' :
+                                            activeTab === 'approval_policy' ? (approvalSubTab === 'modules' ? 'Platform Feature Access Control' : 'Governance & Platform Approvals') :
+                                                activeTab === 'ai_moderation' ? 'AI Moderation Rules' :
+                                                    activeTab === 'communities' ? 'Community Moderation' :
+                                                        activeTab === 'users' ? 'User Directory' :
+                                                            activeTab === 'role_requests' ? 'Role Elevation Requests' :
+                                                                activeTab === 'audit' ? 'Audit Trail' :
+                                                                    activeTab === 'serilog' ? 'Server Logs (Serilog)' :
+                                                                        activeTab === 'analytics' ? 'Platform Analytics' : activeTab}
                         </span>
                     </div>
                     <div className="flex items-center gap-2.5 flex-wrap">
@@ -5731,9 +5729,9 @@ export default function AdminConsole() {
                         </button>
                         {isExportOpen && (
                             <>
-                                <div 
-                                    className="fixed inset-0 z-40" 
-                                    onClick={() => setIsExportOpen(false)} 
+                                <div
+                                    className="fixed inset-0 z-40"
+                                    onClick={() => setIsExportOpen(false)}
                                 />
                                 <div className="absolute right-0 mt-1.5 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden py-1 text-xs font-bold divide-y divide-slate-100 dark:divide-slate-700/60 animate-in fade-in zoom-in-95">
                                     {/* Section 1: Excel Exports (.XLSX) */}
@@ -5752,18 +5750,18 @@ export default function AdminConsole() {
                                             </div>
                                             <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-black">XLSX</span>
                                         </button>
-                                    {!isSysAdmin && (
-                                        <button
-                                            onClick={handleExportUsersExcel}
-                                            className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 flex items-center justify-between cursor-pointer transition-colors"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <span className="material-symbols-outlined text-emerald-600 text-[16px]">group</span>
-                                                <span>Export Users Directory</span>
-                                            </div>
-                                            <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-black">XLSX</span>
-                                        </button>
-                                    )}
+                                        {!isSysAdmin && (
+                                            <button
+                                                onClick={handleExportUsersExcel}
+                                                className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 flex items-center justify-between cursor-pointer transition-colors"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <span className="material-symbols-outlined text-emerald-600 text-[16px]">group</span>
+                                                    <span>Export Users Directory</span>
+                                                </div>
+                                                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-black">XLSX</span>
+                                            </button>
+                                        )}
                                         <button
                                             onClick={handleExportAuditExcel}
                                             className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 flex items-center justify-between cursor-pointer transition-colors"
@@ -5802,18 +5800,18 @@ export default function AdminConsole() {
                                             </div>
                                             <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded font-black">CSV</span>
                                         </button>
-                                    {!isSysAdmin && (
-                                        <button
-                                            onClick={handleExportUsersCSV}
-                                            className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-between cursor-pointer transition-colors"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <span className="material-symbols-outlined text-emerald-600 text-[16px]">group</span>
-                                                <span>Export Users Directory (CSV)</span>
-                                            </div>
-                                            <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded font-black">CSV</span>
-                                        </button>
-                                    )}
+                                        {!isSysAdmin && (
+                                            <button
+                                                onClick={handleExportUsersCSV}
+                                                className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-between cursor-pointer transition-colors"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <span className="material-symbols-outlined text-emerald-600 text-[16px]">group</span>
+                                                    <span>Export Users Directory (CSV)</span>
+                                                </div>
+                                                <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded font-black">CSV</span>
+                                            </button>
+                                        )}
                                         <button
                                             onClick={handleExportAuditCSV}
                                             className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-between cursor-pointer transition-colors"
@@ -5837,85 +5835,74 @@ export default function AdminConsole() {
                 /* Multi-Domain 2-Pillar Deck for System Admin */
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3.5">
                     {/* Pillar 1: Content Moderation & Safety */}
-                    <div 
+                    <div
                         onClick={() => handleDomainSelect('moderation')}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group shadow-xs ${
-                            activeDomain === 'moderation'
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group shadow-xs ${activeDomain === 'moderation'
                                 ? 'bg-[#0c1838] text-white border-[#1e295a] ring-2 ring-blue-500/40 shadow-sm'
                                 : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-slate-200/90 dark:border-slate-800 hover:border-blue-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${
-                                activeDomain === 'moderation' 
-                                    ? 'bg-blue-900/60 text-white border border-blue-400/30' 
+                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${activeDomain === 'moderation'
+                                    ? 'bg-blue-900/60 text-white border border-blue-400/30'
                                     : 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50'
-                            }`}>
+                                }`}>
                                 <span className="material-symbols-outlined text-[22px]">gavel</span>
                             </div>
                             <div className="min-w-0">
                                 <div className="flex items-center gap-1.5 mb-0.5">
-                                    <span className={`text-[10px] font-black uppercase tracking-wider ${
-                                        activeDomain === 'moderation' ? 'text-blue-200' : 'text-slate-400'
-                                    }`}>
+                                    <span className={`text-[10px] font-black uppercase tracking-wider ${activeDomain === 'moderation' ? 'text-blue-200' : 'text-slate-400'
+                                        }`}>
                                         DOMAIN 1
                                     </span>
                                     {(pendingCount + pendingMediaApprovals.length) > 0 && (
-                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shadow-2xs ${
-                                            activeDomain === 'moderation' ? 'bg-amber-400 text-slate-950' : 'bg-amber-50 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/80'
-                                        }`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shadow-2xs ${activeDomain === 'moderation' ? 'bg-amber-400 text-slate-950' : 'bg-amber-50 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/80'
+                                            }`}>
                                             {pendingCount + pendingMediaApprovals.length} Pending
                                         </span>
                                     )}
                                 </div>
-                                <h3 className={`font-extrabold text-xs sm:text-sm tracking-tight truncate ${
-                                    activeDomain === 'moderation' ? 'text-white' : 'text-slate-900 dark:text-white'
-                                }`}>
+                                <h3 className={`font-extrabold text-xs sm:text-sm tracking-tight truncate ${activeDomain === 'moderation' ? 'text-white' : 'text-slate-900 dark:text-white'
+                                    }`}>
                                     Moderation & Content Safety
                                 </h3>
-                                <p className={`text-[10px] sm:text-[11px] truncate ${
-                                    activeDomain === 'moderation' ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'
-                                }`}>
+                                <p className={`text-[10px] sm:text-[11px] truncate ${activeDomain === 'moderation' ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'
+                                    }`}>
                                     Reports, Media & Community Approvals
                                 </p>
                             </div>
                         </div>
                         <div className="text-right shrink-0 pl-2">
-                            <span className={`text-lg sm:text-xl font-black block leading-none ${
-                                activeDomain === 'moderation' ? 'text-white' : 'text-slate-900 dark:text-white'
-                            }`}>
+                            <span className={`text-lg sm:text-xl font-black block leading-none ${activeDomain === 'moderation' ? 'text-white' : 'text-slate-900 dark:text-white'
+                                }`}>
                                 {reports.length}
                             </span>
-                            <span className={`text-[9px] font-bold uppercase tracking-wider ${
-                                activeDomain === 'moderation' ? 'text-blue-300' : 'text-slate-400'
-                            }`}>
+                            <span className={`text-[9px] font-bold uppercase tracking-wider ${activeDomain === 'moderation' ? 'text-blue-300' : 'text-slate-400'
+                                }`}>
                                 REPORTS
                             </span>
                         </div>
                     </div>
 
                     {/* Pillar 2: System Operations & Compliance */}
-                    <div 
+                    <div
                         onClick={() => handleDomainSelect('operations')}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group shadow-xs ${
-                            activeDomain === 'operations'
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group shadow-xs ${activeDomain === 'operations'
                                 ? 'bg-[#0c1838] text-white border-[#1e295a] ring-2 ring-cyan-500/40 shadow-sm'
                                 : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-slate-200/90 dark:border-slate-800 hover:border-cyan-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${
-                                activeDomain === 'operations' 
-                                    ? 'bg-cyan-900/60 text-white border border-cyan-400/30' 
+                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${activeDomain === 'operations'
+                                    ? 'bg-cyan-900/60 text-white border border-cyan-400/30'
                                     : 'bg-cyan-50 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-900/50'
-                            }`}>
+                                }`}>
                                 <span className="material-symbols-outlined text-[22px]">settings_suggest</span>
                             </div>
                             <div className="min-w-0">
                                 <div className="flex items-center gap-1.5 mb-0.5">
-                                    <span className={`text-[10px] font-black uppercase tracking-wider ${
-                                        activeDomain === 'operations' ? 'text-cyan-200' : 'text-slate-400'
-                                    }`}>
+                                    <span className={`text-[10px] font-black uppercase tracking-wider ${activeDomain === 'operations' ? 'text-cyan-200' : 'text-slate-400'
+                                        }`}>
                                         DOMAIN 2
                                     </span>
                                     {systemLogCounts.errors > 0 ? (
@@ -5928,27 +5915,23 @@ export default function AdminConsole() {
                                         </span>
                                     )}
                                 </div>
-                                <h3 className={`font-extrabold text-xs sm:text-sm tracking-tight truncate ${
-                                    activeDomain === 'operations' ? 'text-white' : 'text-slate-900 dark:text-white'
-                                }`}>
+                                <h3 className={`font-extrabold text-xs sm:text-sm tracking-tight truncate ${activeDomain === 'operations' ? 'text-white' : 'text-slate-900 dark:text-white'
+                                    }`}>
                                     Operations & Compliance
                                 </h3>
-                                <p className={`text-[10px] sm:text-[11px] truncate ${
-                                    activeDomain === 'operations' ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'
-                                }`}>
+                                <p className={`text-[10px] sm:text-[11px] truncate ${activeDomain === 'operations' ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'
+                                    }`}>
                                     Audit Trail, Server Logs & Analytics
                                 </p>
                             </div>
                         </div>
                         <div className="text-right shrink-0 pl-2">
-                            <span className={`text-lg sm:text-xl font-black block leading-none ${
-                                activeDomain === 'operations' ? 'text-white' : 'text-slate-900 dark:text-white'
-                            }`}>
+                            <span className={`text-lg sm:text-xl font-black block leading-none ${activeDomain === 'operations' ? 'text-white' : 'text-slate-900 dark:text-white'
+                                }`}>
                                 {auditTrail.length}
                             </span>
-                            <span className={`text-[9px] font-bold uppercase tracking-wider ${
-                                activeDomain === 'operations' ? 'text-cyan-300' : 'text-slate-400'
-                            }`}>
+                            <span className={`text-[9px] font-bold uppercase tracking-wider ${activeDomain === 'operations' ? 'text-cyan-300' : 'text-slate-400'
+                                }`}>
                                 AUDITS
                             </span>
                         </div>
@@ -5963,38 +5946,32 @@ export default function AdminConsole() {
                         <>
                             <button
                                 onClick={() => setActiveTab('users')}
-                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                    activeTab === 'users'
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'users'
                                         ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
                                         : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                }`}
+                                    }`}
                             >
-                                <span className={`material-symbols-outlined text-[17px] ${
-                                    activeTab === 'users' ? 'text-white' : 'text-blue-600 dark:text-blue-400'
-                                }`}>group</span>
+                                <span className={`material-symbols-outlined text-[17px] ${activeTab === 'users' ? 'text-white' : 'text-blue-600 dark:text-blue-400'
+                                    }`}>group</span>
                                 <span>User Directory</span>
-                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                                    activeTab === 'users' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                }`}>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${activeTab === 'users' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                    }`}>
                                     {usersList.length}
                                 </span>
                             </button>
                             {canManageSuspensions && (
                                 <button
                                     onClick={() => setActiveTab('suspension_requests')}
-                                    className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                        activeTab === 'suspension_requests'
+                                    className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'suspension_requests'
                                             ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
                                             : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                    }`}
+                                        }`}
                                 >
-                                    <span className={`material-symbols-outlined text-[17px] ${
-                                        activeTab === 'suspension_requests' ? 'text-white' : 'text-amber-500'
-                                    }`}>gavel</span>
+                                    <span className={`material-symbols-outlined text-[17px] ${activeTab === 'suspension_requests' ? 'text-white' : 'text-amber-500'
+                                        }`}>gavel</span>
                                     <span>Suspension Requests</span>
-                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                                        activeTab === 'suspension_requests' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                    }`}>
+                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${activeTab === 'suspension_requests' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                        }`}>
                                         {suspensionRequests.filter(r => r.status === 'Pending').length}
                                     </span>
                                     {suspensionRequests.filter(r => r.status === 'Pending').length > 0 && (
@@ -6004,45 +5981,39 @@ export default function AdminConsole() {
                             )}
                             <button
                                 onClick={() => setActiveTab('approval_policy')}
-                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                    activeTab === 'approval_policy'
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'approval_policy'
                                         ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
                                         : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                }`}
+                                    }`}
                             >
-                                <span className={`material-symbols-outlined text-[17px] ${
-                                    activeTab === 'approval_policy' ? 'text-white' : 'text-purple-600 dark:text-purple-400'
-                                }`}>policy</span>
+                                <span className={`material-symbols-outlined text-[17px] ${activeTab === 'approval_policy' ? 'text-white' : 'text-purple-600 dark:text-purple-400'
+                                    }`}>policy</span>
                                 <span>Approval Policy & Controls</span>
-                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
-                                    activeTab === 'approval_policy'
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${activeTab === 'approval_policy'
                                         ? 'bg-white/20 text-white'
                                         : configState.requireContentAndCommunityApproval !== false
                                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
                                             : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                }`}>
+                                    }`}>
                                     {configState.requireContentAndCommunityApproval !== false ? 'ON' : 'OFF'}
                                 </span>
                             </button>
                             <button
                                 onClick={() => setActiveTab('notice_period')}
-                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                    activeTab === 'notice_period'
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'notice_period'
                                         ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
                                         : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                }`}
+                                    }`}
                             >
-                                <span className={`material-symbols-outlined text-[17px] ${
-                                    activeTab === 'notice_period' ? 'text-white' : 'text-amber-500'
-                                }`}>event_busy</span>
+                                <span className={`material-symbols-outlined text-[17px] ${activeTab === 'notice_period' ? 'text-white' : 'text-amber-500'
+                                    }`}>event_busy</span>
                                 <span>Notice Period Management</span>
-                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
-                                    activeTab === 'notice_period'
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${activeTab === 'notice_period'
                                         ? 'bg-white/20 text-white'
                                         : noticePeriodConfig.isEnabled && markedNoticeCount > 0
                                             ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300/80'
                                             : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                }`}>
+                                    }`}>
                                     {noticePeriodConfig.isEnabled ? (markedNoticeCount > 0 ? `${markedNoticeCount} Active` : 'ON') : 'OFF'}
                                 </span>
                                 {noticePeriodConfig.isEnabled && markedNoticeCount > 0 && (
@@ -6056,35 +6027,30 @@ export default function AdminConsole() {
                         <>
                             <button
                                 onClick={() => setActiveTab('moderation')}
-                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                    activeTab === 'moderation'
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'moderation'
                                         ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
                                         : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                }`}
+                                    }`}
                             >
                                 <span className="material-symbols-outlined text-[17px]">gavel</span>
                                 <span>Content Moderation</span>
-                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                                    activeTab === 'moderation' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                }`}>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${activeTab === 'moderation' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                    }`}>
                                     {reports.length}
                                 </span>
                             </button>
                             <button
                                 onClick={() => setActiveTab('media_approvals')}
-                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                    activeTab === 'media_approvals'
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'media_approvals'
                                         ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
                                         : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                }`}
+                                    }`}
                             >
-                                <span className={`material-symbols-outlined text-[17px] ${
-                                    activeTab === 'media_approvals' ? 'text-white' : 'text-rose-500'
-                                }`}>video_library</span>
+                                <span className={`material-symbols-outlined text-[17px] ${activeTab === 'media_approvals' ? 'text-white' : 'text-rose-500'
+                                    }`}>video_library</span>
                                 <span>Media Approvals</span>
-                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                                    activeTab === 'media_approvals' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                }`}>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${activeTab === 'media_approvals' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                    }`}>
                                     {pendingMediaApprovals.length}
                                 </span>
                                 {pendingMediaApprovals.length > 0 && (
@@ -6094,33 +6060,28 @@ export default function AdminConsole() {
                             {(!isModerator || isSysAdmin) && (
                                 <button
                                     onClick={() => setActiveTab('approval_policy')}
-                                    className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                        activeTab === 'approval_policy'
+                                    className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'approval_policy'
                                             ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
                                             : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                    }`}
+                                        }`}
                                 >
-                                    <span className={`material-symbols-outlined text-[17px] ${
-                                        activeTab === 'approval_policy' ? 'text-white' : 'text-purple-600 dark:text-purple-400'
-                                    }`}>fact_check</span>
+                                    <span className={`material-symbols-outlined text-[17px] ${activeTab === 'approval_policy' ? 'text-white' : 'text-purple-600 dark:text-purple-400'
+                                        }`}>fact_check</span>
                                     <span>Approval Policy</span>
                                 </button>
                             )}
                             <button
                                 onClick={() => setActiveTab('community_approvals')}
-                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                    activeTab === 'community_approvals'
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'community_approvals'
                                         ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
                                         : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                }`}
+                                    }`}
                             >
-                                <span className={`material-symbols-outlined text-[17px] ${
-                                    activeTab === 'community_approvals' ? 'text-white' : 'text-amber-500'
-                                }`}>approval</span>
+                                <span className={`material-symbols-outlined text-[17px] ${activeTab === 'community_approvals' ? 'text-white' : 'text-amber-500'
+                                    }`}>approval</span>
                                 <span>Community Approvals</span>
-                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                                    activeTab === 'community_approvals' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                }`}>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${activeTab === 'community_approvals' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                    }`}>
                                     {pendingCommunityApprovals.length}
                                 </span>
                             </button>
@@ -6131,33 +6092,28 @@ export default function AdminConsole() {
                         <>
                             <button
                                 onClick={() => setActiveTab('audit')}
-                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                    activeTab === 'audit'
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'audit'
                                         ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
                                         : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                }`}
+                                    }`}
                             >
-                                <span className={`material-symbols-outlined text-[17px] ${
-                                    activeTab === 'audit' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'
-                                }`}>history</span>
+                                <span className={`material-symbols-outlined text-[17px] ${activeTab === 'audit' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'
+                                    }`}>history</span>
                                 <span>Audit Trail</span>
-                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                                    activeTab === 'audit' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                }`}>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${activeTab === 'audit' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                    }`}>
                                     {auditTrail.length}
                                 </span>
                             </button>
                             <button
                                 onClick={() => setActiveTab('serilog')}
-                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                    activeTab === 'serilog'
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'serilog'
                                         ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
                                         : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                }`}
+                                    }`}
                             >
-                                <span className={`material-symbols-outlined text-[17px] ${
-                                    activeTab === 'serilog' ? 'text-white' : 'text-cyan-500'
-                                }`}>terminal</span>
+                                <span className={`material-symbols-outlined text-[17px] ${activeTab === 'serilog' ? 'text-white' : 'text-cyan-500'
+                                    }`}>terminal</span>
                                 <span>Server Logs</span>
                                 {systemLogCounts.errors > 0 && (
                                     <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black">
@@ -6167,15 +6123,13 @@ export default function AdminConsole() {
                             </button>
                             <button
                                 onClick={() => setActiveTab('analytics')}
-                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
-                                    activeTab === 'analytics'
+                                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'analytics'
                                         ? 'bg-[#0c1838] text-white shadow-xs border border-slate-800'
                                         : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                }`}
+                                    }`}
                             >
-                                <span className={`material-symbols-outlined text-[17px] ${
-                                    activeTab === 'analytics' ? 'text-white' : 'text-purple-600 dark:text-purple-400'
-                                }`}>analytics</span>
+                                <span className={`material-symbols-outlined text-[17px] ${activeTab === 'analytics' ? 'text-white' : 'text-purple-600 dark:text-purple-400'
+                                    }`}>analytics</span>
                                 <span>Analytics</span>
                             </button>
                         </>
@@ -6218,16 +6172,15 @@ export default function AdminConsole() {
             {activeTab === 'moderation' && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3.5">
                     {/* 1. All Reports */}
-                    <div 
-                        onClick={() => { 
-                            setActiveMetricCard('total'); 
-                            handleResetFilters(); 
+                    <div
+                        onClick={() => {
+                            setActiveMetricCard('total');
+                            handleResetFilters();
                         }}
-                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${
-                            activeMetricCard === 'total'
-                                ? 'bg-blue-50/50 dark:bg-blue-950/40 border-blue-400 ring-2 ring-blue-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${activeMetricCard === 'total'
+                                ? 'bg-blue-50/50 dark:bg-blue-950/40 border-blue-400 ring-2 ring-blue-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-blue-300 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-blue-600 dark:text-blue-400 mb-1.5">
                             <span className="material-symbols-outlined text-[20px]">report</span>
@@ -6238,19 +6191,18 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 2. Pending Reports */}
-                    <div 
-                        onClick={() => { 
-                            setActiveMetricCard('pending'); 
-                            setStatusFilter('Pending'); 
+                    <div
+                        onClick={() => {
+                            setActiveMetricCard('pending');
+                            setStatusFilter('Pending');
                             setSeverityFilter('All');
                             setDateRangeFilter('All');
-                            showToast(`Filtered: Showing ${pendingCount} Pending Reports`); 
+                            showToast(`Filtered: Showing ${pendingCount} Pending Reports`);
                         }}
-                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${
-                            activeMetricCard === 'pending'
-                                ? 'bg-amber-50/50 dark:bg-amber-950/40 border-amber-400 ring-2 ring-amber-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${activeMetricCard === 'pending'
+                                ? 'bg-amber-50/50 dark:bg-amber-950/40 border-amber-400 ring-2 ring-amber-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-amber-300 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-amber-500 mb-1.5">
                             <span className="material-symbols-outlined text-[20px]">pending_actions</span>
@@ -6261,19 +6213,18 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 3. Removed Reports (previously Action Taken - Red) */}
-                    <div 
-                        onClick={() => { 
-                            setActiveMetricCard('action_taken'); 
-                            setStatusFilter('Action Taken'); 
+                    <div
+                        onClick={() => {
+                            setActiveMetricCard('action_taken');
+                            setStatusFilter('Action Taken');
                             setSeverityFilter('All');
                             setDateRangeFilter('All');
-                            showToast(`Filtered: Showing ${actionTakenCount} Removed Reports`); 
+                            showToast(`Filtered: Showing ${actionTakenCount} Removed Reports`);
                         }}
-                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${
-                            activeMetricCard === 'action_taken'
-                                ? 'bg-rose-50/50 dark:bg-rose-950/40 border-rose-400 ring-2 ring-rose-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${activeMetricCard === 'action_taken'
+                                ? 'bg-rose-50/50 dark:bg-rose-950/40 border-rose-400 ring-2 ring-rose-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-rose-300 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-rose-500 mb-1.5">
                             <span className="material-symbols-outlined text-[20px]">delete_forever</span>
@@ -6284,19 +6235,18 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 4. Dismissed Reports (previously Dismissed - Green) */}
-                    <div 
-                        onClick={() => { 
-                            setActiveMetricCard('dismissed'); 
-                            setStatusFilter('Dismissed'); 
+                    <div
+                        onClick={() => {
+                            setActiveMetricCard('dismissed');
+                            setStatusFilter('Dismissed');
                             setSeverityFilter('All');
                             setDateRangeFilter('All');
-                            showToast(`Filtered: Showing ${dismissedCount} Dismissed Reports`); 
+                            showToast(`Filtered: Showing ${dismissedCount} Dismissed Reports`);
                         }}
-                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${
-                            activeMetricCard === 'dismissed'
-                                ? 'bg-emerald-50/50 dark:bg-emerald-950/40 border-emerald-400 ring-2 ring-emerald-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${activeMetricCard === 'dismissed'
+                                ? 'bg-emerald-50/50 dark:bg-emerald-950/40 border-emerald-400 ring-2 ring-emerald-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-emerald-300 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-emerald-500 mb-1.5">
                             <span className="material-symbols-outlined text-[20px]">task_alt</span>
@@ -6307,19 +6257,18 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 5. Today's Reports */}
-                    <div 
-                        onClick={() => { 
-                            setActiveMetricCard('today'); 
-                            setDateRangeFilter('Today'); 
+                    <div
+                        onClick={() => {
+                            setActiveMetricCard('today');
+                            setDateRangeFilter('Today');
                             setStatusFilter('All');
                             setSeverityFilter('All');
-                            showToast(`Filtered: Showing ${todayReportsCount} Today's Reports`); 
+                            showToast(`Filtered: Showing ${todayReportsCount} Today's Reports`);
                         }}
-                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${
-                            activeMetricCard === 'today'
-                                ? 'bg-purple-50/50 dark:bg-purple-950/40 border-purple-400 ring-2 ring-purple-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl transition-all cursor-pointer group border shadow-xs ${activeMetricCard === 'today'
+                                ? 'bg-purple-50/50 dark:bg-purple-950/40 border-purple-400 ring-2 ring-purple-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-purple-300 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-purple-600 dark:text-purple-400 mb-1.5">
                             <span className="material-symbols-outlined text-[20px]">today</span>
@@ -6335,13 +6284,12 @@ export default function AdminConsole() {
             {activeTab === 'media_approvals' && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-3.5">
                     {/* 1. All Pending Media */}
-                    <div 
+                    <div
                         onClick={() => { setMediaTypeFilter('All'); showToast('Showing all pending media submissions'); }}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
-                            mediaTypeFilter === 'All'
-                                ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-400 dark:border-rose-700 ring-2 ring-rose-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${mediaTypeFilter === 'All'
+                                ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-400 dark:border-rose-700 ring-2 ring-rose-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between mb-2">
                             <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-800/60 flex items-center justify-center shrink-0 shadow-2xs">
@@ -6354,13 +6302,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 2. Video Submissions */}
-                    <div 
+                    <div
                         onClick={() => { setMediaTypeFilter('Video'); showToast('Filtered: Showing Video Submissions'); }}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
-                            mediaTypeFilter === 'Video'
-                                ? 'bg-cyan-50/60 dark:bg-cyan-950/20 border-cyan-400 dark:border-cyan-700 ring-2 ring-cyan-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${mediaTypeFilter === 'Video'
+                                ? 'bg-cyan-50/60 dark:bg-cyan-950/20 border-cyan-400 dark:border-cyan-700 ring-2 ring-cyan-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between mb-2">
                             <div className="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400 border border-cyan-200/80 dark:border-cyan-800/60 flex items-center justify-center shrink-0 shadow-2xs">
@@ -6373,13 +6320,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 3. Podcast Submissions */}
-                    <div 
+                    <div
                         onClick={() => { setMediaTypeFilter('Podcast'); showToast('Filtered: Showing Podcast Submissions'); }}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
-                            mediaTypeFilter === 'Podcast'
-                                ? 'bg-pink-50/60 dark:bg-pink-950/20 border-pink-400 dark:border-pink-700 ring-2 ring-pink-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${mediaTypeFilter === 'Podcast'
+                                ? 'bg-pink-50/60 dark:bg-pink-950/20 border-pink-400 dark:border-pink-700 ring-2 ring-pink-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between mb-2">
                             <div className="w-8 h-8 rounded-xl bg-pink-50 dark:bg-pink-950/50 text-pink-600 dark:text-pink-400 border border-pink-200/80 dark:border-pink-800/60 flex items-center justify-center shrink-0 shadow-2xs">
@@ -6392,13 +6338,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 4. Article Submissions */}
-                    <div 
+                    <div
                         onClick={() => { setMediaTypeFilter('Article'); showToast('Filtered: Showing Article Submissions'); }}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
-                            mediaTypeFilter === 'Article'
-                                ? 'bg-violet-50/60 dark:bg-violet-950/20 border-violet-400 dark:border-violet-700 ring-2 ring-violet-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${mediaTypeFilter === 'Article'
+                                ? 'bg-violet-50/60 dark:bg-violet-950/20 border-violet-400 dark:border-violet-700 ring-2 ring-violet-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between mb-2">
                             <div className="w-8 h-8 rounded-xl bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400 border border-violet-200/80 dark:border-violet-800/60 flex items-center justify-center shrink-0 shadow-2xs">
@@ -6411,13 +6356,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 5. Wiki Submissions */}
-                    <div 
+                    <div
                         onClick={() => { setMediaTypeFilter('Wiki'); showToast('Filtered: Showing Wiki Submissions'); }}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
-                            mediaTypeFilter === 'Wiki'
-                                ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-400 dark:border-amber-700 ring-2 ring-amber-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${mediaTypeFilter === 'Wiki'
+                                ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-400 dark:border-amber-700 ring-2 ring-amber-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between mb-2">
                             <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200/80 dark:border-amber-800/60 flex items-center justify-center shrink-0 shadow-2xs">
@@ -6430,7 +6374,7 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 6. Batch Approve All */}
-                    <div 
+                    <div
                         onClick={handleBatchApproveMedia}
                         className="p-3.5 rounded-2xl border transition-all cursor-pointer group bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500 hover:bg-emerald-500/15 shadow-xs"
                     >
@@ -6450,13 +6394,12 @@ export default function AdminConsole() {
             {activeTab === 'community_approvals' && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3.5">
                     {/* 1. All Pending Community Requests */}
-                    <div 
+                    <div
                         onClick={() => { setCommunityApprovalTypeFilter('All'); showToast('Showing all pending community requests'); }}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
-                            communityApprovalTypeFilter === 'All'
-                                ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-400 dark:border-amber-700 ring-2 ring-amber-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${communityApprovalTypeFilter === 'All'
+                                ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-400 dark:border-amber-700 ring-2 ring-amber-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between mb-2">
                             <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200/80 dark:border-amber-800/60 flex items-center justify-center shrink-0 shadow-2xs">
@@ -6469,13 +6412,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 2. Public Communities */}
-                    <div 
+                    <div
                         onClick={() => { setCommunityApprovalTypeFilter('Public'); showToast('Filtered: Showing Public community requests'); }}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
-                            communityApprovalTypeFilter === 'Public'
-                                ? 'bg-indigo-50/60 dark:bg-indigo-950/20 border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${communityApprovalTypeFilter === 'Public'
+                                ? 'bg-indigo-50/60 dark:bg-indigo-950/20 border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between mb-2">
                             <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-800/60 flex items-center justify-center shrink-0 shadow-2xs">
@@ -6488,13 +6430,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 3. Private Communities */}
-                    <div 
+                    <div
                         onClick={() => { setCommunityApprovalTypeFilter('Private'); showToast('Filtered: Showing Private community requests'); }}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
-                            communityApprovalTypeFilter === 'Private'
-                                ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-400 dark:border-rose-700 ring-2 ring-rose-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${communityApprovalTypeFilter === 'Private'
+                                ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-400 dark:border-rose-700 ring-2 ring-rose-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between mb-2">
                             <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-800/60 flex items-center justify-center shrink-0 shadow-2xs">
@@ -6507,13 +6448,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 4. Org Communities */}
-                    <div 
+                    <div
                         onClick={() => { setCommunityApprovalTypeFilter('Org'); showToast('Filtered: Showing Org-wide community requests'); }}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${
-                            communityApprovalTypeFilter === 'Org'
-                                ? 'bg-purple-50/60 dark:bg-purple-950/20 border-purple-400 dark:border-purple-700 ring-2 ring-purple-500/40 shadow-sm scale-[1.01]' 
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-xs ${communityApprovalTypeFilter === 'Org'
+                                ? 'bg-purple-50/60 dark:bg-purple-950/20 border-purple-400 dark:border-purple-700 ring-2 ring-purple-500/40 shadow-sm scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between mb-2">
                             <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 border border-purple-200/80 dark:border-purple-800/60 flex items-center justify-center shrink-0 shadow-2xs">
@@ -6541,13 +6481,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 2. Permissive 50% Preset */}
-                    <div 
+                    <div
                         onClick={() => { setConfigState({ ...configState, aiToxicityThreshold: 50 }); showToast('AI Sensitivity preset set to 50% (Permissive)'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            (configState.aiToxicityThreshold || 80) === 50
-                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${(configState.aiToxicityThreshold || 80) === 50
+                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">filter_1</span>
@@ -6558,13 +6497,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 3. Balanced 80% Preset */}
-                    <div 
+                    <div
                         onClick={() => { setConfigState({ ...configState, aiToxicityThreshold: 80 }); showToast('AI Sensitivity preset set to 80% (Recommended)'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            (configState.aiToxicityThreshold || 80) === 80
-                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${(configState.aiToxicityThreshold || 80) === 80
+                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-indigo-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">verified</span>
@@ -6575,13 +6513,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 4. Strict 95% Preset */}
-                    <div 
+                    <div
                         onClick={() => { setConfigState({ ...configState, aiToxicityThreshold: 95 }); showToast('AI Sensitivity preset set to 95% (Strict)'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            (configState.aiToxicityThreshold || 80) === 95
-                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${(configState.aiToxicityThreshold || 80) === 95
+                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-rose-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">shield</span>
@@ -6592,17 +6529,16 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 5. Toggle Auto-Quarantine */}
-                    <div 
+                    <div
                         onClick={() => {
                             const next = configState.aiAutoQuarantine === false;
                             setConfigState({ ...configState, aiAutoQuarantine: next });
                             showToast(`Auto-Quarantine ${next ? 'Enabled' : 'Disabled'}`);
                         }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            configState.aiAutoQuarantine !== false
-                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${configState.aiAutoQuarantine !== false
+                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-rose-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">gavel</span>
@@ -6615,17 +6551,16 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 6. Toggle Deep PII Scan */}
-                    <div 
+                    <div
                         onClick={() => {
                             const next = configState.aiDeepScan === false;
                             setConfigState({ ...configState, aiDeepScan: next });
                             showToast(`Deep PII Scan ${next ? 'Enabled' : 'Disabled'}`);
                         }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            configState.aiDeepScan !== false
-                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${configState.aiDeepScan !== false
+                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-amber-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">key</span>
@@ -6643,13 +6578,12 @@ export default function AdminConsole() {
             {activeTab === 'communities' && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-3">
                     {/* 1. All Communities */}
-                    <div 
+                    <div
                         onClick={() => { setCommunityPolicyFilter('All'); showToast('Showing all communities'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            communityPolicyFilter === 'All'
-                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${communityPolicyFilter === 'All'
+                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-indigo-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">forum</span>
@@ -6660,13 +6594,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 2. Strict Policy */}
-                    <div 
+                    <div
                         onClick={() => { setCommunityPolicyFilter('Strict'); showToast('Filtered: Showing Strict Policy Communities'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            communityPolicyFilter === 'Strict'
-                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${communityPolicyFilter === 'Strict'
+                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-rose-500/40 hover:border-rose-500 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-rose-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">lock</span>
@@ -6677,13 +6610,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 3. Standard Policy */}
-                    <div 
+                    <div
                         onClick={() => { setCommunityPolicyFilter('Standard'); showToast('Filtered: Showing Standard Policy Communities'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            communityPolicyFilter === 'Standard'
-                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${communityPolicyFilter === 'Standard'
+                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-indigo-500/40 hover:border-indigo-500 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-indigo-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">verified</span>
@@ -6694,13 +6626,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 4. Relaxed Policy */}
-                    <div 
+                    <div
                         onClick={() => { setCommunityPolicyFilter('Relaxed'); showToast('Filtered: Showing Relaxed Policy Communities'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            communityPolicyFilter === 'Relaxed'
-                                ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${communityPolicyFilter === 'Relaxed'
+                                ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-emerald-500/40 hover:border-emerald-500 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-emerald-500 mb-1">
                             <span className="material-symbols-outlined text-[18px]">public</span>
@@ -6711,7 +6642,7 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 5. Create Community Action */}
-                    <div 
+                    <div
                         onClick={() => setIsCreateChannelModalOpen(true)}
                         className="p-2.5 rounded-xl transition-all cursor-pointer group border bg-indigo-500/10 border-indigo-500/40 hover:border-indigo-500 hover:bg-indigo-500/15 shadow-xs"
                     >
@@ -6729,22 +6660,21 @@ export default function AdminConsole() {
             {activeTab === 'users' && !isSysAdmin && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 mb-5">
                     {/* 1. Active Accounts */}
-                    <div 
-                        onClick={() => { 
-                            if (userSearchTerm.toLowerCase() === 'active' && selectedRoleFilter === 'All') { 
-                                setUserSearchTerm(''); 
-                                showToast(`Showing all ${usersList.length} registered employees`); 
-                            } else { 
-                                setUserSearchTerm('Active'); 
+                    <div
+                        onClick={() => {
+                            if (userSearchTerm.toLowerCase() === 'active' && selectedRoleFilter === 'All') {
+                                setUserSearchTerm('');
+                                showToast(`Showing all ${usersList.length} registered employees`);
+                            } else {
+                                setUserSearchTerm('Active');
                                 setSelectedRoleFilter('All');
-                                showToast(`Filtered: Showing ${activeUsersCount} active employee accounts`); 
-                            } 
+                                showToast(`Filtered: Showing ${activeUsersCount} active employee accounts`);
+                            }
                         }}
-                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
-                            userSearchTerm.toLowerCase() === 'active' && selectedRoleFilter === 'All'
-                                ? 'bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/30 dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900 border-emerald-500/60 ring-2 ring-emerald-500/20 shadow-md scale-[1.01]' 
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${userSearchTerm.toLowerCase() === 'active' && selectedRoleFilter === 'All'
+                                ? 'bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/30 dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900 border-emerald-500/60 ring-2 ring-emerald-500/20 shadow-md scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="flex items-center justify-between mb-2.5">
@@ -6760,23 +6690,22 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 2. Moderators */}
-                    <div 
-                        onClick={() => { 
-                            if (selectedRoleFilter === 'Moderator') { 
-                                setSelectedRoleFilter('All'); 
+                    <div
+                        onClick={() => {
+                            if (selectedRoleFilter === 'Moderator') {
+                                setSelectedRoleFilter('All');
                                 setUserSearchTerm('');
-                                showToast(`Showing all ${usersList.length} registered employees`); 
-                            } else { 
-                                setSelectedRoleFilter('Moderator'); 
+                                showToast(`Showing all ${usersList.length} registered employees`);
+                            } else {
+                                setSelectedRoleFilter('Moderator');
                                 setUserSearchTerm('');
-                                showToast(`Filtered: Showing ${moderatorsCount} Content Moderators`); 
-                            } 
+                                showToast(`Filtered: Showing ${moderatorsCount} Content Moderators`);
+                            }
                         }}
-                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
-                            selectedRoleFilter === 'Moderator'
-                                ? 'bg-gradient-to-br from-amber-50/70 via-white to-amber-50/30 dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 border-amber-500/60 ring-2 ring-amber-500/20 shadow-md scale-[1.01]' 
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${selectedRoleFilter === 'Moderator'
+                                ? 'bg-gradient-to-br from-amber-50/70 via-white to-amber-50/30 dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 border-amber-500/60 ring-2 ring-amber-500/20 shadow-md scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="flex items-center justify-between mb-2.5">
@@ -6792,23 +6721,22 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 3. HR Admin */}
-                    <div 
-                        onClick={() => { 
-                            if (selectedRoleFilter === 'HR Admin') { 
-                                setSelectedRoleFilter('All'); 
+                    <div
+                        onClick={() => {
+                            if (selectedRoleFilter === 'HR Admin') {
+                                setSelectedRoleFilter('All');
                                 setUserSearchTerm('');
-                                showToast(`Showing all ${usersList.length} registered employees`); 
-                            } else { 
-                                setSelectedRoleFilter('HR Admin'); 
+                                showToast(`Showing all ${usersList.length} registered employees`);
+                            } else {
+                                setSelectedRoleFilter('HR Admin');
                                 setUserSearchTerm('');
-                                showToast(`Filtered: Showing ${hrAdminsCount} HR Administrators`); 
-                            } 
+                                showToast(`Filtered: Showing ${hrAdminsCount} HR Administrators`);
+                            }
                         }}
-                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
-                            selectedRoleFilter === 'HR Admin'
-                                ? 'bg-gradient-to-br from-blue-50/70 via-white to-blue-50/30 dark:from-blue-950/40 dark:via-slate-900 dark:to-slate-900 border-blue-500/60 ring-2 ring-blue-500/20 shadow-md scale-[1.01]' 
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${selectedRoleFilter === 'HR Admin'
+                                ? 'bg-gradient-to-br from-blue-50/70 via-white to-blue-50/30 dark:from-blue-950/40 dark:via-slate-900 dark:to-slate-900 border-blue-500/60 ring-2 ring-blue-500/20 shadow-md scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="flex items-center justify-between mb-2.5">
@@ -6824,23 +6752,22 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 4. System Admin */}
-                    <div 
-                        onClick={() => { 
-                            if (selectedRoleFilter === 'System Admin') { 
-                                setSelectedRoleFilter('All'); 
+                    <div
+                        onClick={() => {
+                            if (selectedRoleFilter === 'System Admin') {
+                                setSelectedRoleFilter('All');
                                 setUserSearchTerm('');
-                                showToast(`Showing all ${usersList.length} registered employees`); 
-                            } else { 
-                                setSelectedRoleFilter('System Admin'); 
+                                showToast(`Showing all ${usersList.length} registered employees`);
+                            } else {
+                                setSelectedRoleFilter('System Admin');
                                 setUserSearchTerm('');
-                                showToast(`Filtered: Showing ${systemAdminsCount} System Administrators`); 
-                            } 
+                                showToast(`Filtered: Showing ${systemAdminsCount} System Administrators`);
+                            }
                         }}
-                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
-                            selectedRoleFilter === 'System Admin'
-                                ? 'bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 dark:from-purple-950/40 dark:via-slate-900 dark:to-slate-900 border-purple-500/60 ring-2 ring-purple-500/20 shadow-md scale-[1.01]' 
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${selectedRoleFilter === 'System Admin'
+                                ? 'bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 dark:from-purple-950/40 dark:via-slate-900 dark:to-slate-900 border-purple-500/60 ring-2 ring-purple-500/20 shadow-md scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-purple-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="flex items-center justify-between mb-2.5">
@@ -6856,34 +6783,32 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 5. Suspended Accounts */}
-                    <div 
-                        onClick={() => { 
-                            if (userSearchTerm.toLowerCase() === 'suspended') { 
-                                setUserSearchTerm(''); 
+                    <div
+                        onClick={() => {
+                            if (userSearchTerm.toLowerCase() === 'suspended') {
+                                setUserSearchTerm('');
                                 setSelectedRoleFilter('All');
-                                showToast(`Showing all ${usersList.length} registered employees`); 
-                            } else { 
-                                setUserSearchTerm('Suspended'); 
+                                showToast(`Showing all ${usersList.length} registered employees`);
+                            } else {
+                                setUserSearchTerm('Suspended');
                                 setSelectedRoleFilter('All');
-                                showToast(`Filtered: Showing ${suspendedUsersCount} suspended accounts`); 
-                            } 
+                                showToast(`Filtered: Showing ${suspendedUsersCount} suspended accounts`);
+                            }
                         }}
-                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
-                            userSearchTerm.toLowerCase() === 'suspended'
-                                ? 'bg-gradient-to-br from-rose-50/70 via-white to-rose-50/30 dark:from-rose-950/40 dark:via-slate-900 dark:to-slate-900 border-rose-500/60 ring-2 ring-rose-500/20 shadow-md scale-[1.01]' 
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${userSearchTerm.toLowerCase() === 'suspended'
+                                ? 'bg-gradient-to-br from-rose-50/70 via-white to-rose-50/30 dark:from-rose-950/40 dark:via-slate-900 dark:to-slate-900 border-rose-500/60 ring-2 ring-rose-500/20 shadow-md scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-rose-500 to-amber-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="flex items-center justify-between mb-2.5">
                             <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/50 flex items-center justify-center">
                                 <span className="material-symbols-outlined text-[19px]">person_off</span>
                             </div>
-                            <span className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border ${
-                                suspendedUsersCount > 0 
-                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-800/60' 
+                            <span className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border ${suspendedUsersCount > 0
+                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-800/60'
                                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                            }`}>
+                                }`}>
                                 {suspendedUsersCount > 0 ? 'Quarantined' : 'Clean'}
                             </span>
                         </div>
@@ -6892,15 +6817,14 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 6. In Notice Period (HR Admin Governance) */}
-                    <div 
-                        onClick={() => { 
+                    <div
+                        onClick={() => {
                             setActiveTab('notice_period');
                         }}
-                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${
-                            markedNoticeCount > 0
-                                ? 'bg-gradient-to-br from-amber-50/70 via-white to-amber-50/30 dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 border-amber-500/60 ring-2 ring-amber-500/20 shadow-md scale-[1.01]' 
+                        className={`relative overflow-hidden p-4 rounded-2xl transition-all duration-200 cursor-pointer group border ${markedNoticeCount > 0
+                                ? 'bg-gradient-to-br from-amber-50/70 via-white to-amber-50/30 dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 border-amber-500/60 ring-2 ring-amber-500/20 shadow-md scale-[1.01]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
+                            }`}
                         title="Click to manage Notice Period & Post-Scheduling"
                     >
                         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -6908,11 +6832,10 @@ export default function AdminConsole() {
                             <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50 flex items-center justify-center">
                                 <span className="material-symbols-outlined text-[19px]">event_busy</span>
                             </div>
-                            <span className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border ${
-                                noticePeriodConfig.isEnabled 
-                                    ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-800/60' 
+                            <span className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border ${noticePeriodConfig.isEnabled
+                                    ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-800/60'
                                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                            }`}>
+                                }`}>
                                 {noticePeriodConfig.isEnabled ? 'Guard ON' : 'Guard OFF'}
                             </span>
                         </div>
@@ -6926,13 +6849,12 @@ export default function AdminConsole() {
             {activeTab === 'role_requests' && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
                     {/* 1. All Role Requests */}
-                    <div 
+                    <div
                         onClick={() => { setRoleRequestStatusFilter('All'); showToast('Showing all role requests'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            roleRequestStatusFilter === 'All'
-                                ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${roleRequestStatusFilter === 'All'
+                                ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-purple-600 dark:text-purple-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">verified_user</span>
@@ -6943,13 +6865,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 2. Pending Review */}
-                    <div 
+                    <div
                         onClick={() => { setRoleRequestStatusFilter('Pending'); showToast('Filtered: Showing Pending Role Requests'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            roleRequestStatusFilter === 'Pending'
-                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${roleRequestStatusFilter === 'Pending'
+                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-amber-500/40 hover:border-amber-500 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">pending_actions</span>
@@ -6960,13 +6881,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 3. Approved Requests */}
-                    <div 
+                    <div
                         onClick={() => { setRoleRequestStatusFilter('Approved'); showToast('Filtered: Showing Approved Role Requests'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            roleRequestStatusFilter === 'Approved'
-                                ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${roleRequestStatusFilter === 'Approved'
+                                ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">check_circle</span>
@@ -6977,13 +6897,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 4. Rejected Requests */}
-                    <div 
+                    <div
                         onClick={() => { setRoleRequestStatusFilter('Rejected'); showToast('Filtered: Showing Rejected Role Requests'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            roleRequestStatusFilter === 'Rejected'
-                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${roleRequestStatusFilter === 'Rejected'
+                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">cancel</span>
@@ -6999,13 +6918,12 @@ export default function AdminConsole() {
             {activeTab === 'audit' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                     {/* 1. All Audits */}
-                    <div 
+                    <div
                         onClick={() => { setAuditActionFilter('All'); showToast('Showing all audit events'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            auditActionFilter === 'All'
-                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${auditActionFilter === 'All'
+                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-indigo-600 dark:text-indigo-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">history</span>
@@ -7016,13 +6934,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 4. User Governance */}
-                    <div 
+                    <div
                         onClick={() => { setAuditActionFilter('User'); showToast('Filtered: Showing User Governance Logs'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            auditActionFilter === 'User'
-                                ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${auditActionFilter === 'User'
+                                ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-purple-600 dark:text-purple-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
@@ -7038,13 +6955,12 @@ export default function AdminConsole() {
             {activeTab === 'serilog' && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-3">
                     {/* 1. All Telemetry */}
-                    <div 
+                    <div
                         onClick={() => { setLogLevelFilter('ALL'); showToast('Showing all server telemetry logs'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            logLevelFilter === 'ALL'
-                                ? 'bg-cyan-500/10 border-cyan-500 ring-2 ring-cyan-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${logLevelFilter === 'ALL'
+                                ? 'bg-cyan-500/10 border-cyan-500 ring-2 ring-cyan-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-cyan-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-cyan-600 dark:text-cyan-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">terminal</span>
@@ -7055,13 +6971,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 2. Errors */}
-                    <div 
+                    <div
                         onClick={() => { setLogLevelFilter('ERROR'); showToast('Filtered: Showing ERROR logs only'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            logLevelFilter === 'ERROR'
-                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${logLevelFilter === 'ERROR'
+                                ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-rose-500/40 hover:border-rose-500 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">error</span>
@@ -7072,13 +6987,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 3. Warnings */}
-                    <div 
+                    <div
                         onClick={() => { setLogLevelFilter('WARN'); showToast('Filtered: Showing WARNING logs only'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            logLevelFilter === 'WARN'
-                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${logLevelFilter === 'WARN'
+                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-amber-500/40 hover:border-amber-500 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">warning</span>
@@ -7089,13 +7003,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 4. Information */}
-                    <div 
+                    <div
                         onClick={() => { setLogLevelFilter('INFO'); showToast('Filtered: Showing INFO logs only'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            logLevelFilter === 'INFO'
-                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${logLevelFilter === 'INFO'
+                                ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-indigo-600 dark:text-indigo-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">info</span>
@@ -7106,13 +7019,12 @@ export default function AdminConsole() {
                     </div>
 
                     {/* 5. Debug */}
-                    <div 
+                    <div
                         onClick={() => { setLogLevelFilter('DEBUG'); showToast('Filtered: Showing DEBUG logs only'); }}
-                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${
-                            logLevelFilter === 'DEBUG'
-                                ? 'bg-slate-600/10 border-slate-600 ring-2 ring-slate-600/50 shadow-md scale-[1.02]' 
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer group border ${logLevelFilter === 'DEBUG'
+                                ? 'bg-slate-600/10 border-slate-600 ring-2 ring-slate-600/50 shadow-md scale-[1.02]'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-500/40 shadow-xs'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
                             <span className="material-symbols-outlined text-[18px]">bug_report</span>
@@ -7280,7 +7192,7 @@ export default function AdminConsole() {
                                         sortedReports.slice(0, visibleReportCount).map(r => {
                                             const isPending = r.status === 'Pending';
                                             const isSelected = selectedReportIds.includes(r.reportId);
-                                            
+
                                             // Reason badge style
                                             let reasonBadgeStyle = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
                                             if (r.reasonCode === 'Harassment') reasonBadgeStyle = 'bg-rose-50 text-rose-700 border border-rose-200/80';
@@ -7326,7 +7238,7 @@ export default function AdminConsole() {
                                                         <div className="flex items-center justify-center gap-1">
                                                             <span>#{r.reportId}</span>
                                                             {r.reportCount > 1 && (
-                                                                <span 
+                                                                <span
                                                                     className="px-1.5 py-0.2 rounded text-[9px] font-black bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60"
                                                                     title={`${r.reportCount} reports submitted for this content`}
                                                                 >
@@ -7343,8 +7255,8 @@ export default function AdminConsole() {
                                                                 <HighlightText text={r.reporterFullName} query={searchQuery} />
                                                             </div>
                                                             {r.otherReportersCount > 0 && (
-                                                                <span 
-                                                                    className="text-[9.5px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.2 rounded-md shrink-0 border border-blue-200/60 cursor-help" 
+                                                                <span
+                                                                    className="text-[9.5px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.2 rounded-md shrink-0 border border-blue-200/60 cursor-help"
                                                                     title={r.allReportersText}
                                                                 >
                                                                     +{r.otherReportersCount}
@@ -7557,337 +7469,334 @@ export default function AdminConsole() {
                     <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
                         {/* Executive Header Bar */}
                         <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs">
-                                <span className="material-symbols-outlined text-[22px]">manage_accounts</span>
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-2.5 flex-wrap">
-                                    <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
-                                        User Governance & Identity Directory
-                                    </h2>
-                                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                                        {filteredUsers.length} {filteredUsers.length === 1 ? 'Record' : 'Records'}
-                                    </span>
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs">
+                                    <span className="material-symbols-outlined text-[22px]">manage_accounts</span>
                                 </div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Role assignment, security compliance, privilege controls and employee lifecycle governance
-                                </p>
+                                <div>
+                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                        <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+                                            User Governance & Identity Directory
+                                        </h2>
+                                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                            {filteredUsers.length} {filteredUsers.length === 1 ? 'Record' : 'Records'}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Role assignment, security compliance, privilege controls and employee lifecycle governance
+                                    </p>
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={fetchUsers}
-                                disabled={isLoadingUsers}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 font-bold text-xs shadow-xs transition-colors cursor-pointer"
-                                title="Sync User Directory from Backend"
-                            >
-                                <span className={`material-symbols-outlined text-[16px] text-indigo-500 ${isLoadingUsers ? 'animate-spin' : ''}`}>sync</span>
-                                <span>Sync Directory</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Filter Bar & Controls */}
-                    <div className="px-4 sm:px-5 py-3 bg-slate-50/70 dark:bg-slate-800/40 border-b border-slate-200/70 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-                        {/* Search Input */}
-                        <div className="relative flex-1 min-w-[240px] max-w-md">
-                            <span className="material-symbols-outlined text-[17px] text-slate-400 absolute left-3 top-1/2 -translate-y-1/2">
-                                search
-                            </span>
-                            <input
-                                type="text"
-                                value={userSearchTerm}
-                                onChange={e => setUserSearchTerm(e.target.value)}
-                                placeholder="Search employee, email, role, IOU..."
-                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs transition-all"
-                            />
-                            {userSearchTerm && (
+                            <div className="flex items-center gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => setUserSearchTerm('')}
-                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
-                                    title="Clear search"
+                                    onClick={fetchUsers}
+                                    disabled={isLoadingUsers}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                                    title="Sync User Directory from Backend"
                                 >
-                                    <span className="material-symbols-outlined text-[15px]">close</span>
+                                    <span className={`material-symbols-outlined text-[16px] text-indigo-500 ${isLoadingUsers ? 'animate-spin' : ''}`}>sync</span>
+                                    <span>Sync Directory</span>
                                 </button>
-                            )}
-                        </div>
-
-                        {/* Right: Role Dropdown */}
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Filter Role:</label>
-                            <div className="relative">
-                                <select
-                                    value={selectedRoleFilter}
-                                    onChange={e => setSelectedRoleFilter(e.target.value)}
-                                    className="appearance-none pl-3 pr-8 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-xs"
-                                >
-                                    <option value="All" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">All Roles</option>
-                                    <option value="System Admin" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">System Admin</option>
-                                    <option value="HR Admin" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">HR Admin</option>
-                                    <option value="Moderator" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Moderator</option>
-                                    <option value="Employee" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Employee</option>
-                                </select>
-                                <span className="material-symbols-outlined text-[16px] text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                                    expand_more
-                                </span>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Table Container */}
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse text-xs">
-                            <thead className="bg-slate-50/90 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200/80 dark:border-slate-800">
-                                <tr>
-                                    <th className="px-5 py-3.5">User #</th>
-                                    <th className="px-4 py-3.5">Employee Name & Email</th>
-                                    <th className="px-4 py-3.5">Designation & IOU</th>
-                                    <th className="px-4 py-3.5">Assigned Role</th>
-                                    <th className="px-4 py-3.5">Karma Score</th>
-                                    <th className="px-4 py-3.5">Status</th>
-                                    <th className="px-5 py-3.5 text-right">Governance Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                {isLoadingUsers ? (
+                        {/* Filter Bar & Controls */}
+                        <div className="px-4 sm:px-5 py-3 bg-slate-50/70 dark:bg-slate-800/40 border-b border-slate-200/70 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+                            {/* Search Input */}
+                            <div className="relative flex-1 min-w-[240px] max-w-md">
+                                <span className="material-symbols-outlined text-[17px] text-slate-400 absolute left-3 top-1/2 -translate-y-1/2">
+                                    search
+                                </span>
+                                <input
+                                    type="text"
+                                    value={userSearchTerm}
+                                    onChange={e => setUserSearchTerm(e.target.value)}
+                                    placeholder="Search employee, email, role, IOU..."
+                                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs transition-all"
+                                />
+                                {userSearchTerm && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setUserSearchTerm('')}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                                        title="Clear search"
+                                    >
+                                        <span className="material-symbols-outlined text-[15px]">close</span>
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Right: Role Dropdown */}
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Filter Role:</label>
+                                <div className="relative">
+                                    <select
+                                        value={selectedRoleFilter}
+                                        onChange={e => setSelectedRoleFilter(e.target.value)}
+                                        className="appearance-none pl-3 pr-8 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-xs"
+                                    >
+                                        <option value="All" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">All Roles</option>
+                                        <option value="System Admin" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">System Admin</option>
+                                        <option value="HR Admin" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">HR Admin</option>
+                                        <option value="Moderator" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Moderator</option>
+                                        <option value="Employee" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Employee</option>
+                                    </select>
+                                    <span className="material-symbols-outlined text-[16px] text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                                        expand_more
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Table Container */}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse text-xs">
+                                <thead className="bg-slate-50/90 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200/80 dark:border-slate-800">
                                     <tr>
-                                        <td colSpan="7" className="text-center py-12">
-                                            <div className="flex flex-col items-center justify-center gap-2">
-                                                <span className="material-symbols-outlined text-3xl text-indigo-500 animate-spin">progress_activity</span>
-                                                <p className="text-xs font-semibold text-slate-500">Loading user directory...</p>
-                                            </div>
-                                        </td>
+                                        <th className="px-5 py-3.5">User #</th>
+                                        <th className="px-4 py-3.5">Employee Name & Email</th>
+                                        <th className="px-4 py-3.5">Designation & IOU</th>
+                                        <th className="px-4 py-3.5">Assigned Role</th>
+                                        <th className="px-4 py-3.5">Karma Score</th>
+                                        <th className="px-4 py-3.5">Status</th>
+                                        <th className="px-5 py-3.5 text-right">Governance Actions</th>
                                     </tr>
-                                ) : filteredUsers.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="7" className="text-center py-12 text-slate-500">
-                                            <div className="flex flex-col items-center justify-center gap-2">
-                                                <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
-                                                    <span className="material-symbols-outlined text-2xl">search_off</span>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                    {isLoadingUsers ? (
+                                        <tr>
+                                            <td colSpan="7" className="text-center py-12">
+                                                <div className="flex flex-col items-center justify-center gap-2">
+                                                    <span className="material-symbols-outlined text-3xl text-indigo-500 animate-spin">progress_activity</span>
+                                                    <p className="text-xs font-semibold text-slate-500">Loading user directory...</p>
                                                 </div>
-                                                <p className="font-bold text-sm text-slate-700 dark:text-slate-300">No matching employees found</p>
-                                                <p className="text-xs text-slate-400 max-w-sm">No accounts match the current filter query. Try resetting filters.</p>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => { setUserSearchTerm(''); setSelectedRoleFilter('All'); }} 
-                                                    className="mt-2 px-3.5 py-1.5 bg-indigo-600 text-white rounded-xl font-bold text-xs shadow-xs hover:bg-indigo-700 transition-colors cursor-pointer"
-                                                >
-                                                    Clear All Filters
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredUsers.slice(0, visibleUserCount).map(u => {
-                                        const assignedRole = getUserAssignedRole(u);
-                                        const uEmail = u.email || `${(u.fullName || u.name || 'user').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`;
-                                        const uAvatar = u.avatar || u.profilePhotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName || u.name || 'U')}&background=6366f1&color=fff&bold=true`;
-
-                                        return (
-                                            <tr key={u.userId || u.id} className="hover:bg-slate-50/90 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100/80 dark:border-slate-800/60">
-                                                <td className="px-5 py-3.5">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-slate-800 dark:text-slate-200 font-mono text-xs font-bold">#{u.userId || u.id}</span>
-                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full w-fit mt-1 border ${
-                                                            assignedRole.toLowerCase().includes('admin') || assignedRole.toLowerCase().includes('adm')
-                                                                ? 'text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 border-purple-200/60 dark:border-purple-800/60'
-                                                                : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border-slate-200/60 dark:border-slate-700/60'
-                                                        }`}>
-                                                            {assignedRole.toLowerCase().includes('admin') || assignedRole.toLowerCase().includes('adm') ? 'Admin' : 'Member'}
-                                                        </span>
+                                            </td>
+                                        </tr>
+                                    ) : filteredUsers.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="7" className="text-center py-12 text-slate-500">
+                                                <div className="flex flex-col items-center justify-center gap-2">
+                                                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                                                        <span className="material-symbols-outlined text-2xl">search_off</span>
                                                     </div>
-                                                </td>
-                                                <td className="px-4 py-3.5">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="relative shrink-0">
-                                                            <img 
-                                                                src={uAvatar} 
-                                                                alt={u.fullName || u.name} 
-                                                                className="w-9 h-9 rounded-xl object-cover ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-xs" 
-                                                            />
-                                                            <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 ${u.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                                                    <p className="font-bold text-sm text-slate-700 dark:text-slate-300">No matching employees found</p>
+                                                    <p className="text-xs text-slate-400 max-w-sm">No accounts match the current filter query. Try resetting filters.</p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setUserSearchTerm(''); setSelectedRoleFilter('All'); }}
+                                                        className="mt-2 px-3.5 py-1.5 bg-indigo-600 text-white rounded-xl font-bold text-xs shadow-xs hover:bg-indigo-700 transition-colors cursor-pointer"
+                                                    >
+                                                        Clear All Filters
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredUsers.slice(0, visibleUserCount).map(u => {
+                                            const assignedRole = getUserAssignedRole(u);
+                                            const uEmail = u.email || `${(u.fullName || u.name || 'user').toLowerCase().replace(/\s+/g, '.')}@mponline.gov.in`;
+                                            const uAvatar = u.avatar || u.profilePhotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName || u.name || 'U')}&background=6366f1&color=fff&bold=true`;
+
+                                            return (
+                                                <tr key={u.userId || u.id} className="hover:bg-slate-50/90 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100/80 dark:border-slate-800/60">
+                                                    <td className="px-5 py-3.5">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-slate-800 dark:text-slate-200 font-mono text-xs font-bold">#{u.userId || u.id}</span>
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full w-fit mt-1 border ${assignedRole.toLowerCase().includes('admin') || assignedRole.toLowerCase().includes('adm')
+                                                                    ? 'text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 border-purple-200/60 dark:border-purple-800/60'
+                                                                    : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border-slate-200/60 dark:border-slate-700/60'
+                                                                }`}>
+                                                                {assignedRole.toLowerCase().includes('admin') || assignedRole.toLowerCase().includes('adm') ? 'Admin' : 'Member'}
+                                                            </span>
                                                         </div>
+                                                    </td>
+                                                    <td className="px-4 py-3.5">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="relative shrink-0">
+                                                                <img
+                                                                    src={uAvatar}
+                                                                    alt={u.fullName || u.name}
+                                                                    className="w-9 h-9 rounded-xl object-cover ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-xs"
+                                                                />
+                                                                <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 ${u.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p
+                                                                    onClick={() => {
+                                                                        setSelectedUserDetailsUser(u);
+                                                                        setIsUserDetailsModalOpen(true);
+                                                                    }}
+                                                                    className="font-bold text-xs text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer transition-colors truncate"
+                                                                >
+                                                                    {u.fullName || u.name}
+                                                                </p>
+                                                                <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[200px] mt-0.5">{uEmail}</p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3.5">
                                                         <div className="min-w-0">
-                                                            <p 
+                                                            <p className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">{u.designation || 'Staff Member'}</p>
+                                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                                                                <span className="material-symbols-outlined text-[13px] text-slate-400">apartment</span>
+                                                                <span>{u.department || u.departmentName || 'MPOnline Limited'}</span>
+                                                            </p>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3.5">
+                                                        <div className="flex items-center">
+                                                            {(() => {
+                                                                const role = getUserAssignedRole(u);
+                                                                return (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            if (isSysAdmin || isHrAdmin) {
+                                                                                setRoleUserId(String(u.userId || u.id));
+                                                                                setRoleUserName(u.fullName || u.name);
+                                                                                setSelectedRoles([role]);
+                                                                                setIsRoleModalOpen(true);
+                                                                            }
+                                                                        }}
+                                                                        className={`px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 shadow-xs transition-all ${getRoleBadgeStyle(role)} ${(isSysAdmin || isHrAdmin) ? 'cursor-pointer hover:shadow-xs hover:scale-[1.02] active:scale-95' : ''}`}
+                                                                        title={isSysAdmin || isHrAdmin ? "Click to configure role & privileges" : role}
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-[14px]">
+                                                                            {role.toLowerCase().includes('system') ? 'shield_person' :
+                                                                                role.toLowerCase().includes('hr') ? 'badge' :
+                                                                                    role.toLowerCase().includes('community') ? 'groups' :
+                                                                                        role.toLowerCase().includes('mod') ? 'shield' : 'person'}
+                                                                        </span>
+                                                                        <span>{role}</span>
+                                                                        {(isSysAdmin || isHrAdmin) && (
+                                                                            <span className="material-symbols-outlined text-[12px] opacity-60">edit</span>
+                                                                        )}
+                                                                    </button>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3.5">
+                                                        {(() => {
+                                                            const singleRole = getUserAssignedRole(u).toLowerCase();
+                                                            const isUserSysAdmin = singleRole.includes('system') || singleRole.includes('sysadm');
+                                                            if (isUserSysAdmin) {
+                                                                return <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 italic" title="System Admin is exempt from Karma">— (Exempt)</span>;
+                                                            }
+                                                            return (
+                                                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/80 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/40 text-xs font-black">
+                                                                    <span className="material-symbols-outlined text-[15px] text-amber-500">stars</span>
+                                                                    <span>{typeof u.karmaPoints === 'number' ? u.karmaPoints : 0} pts</span>
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </td>
+                                                    <td className="px-4 py-3.5">
+                                                        {(() => {
+                                                            const isSusp = u.isSuspended === true || u.isPermanentlySuspended === true || !u.isActive || (u.status || '').toLowerCase() === 'suspended';
+                                                            const statusCfg = getUserStatusConfig(isSusp ? 'Suspended' : (u.status || 'Active'));
+                                                            const hasPendingSuspension = !isSusp && suspensionRequests.some(r => Number(r.targetUserId) === Number(u.userId || u.id) && r.status === 'Pending');
+                                                            return (
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border shadow-xs w-fit transition-all duration-200 ${statusCfg.badgeClass}`}>
+                                                                        <span className={`w-1.5 h-1.5 rounded-full transition-colors duration-200 ${statusCfg.dotClass} ${!isSusp ? 'animate-pulse' : ''}`}></span>
+                                                                        <span>{statusCfg.label}</span>
+                                                                    </span>
+                                                                    {isEmployeeMarkedInNotice(u) && (
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 w-fit" title={noticePeriodConfig.isEnabled ? "In Notice Period — Post Scheduling Disabled" : "In Notice Period (Policy Paused)"}>
+                                                                            <span className="material-symbols-outlined text-[12px] text-amber-500">event_busy</span>
+                                                                            <span>In Notice Period</span>
+                                                                        </span>
+                                                                    )}
+                                                                    {hasPendingSuspension && (
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 w-fit">
+                                                                            <span className="material-symbols-outlined text-[12px] animate-pulse">hourglass_top</span>
+                                                                            <span>Pending HR Approval</span>
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </td>
+                                                    <td className="px-5 py-3.5 text-right">
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            <button
+                                                                type="button"
                                                                 onClick={() => {
                                                                     setSelectedUserDetailsUser(u);
                                                                     setIsUserDetailsModalOpen(true);
                                                                 }}
-                                                                className="font-bold text-xs text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer transition-colors truncate"
+                                                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/50 dark:hover:text-indigo-400 border border-slate-200/60 dark:border-slate-700 transition-all cursor-pointer shadow-xs"
+                                                                title="View User Details"
+                                                                aria-label="View User Details"
                                                             >
-                                                                {u.fullName || u.name}
-                                                            </p>
-                                                            <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[200px] mt-0.5">{uEmail}</p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3.5">
-                                                    <div className="min-w-0">
-                                                        <p className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">{u.designation || 'Staff Member'}</p>
-                                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
-                                                            <span className="material-symbols-outlined text-[13px] text-slate-400">apartment</span>
-                                                            <span>{u.department || u.departmentName || 'MPOnline Limited'}</span>
-                                                        </p>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3.5">
-                                                    <div className="flex items-center">
-                                                        {(() => {
-                                                            const role = getUserAssignedRole(u);
-                                                            return (
+                                                                <span className="material-symbols-outlined text-[17px]">visibility</span>
+                                                            </button>
+                                                            {(isSysAdmin || isHrAdmin) && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
-                                                                        if (isSysAdmin || isHrAdmin) {
-                                                                            setRoleUserId(String(u.userId || u.id));
-                                                                            setRoleUserName(u.fullName || u.name);
-                                                                            setSelectedRoles([role]);
-                                                                            setIsRoleModalOpen(true);
-                                                                        }
+                                                                        const userRole = getUserAssignedRole(u);
+                                                                        setRoleUserId(String(u.userId || u.id));
+                                                                        setRoleUserName(u.fullName || u.name);
+                                                                        setSelectedRoles([userRole]);
+                                                                        setIsRoleModalOpen(true);
                                                                     }}
-                                                                    className={`px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 shadow-xs transition-all ${getRoleBadgeStyle(role)} ${(isSysAdmin || isHrAdmin) ? 'cursor-pointer hover:shadow-xs hover:scale-[1.02] active:scale-95' : ''}`}
-                                                                    title={isSysAdmin || isHrAdmin ? "Click to configure role & privileges" : role}
+                                                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200/60 dark:border-indigo-800/60 transition-all cursor-pointer shadow-xs"
+                                                                    title="Edit Role & Privileges"
+                                                                    aria-label="Edit Role & Privileges"
                                                                 >
-                                                                    <span className="material-symbols-outlined text-[14px]">
-                                                                        {role.toLowerCase().includes('system') ? 'shield_person' :
-                                                                         role.toLowerCase().includes('hr') ? 'badge' :
-                                                                         role.toLowerCase().includes('community') ? 'groups' :
-                                                                         role.toLowerCase().includes('mod') ? 'shield' : 'person'}
-                                                                    </span>
-                                                                    <span>{role}</span>
-                                                                    {(isSysAdmin || isHrAdmin) && (
-                                                                        <span className="material-symbols-outlined text-[12px] opacity-60">edit</span>
-                                                                    )}
+                                                                    <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
                                                                 </button>
-                                                            );
-                                                        })()}
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3.5">
-                                                    {(() => {
-                                                        const singleRole = getUserAssignedRole(u).toLowerCase();
-                                                        const isUserSysAdmin = singleRole.includes('system') || singleRole.includes('sysadm');
-                                                        if (isUserSysAdmin) {
-                                                            return <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 italic" title="System Admin is exempt from Karma">— (Exempt)</span>;
-                                                        }
-                                                        return (
-                                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/80 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/40 text-xs font-black">
-                                                                <span className="material-symbols-outlined text-[15px] text-amber-500">stars</span>
-                                                                <span>{typeof u.karmaPoints === 'number' ? u.karmaPoints : 0} pts</span>
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </td>
-                                                <td className="px-4 py-3.5">
-                                                    {(() => {
-                                                        const isSusp = u.isSuspended === true || u.isPermanentlySuspended === true || !u.isActive || (u.status || '').toLowerCase() === 'suspended';
-                                                        const statusCfg = getUserStatusConfig(isSusp ? 'Suspended' : (u.status || 'Active'));
-                                                        const hasPendingSuspension = !isSusp && suspensionRequests.some(r => Number(r.targetUserId) === Number(u.userId || u.id) && r.status === 'Pending');
-                                                        return (
-                                                            <div className="flex flex-col gap-1">
-                                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border shadow-xs w-fit transition-all duration-200 ${statusCfg.badgeClass}`}>
-                                                                    <span className={`w-1.5 h-1.5 rounded-full transition-colors duration-200 ${statusCfg.dotClass} ${!isSusp ? 'animate-pulse' : ''}`}></span>
-                                                                    <span>{statusCfg.label}</span>
-                                                                </span>
-                                                                {isEmployeeMarkedInNotice(u) && (
-                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 w-fit" title={noticePeriodConfig.isEnabled ? "In Notice Period — Post Scheduling Disabled" : "In Notice Period (Policy Paused)"}>
-                                                                        <span className="material-symbols-outlined text-[12px] text-amber-500">event_busy</span>
-                                                                        <span>In Notice Period</span>
-                                                                    </span>
-                                                                )}
-                                                                {hasPendingSuspension && (
-                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 w-fit">
-                                                                        <span className="material-symbols-outlined text-[12px] animate-pulse">hourglass_top</span>
-                                                                        <span>Pending HR Approval</span>
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </td>
-                                                <td className="px-5 py-3.5 text-right">
-                                                    <div className="flex items-center justify-end gap-1.5">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setSelectedUserDetailsUser(u);
-                                                                setIsUserDetailsModalOpen(true);
-                                                            }}
-                                                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/50 dark:hover:text-indigo-400 border border-slate-200/60 dark:border-slate-700 transition-all cursor-pointer shadow-xs"
-                                                            title="View User Details"
-                                                            aria-label="View User Details"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[17px]">visibility</span>
-                                                        </button>
-                                                        {(isSysAdmin || isHrAdmin) && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const userRole = getUserAssignedRole(u);
-                                                                    setRoleUserId(String(u.userId || u.id));
-                                                                    setRoleUserName(u.fullName || u.name);
-                                                                    setSelectedRoles([userRole]);
-                                                                    setIsRoleModalOpen(true);
-                                                                }}
-                                                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200/60 dark:border-indigo-800/60 transition-all cursor-pointer shadow-xs"
-                                                                title="Edit Role & Privileges"
-                                                                aria-label="Edit Role & Privileges"
-                                                            >
-                                                                <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
-                                                            </button>
-                                                        )}
-                                                        {isHrAdmin && !isSysAdmin && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleToggleEmployeeNotice(u)}
-                                                                className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 cursor-pointer shadow-xs active:scale-95 ${
-                                                                    isEmployeeMarkedInNotice(u)
-                                                                        ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-200'
-                                                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-amber-50 hover:text-amber-600 border-slate-200/60 dark:border-slate-700'
-                                                                }`}
-                                                                title={isEmployeeMarkedInNotice(u) ? "In Notice Period: Click to remove and restore scheduling" : "Mark as In Notice Period (Disable Post Scheduling)"}
-                                                                aria-label="Toggle Notice Period"
-                                                            >
-                                                                <span className="material-symbols-outlined text-[16px]">
-                                                                    {isEmployeeMarkedInNotice(u) ? 'event_busy' : 'timer_off'}
-                                                                </span>
-                                                            </button>
-                                                        )}
-                                                        {(() => {
-                                                            const isSusp = u.isSuspended === true || u.isPermanentlySuspended === true || !u.isActive || (u.status || '').toLowerCase() === 'suspended';
-                                                            return (
+                                                            )}
+                                                            {isHrAdmin && !isSysAdmin && (
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => handleToggleUserActive(u)}
-                                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 cursor-pointer shadow-xs active:scale-95 ${
-                                                                        !isSusp 
-                                                                            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 border-rose-200/60 dark:border-rose-800/60 hover:shadow-xs' 
-                                                                            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-xs'
-                                                                    }`}
-                                                                    title={!isSusp ? (isHrAdmin ? "Suspend User" : "Request Suspension") : "Activate User"}
-                                                                    aria-label={!isSusp ? (isHrAdmin ? "Suspend User" : "Request Suspension") : "Activate User"}
+                                                                    onClick={() => handleToggleEmployeeNotice(u)}
+                                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 cursor-pointer shadow-xs active:scale-95 ${isEmployeeMarkedInNotice(u)
+                                                                            ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-200'
+                                                                            : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-amber-50 hover:text-amber-600 border-slate-200/60 dark:border-slate-700'
+                                                                        }`}
+                                                                    title={isEmployeeMarkedInNotice(u) ? "In Notice Period: Click to remove and restore scheduling" : "Mark as In Notice Period (Disable Post Scheduling)"}
+                                                                    aria-label="Toggle Notice Period"
                                                                 >
-                                                                    <span className="material-symbols-outlined text-[17px] transition-transform duration-200">
-                                                                        {!isSusp ? 'person_off' : 'how_to_reg'}
+                                                                    <span className="material-symbols-outlined text-[16px]">
+                                                                        {isEmployeeMarkedInNotice(u) ? 'event_busy' : 'timer_off'}
                                                                     </span>
                                                                 </button>
-                                                            );
-                                                        })()}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
+                                                            )}
+                                                            {(() => {
+                                                                const isSusp = u.isSuspended === true || u.isPermanentlySuspended === true || !u.isActive || (u.status || '').toLowerCase() === 'suspended';
+                                                                return (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleToggleUserActive(u)}
+                                                                        className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 cursor-pointer shadow-xs active:scale-95 ${!isSusp
+                                                                                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 border-rose-200/60 dark:border-rose-800/60 hover:shadow-xs'
+                                                                                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-xs'
+                                                                            }`}
+                                                                        title={!isSusp ? (isHrAdmin ? "Suspend User" : "Request Suspension") : "Activate User"}
+                                                                        aria-label={!isSusp ? (isHrAdmin ? "Suspend User" : "Request Suspension") : "Activate User"}
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-[17px] transition-transform duration-200">
+                                                                            {!isSusp ? 'person_off' : 'how_to_reg'}
+                                                                        </span>
+                                                                    </button>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <ScrollLoadingIndicator isVisible={visibleUserCount < filteredUsers.length} text="Loading more users on scroll..." />
                     </div>
-                    <ScrollLoadingIndicator isVisible={visibleUserCount < filteredUsers.length} text="Loading more users on scroll..." />
-                </div>
                 </div>
             )}
 
@@ -7910,7 +7819,7 @@ export default function AdminConsole() {
                                     </span>
                                 </div>
                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-2xl">
-                                    {canManageSuspensions 
+                                    {canManageSuspensions
                                         ? "Review employee account suspension requests submitted by Moderators. Approved suspensions take immediate effect across the platform."
                                         : "Track submitted employee suspension requests sent to HR Administrators for review, verification, and governance enforcement."}
                                 </p>
@@ -7950,11 +7859,10 @@ export default function AdminConsole() {
                         <button
                             type="button"
                             onClick={() => setSuspensionRequestStatusFilter('All')}
-                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
-                                suspensionRequestStatusFilter === 'All'
+                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${suspensionRequestStatusFilter === 'All'
                                     ? 'bg-[#0c1838] text-white border-[#1e295a] shadow-xs'
                                     : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300'
-                            }`}
+                                }`}
                         >
                             <div className="flex items-center justify-between">
                                 <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">All Requests</span>
@@ -7968,11 +7876,10 @@ export default function AdminConsole() {
                         <button
                             type="button"
                             onClick={() => setSuspensionRequestStatusFilter('Pending')}
-                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
-                                suspensionRequestStatusFilter === 'Pending'
+                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${suspensionRequestStatusFilter === 'Pending'
                                     ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-500/20'
                                     : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 hover:border-amber-300'
-                            }`}
+                                }`}
                         >
                             <div className="flex items-center justify-between">
                                 <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Pending HR</span>
@@ -7989,11 +7896,10 @@ export default function AdminConsole() {
                         <button
                             type="button"
                             onClick={() => setSuspensionRequestStatusFilter('Approved')}
-                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
-                                suspensionRequestStatusFilter === 'Approved'
+                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${suspensionRequestStatusFilter === 'Approved'
                                     ? 'bg-emerald-600 text-white border-emerald-700 shadow-md shadow-emerald-600/20'
                                     : 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300 hover:border-emerald-300'
-                            }`}
+                                }`}
                         >
                             <div className="flex items-center justify-between">
                                 <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Approved</span>
@@ -8007,11 +7913,10 @@ export default function AdminConsole() {
                         <button
                             type="button"
                             onClick={() => setSuspensionRequestStatusFilter('Rejected')}
-                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
-                                suspensionRequestStatusFilter === 'Rejected'
+                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${suspensionRequestStatusFilter === 'Rejected'
                                     ? 'bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-600/20'
                                     : 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 text-rose-800 dark:text-rose-300 hover:border-rose-300'
-                            }`}
+                                }`}
                         >
                             <div className="flex items-center justify-between">
                                 <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Rejected</span>
@@ -8041,7 +7946,7 @@ export default function AdminConsole() {
                             const matchesStatus = suspensionRequestStatusFilter === 'All' || (r.status || '').toLowerCase() === suspensionRequestStatusFilter.toLowerCase();
                             const term = (suspensionRequestSearchTerm || '').trim().toLowerCase();
                             if (!term) return matchesStatus;
-                            const matchesTerm = 
+                            const matchesTerm =
                                 (r.targetFullName || '').toLowerCase().includes(term) ||
                                 (r.targetEmployeeId || '').toLowerCase().includes(term) ||
                                 (r.targetEmail || '').toLowerCase().includes(term) ||
@@ -8082,13 +7987,12 @@ export default function AdminConsole() {
                                     return (
                                         <div
                                             key={req.requestId}
-                                            className={`p-5 rounded-2xl border transition-all space-y-4 ${
-                                                isPending
+                                            className={`p-5 rounded-2xl border transition-all space-y-4 ${isPending
                                                     ? 'border-amber-400/60 bg-amber-500/[0.03] dark:bg-amber-950/10 shadow-xs'
                                                     : req.status === 'Approved'
                                                         ? 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-500/[0.02] dark:bg-emerald-950/10'
                                                         : 'border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20'
-                                            }`}
+                                                }`}
                                         >
                                             {/* Header Strip */}
                                             <div className="flex items-center justify-between gap-2">
@@ -8128,13 +8032,12 @@ export default function AdminConsole() {
                                                     </span>
                                                 </div>
 
-                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
-                                                    isPending
+                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${isPending
                                                         ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400 animate-pulse'
                                                         : req.status === 'Approved'
                                                             ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-400'
                                                             : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-400'
-                                                }`}>
+                                                    }`}>
                                                     {isPending ? 'Pending HR Approval' : req.status}
                                                 </span>
                                             </div>
@@ -8166,11 +8069,10 @@ export default function AdminConsole() {
                                                     </div>
                                                 </div>
 
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
-                                                    isCurrentlySuspended 
-                                                        ? 'bg-rose-500/15 text-rose-600 border border-rose-500/20' 
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${isCurrentlySuspended
+                                                        ? 'bg-rose-500/15 text-rose-600 border border-rose-500/20'
                                                         : 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/20'
-                                                }`}>
+                                                    }`}>
                                                     {isCurrentlySuspended ? 'Suspended' : 'Active'}
                                                 </span>
                                             </div>
@@ -8362,17 +8264,15 @@ export default function AdminConsole() {
                                 <button
                                     type="button"
                                     onClick={() => handleToggleNoticePolicy(!noticePeriodConfig.isEnabled)}
-                                    className={`relative inline-flex h-8 w-15 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none shadow-inner ${
-                                        noticePeriodConfig.isEnabled ? 'bg-amber-500 hover:bg-amber-400' : 'bg-slate-700 hover:bg-slate-600'
-                                    }`}
+                                    className={`relative inline-flex h-8 w-15 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none shadow-inner ${noticePeriodConfig.isEnabled ? 'bg-amber-500 hover:bg-amber-400' : 'bg-slate-700 hover:bg-slate-600'
+                                        }`}
                                     role="switch"
                                     aria-checked={noticePeriodConfig.isEnabled}
                                     title="Toggle Master Notice Period Post-Scheduling Guard"
                                 >
                                     <span
-                                        className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                                            noticePeriodConfig.isEnabled ? 'translate-x-7' : 'translate-x-0'
-                                        }`}
+                                        className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${noticePeriodConfig.isEnabled ? 'translate-x-7' : 'translate-x-0'
+                                            }`}
                                     />
                                 </button>
                             </div>
@@ -8397,11 +8297,10 @@ export default function AdminConsole() {
                         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Post Scheduling Guard</span>
-                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                                    noticePeriodConfig.isEnabled 
-                                        ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400' 
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${noticePeriodConfig.isEnabled
+                                        ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
                                         : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                                }`}>
+                                    }`}>
                                     <span className="material-symbols-outlined text-[19px]">timer_off</span>
                                 </div>
                             </div>
@@ -8487,33 +8386,30 @@ export default function AdminConsole() {
                                     <button
                                         type="button"
                                         onClick={() => setNoticePeriodFilter('All')}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                            noticePeriodFilter === 'All'
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${noticePeriodFilter === 'All'
                                                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                                                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                                        }`}
+                                            }`}
                                     >
                                         All ({usersList.length})
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setNoticePeriodFilter('InNotice')}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                            noticePeriodFilter === 'InNotice'
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${noticePeriodFilter === 'InNotice'
                                                 ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
                                                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                                        }`}
+                                            }`}
                                     >
                                         In Notice ({markedNoticeCount})
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setNoticePeriodFilter('Standard')}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                            noticePeriodFilter === 'Standard'
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${noticePeriodFilter === 'Standard'
                                                 ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
                                                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                                        }`}
+                                            }`}
                                     >
                                         Standard ({Math.max(0, usersList.length - markedNoticeCount)})
                                     </button>
@@ -8551,7 +8447,7 @@ export default function AdminConsole() {
                                             <input
                                                 type="checkbox"
                                                 checked={
-                                                    usersList.length > 0 && 
+                                                    usersList.length > 0 &&
                                                     filteredNoticeUsers.length > 0 && filteredNoticeUsers.every(u => selectedNoticeUserKeys.includes(String(u.userId || u.id || u.employeeId)))
                                                 }
                                                 onChange={(e) => {
@@ -8620,11 +8516,10 @@ export default function AdminConsole() {
                                             const empIdDisplay = u.employeeId || (KNOWN_ROSTER_DETAILS[String(u.userId || u.id)] ? Object.keys(KNOWN_ROSTER_NAMES).find(k => KNOWN_ROSTER_NAMES[k] === (u.fullName || u.name)) : `EMP#${u.userId || u.id}`);
 
                                             return (
-                                                <tr 
+                                                <tr
                                                     key={uKey}
-                                                    className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors ${
-                                                        isMarked ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''
-                                                    }`}
+                                                    className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors ${isMarked ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''
+                                                        }`}
                                                 >
                                                     <td className="px-5 py-3.5 text-center">
                                                         <input
@@ -8720,11 +8615,10 @@ export default function AdminConsole() {
                                                         <button
                                                             type="button"
                                                             onClick={() => handleToggleEmployeeNotice(u)}
-                                                            className={`px-3.5 py-1.5 rounded-xl font-bold text-xs inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 ${
-                                                                isMarked
+                                                            className={`px-3.5 py-1.5 rounded-xl font-bold text-xs inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 ${isMarked
                                                                     ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
                                                                     : 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
-                                                            }`}
+                                                                }`}
                                                             title={isMarked ? "Remove from notice period and restore post scheduling" : "Mark employee as In Notice Period to disable post-scheduling"}
                                                         >
                                                             <span className="material-symbols-outlined text-[15px]">
@@ -8780,13 +8674,12 @@ export default function AdminConsole() {
                                     Community Moderation & Enterprise Channels ({filteredCommunities.length}{communityPolicyFilter !== 'All' ? ` / ${communityChannels.length}` : ''})
                                 </h2>
                                 {communityPolicyFilter !== 'All' && (
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                        communityPolicyFilter === 'Strict' 
-                                            ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' 
-                                            : communityPolicyFilter === 'Standard' 
-                                            ? 'bg-indigo-500/10 text-indigo-600 border border-indigo-500/20' 
-                                            : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                                    }`}>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${communityPolicyFilter === 'Strict'
+                                            ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+                                            : communityPolicyFilter === 'Standard'
+                                                ? 'bg-indigo-500/10 text-indigo-600 border border-indigo-500/20'
+                                                : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                        }`}>
                                         Filtered: {communityPolicyFilter}
                                     </span>
                                 )}
@@ -8812,11 +8705,10 @@ export default function AdminConsole() {
                             <div className="relative">
                                 <button
                                     onClick={() => setIsCommunityFilterOpen(prev => !prev)}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer shadow-xs ${
-                                        communityPolicyFilter !== 'All'
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer shadow-xs ${communityPolicyFilter !== 'All'
                                             ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-500/20 ring-2 ring-indigo-500/30'
                                             : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-500/50'
-                                    }`}
+                                        }`}
                                 >
                                     <span className="material-symbols-outlined text-[16px]">tune</span>
                                     <span>
@@ -8829,9 +8721,9 @@ export default function AdminConsole() {
 
                                 {isCommunityFilterOpen && (
                                     <>
-                                        <div 
-                                            className="fixed inset-0 z-20" 
-                                            onClick={() => setIsCommunityFilterOpen(false)} 
+                                        <div
+                                            className="fixed inset-0 z-20"
+                                            onClick={() => setIsCommunityFilterOpen(false)}
                                         />
                                         <div className="absolute right-0 mt-1.5 w-52 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-30 py-1.5 overflow-hidden animate-in fade-in zoom-in-95 text-xs">
                                             <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-700/60">
@@ -8845,11 +8737,10 @@ export default function AdminConsole() {
                                                     setIsCommunityFilterOpen(false);
                                                     showToast('Showing all communities');
                                                 }}
-                                                className={`w-full px-3 py-2 text-left font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                                                    communityPolicyFilter === 'All'
+                                                className={`w-full px-3 py-2 text-left font-bold flex items-center justify-between transition-colors cursor-pointer ${communityPolicyFilter === 'All'
                                                         ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
                                                         : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-slate-400"></span>
@@ -8865,11 +8756,10 @@ export default function AdminConsole() {
                                                     setIsCommunityFilterOpen(false);
                                                     showToast('Filtered: Showing Strict moderation communities');
                                                 }}
-                                                className={`w-full px-3 py-2 text-left font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                                                    communityPolicyFilter === 'Strict'
+                                                className={`w-full px-3 py-2 text-left font-bold flex items-center justify-between transition-colors cursor-pointer ${communityPolicyFilter === 'Strict'
                                                         ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
                                                         : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-rose-500"></span>
@@ -8887,11 +8777,10 @@ export default function AdminConsole() {
                                                     setIsCommunityFilterOpen(false);
                                                     showToast('Filtered: Showing Standard moderation communities');
                                                 }}
-                                                className={`w-full px-3 py-2 text-left font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                                                    communityPolicyFilter === 'Standard'
+                                                className={`w-full px-3 py-2 text-left font-bold flex items-center justify-between transition-colors cursor-pointer ${communityPolicyFilter === 'Standard'
                                                         ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
                                                         : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
@@ -8909,11 +8798,10 @@ export default function AdminConsole() {
                                                     setIsCommunityFilterOpen(false);
                                                     showToast('Filtered: Showing Relaxed moderation communities');
                                                 }}
-                                                className={`w-full px-3 py-2 text-left font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                                                    communityPolicyFilter === 'Relaxed'
+                                                className={`w-full px-3 py-2 text-left font-bold flex items-center justify-between transition-colors cursor-pointer ${communityPolicyFilter === 'Relaxed'
                                                         ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
                                                         : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -8954,68 +8842,68 @@ export default function AdminConsole() {
                             </div>
                         ) : (
                             filteredCommunities.map((c) => (
-                            <div 
-                                key={c.id} 
-                                onClick={() => {
-                                    setActiveTab('moderation');
-                                    setCommunityFilter(c.filterKey);
-                                    showToast(`Filtered: Showing reports for ${c.name} channel.`);
-                                }}
-                                className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-500/50 transition-all cursor-pointer group shadow-xs hover:shadow-md flex flex-col justify-between"
-                            >
-                                <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
-                                            <span className="material-symbols-outlined text-[20px]">{c.icon || 'forum'}</span>
-                                            <span className="font-black text-xs text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{c.name}</span>
+                                <div
+                                    key={c.id}
+                                    onClick={() => {
+                                        setActiveTab('moderation');
+                                        setCommunityFilter(c.filterKey);
+                                        showToast(`Filtered: Showing reports for ${c.name} channel.`);
+                                    }}
+                                    className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-500/50 transition-all cursor-pointer group shadow-xs hover:shadow-md flex flex-col justify-between"
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                                                <span className="material-symbols-outlined text-[20px]">{c.icon || 'forum'}</span>
+                                                <span className="font-black text-xs text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{c.name}</span>
+                                            </div>
+                                            <span className={`px-2 py-0.5 font-bold text-[10px] rounded ${c.status === 'Strict' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20' : (c.status === 'Standard' ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20')}`}>
+                                                {c.status}
+                                            </span>
                                         </div>
-                                        <span className={`px-2 py-0.5 font-bold text-[10px] rounded ${c.status === 'Strict' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20' : (c.status === 'Standard' ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20')}`}>
-                                            {c.status}
-                                        </span>
+                                        <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 mb-1">
+                                            {c.category}
+                                        </p>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="px-2 py-0.5 bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 font-bold text-[9px] rounded-full uppercase">
+                                                {c.type || 'Public'}
+                                            </span>
+                                            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                                                {getCommunityMemberCount(c)} {getCommunityMemberCount(c) === 1 ? 'Member' : 'Members'}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                                            Pending Reports: <span className={`font-bold ${c.reportsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>{c.reportsCount}</span>
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 mb-1">
-                                        {c.category}
-                                    </p>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="px-2 py-0.5 bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 font-bold text-[9px] rounded-full uppercase">
-                                            {c.type || 'Public'}
-                                        </span>
-                                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
-                                            {getCommunityMemberCount(c)} {getCommunityMemberCount(c) === 1 ? 'Member' : 'Members'}
-                                        </span>
-                                    </div>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                                        Pending Reports: <span className={`font-bold ${c.reportsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>{c.reportsCount}</span>
-                                    </p>
-                                </div>
-                                <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-[11px] gap-2">
-                                    <span className="text-slate-500 dark:text-slate-400 truncate">Mod: <strong className="text-slate-800 dark:text-slate-200">{c.mod}</strong></span>
-                                    <div className="flex items-center gap-1.5 shrink-0">
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                navigate(`/community/view?id=${c.id}`);
-                                            }}
-                                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg transition-all shadow-xs flex items-center gap-1 cursor-pointer"
-                                            title={`View full ${c.name} community page`}
-                                        >
-                                            <span className="material-symbols-outlined text-[13px]">visibility</span>
-                                            <span>View</span>
-                                        </button>
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSelectedManageCommunity(c);
-                                                setIsCommunityModalOpen(true);
-                                            }}
-                                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-lg transition-all shadow-xs cursor-pointer"
-                                        >
-                                            Manage
-                                        </button>
+                                    <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-[11px] gap-2">
+                                        <span className="text-slate-500 dark:text-slate-400 truncate">Mod: <strong className="text-slate-800 dark:text-slate-200">{c.mod}</strong></span>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate(`/community/view?id=${c.id}`);
+                                                }}
+                                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                                                title={`View full ${c.name} community page`}
+                                            >
+                                                <span className="material-symbols-outlined text-[13px]">visibility</span>
+                                                <span>View</span>
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedManageCommunity(c);
+                                                    setIsCommunityModalOpen(true);
+                                                }}
+                                                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-lg transition-all shadow-xs cursor-pointer"
+                                            >
+                                                Manage
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )))}
+                            )))}
                     </div>
                 </div>
             )}
@@ -9038,15 +8926,15 @@ export default function AdminConsole() {
                                 </p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                                <button 
+                                <button
                                     onClick={handleResetAiRules}
                                     className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg font-bold text-xs cursor-pointer transition-colors flex items-center gap-1.5"
                                 >
                                     <span className="material-symbols-outlined text-[15px]">restart_alt</span>
                                     <span>Reset Defaults</span>
                                 </button>
-                                <button 
-                                    onClick={handleSaveConfig} 
+                                <button
+                                    onClick={handleSaveConfig}
                                     className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs cursor-pointer shadow-xs transition-colors flex items-center gap-1.5"
                                 >
                                     <span className="material-symbols-outlined text-[15px]">save</span>
@@ -9072,13 +8960,13 @@ export default function AdminConsole() {
                                     <p className="text-slate-500 dark:text-slate-400 mb-3 text-[11px] leading-relaxed">
                                         Content with toxicity/abuse confidence score <span className="font-bold text-indigo-600">&gt;= {configState.aiToxicityThreshold || 80}%</span> is automatically intercepted and routed to the Content Moderation queue.
                                     </p>
-                                    <input 
-                                        type="range" 
-                                        min="50" 
-                                        max="95" 
+                                    <input
+                                        type="range"
+                                        min="50"
+                                        max="95"
                                         value={configState.aiToxicityThreshold || 80}
                                         onChange={e => setConfigState({ ...configState, aiToxicityThreshold: Number(e.target.value) })}
-                                        className="w-full accent-indigo-600 cursor-pointer" 
+                                        className="w-full accent-indigo-600 cursor-pointer"
                                     />
                                     <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-bold">
                                         <span>50% (Permissive)</span>
@@ -9090,14 +8978,13 @@ export default function AdminConsole() {
                                     <span className="text-slate-400">Quick presets:</span>
                                     <div className="flex gap-1">
                                         {[50, 80, 95].map(preset => (
-                                            <button 
+                                            <button
                                                 key={preset}
                                                 onClick={() => setConfigState({ ...configState, aiToxicityThreshold: preset })}
-                                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
-                                                    (configState.aiToxicityThreshold || 80) === preset
+                                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${(configState.aiToxicityThreshold || 80) === preset
                                                         ? 'bg-indigo-600 text-white'
                                                         : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300'
-                                                }`}
+                                                    }`}
                                             >
                                                 {preset}%
                                             </button>
@@ -9114,11 +9001,10 @@ export default function AdminConsole() {
                                             <span className="material-symbols-outlined text-rose-500 text-[18px]">gavel</span>
                                             <h3 className="font-bold text-sm text-slate-900 dark:text-white">Auto-Quarantine High Risk</h3>
                                         </div>
-                                        <span className={`px-2 py-0.5 rounded-md font-black text-[10px] ${
-                                            configState.aiAutoQuarantine !== false 
-                                                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' 
+                                        <span className={`px-2 py-0.5 rounded-md font-black text-[10px] ${configState.aiAutoQuarantine !== false
+                                                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
                                                 : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                                        }`}>
+                                            }`}>
                                             {configState.aiAutoQuarantine !== false ? 'ENABLED' : 'OFF'}
                                         </span>
                                     </div>
@@ -9126,11 +9012,11 @@ export default function AdminConsole() {
                                         Immediately suppresses / hides posts with Toxicity score <span className="font-bold text-rose-600">&gt; 95%</span> from the public feed before a human moderator reviews it.
                                     </p>
                                     <label className="flex items-center gap-2 font-bold cursor-pointer select-none mt-2">
-                                        <input 
-                                            type="checkbox" 
+                                        <input
+                                            type="checkbox"
                                             checked={configState.aiAutoQuarantine !== false}
                                             onChange={e => setConfigState({ ...configState, aiAutoQuarantine: e.target.checked })}
-                                            className="w-4 h-4 rounded text-rose-600 cursor-pointer accent-rose-600" 
+                                            className="w-4 h-4 rounded text-rose-600 cursor-pointer accent-rose-600"
                                         />
                                         <span className="text-slate-800 dark:text-slate-200 text-xs">Auto-Quarantine &gt;95% Severity</span>
                                     </label>
@@ -9149,11 +9035,10 @@ export default function AdminConsole() {
                                             <span className="material-symbols-outlined text-amber-500 text-[18px]">key</span>
                                             <h3 className="font-bold text-sm text-slate-900 dark:text-white">Copyright & PII Leak Scanner</h3>
                                         </div>
-                                        <span className={`px-2 py-0.5 rounded-md font-black text-[10px] ${
-                                            configState.aiDeepScan !== false 
-                                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' 
+                                        <span className={`px-2 py-0.5 rounded-md font-black text-[10px] ${configState.aiDeepScan !== false
+                                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                                                 : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                                        }`}>
+                                            }`}>
                                             {configState.aiDeepScan !== false ? 'ENABLED' : 'OFF'}
                                         </span>
                                     </div>
@@ -9161,11 +9046,11 @@ export default function AdminConsole() {
                                         Scans text, snippets & attachments for Indian PAN, Aadhaar numbers, confidential compensation/CTC docs, and API tokens.
                                     </p>
                                     <label className="flex items-center gap-2 font-bold cursor-pointer select-none mt-2">
-                                        <input 
-                                            type="checkbox" 
+                                        <input
+                                            type="checkbox"
                                             checked={configState.aiDeepScan !== false}
                                             onChange={e => setConfigState({ ...configState, aiDeepScan: e.target.checked })}
-                                            className="w-4 h-4 rounded text-amber-600 cursor-pointer accent-amber-600" 
+                                            className="w-4 h-4 rounded text-amber-600 cursor-pointer accent-amber-600"
                                         />
                                         <span className="text-slate-800 dark:text-slate-200 text-xs">Enable Deep Attachment Scan</span>
                                     </label>
@@ -9258,11 +9143,10 @@ export default function AdminConsole() {
                                             setAiTestInput(p.content);
                                             runAiEvaluation(p.content);
                                         }}
-                                        className={`px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${
-                                            aiSelectedPreset === p.id 
+                                        className={`px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${aiSelectedPreset === p.id
                                                 ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                                                 : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                                        }`}
+                                            }`}
                                     >
                                         <span>{p.label}</span>
                                         <span className={`px-1.5 py-0.2 rounded text-[10px] font-black border ${p.badgeColor} ${aiSelectedPreset === p.id ? 'bg-white/20 text-white border-transparent' : ''}`}>
@@ -9306,13 +9190,12 @@ export default function AdminConsole() {
                         {aiAnalysisResult && (
                             <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 animate-fadeIn">
                                 {/* Prominent Verdict Banner */}
-                                <div className={`p-3.5 rounded-xl border mb-4 flex items-start justify-between gap-3 ${
-                                    aiAnalysisResult.status === 'QUARANTINED'
+                                <div className={`p-3.5 rounded-xl border mb-4 flex items-start justify-between gap-3 ${aiAnalysisResult.status === 'QUARANTINED'
                                         ? 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-400'
                                         : aiAnalysisResult.status === 'FLAGGED'
                                             ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400'
                                             : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
-                                }`}>
+                                    }`}>
                                     <div className="flex items-start gap-2.5">
                                         <span className="material-symbols-outlined text-[24px] mt-0.5 shrink-0">
                                             {aiAnalysisResult.status === 'QUARANTINED' ? 'dangerous' : aiAnalysisResult.status === 'FLAGGED' ? 'warning' : 'verified'}
@@ -9341,17 +9224,15 @@ export default function AdminConsole() {
                                     <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700">
                                         <div className="flex items-center justify-between text-xs mb-1.5 font-bold">
                                             <span className="text-slate-600 dark:text-slate-300">Toxicity Confidence</span>
-                                            <span className={`font-black ${
-                                                aiAnalysisResult.toxicityScore >= 80 ? 'text-red-500' : aiAnalysisResult.toxicityScore >= 50 ? 'text-amber-500' : 'text-emerald-500'
-                                            }`}>
+                                            <span className={`font-black ${aiAnalysisResult.toxicityScore >= 80 ? 'text-red-500' : aiAnalysisResult.toxicityScore >= 50 ? 'text-amber-500' : 'text-emerald-500'
+                                                }`}>
                                                 {aiAnalysisResult.toxicityScore}%
                                             </span>
                                         </div>
                                         <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                            <div 
-                                                className={`h-full rounded-full transition-all duration-500 ${
-                                                    aiAnalysisResult.toxicityScore >= 80 ? 'bg-red-500' : aiAnalysisResult.toxicityScore >= 50 ? 'bg-amber-500' : 'bg-emerald-500'
-                                                }`}
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-500 ${aiAnalysisResult.toxicityScore >= 80 ? 'bg-red-500' : aiAnalysisResult.toxicityScore >= 50 ? 'bg-amber-500' : 'bg-emerald-500'
+                                                    }`}
                                                 style={{ width: `${aiAnalysisResult.toxicityScore}%` }}
                                             />
                                         </div>
@@ -9365,17 +9246,15 @@ export default function AdminConsole() {
                                     <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700">
                                         <div className="flex items-center justify-between text-xs mb-1.5 font-bold">
                                             <span className="text-slate-600 dark:text-slate-300">Confidential PII Risk</span>
-                                            <span className={`font-black ${
-                                                aiAnalysisResult.piiScore >= 70 ? 'text-amber-500' : 'text-emerald-500'
-                                            }`}>
+                                            <span className={`font-black ${aiAnalysisResult.piiScore >= 70 ? 'text-amber-500' : 'text-emerald-500'
+                                                }`}>
                                                 {aiAnalysisResult.piiScore}%
                                             </span>
                                         </div>
                                         <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                            <div 
-                                                className={`h-full rounded-full transition-all duration-500 ${
-                                                    aiAnalysisResult.piiScore >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
-                                                }`}
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-500 ${aiAnalysisResult.piiScore >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
+                                                    }`}
                                                 style={{ width: `${aiAnalysisResult.piiScore}%` }}
                                             />
                                         </div>
@@ -9389,17 +9268,15 @@ export default function AdminConsole() {
                                     <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700">
                                         <div className="flex items-center justify-between text-xs mb-1.5 font-bold">
                                             <span className="text-slate-600 dark:text-slate-300">Spam Probability</span>
-                                            <span className={`font-black ${
-                                                aiAnalysisResult.spamScore >= 75 ? 'text-purple-500' : 'text-emerald-500'
-                                            }`}>
+                                            <span className={`font-black ${aiAnalysisResult.spamScore >= 75 ? 'text-purple-500' : 'text-emerald-500'
+                                                }`}>
                                                 {aiAnalysisResult.spamScore}%
                                             </span>
                                         </div>
                                         <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                            <div 
-                                                className={`h-full rounded-full transition-all duration-500 ${
-                                                    aiAnalysisResult.spamScore >= 75 ? 'bg-purple-500' : 'bg-emerald-500'
-                                                }`}
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-500 ${aiAnalysisResult.spamScore >= 75 ? 'bg-purple-500' : 'bg-emerald-500'
+                                                    }`}
                                                 style={{ width: `${aiAnalysisResult.spamScore}%` }}
                                             />
                                         </div>
@@ -9412,27 +9289,27 @@ export default function AdminConsole() {
 
                                 {/* Detected Triggers Badges */}
                                 {((aiAnalysisResult.detectedToxicKeywords && aiAnalysisResult.detectedToxicKeywords.length > 0) ||
-                                  (aiAnalysisResult.detectedPiiKeywords && aiAnalysisResult.detectedPiiKeywords.length > 0) ||
-                                  (aiAnalysisResult.detectedSpamKeywords && aiAnalysisResult.detectedSpamKeywords.length > 0)) && (
-                                    <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase mr-1">Detected Signals:</span>
-                                        {aiAnalysisResult.detectedToxicKeywords?.map((kw, i) => (
-                                            <span key={i} className="px-2 py-0.5 bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 rounded text-[10px] font-bold">
-                                                Toxicity: "{kw}"
-                                            </span>
-                                        ))}
-                                        {aiAnalysisResult.detectedPiiKeywords?.map((kw, i) => (
-                                            <span key={i} className="px-2 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded text-[10px] font-bold">
-                                                Data Leak: {kw}
-                                            </span>
-                                        ))}
-                                        {aiAnalysisResult.detectedSpamKeywords?.map((kw, i) => (
-                                            <span key={i} className="px-2 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 rounded text-[10px] font-bold">
-                                                Spam: "{kw}"
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
+                                    (aiAnalysisResult.detectedPiiKeywords && aiAnalysisResult.detectedPiiKeywords.length > 0) ||
+                                    (aiAnalysisResult.detectedSpamKeywords && aiAnalysisResult.detectedSpamKeywords.length > 0)) && (
+                                        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase mr-1">Detected Signals:</span>
+                                            {aiAnalysisResult.detectedToxicKeywords?.map((kw, i) => (
+                                                <span key={i} className="px-2 py-0.5 bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 rounded text-[10px] font-bold">
+                                                    Toxicity: "{kw}"
+                                                </span>
+                                            ))}
+                                            {aiAnalysisResult.detectedPiiKeywords?.map((kw, i) => (
+                                                <span key={i} className="px-2 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded text-[10px] font-bold">
+                                                    Data Leak: {kw}
+                                                </span>
+                                            ))}
+                                            {aiAnalysisResult.detectedSpamKeywords?.map((kw, i) => (
+                                                <span key={i} className="px-2 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 rounded text-[10px] font-bold">
+                                                    Spam: "{kw}"
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                             </div>
                         )}
                     </div>
@@ -9441,7 +9318,7 @@ export default function AdminConsole() {
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs p-4">
                         <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider mb-3 flex items-center gap-1.5">
                             <span className="material-symbols-outlined text-[16px] text-indigo-600">account_tree</span>
-                            <span>How Knome AI Content Moderation Works in Enterprise Production</span>
+                            <span>How TechnoSocial AI Content Moderation Works in Enterprise Production</span>
                         </h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                             <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -9582,11 +9459,10 @@ export default function AdminConsole() {
                                     <button
                                         onClick={() => setSerilogViewMode('split')}
                                         title="Split View: Graphs & Console Stream"
-                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                                            serilogViewMode === 'split'
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${serilogViewMode === 'split'
                                                 ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-300 shadow-xs'
                                                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="material-symbols-outlined text-[15px]">splitscreen</span>
                                         <span className="hidden sm:inline">Split</span>
@@ -9594,11 +9470,10 @@ export default function AdminConsole() {
                                     <button
                                         onClick={() => setSerilogViewMode('graphs')}
                                         title="Graphs & Analytics Only"
-                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                                            serilogViewMode === 'graphs'
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${serilogViewMode === 'graphs'
                                                 ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-300 shadow-xs'
                                                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="material-symbols-outlined text-[15px]">bar_chart</span>
                                         <span className="hidden sm:inline">Graphs</span>
@@ -9606,11 +9481,10 @@ export default function AdminConsole() {
                                     <button
                                         onClick={() => setSerilogViewMode('stream')}
                                         title="Console Stream Only"
-                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                                            serilogViewMode === 'stream'
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${serilogViewMode === 'stream'
                                                 ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-300 shadow-xs'
                                                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="material-symbols-outlined text-[15px]">terminal</span>
                                         <span className="hidden sm:inline">Stream</span>
@@ -9665,11 +9539,10 @@ export default function AdminConsole() {
                                 {/* Auto-Refresh Toggle */}
                                 <button
                                     onClick={() => setIsAutoRefreshLogs(!isAutoRefreshLogs)}
-                                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
-                                        isAutoRefreshLogs
+                                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${isAutoRefreshLogs
                                             ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 shadow-xs'
                                             : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-                                    }`}
+                                        }`}
                                 >
                                     <span className={`material-symbols-outlined text-[16px] ${isAutoRefreshLogs ? 'text-emerald-500 animate-spin' : ''}`}>
                                         {isAutoRefreshLogs ? 'autorenew' : 'sync'}
@@ -9723,11 +9596,10 @@ export default function AdminConsole() {
                                                     setSelectedHourFilter(null);
                                                 }
                                             }}
-                                            className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer border ${
-                                                isSelected
+                                            className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer border ${isSelected
                                                     ? 'bg-cyan-600 text-white border-cyan-600 shadow-xs'
                                                     : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400'
-                                            }`}
+                                                }`}
                                         >
                                             {dg.hasActiveFile && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>}
                                             <span>{dg.dateDisplay}</span>
@@ -9744,11 +9616,10 @@ export default function AdminConsole() {
                         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                             <div
                                 onClick={() => setLogLevelFilter('ALL')}
-                                className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
-                                    logLevelFilter === 'ALL'
+                                className={`p-2.5 rounded-xl border cursor-pointer transition-all ${logLevelFilter === 'ALL'
                                         ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-500/30'
                                         : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-slate-400'
-                                }`}
+                                    }`}
                             >
                                 <span className="text-[10px] font-bold uppercase tracking-wider block opacity-75">Total Log Events</span>
                                 <span className={`text-lg font-black ${logLevelFilter === 'ALL' ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{systemLogCounts.total || systemLogs.length}</span>
@@ -9756,11 +9627,10 @@ export default function AdminConsole() {
 
                             <div
                                 onClick={() => setLogLevelFilter('ERR')}
-                                className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
-                                    logLevelFilter === 'ERR'
+                                className={`p-2.5 rounded-xl border cursor-pointer transition-all ${logLevelFilter === 'ERR'
                                         ? 'bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-500/30'
                                         : 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-400 hover:border-rose-400'
-                                }`}
+                                    }`}
                             >
                                 <span className="text-[10px] font-bold uppercase tracking-wider block opacity-75">Errors & Fatal</span>
                                 <span className={`text-lg font-black ${logLevelFilter === 'ERR' ? 'text-white' : 'text-rose-600 dark:text-rose-400'}`}>{systemLogCounts.errors || 0}</span>
@@ -9768,11 +9638,10 @@ export default function AdminConsole() {
 
                             <div
                                 onClick={() => setLogLevelFilter('WRN')}
-                                className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
-                                    logLevelFilter === 'WRN'
+                                className={`p-2.5 rounded-xl border cursor-pointer transition-all ${logLevelFilter === 'WRN'
                                         ? 'bg-amber-600 text-white border-amber-600 shadow-md ring-2 ring-amber-500/30'
                                         : 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 hover:border-amber-400'
-                                }`}
+                                    }`}
                             >
                                 <span className="text-[10px] font-bold uppercase tracking-wider block opacity-75">Warnings</span>
                                 <span className={`text-lg font-black ${logLevelFilter === 'WRN' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`}>{systemLogCounts.warnings || 0}</span>
@@ -9780,11 +9649,10 @@ export default function AdminConsole() {
 
                             <div
                                 onClick={() => setLogLevelFilter('INF')}
-                                className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
-                                    logLevelFilter === 'INF'
+                                className={`p-2.5 rounded-xl border cursor-pointer transition-all ${logLevelFilter === 'INF'
                                         ? 'bg-sky-600 text-white border-sky-600 shadow-md ring-2 ring-sky-500/30'
                                         : 'bg-sky-50/50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-900/40 text-sky-600 dark:text-sky-400 hover:border-sky-400'
-                                }`}
+                                    }`}
                             >
                                 <span className="text-[10px] font-bold uppercase tracking-wider block opacity-75">Information</span>
                                 <span className={`text-lg font-black ${logLevelFilter === 'INF' ? 'text-white' : 'text-sky-600 dark:text-sky-400'}`}>{systemLogCounts.info || 0}</span>
@@ -9871,13 +9739,12 @@ export default function AdminConsole() {
                                                         {/* Stacked Bar */}
                                                         <div
                                                             style={{ height: `${heightPct}%` }}
-                                                            className={`w-full rounded-t-md overflow-hidden flex flex-col-reverse transition-all ${
-                                                                isSelected
+                                                            className={`w-full rounded-t-md overflow-hidden flex flex-col-reverse transition-all ${isSelected
                                                                     ? 'ring-2 ring-cyan-400 ring-offset-1 dark:ring-offset-slate-900 shadow-md scale-105'
                                                                     : total === 0
-                                                                    ? 'bg-slate-200 dark:bg-slate-800 opacity-40'
-                                                                    : 'hover:brightness-110'
-                                                            }`}
+                                                                        ? 'bg-slate-200 dark:bg-slate-800 opacity-40'
+                                                                        : 'hover:brightness-110'
+                                                                }`}
                                                         >
                                                             {/* Errors segment */}
                                                             {errPct > 0 && (
@@ -9894,9 +9761,8 @@ export default function AdminConsole() {
                                                         </div>
 
                                                         {/* Hour label below (every 3 hours or on sm screens) */}
-                                                        <span className={`text-[9px] font-mono mt-1 ${
-                                                            isSelected ? 'text-cyan-500 font-black' : h.hour % 3 === 0 ? 'text-slate-400 font-bold' : 'text-transparent sm:text-slate-500'
-                                                        }`}>
+                                                        <span className={`text-[9px] font-mono mt-1 ${isSelected ? 'text-cyan-500 font-black' : h.hour % 3 === 0 ? 'text-slate-400 font-bold' : 'text-transparent sm:text-slate-500'
+                                                            }`}>
                                                             {h.hour % 3 === 0 ? `${h.hour}h` : ''}
                                                         </span>
                                                     </div>
@@ -10005,11 +9871,10 @@ export default function AdminConsole() {
                                                     >
                                                         <div
                                                             style={{ height: `${heightPct}%` }}
-                                                            className={`w-full rounded-t transition-all ${
-                                                                day.isSelected
+                                                            className={`w-full rounded-t transition-all ${day.isSelected
                                                                     ? 'bg-cyan-500 shadow-xs'
                                                                     : 'bg-slate-300 dark:bg-slate-700 hover:bg-cyan-400/60'
-                                                            }`}
+                                                                }`}
                                                         ></div>
                                                         <span className="text-[8px] font-mono text-slate-400 mt-1 truncate max-w-[32px]">
                                                             {day.date.slice(5)}
@@ -10067,17 +9932,16 @@ export default function AdminConsole() {
                                     <button
                                         key={lvl}
                                         onClick={() => setLogLevelFilter(lvl)}
-                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                                            logLevelFilter === lvl
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${logLevelFilter === lvl
                                                 ? lvl === 'ERR'
                                                     ? 'bg-rose-600 text-white'
                                                     : lvl === 'WRN'
-                                                    ? 'bg-amber-600 text-white'
-                                                    : lvl === 'INF'
-                                                    ? 'bg-sky-600 text-white'
-                                                    : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
+                                                        ? 'bg-amber-600 text-white'
+                                                        : lvl === 'INF'
+                                                            ? 'bg-sky-600 text-white'
+                                                            : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
                                                 : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-400'
-                                        }`}
+                                            }`}
                                     >
                                         {lvl === 'ALL' ? 'All Logs' : lvl}
                                     </button>
@@ -10117,22 +9981,20 @@ export default function AdminConsole() {
                                         <div className="flex items-center bg-slate-200/80 dark:bg-slate-800 p-0.5 rounded-xl text-[11px] font-bold">
                                             <button
                                                 onClick={() => setLogDisplayMode('human')}
-                                                className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
-                                                    logDisplayMode === 'human'
+                                                className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${logDisplayMode === 'human'
                                                         ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
                                                         : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                                                }`}
+                                                    }`}
                                             >
                                                 <span className="material-symbols-outlined text-[14px]">face</span>
                                                 <span>Simple View</span>
                                             </button>
                                             <button
                                                 onClick={() => setLogDisplayMode('raw')}
-                                                className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
-                                                    logDisplayMode === 'raw'
+                                                className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${logDisplayMode === 'raw'
                                                         ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
                                                         : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                                                }`}
+                                                    }`}
                                             >
                                                 <span className="material-symbols-outlined text-[14px]">terminal</span>
                                                 <span>Raw Logs</span>
@@ -10260,13 +10122,12 @@ export default function AdminConsole() {
                                                 <div
                                                     key={idx}
                                                     onClick={() => setExpandedLogIndex(isExpanded ? null : idx)}
-                                                    className={`pt-2.5 pb-2.5 px-3 rounded-xl transition-all cursor-pointer group border ${
-                                                        isError
+                                                    className={`pt-2.5 pb-2.5 px-3 rounded-xl transition-all cursor-pointer group border ${isError
                                                             ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 hover:border-rose-400'
                                                             : isWarn
-                                                            ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 hover:border-amber-400'
-                                                            : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                                                    }`}
+                                                                ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 hover:border-amber-400'
+                                                                : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                                                        }`}
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
                                                         {/* Left: Icon & Description */}
@@ -10358,18 +10219,17 @@ export default function AdminConsole() {
                                             const badgeClass = isError
                                                 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                                                 : isWarn
-                                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                                : isInfo
-                                                ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
-                                                : 'bg-slate-500/20 text-slate-400 border border-slate-500/30';
+                                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                                    : isInfo
+                                                        ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
+                                                        : 'bg-slate-500/20 text-slate-400 border border-slate-500/30';
 
                                             return (
                                                 <div
                                                     key={idx}
                                                     onClick={() => setExpandedLogIndex(isExpanded ? null : idx)}
-                                                    className={`pt-1.5 pb-1.5 px-2 rounded-lg transition-colors cursor-pointer group hover:bg-slate-900/90 ${
-                                                        isError ? 'bg-rose-950/20' : ''
-                                                    }`}
+                                                    className={`pt-1.5 pb-1.5 px-2 rounded-lg transition-colors cursor-pointer group hover:bg-slate-900/90 ${isError ? 'bg-rose-950/20' : ''
+                                                        }`}
                                                 >
                                                     <div className="flex items-start gap-2 text-[11px] leading-relaxed">
                                                         {/* Timestamp */}
@@ -10447,12 +10307,12 @@ export default function AdminConsole() {
                         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
                             <h3 className="font-black text-sm text-slate-900 dark:text-white mb-1">7-Day Moderation Reports Trend</h3>
                             <p className="text-xs text-slate-400 mb-4">Volume of incoming content reports vs resolved actions</p>
-                            
+
                             {/* Simple Responsive SVG Trend Bar Chart */}
                             <div className="h-40 flex items-end justify-between gap-2 pt-4 px-2 border-b border-slate-200 dark:border-slate-800">
                                 {sevenDayTrend.map((bar, i) => (
-                                    <div 
-                                        key={i} 
+                                    <div
+                                        key={i}
                                         className="group relative flex-1 flex flex-col items-center gap-1 h-full justify-end"
                                         title={`${bar.day}: ${bar.count} report${bar.count === 1 ? '' : 's'} (${bar.pending} pending, ${bar.resolved} resolved)`}
                                     >
@@ -10461,12 +10321,11 @@ export default function AdminConsole() {
                                             {bar.count} {bar.count === 1 ? 'report' : 'reports'} ({bar.pending} pending)
                                         </div>
 
-                                        <div 
-                                            className={`w-full max-w-[28px] rounded-t-sm transition-all duration-300 hover:opacity-80 ${
-                                                bar.val > 0 
-                                                    ? 'bg-gradient-to-t from-indigo-600 to-indigo-400' 
+                                        <div
+                                            className={`w-full max-w-[28px] rounded-t-sm transition-all duration-300 hover:opacity-80 ${bar.val > 0
+                                                    ? 'bg-gradient-to-t from-indigo-600 to-indigo-400'
                                                     : 'bg-slate-200 dark:bg-slate-800 min-h-[4px]'
-                                            }`} 
+                                                }`}
                                             style={{ height: bar.val > 0 ? `${bar.val}%` : '4px' }}
                                         ></div>
                                         <span className="text-[10px] font-bold text-slate-400 mt-1 whitespace-nowrap">{bar.day}</span>
@@ -10479,7 +10338,7 @@ export default function AdminConsole() {
                         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
                             <h3 className="font-black text-sm text-slate-900 dark:text-white mb-1">Moderation Action Breakdown</h3>
                             <p className="text-xs text-slate-400 mb-4">Distribution of Pending vs Resolved vs Dismissed reports</p>
-                            
+
                             <div className="flex items-center justify-around h-40">
                                 <div className="w-32 h-32 rounded-full border-8 border-indigo-500 border-t-amber-500 border-r-emerald-500 flex items-center justify-center flex-col">
                                     <span className="text-xl font-black text-slate-900 dark:text-white">{reports.length}</span>
@@ -10544,21 +10403,19 @@ export default function AdminConsole() {
                             <button
                                 type="button"
                                 onClick={() => setApprovalSubTab('governance')}
-                                className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                                    approvalSubTab === 'governance'
+                                className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${approvalSubTab === 'governance'
                                         ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700 ring-1 ring-slate-900/5'
                                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/60 dark:hover:bg-slate-800'
-                                }`}
+                                    }`}
                             >
                                 <span className={`material-symbols-outlined text-[18px] ${approvalSubTab === 'governance' ? 'text-rose-500' : 'text-slate-400'}`}>
                                     admin_panel_settings
                                 </span>
                                 <span>Governance & Platform Approvals</span>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                                    approvalSubTab === 'governance'
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${approvalSubTab === 'governance'
                                         ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
                                         : 'bg-slate-200/80 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                                }`}>
+                                    }`}>
                                     {[
                                         configState.requireCommunityApproval !== false,
                                         configState.requireArticleApproval !== false,
@@ -10577,21 +10434,19 @@ export default function AdminConsole() {
                             <button
                                 type="button"
                                 onClick={() => setApprovalSubTab('modules')}
-                                className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                                    approvalSubTab === 'modules'
+                                className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${approvalSubTab === 'modules'
                                         ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700 ring-1 ring-slate-900/5'
                                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/60 dark:hover:bg-slate-800'
-                                }`}
+                                    }`}
                             >
                                 <span className={`material-symbols-outlined text-[18px] ${approvalSubTab === 'modules' ? 'text-indigo-500' : 'text-slate-400'}`}>
                                     tune
                                 </span>
                                 <span>Platform Feature Access Control</span>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                                    approvalSubTab === 'modules'
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${approvalSubTab === 'modules'
                                         ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
                                         : 'bg-slate-200/80 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                                }`}>
+                                    }`}>
                                     {[
                                         configState.enablePosts !== false,
                                         configState.enableArticles !== false,
@@ -10623,1102 +10478,1087 @@ export default function AdminConsole() {
                     {/* ─── TAB 1: GOVERNANCE & PLATFORM APPROVALS CONTROL CENTER ─── */}
                     {approvalSubTab === 'governance' && (
                         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 space-y-6">
-                    {/* Header Bar */}
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
-                        <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-rose-500/20 shrink-0">
-                                <span className="material-symbols-outlined text-[26px]">admin_panel_settings</span>
-                            </div>
-                            <div>
-                                <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                                    Governance & Platform Approvals Control Center
-                                </h2>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Configure independent publication approval rules and communication capabilities across Knome.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
-                            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                {[
-                                    configState.requireCommunityApproval !== false,
-                                    configState.requireArticleApproval !== false,
-                                    configState.requireWikiApproval !== false,
-                                    configState.requireVideoApproval !== false,
-                                    configState.requirePodcastApproval !== false,
-                                    configState.enableMessaging !== false,
-                                    configState.enableEmail !== false
-                                ].filter(Boolean).length} / 7 Governance Policies
-                            </span>
-
-
-
-
-                            <button
-                                type="button"
-                                onClick={handleSaveConfigClick}
-                                className={`px-4 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${
-                                    getPendingGovernanceChanges().length > 0
-                                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30 animate-pulse'
-                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                                }`}
-                            >
-                                <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
-                                <span>Save Changes {getPendingGovernanceChanges().length > 0 ? `(${getPendingGovernanceChanges().length})` : ''}</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Quick Presets Bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs font-semibold">
-                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[16px] text-indigo-500">tune</span>
-                            <span>Quick Presets:</span>
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => {
-                                    handleToggleApprovalPolicy();
-                                }}
-                                className="px-3 py-1 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 text-[11px] font-bold cursor-pointer transition-all"
-                            >
-                                Toggle All Content Approvals
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setConfigState(prev => ({
-                                        ...prev,
-                                        requireContentAndCommunityApproval: true,
-                                        requireCommunityApproval: true,
-                                        requireArticleApproval: true,
-                                        requireWikiApproval: true,
-                                        requireVideoApproval: true,
-                                        requirePodcastApproval: true,
-                                        enableMessaging: true,
-                                        enableEmail: true,
-                                        enablePosts: true,
-                                        enableArticles: true,
-                                        enableClips: true,
-                                        enableWiki: true,
-                                        enableVideos: true,
-                                        enablePodcasts: true,
-                                    }));
-                                    showToast("All 7 governance policies and 6 platform modules staged to ON. Click 'Save & Commit All Changes' to apply.");
-                                }}
-                                className="px-3 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[11px] font-bold cursor-pointer transition-all"
-                            >
-                                Enable All (Standard)
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* ── 7 INDEPENDENT TOGGLE CARDS GRID ── */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-                        {/* 1. COMMUNITY APPROVAL CARD */}
-                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-indigo-400/50 transition-all flex flex-col justify-between">
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                                            <span className="material-symbols-outlined text-[22px]">groups</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500 block">Content Governance</span>
-                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Community Approval</h3>
-                                        </div>
+                            {/* Header Bar */}
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-rose-500/20 shrink-0">
+                                        <span className="material-symbols-outlined text-[26px]">admin_panel_settings</span>
                                     </div>
-                                    <div className="flex items-center gap-1.5">
-                                        {(committedConfig.requireCommunityApproval !== false) !== (configState.requireCommunityApproval !== false) && (
-                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                PENDING
-                                            </span>
-                                        )}
-                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                            configState.requireCommunityApproval !== false
-                                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                                        }`}>
-                                            {configState.requireCommunityApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
-                                        </span>
+                                    <div>
+                                        <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                                            Governance & Platform Approvals Control Center
+                                        </h2>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                            Configure independent publication approval rules and communication capabilities across TechnoSocial.
+                                        </p>
                                     </div>
                                 </div>
 
-                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                    Require administrator approval before communities are published. Applies to both public and private communities.
-                                </p>
-
-                                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireCommunityApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
-                                        <span>Community stays Pending until admin approval.</span>
-                                    </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireCommunityApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
-                                        <span>Community is created and live immediately.</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        {configState.requireCommunityApproval !== false ? 'Approval Required' : 'Instant Publish'}
-                                    </span>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={configState.requireCommunityApproval !== false}
-                                            onChange={() => handleToggleIndependentSetting('requireCommunityApproval', 'Community Approval')}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 2. ARTICLE APPROVAL CARD */}
-                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-violet-400/50 transition-all flex flex-col justify-between">
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
-                                            <span className="material-symbols-outlined text-[22px]">article</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-violet-500 block">Content Governance</span>
-                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Article Approval</h3>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        {(committedConfig.requireArticleApproval !== false) !== (configState.requireArticleApproval !== false) && (
-                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                PENDING
-                                            </span>
-                                        )}
-                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                            configState.requireArticleApproval !== false
-                                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                                        }`}>
-                                            {configState.requireArticleApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                    Require administrator approval before articles and thought leadership pieces are published to the organization portal.
-                                </p>
-
-                                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireArticleApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
-                                        <span>Article routes to Approvals queue until approved.</span>
-                                    </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireArticleApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
-                                        <span>Article publishes live immediately to the feed.</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        {configState.requireArticleApproval !== false ? 'Approval Required' : 'Instant Publish'}
-                                    </span>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={configState.requireArticleApproval !== false}
-                                            onChange={() => handleToggleIndependentSetting('requireArticleApproval', 'Article Approval')}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 3. WIKI APPROVAL CARD */}
-                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-emerald-400/50 transition-all flex flex-col justify-between">
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                                            <span className="material-symbols-outlined text-[22px]">auto_stories</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-500 block">Knowledge Governance</span>
-                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Wiki Approval</h3>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        {(committedConfig.requireWikiApproval !== false) !== (configState.requireWikiApproval !== false) && (
-                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                PENDING
-                                            </span>
-                                        )}
-                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                            configState.requireWikiApproval !== false
-                                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                                        }`}>
-                                            {configState.requireWikiApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                    Require administrator approval before enterprise wiki documentation and SOP guides are published to the knowledge base.
-                                </p>
-
-                                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireWikiApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
-                                        <span>Wiki stays in Pending Approval until admin review.</span>
-                                    </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireWikiApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
-                                        <span>Wiki document publishes immediately to library.</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        {configState.requireWikiApproval !== false ? 'Approval Required' : 'Instant Publish'}
-                                    </span>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={configState.requireWikiApproval !== false}
-                                            onChange={() => handleToggleIndependentSetting('requireWikiApproval', 'Wiki Approval')}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 2. VIDEO APPROVAL CARD */}
-                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-cyan-400/50 transition-all flex flex-col justify-between">
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0">
-                                            <span className="material-symbols-outlined text-[22px]">videocam</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-cyan-500 block">Multimedia Governance</span>
-                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Video Approval</h3>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        {(committedConfig.requireVideoApproval !== false) !== (configState.requireVideoApproval !== false) && (
-                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                PENDING
-                                            </span>
-                                        )}
-                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                            configState.requireVideoApproval !== false
-                                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                                        }`}>
-                                            {configState.requireVideoApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                    Require administrator approval before user videos are published to the public video portal.
-                                </p>
-
-                                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireVideoApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
-                                        <span>Video routes to Media Approvals queue.</span>
-                                    </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.requireVideoApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
-                                        <span>Video publishes live immediately upon upload.</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        {configState.requireVideoApproval !== false ? 'Approval Required' : 'Instant Publish'}
-                                    </span>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={configState.requireVideoApproval !== false}
-                                            onChange={() => handleToggleIndependentSetting('requireVideoApproval', 'Video Approval')}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 3. PODCAST APPROVAL CARD */}
-                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-pink-400/50 transition-all flex flex-col justify-between">
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 flex items-center justify-center shrink-0">
-                                            <span className="material-symbols-outlined text-[22px]">podcasts</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-pink-500 block">Multimedia Governance</span>
-                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Podcast Approval</h3>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        {(committedConfig.requirePodcastApproval !== false) !== (configState.requirePodcastApproval !== false) && (
-                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                PENDING
-                                            </span>
-                                        )}
-                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                            configState.requirePodcastApproval !== false
-                                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                                        }`}>
-                                            {configState.requirePodcastApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                    Require administrator approval before audio podcasts and series episodes are published.
-                                </p>
-
-                                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.requirePodcastApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
-                                        <span>Podcast routes to Media Approvals queue.</span>
-                                    </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.requirePodcastApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
-                                        <span>Podcast publishes live immediately upon upload.</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        {configState.requirePodcastApproval !== false ? 'Approval Required' : 'Instant Publish'}
-                                    </span>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={configState.requirePodcastApproval !== false}
-                                            onChange={() => handleToggleIndependentSetting('requirePodcastApproval', 'Podcast Approval')}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 4. DIRECT MESSAGING CARD */}
-                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-blue-400/50 transition-all flex flex-col justify-between">
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                                            <span className="material-symbols-outlined text-[22px]">forum</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-blue-500 block">Communication Channel</span>
-                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Direct Messaging (Chat & DMs)</h3>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        {(committedConfig.enableMessaging !== false) !== (configState.enableMessaging !== false) && (
-                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                PENDING
-                                            </span>
-                                        )}
-                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                            configState.enableMessaging !== false
-                                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                        }`}>
-                                            {configState.enableMessaging !== false ? 'ONLINE (ACTIVE)' : 'DISABLED (LOCKED)'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                    Enable direct user-to-user messaging, chat channels, and real-time SignalR live delivery across the platform.
-                                </p>
-
-                                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.enableMessaging !== false ? 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-900 dark:text-blue-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-blue-600 dark:text-blue-400">When ON:</div>
-                                        <span>Employees can send DMs, files & reactions freely.</span>
-                                    </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.enableMessaging === false ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-amber-600 dark:text-amber-400">When OFF:</div>
-                                        <span>Messaging locked; displays admin maintenance alert.</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        {configState.enableMessaging !== false ? 'Messaging Enabled' : 'Messaging Disabled'}
-                                    </span>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={configState.enableMessaging !== false}
-                                            onChange={() => handleToggleIndependentSetting('enableMessaging', 'Direct Messaging')}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 5. EMAIL NOTIFICATIONS CARD */}
-                        <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-amber-400/50 transition-all flex flex-col justify-between col-span-1 lg:col-span-2">
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                                            <span className="material-symbols-outlined text-[22px]">mail</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-amber-500 block">Notification Service</span>
-                                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Email Notifications & Alerts</h3>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        {(committedConfig.enableEmail !== false) !== (configState.enableEmail !== false) && (
-                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                PENDING
-                                            </span>
-                                        )}
-                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                                    <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        {[
+                                            configState.requireCommunityApproval !== false,
+                                            configState.requireArticleApproval !== false,
+                                            configState.requireWikiApproval !== false,
+                                            configState.requireVideoApproval !== false,
+                                            configState.requirePodcastApproval !== false,
+                                            configState.enableMessaging !== false,
                                             configState.enableEmail !== false
-                                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                        }`}>
-                                            {configState.enableEmail !== false ? 'ACTIVE (SENDING)' : 'PAUSED (MUTED)'}
-                                        </span>
-                                    </div>
-                                </div>
+                                        ].filter(Boolean).length} / 7 Governance Policies
+                                    </span>
 
-                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                    Enable outgoing email dispatch and notification services for employee alerts, role approvals, and scheduled digests.
-                                </p>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-                                    <div className={`p-2.5 rounded-xl border ${configState.enableEmail !== false ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-amber-600 dark:text-amber-400">When ON:</div>
-                                        <span>SMTP server dispatches transactional notifications and employee alerts.</span>
-                                    </div>
-                                    <div className={`p-2.5 rounded-xl border ${configState.enableEmail === false ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                        <div className="font-bold mb-0.5 text-slate-600 dark:text-slate-400">When OFF:</div>
-                                        <span>Outgoing email dispatch is safely paused without generating failures.</span>
-                                    </div>
+
+
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveConfigClick}
+                                        className={`px-4 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${getPendingGovernanceChanges().length > 0
+                                                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30 animate-pulse'
+                                                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                            }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
+                                        <span>Save Changes {getPendingGovernanceChanges().length > 0 ? `(${getPendingGovernanceChanges().length})` : ''}</span>
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                            {/* Quick Presets Bar */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs font-semibold">
+                                <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-[16px] text-indigo-500">tune</span>
+                                    <span>Quick Presets:</span>
+                                </span>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        {configState.enableEmail !== false ? 'Email Dispatch Active' : 'Email Dispatch Paused'}
-                                    </span>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={configState.enableEmail !== false}
-                                            onChange={() => handleToggleIndependentSetting('enableEmail', 'Email Notifications')}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
-                                    </label>
+                                    <button
+                                        onClick={() => {
+                                            handleToggleApprovalPolicy();
+                                        }}
+                                        className="px-3 py-1 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 text-[11px] font-bold cursor-pointer transition-all"
+                                    >
+                                        Toggle All Content Approvals
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setConfigState(prev => ({
+                                                ...prev,
+                                                requireContentAndCommunityApproval: true,
+                                                requireCommunityApproval: true,
+                                                requireArticleApproval: true,
+                                                requireWikiApproval: true,
+                                                requireVideoApproval: true,
+                                                requirePodcastApproval: true,
+                                                enableMessaging: true,
+                                                enableEmail: true,
+                                                enablePosts: true,
+                                                enableArticles: true,
+                                                enableClips: true,
+                                                enableWiki: true,
+                                                enableVideos: true,
+                                                enablePodcasts: true,
+                                            }));
+                                            showToast("All 7 governance policies and 6 platform modules staged to ON. Click 'Save & Commit All Changes' to apply.");
+                                        }}
+                                        className="px-3 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[11px] font-bold cursor-pointer transition-all"
+                                    >
+                                        Enable All (Standard)
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* ── 7 INDEPENDENT TOGGLE CARDS GRID ── */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                                {/* 1. COMMUNITY APPROVAL CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-indigo-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">groups</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500 block">Content Governance</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Community Approval</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.requireCommunityApproval !== false) !== (configState.requireCommunityApproval !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.requireCommunityApproval !== false
+                                                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                                    }`}>
+                                                    {configState.requireCommunityApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Require administrator approval before communities are published. Applies to both public and private communities.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.requireCommunityApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                                <span>Community stays Pending until admin approval.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.requireCommunityApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
+                                                <span>Community is created and live immediately.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.requireCommunityApproval !== false ? 'Approval Required' : 'Instant Publish'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.requireCommunityApproval !== false}
+                                                    onChange={() => handleToggleIndependentSetting('requireCommunityApproval', 'Community Approval')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 2. ARTICLE APPROVAL CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-violet-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">article</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-violet-500 block">Content Governance</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Article Approval</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.requireArticleApproval !== false) !== (configState.requireArticleApproval !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.requireArticleApproval !== false
+                                                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                                    }`}>
+                                                    {configState.requireArticleApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Require administrator approval before articles and thought leadership pieces are published to the organization portal.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.requireArticleApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                                <span>Article routes to Approvals queue until approved.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.requireArticleApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
+                                                <span>Article publishes live immediately to the feed.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.requireArticleApproval !== false ? 'Approval Required' : 'Instant Publish'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.requireArticleApproval !== false}
+                                                    onChange={() => handleToggleIndependentSetting('requireArticleApproval', 'Article Approval')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 3. WIKI APPROVAL CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-emerald-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">auto_stories</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-500 block">Knowledge Governance</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Wiki Approval</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.requireWikiApproval !== false) !== (configState.requireWikiApproval !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.requireWikiApproval !== false
+                                                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                                    }`}>
+                                                    {configState.requireWikiApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Require administrator approval before enterprise wiki documentation and SOP guides are published to the knowledge base.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.requireWikiApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                                <span>Wiki stays in Pending Approval until admin review.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.requireWikiApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
+                                                <span>Wiki document publishes immediately to library.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.requireWikiApproval !== false ? 'Approval Required' : 'Instant Publish'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.requireWikiApproval !== false}
+                                                    onChange={() => handleToggleIndependentSetting('requireWikiApproval', 'Wiki Approval')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 2. VIDEO APPROVAL CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-cyan-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">videocam</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-cyan-500 block">Multimedia Governance</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Video Approval</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.requireVideoApproval !== false) !== (configState.requireVideoApproval !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.requireVideoApproval !== false
+                                                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                                    }`}>
+                                                    {configState.requireVideoApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Require administrator approval before user videos are published to the public video portal.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.requireVideoApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                                <span>Video routes to Media Approvals queue.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.requireVideoApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
+                                                <span>Video publishes live immediately upon upload.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.requireVideoApproval !== false ? 'Approval Required' : 'Instant Publish'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.requireVideoApproval !== false}
+                                                    onChange={() => handleToggleIndependentSetting('requireVideoApproval', 'Video Approval')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 3. PODCAST APPROVAL CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-pink-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">podcasts</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-pink-500 block">Multimedia Governance</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Podcast Approval</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.requirePodcastApproval !== false) !== (configState.requirePodcastApproval !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.requirePodcastApproval !== false
+                                                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                                    }`}>
+                                                    {configState.requirePodcastApproval !== false ? 'ENFORCED (ON)' : 'DIRECT PUBLISH (OFF)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Require administrator approval before audio podcasts and series episodes are published.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.requirePodcastApproval !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                                <span>Podcast routes to Media Approvals queue.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.requirePodcastApproval === false ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-emerald-600 dark:text-emerald-400">When OFF:</div>
+                                                <span>Podcast publishes live immediately upon upload.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.requirePodcastApproval !== false ? 'Approval Required' : 'Instant Publish'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.requirePodcastApproval !== false}
+                                                    onChange={() => handleToggleIndependentSetting('requirePodcastApproval', 'Podcast Approval')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 4. DIRECT MESSAGING CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-blue-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">forum</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-500 block">Communication Channel</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Direct Messaging (Chat & DMs)</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.enableMessaging !== false) !== (configState.enableMessaging !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.enableMessaging !== false
+                                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                                    }`}>
+                                                    {configState.enableMessaging !== false ? 'ONLINE (ACTIVE)' : 'DISABLED (LOCKED)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Enable direct user-to-user messaging, chat channels, and real-time SignalR live delivery across the platform.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableMessaging !== false ? 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-900 dark:text-blue-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-blue-600 dark:text-blue-400">When ON:</div>
+                                                <span>Employees can send DMs, files & reactions freely.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableMessaging === false ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-amber-600 dark:text-amber-400">When OFF:</div>
+                                                <span>Messaging locked; displays admin maintenance alert.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.enableMessaging !== false ? 'Messaging Enabled' : 'Messaging Disabled'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.enableMessaging !== false}
+                                                    onChange={() => handleToggleIndependentSetting('enableMessaging', 'Direct Messaging')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 5. EMAIL NOTIFICATIONS CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-amber-400/50 transition-all flex flex-col justify-between col-span-1 lg:col-span-2">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">mail</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-500 block">Notification Service</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Email Notifications & Alerts</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.enableEmail !== false) !== (configState.enableEmail !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.enableEmail !== false
+                                                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                                    }`}>
+                                                    {configState.enableEmail !== false ? 'ACTIVE (SENDING)' : 'PAUSED (MUTED)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Enable outgoing email dispatch and notification services for employee alerts, role approvals, and scheduled digests.
+                                        </p>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableEmail !== false ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-amber-600 dark:text-amber-400">When ON:</div>
+                                                <span>SMTP server dispatches transactional notifications and employee alerts.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableEmail === false ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-slate-600 dark:text-slate-400">When OFF:</div>
+                                                <span>Outgoing email dispatch is safely paused without generating failures.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.enableEmail !== false ? 'Email Dispatch Active' : 'Email Dispatch Paused'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.enableEmail !== false}
+                                                    onChange={() => handleToggleIndependentSetting('enableEmail', 'Email Notifications')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            {/* Bottom Status & Persistence Bar (Governance) */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+                                <div className="flex items-center gap-2 text-xs">
+                                    {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) ? (
+                                        <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                            <span>
+                                                {getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length} pending governance change{getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length > 1 ? 's' : ''} ready to review & commit
+                                            </span>
+                                        </span>
+                                    ) : (
+                                        <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                            <span>All platform governance settings are synchronized</span>
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setConfigState(prev => ({
+                                                    ...prev,
+                                                    requireContentAndCommunityApproval: committedConfig.requireContentAndCommunityApproval,
+                                                    requireCommunityApproval: committedConfig.requireCommunityApproval,
+                                                    requireArticleApproval: committedConfig.requireArticleApproval,
+                                                    requireWikiApproval: committedConfig.requireWikiApproval,
+                                                    requireVideoApproval: committedConfig.requireVideoApproval,
+                                                    requirePodcastApproval: committedConfig.requirePodcastApproval,
+                                                    enableMessaging: committedConfig.enableMessaging,
+                                                    enableEmail: committedConfig.enableEmail
+                                                }));
+                                                showToast('Pending governance changes have been discarded.');
+                                            }}
+                                            className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
+                                        >
+                                            Discard Draft
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveConfigClick}
+                                        className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
+                                        <span>Save & Commit Governance Changes {getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length > 0 ? `(${getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length})` : ''}</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
+                    )}
 
-                    </div>
+                    {/* ─── TAB 2: PLATFORM FEATURE ACCESS CONTROL (MODULE TOGGLES) ─── */}
+                    {approvalSubTab === 'modules' && (
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 space-y-6">
+                            {/* Header Bar */}
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
+                                        <span className="material-symbols-outlined text-[26px]">tune</span>
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                                            Platform Feature Access Control (Module Toggles)
+                                        </h2>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                            Configure individual module availability across TechnoSocial. When a feature is toggled OFF, navigation links are hidden, direct routes are blocked, and backend APIs are protected.
+                                        </p>
+                                    </div>
+                                </div>
 
-                    {/* Bottom Status & Persistence Bar (Governance) */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
-                        <div className="flex items-center gap-2 text-xs">
-                            {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) ? (
-                                <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                    <span>
-                                        {getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length} pending governance change{getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length > 1 ? 's' : ''} ready to review & commit
+                                <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                                    <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                                        {[
+                                            configState.enablePosts !== false,
+                                            configState.enableArticles !== false,
+                                            configState.enableClips !== false,
+                                            configState.enableWiki !== false,
+                                            configState.enableVideos !== false,
+                                            configState.enablePodcasts !== false
+                                        ].filter(Boolean).length} / 6 Features Active
                                     </span>
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveConfigClick}
+                                        className={`px-4 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${getPendingGovernanceChanges().some(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key))
+                                                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30 animate-pulse'
+                                                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                            }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
+                                        <span>Save Changes {getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length > 0 ? `(${getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length})` : ''}</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Quick Presets Bar */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs font-semibold">
+                                <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-[16px] text-indigo-500">tune</span>
+                                    <span>Quick Presets:</span>
                                 </span>
-                            ) : (
-                                <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    <span>All platform governance settings are synchronized</span>
-                                </span>
-                            )}
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSetAllFeatures(true)}
+                                        className="px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 text-[11px] font-bold cursor-pointer transition-all"
+                                    >
+                                        Enable All 6 Features
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSetAllFeatures(false)}
+                                        className="px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 text-[11px] font-bold cursor-pointer transition-all"
+                                    >
+                                        Disable All Features
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* ── 6 INDEPENDENT FEATURE CARDS GRID ── */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                                {/* 1. POSTS MODULE CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-blue-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">dynamic_feed</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-500 block">Core Social Feed</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Posts</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.enablePosts !== false) !== (configState.enablePosts !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.enablePosts !== false
+                                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                                    }`}>
+                                                    {configState.enablePosts !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Social posts feed, user timelines, discussions, composer attachments, and employee reactions.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.enablePosts !== false ? 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-900 dark:text-blue-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-blue-600 dark:text-blue-400">When ON:</div>
+                                                <span>Full feed, composer, reactions, and post APIs enabled.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.enablePosts === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                                <span>Posts hidden in UI, composer locked, APIs return 403.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.enablePosts !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.enablePosts !== false}
+                                                    onChange={() => handleToggleIndependentSetting('enablePosts', 'Posts')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 2. ARTICLES MODULE CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-sky-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">article</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-sky-500 block">Editorial & Knowledge</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Articles</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.enableArticles !== false) !== (configState.enableArticles !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.enableArticles !== false
+                                                        ? 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                                    }`}>
+                                                    {configState.enableArticles !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Long-form articles, editorial publication, reader views, rich-text editor, and article exploration.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableArticles !== false ? 'bg-sky-50/70 dark:bg-sky-950/20 border-sky-200 dark:border-sky-900/50 text-sky-900 dark:text-sky-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-sky-600 dark:text-sky-400">When ON:</div>
+                                                <span>Articles portal, reading view, editor, and search active.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableArticles === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                                <span>Articles hidden in nav, route guarded, APIs return 403.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.enableArticles !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.enableArticles !== false}
+                                                    onChange={() => handleToggleIndependentSetting('enableArticles', 'Articles')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 3. CLIPS MODULE CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-rose-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">movie</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-rose-500 block">Short-Form Video</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Clips</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.enableClips !== false) !== (configState.enableClips !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.enableClips !== false
+                                                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                                    }`}>
+                                                    {configState.enableClips !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Vertical video reels, swipeable clips feed, mobile media playback, and short video creation.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableClips !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
+                                                <span>Clips feed, reels player, creator uploads, and APIs live.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableClips === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                                <span>Clips hidden in nav, route guarded, APIs return 403.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.enableClips !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.enableClips !== false}
+                                                    onChange={() => handleToggleIndependentSetting('enableClips', 'Clips')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 4. WIKI MODULE CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-indigo-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">menu_book</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500 block">Documentation & Knowledge</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Wiki</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.enableWiki !== false) !== (configState.enableWiki !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.enableWiki !== false
+                                                        ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                                    }`}>
+                                                    {configState.enableWiki !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Enterprise wiki documentation, multi-level hierarchy sections, markdown guides, and unique view tracking.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableWiki !== false ? 'bg-indigo-50/70 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/50 text-indigo-900 dark:text-indigo-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-indigo-600 dark:text-indigo-400">When ON:</div>
+                                                <span>Wiki catalog, hierarchical editor, reader, and APIs live.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableWiki === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                                <span>Wiki hidden in nav, route guarded, APIs return 403.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.enableWiki !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.enableWiki !== false}
+                                                    onChange={() => handleToggleIndependentSetting('enableWiki', 'Wiki')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 5. VIDEOS MODULE CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-red-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">videocam</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-red-500 block">Multimedia Streaming</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Videos</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.enableVideos !== false) !== (configState.enableVideos !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.enableVideos !== false
+                                                        ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                                    }`}>
+                                                    {configState.enableVideos !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Enterprise video portal, on-demand streaming, channel uploads, and multimedia player.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableVideos !== false ? 'bg-red-50/70 dark:bg-red-950/20 border-red-200 dark:border-red-900/50 text-red-900 dark:text-red-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-red-600 dark:text-red-400">When ON:</div>
+                                                <span>Video hub, streaming playback, uploads, and APIs live.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.enableVideos === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                                <span>Videos hidden in nav, route guarded, APIs return 403.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.enableVideos !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.enableVideos !== false}
+                                                    onChange={() => handleToggleIndependentSetting('enableVideos', 'Videos')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 6. PODCASTS MODULE CARD */}
+                                <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-fuchsia-400/50 transition-all flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-[22px]">podcasts</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-fuchsia-500 block">Audio Broadcasting</span>
+                                                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Podcasts</h3>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {(committedConfig.enablePodcasts !== false) !== (configState.enablePodcasts !== false) && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                                        PENDING
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.enablePodcasts !== false
+                                                        ? 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300'
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                                    }`}>
+                                                    {configState.enablePodcasts !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Audio podcast studio, corporate series, audio episode streams, and background audio player.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className={`p-2.5 rounded-xl border ${configState.enablePodcasts !== false ? 'bg-fuchsia-50/70 dark:bg-fuchsia-950/20 border-fuchsia-200 dark:border-fuchsia-900/50 text-fuchsia-900 dark:text-fuchsia-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-fuchsia-600 dark:text-fuchsia-400">When ON:</div>
+                                                <span>Podcast series, episodes, audio player, and APIs live.</span>
+                                            </div>
+                                            <div className={`p-2.5 rounded-xl border ${configState.enablePodcasts === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
+                                                <span>Podcasts hidden in nav, route guarded, APIs return 403.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                {configState.enablePodcasts !== false ? 'Feature Enabled' : 'Feature Disabled'}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={configState.enablePodcasts !== false}
+                                                    onChange={() => handleToggleIndependentSetting('enablePodcasts', 'Podcasts')}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-fuchsia-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+
+
+                            {/* Bottom Status & Persistence Bar */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+                                <div className="flex items-center gap-2 text-xs">
+                                    {getPendingGovernanceChanges().some(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)) ? (
+                                        <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                            <span>
+                                                {getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length} pending module change{getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length > 1 ? 's' : ''} ready to review & commit
+                                            </span>
+                                        </span>
+                                    ) : (
+                                        <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                            <span>All platform feature module toggles are synchronized</span>
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {getPendingGovernanceChanges().some(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setConfigState(prev => ({
+                                                    ...prev,
+                                                    enablePosts: committedConfig.enablePosts,
+                                                    enableArticles: committedConfig.enableArticles,
+                                                    enableClips: committedConfig.enableClips,
+                                                    enableWiki: committedConfig.enableWiki,
+                                                    enableVideos: committedConfig.enableVideos,
+                                                    enablePodcasts: committedConfig.enablePodcasts
+                                                }));
+                                                showToast('Pending module changes have been discarded.');
+                                            }}
+                                            className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
+                                        >
+                                            Discard Draft
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveConfigClick}
+                                        className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
+                                        <span>Save & Commit Feature Changes {getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length > 0 ? `(${getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length})` : ''}</span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            {getPendingGovernanceChanges().some(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)) && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setConfigState(prev => ({
-                                            ...prev,
-                                            requireContentAndCommunityApproval: committedConfig.requireContentAndCommunityApproval,
-                                            requireCommunityApproval: committedConfig.requireCommunityApproval,
-                                            requireArticleApproval: committedConfig.requireArticleApproval,
-                                            requireWikiApproval: committedConfig.requireWikiApproval,
-                                            requireVideoApproval: committedConfig.requireVideoApproval,
-                                            requirePodcastApproval: committedConfig.requirePodcastApproval,
-                                            enableMessaging: committedConfig.enableMessaging,
-                                            enableEmail: committedConfig.enableEmail
-                                        }));
-                                        showToast('Pending governance changes have been discarded.');
-                                    }}
-                                    className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
-                                >
-                                    Discard Draft
-                                </button>
-                            )}
-                            <button
-                                type="button"
-                                onClick={handleSaveConfigClick}
-                                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                            >
-                                <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
-                                <span>Save & Commit Governance Changes {getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length > 0 ? `(${getPendingGovernanceChanges().filter(c => ['requireCommunityApproval', 'requireArticleApproval', 'requireWikiApproval', 'requireVideoApproval', 'requirePodcastApproval', 'enableMessaging', 'enableEmail', 'requireContentAndCommunityApproval'].includes(c.key)).length})` : ''}</span>
-                            </button>
-                        </div>
-                    </div>
+                    )}
                 </div>
             )}
-
-            {/* ─── TAB 2: PLATFORM FEATURE ACCESS CONTROL (MODULE TOGGLES) ─── */}
-            {approvalSubTab === 'modules' && (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 space-y-6">
-                    {/* Header Bar */}
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
-                        <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
-                                <span className="material-symbols-outlined text-[26px]">tune</span>
-                            </div>
-                            <div>
-                                <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                                    Platform Feature Access Control (Module Toggles)
-                                </h2>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Configure individual module availability across Knome. When a feature is toggled OFF, navigation links are hidden, direct routes are blocked, and backend APIs are protected.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
-                            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                                {[
-                                    configState.enablePosts !== false,
-                                    configState.enableArticles !== false,
-                                    configState.enableClips !== false,
-                                    configState.enableWiki !== false,
-                                    configState.enableVideos !== false,
-                                    configState.enablePodcasts !== false
-                                ].filter(Boolean).length} / 6 Features Active
-                            </span>
-                            <button
-                                type="button"
-                                onClick={handleSaveConfigClick}
-                                className={`px-4 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${
-                                    getPendingGovernanceChanges().some(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key))
-                                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30 animate-pulse'
-                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                                }`}
-                            >
-                                <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
-                                <span>Save Changes {getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length > 0 ? `(${getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length})` : ''}</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Quick Presets Bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs font-semibold">
-                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[16px] text-indigo-500">tune</span>
-                            <span>Quick Presets:</span>
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => handleSetAllFeatures(true)}
-                                className="px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 text-[11px] font-bold cursor-pointer transition-all"
-                            >
-                                Enable All 6 Features
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handleSetAllFeatures(false)}
-                                className="px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 text-[11px] font-bold cursor-pointer transition-all"
-                            >
-                                Disable All Features
-                            </button>
-                        </div>
-                    </div>
-
-                        {/* ── 6 INDEPENDENT FEATURE CARDS GRID ── */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-
-                            {/* 1. POSTS MODULE CARD */}
-                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-blue-400/50 transition-all flex flex-col justify-between">
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                                                <span className="material-symbols-outlined text-[22px]">dynamic_feed</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-blue-500 block">Core Social Feed</span>
-                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Posts</h3>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            {(committedConfig.enablePosts !== false) !== (configState.enablePosts !== false) && (
-                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                    PENDING
-                                                </span>
-                                            )}
-                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                                configState.enablePosts !== false
-                                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                            }`}>
-                                                {configState.enablePosts !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                        Social posts feed, user timelines, discussions, composer attachments, and employee reactions.
-                                    </p>
-
-                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enablePosts !== false ? 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-900 dark:text-blue-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-blue-600 dark:text-blue-400">When ON:</div>
-                                            <span>Full feed, composer, reactions, and post APIs enabled.</span>
-                                        </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enablePosts === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
-                                            <span>Posts hidden in UI, composer locked, APIs return 403.</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                            {configState.enablePosts !== false ? 'Feature Enabled' : 'Feature Disabled'}
-                                        </span>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={configState.enablePosts !== false}
-                                                onChange={() => handleToggleIndependentSetting('enablePosts', 'Posts')}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* 2. ARTICLES MODULE CARD */}
-                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-sky-400/50 transition-all flex flex-col justify-between">
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
-                                                <span className="material-symbols-outlined text-[22px]">article</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-sky-500 block">Editorial & Knowledge</span>
-                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Articles</h3>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            {(committedConfig.enableArticles !== false) !== (configState.enableArticles !== false) && (
-                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                    PENDING
-                                                </span>
-                                            )}
-                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                                configState.enableArticles !== false
-                                                    ? 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
-                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                            }`}>
-                                                {configState.enableArticles !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                        Long-form articles, editorial publication, reader views, rich-text editor, and article exploration.
-                                    </p>
-
-                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableArticles !== false ? 'bg-sky-50/70 dark:bg-sky-950/20 border-sky-200 dark:border-sky-900/50 text-sky-900 dark:text-sky-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-sky-600 dark:text-sky-400">When ON:</div>
-                                            <span>Articles portal, reading view, editor, and search active.</span>
-                                        </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableArticles === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
-                                            <span>Articles hidden in nav, route guarded, APIs return 403.</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                            {configState.enableArticles !== false ? 'Feature Enabled' : 'Feature Disabled'}
-                                        </span>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={configState.enableArticles !== false}
-                                                onChange={() => handleToggleIndependentSetting('enableArticles', 'Articles')}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* 3. CLIPS MODULE CARD */}
-                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-rose-400/50 transition-all flex flex-col justify-between">
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                                                <span className="material-symbols-outlined text-[22px]">movie</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-rose-500 block">Short-Form Video</span>
-                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Clips</h3>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            {(committedConfig.enableClips !== false) !== (configState.enableClips !== false) && (
-                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                    PENDING
-                                                </span>
-                                            )}
-                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                                configState.enableClips !== false
-                                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                            }`}>
-                                                {configState.enableClips !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                        Vertical video reels, swipeable clips feed, mobile media playback, and short video creation.
-                                    </p>
-
-                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableClips !== false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When ON:</div>
-                                            <span>Clips feed, reels player, creator uploads, and APIs live.</span>
-                                        </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableClips === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
-                                            <span>Clips hidden in nav, route guarded, APIs return 403.</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                            {configState.enableClips !== false ? 'Feature Enabled' : 'Feature Disabled'}
-                                        </span>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={configState.enableClips !== false}
-                                                onChange={() => handleToggleIndependentSetting('enableClips', 'Clips')}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* 4. WIKI MODULE CARD */}
-                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-indigo-400/50 transition-all flex flex-col justify-between">
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                                                <span className="material-symbols-outlined text-[22px]">menu_book</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500 block">Documentation & Knowledge</span>
-                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Wiki</h3>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            {(committedConfig.enableWiki !== false) !== (configState.enableWiki !== false) && (
-                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                    PENDING
-                                                </span>
-                                            )}
-                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                                configState.enableWiki !== false
-                                                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                            }`}>
-                                                {configState.enableWiki !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                        Enterprise wiki documentation, multi-level hierarchy sections, markdown guides, and unique view tracking.
-                                    </p>
-
-                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableWiki !== false ? 'bg-indigo-50/70 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/50 text-indigo-900 dark:text-indigo-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-indigo-600 dark:text-indigo-400">When ON:</div>
-                                            <span>Wiki catalog, hierarchical editor, reader, and APIs live.</span>
-                                        </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableWiki === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
-                                            <span>Wiki hidden in nav, route guarded, APIs return 403.</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                            {configState.enableWiki !== false ? 'Feature Enabled' : 'Feature Disabled'}
-                                        </span>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={configState.enableWiki !== false}
-                                                onChange={() => handleToggleIndependentSetting('enableWiki', 'Wiki')}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* 5. VIDEOS MODULE CARD */}
-                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-red-400/50 transition-all flex flex-col justify-between">
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
-                                                <span className="material-symbols-outlined text-[22px]">videocam</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-red-500 block">Multimedia Streaming</span>
-                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Videos</h3>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            {(committedConfig.enableVideos !== false) !== (configState.enableVideos !== false) && (
-                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                    PENDING
-                                                </span>
-                                            )}
-                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                                configState.enableVideos !== false
-                                                    ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
-                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                            }`}>
-                                                {configState.enableVideos !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                        Enterprise video portal, on-demand streaming, channel uploads, and multimedia player.
-                                    </p>
-
-                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableVideos !== false ? 'bg-red-50/70 dark:bg-red-950/20 border-red-200 dark:border-red-900/50 text-red-900 dark:text-red-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-red-600 dark:text-red-400">When ON:</div>
-                                            <span>Video hub, streaming playback, uploads, and APIs live.</span>
-                                        </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enableVideos === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
-                                            <span>Videos hidden in nav, route guarded, APIs return 403.</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                            {configState.enableVideos !== false ? 'Feature Enabled' : 'Feature Disabled'}
-                                        </span>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={configState.enableVideos !== false}
-                                                onChange={() => handleToggleIndependentSetting('enableVideos', 'Videos')}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* 6. PODCASTS MODULE CARD */}
-                            <div className="p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs hover:border-fuchsia-400/50 transition-all flex flex-col justify-between">
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-10 h-10 rounded-xl bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 flex items-center justify-center shrink-0">
-                                                <span className="material-symbols-outlined text-[22px]">podcasts</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-fuchsia-500 block">Audio Broadcasting</span>
-                                                <h3 className="text-sm font-black text-slate-900 dark:text-white">Podcasts</h3>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            {(committedConfig.enablePodcasts !== false) !== (configState.enablePodcasts !== false) && (
-                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
-                                                    PENDING
-                                                </span>
-                                            )}
-                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                                configState.enablePodcasts !== false
-                                                    ? 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300'
-                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                            }`}>
-                                                {configState.enablePodcasts !== false ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                        Audio podcast studio, corporate series, audio episode streams, and background audio player.
-                                    </p>
-
-                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className={`p-2.5 rounded-xl border ${configState.enablePodcasts !== false ? 'bg-fuchsia-50/70 dark:bg-fuchsia-950/20 border-fuchsia-200 dark:border-fuchsia-900/50 text-fuchsia-900 dark:text-fuchsia-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-fuchsia-600 dark:text-fuchsia-400">When ON:</div>
-                                            <span>Podcast series, episodes, audio player, and APIs live.</span>
-                                        </div>
-                                        <div className={`p-2.5 rounded-xl border ${configState.enablePodcasts === false ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 font-semibold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                                            <div className="font-bold mb-0.5 text-rose-600 dark:text-rose-400">When OFF:</div>
-                                            <span>Podcasts hidden in nav, route guarded, APIs return 403.</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                            {configState.enablePodcasts !== false ? 'Feature Enabled' : 'Feature Disabled'}
-                                        </span>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={configState.enablePodcasts !== false}
-                                                onChange={() => handleToggleIndependentSetting('enablePodcasts', 'Podcasts')}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-fuchsia-600"></div>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                        </div>
-
-
-                    {/* Bottom Status & Persistence Bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
-                        <div className="flex items-center gap-2 text-xs">
-                            {getPendingGovernanceChanges().some(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)) ? (
-                                <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                    <span>
-                                        {getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length} pending module change{getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length > 1 ? 's' : ''} ready to review & commit
-                                    </span>
-                                </span>
-                            ) : (
-                                <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    <span>All platform feature module toggles are synchronized</span>
-                                </span>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {getPendingGovernanceChanges().some(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)) && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setConfigState(prev => ({
-                                            ...prev,
-                                            enablePosts: committedConfig.enablePosts,
-                                            enableArticles: committedConfig.enableArticles,
-                                            enableClips: committedConfig.enableClips,
-                                            enableWiki: committedConfig.enableWiki,
-                                            enableVideos: committedConfig.enableVideos,
-                                            enablePodcasts: committedConfig.enablePodcasts
-                                        }));
-                                        showToast('Pending module changes have been discarded.');
-                                    }}
-                                    className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
-                                >
-                                    Discard Draft
-                                </button>
-                            )}
-                            <button
-                                type="button"
-                                onClick={handleSaveConfigClick}
-                                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                            >
-                                <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
-                                <span>Save & Commit Feature Changes {getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length > 0 ? `(${getPendingGovernanceChanges().filter(c => ['enablePosts', 'enableArticles', 'enableClips', 'enableWiki', 'enableVideos', 'enablePodcasts'].includes(c.key)).length})` : ''}</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    )}
 
             {/* ─── TAB: MEDIA APPROVALS (VIDEOS & PODCASTS) ─── */}
             {activeTab === 'media_approvals' && (
@@ -11732,11 +11572,10 @@ export default function AdminConsole() {
                             <div className="min-w-0">
                                 <div className="flex items-center gap-2">
                                     <h3 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">Content & Community Approval Policy</h3>
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                        configState.requireContentAndCommunityApproval !== false
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${configState.requireContentAndCommunityApproval !== false
                                             ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300'
                                             : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300'
-                                    }`}>
+                                        }`}>
                                         {configState.requireContentAndCommunityApproval !== false ? 'APPROVAL REQUIRED (ON)' : 'INSTANT PUBLISH (OFF)'}
                                     </span>
                                 </div>
@@ -11801,19 +11640,17 @@ export default function AdminConsole() {
                                     key={filterTab.id}
                                     type="button"
                                     onClick={() => setMediaTypeFilter(filterTab.id)}
-                                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-                                        isSelected
+                                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${isSelected
                                             ? filterTab.activeColor || 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
                                             : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:bg-slate-200/80 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60'
-                                    }`}
+                                        }`}
                                 >
                                     <span className="material-symbols-outlined text-[16px]">{filterTab.icon}</span>
                                     <span>{filterTab.label}</span>
-                                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                                        isSelected
+                                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${isSelected
                                             ? 'bg-white/20 text-white'
                                             : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                                    }`}>
+                                        }`}>
                                         {filterTab.count}
                                     </span>
                                 </button>
@@ -11836,90 +11673,88 @@ export default function AdminConsole() {
                                     return t === mediaTypeFilter.toLowerCase();
                                 })
                                 .map((item) => (
-                                <div key={item.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3 shadow-xs hover:border-indigo-200 dark:hover:border-indigo-800/50 transition-all">
-                                    <div className="flex items-center justify-between">
-                                        <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
-                                            (item.mediaType || item.type || '').toLowerCase() === 'video' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20' : 
-                                            (item.mediaType || item.type || '').toLowerCase() === 'podcast' || (item.mediaType || item.type || '').toLowerCase() === 'audio' ? 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20' :
-                                            (item.mediaType || item.type || '').toLowerCase() === 'article' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20' :
-                                            'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                                        }`}>
-                                            {item.mediaType || item.type || 'Media'} Submission
-                                        </span>
-                                        <span className="text-[11px] font-medium text-slate-400">
-                                            {new Date(item.submittedDate).toLocaleString()}
-                                        </span>
-                                    </div>
+                                    <div key={item.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3 shadow-xs hover:border-indigo-200 dark:hover:border-indigo-800/50 transition-all">
+                                        <div className="flex items-center justify-between">
+                                            <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${(item.mediaType || item.type || '').toLowerCase() === 'video' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20' :
+                                                    (item.mediaType || item.type || '').toLowerCase() === 'podcast' || (item.mediaType || item.type || '').toLowerCase() === 'audio' ? 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20' :
+                                                        (item.mediaType || item.type || '').toLowerCase() === 'article' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20' :
+                                                            'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                                }`}>
+                                                {item.mediaType || item.type || 'Media'} Submission
+                                            </span>
+                                            <span className="text-[11px] font-medium text-slate-400">
+                                                {new Date(item.submittedDate).toLocaleString()}
+                                            </span>
+                                        </div>
 
-                                    <div className="flex items-start gap-3">
-                                        {/* Media thumbnail / visual preview */}
-                                        {(item.mediaType || item.type || '').toLowerCase() === 'video' || (item.mediaType || item.type || '').toLowerCase() === 'podcast' || (item.mediaType || item.type || '').toLowerCase() === 'audio' ? (
-                                            <div 
-                                                className="relative group shrink-0 cursor-pointer"
-                                                onClick={() => setPreviewingMedia(item)}
-                                                title="Click to play preview"
-                                            >
-                                                <img src={resolveMediaUrl(item.thumbnail) || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=1200'} className="w-20 h-20 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs" alt={item.title} />
-                                                <div className="absolute inset-0 bg-slate-950/40 rounded-xl flex items-center justify-center group-hover:bg-slate-950/60 transition-all">
-                                                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110 ${item.mediaType === 'Video' ? 'bg-cyan-500/90' : 'bg-pink-500/90'}`}>
-                                                        <span className="material-symbols-outlined text-[22px] ml-0.5">play_arrow</span>
+                                        <div className="flex items-start gap-3">
+                                            {/* Media thumbnail / visual preview */}
+                                            {(item.mediaType || item.type || '').toLowerCase() === 'video' || (item.mediaType || item.type || '').toLowerCase() === 'podcast' || (item.mediaType || item.type || '').toLowerCase() === 'audio' ? (
+                                                <div
+                                                    className="relative group shrink-0 cursor-pointer"
+                                                    onClick={() => setPreviewingMedia(item)}
+                                                    title="Click to play preview"
+                                                >
+                                                    <img src={resolveMediaUrl(item.thumbnail) || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=1200'} className="w-20 h-20 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs" alt={item.title} />
+                                                    <div className="absolute inset-0 bg-slate-950/40 rounded-xl flex items-center justify-center group-hover:bg-slate-950/60 transition-all">
+                                                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110 ${item.mediaType === 'Video' ? 'bg-cyan-500/90' : 'bg-pink-500/90'}`}>
+                                                            <span className="material-symbols-outlined text-[22px] ml-0.5">play_arrow</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            <div 
-                                                className="relative group shrink-0 cursor-pointer"
-                                                onClick={() => setPreviewingMedia(item)}
-                                                title="Click to preview content"
-                                            >
-                                                {item.thumbnail ? (
-                                                    <img src={resolveMediaUrl(item.thumbnail)} className="w-20 h-20 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs" alt={item.title} />
-                                                ) : (
-                                                    <div className={`w-20 h-20 rounded-xl flex flex-col items-center justify-center border shadow-xs transition-all ${
-                                                        item.mediaType === 'Article' 
-                                                            ? 'bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800/50 text-violet-600 dark:text-violet-400' 
-                                                            : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400'
-                                                    }`}>
-                                                        <span className="material-symbols-outlined text-[28px]">{item.mediaType === 'Article' ? 'article' : 'auto_stories'}</span>
-                                                        <span className="text-[9px] font-black uppercase mt-1 tracking-wider">{item.mediaType}</span>
-                                                    </div>
-                                                )}
-                                                <div className="absolute inset-0 bg-slate-950/30 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                                                    <div className="w-8 h-8 rounded-full bg-white/90 text-slate-800 flex items-center justify-center shadow">
-                                                        <span className="material-symbols-outlined text-[18px]">visibility</span>
+                                            ) : (
+                                                <div
+                                                    className="relative group shrink-0 cursor-pointer"
+                                                    onClick={() => setPreviewingMedia(item)}
+                                                    title="Click to preview content"
+                                                >
+                                                    {item.thumbnail ? (
+                                                        <img src={resolveMediaUrl(item.thumbnail)} className="w-20 h-20 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs" alt={item.title} />
+                                                    ) : (
+                                                        <div className={`w-20 h-20 rounded-xl flex flex-col items-center justify-center border shadow-xs transition-all ${item.mediaType === 'Article'
+                                                                ? 'bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800/50 text-violet-600 dark:text-violet-400'
+                                                                : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400'
+                                                            }`}>
+                                                            <span className="material-symbols-outlined text-[28px]">{item.mediaType === 'Article' ? 'article' : 'auto_stories'}</span>
+                                                            <span className="text-[9px] font-black uppercase mt-1 tracking-wider">{item.mediaType}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="absolute inset-0 bg-slate-950/30 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                                                        <div className="w-8 h-8 rounded-full bg-white/90 text-slate-800 flex items-center justify-center shadow">
+                                                            <span className="material-symbols-outlined text-[18px]">visibility</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        )}
+                                            )}
 
-                                        <div className="min-w-0 flex-1">
-                                            <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">{item.title}</h4>
-                                            <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{item.description || 'No description provided.'}</p>
-                                            <div className="flex items-center gap-2 mt-2 text-[11px] text-slate-400 font-semibold">
-                                                <span>By: {item.authorName}</span>
-                                                <span>•</span>
-                                                <span>Category: {item.category}</span>
+                                            <div className="min-w-0 flex-1">
+                                                <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">{item.title}</h4>
+                                                <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{item.description || 'No description provided.'}</p>
+                                                <div className="flex items-center gap-2 mt-2 text-[11px] text-slate-400 font-semibold">
+                                                    <span>By: {item.authorName}</span>
+                                                    <span>•</span>
+                                                    <span>Category: {item.category}</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <div className="flex items-center justify-end pt-3 border-t border-slate-200/60 dark:border-slate-800 gap-2">
-                                        <button
-                                            onClick={() => handleRejectMedia(item)}
-                                            className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                                        >
-                                            Decline / Reject
-                                        </button>
-                                        <button
-                                            onClick={() => handleApproveMedia(item)}
-                                            className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                                            Approve & Publish
-                                        </button>
+                                        <div className="flex items-center justify-end pt-3 border-t border-slate-200/60 dark:border-slate-800 gap-2">
+                                            <button
+                                                onClick={() => handleRejectMedia(item)}
+                                                className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                            >
+                                                Decline / Reject
+                                            </button>
+                                            <button
+                                                onClick={() => handleApproveMedia(item)}
+                                                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                                                Approve & Publish
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))}
                         </div>
                     ) : (
                         <div className="py-12 text-center flex flex-col items-center justify-center">
@@ -11979,11 +11814,10 @@ export default function AdminConsole() {
                                 <button
                                     key={t}
                                     onClick={() => setCommunityApprovalTypeFilter(t)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                        communityApprovalTypeFilter === t
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${communityApprovalTypeFilter === t
                                             ? 'bg-amber-500 text-white shadow-xs'
                                             : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                    }`}
+                                        }`}
                                 >
                                     {t}
                                 </button>
@@ -12024,23 +11858,23 @@ export default function AdminConsole() {
                                     return true;
                                 })
                                 .map(comm => (
-                                    <div 
-                                        key={comm.id} 
+                                    <div
+                                        key={comm.id}
                                         className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:border-amber-300 dark:hover:border-amber-700/80 transition-all group"
                                     >
                                         {/* Banner & Type Badges */}
                                         <div className="h-32 relative overflow-hidden bg-slate-200 dark:bg-slate-800">
-                                            <img 
-                                                src={comm.banner || comm.bannerUrl || getCommunityImages(comm.name, comm.category).banner} 
-                                                alt={comm.name} 
+                                            <img
+                                                src={comm.banner || comm.bannerUrl || getCommunityImages(comm.name, comm.category).banner}
+                                                alt={comm.name}
                                                 onError={(e) => {
                                                     e.currentTarget.onerror = null;
                                                     e.currentTarget.src = getCommunityImages(comm.name, comm.category).banner;
                                                 }}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                             />
                                             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent"></div>
-                                            
+
                                             <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
                                                 <span className="px-2.5 py-0.5 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white shadow-xs flex items-center gap-1">
                                                     <span className="material-symbols-outlined text-[13px]">hourglass_top</span>
@@ -12049,13 +11883,12 @@ export default function AdminConsole() {
                                             </div>
 
                                             <div className="absolute top-2.5 right-2.5">
-                                                <span className={`px-2.5 py-0.5 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-wider shadow-xs ${
-                                                    formatCommunityType(comm.type) === 'Org' 
-                                                        ? 'bg-purple-600 text-white' 
-                                                        : formatCommunityType(comm.type) === 'Private' 
-                                                        ? 'bg-rose-600 text-white' 
-                                                        : 'bg-white/95 text-slate-800 dark:bg-slate-900/90 dark:text-white'
-                                                }`}>
+                                                <span className={`px-2.5 py-0.5 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-wider shadow-xs ${formatCommunityType(comm.type) === 'Org'
+                                                        ? 'bg-purple-600 text-white'
+                                                        : formatCommunityType(comm.type) === 'Private'
+                                                            ? 'bg-rose-600 text-white'
+                                                            : 'bg-white/95 text-slate-800 dark:bg-slate-900/90 dark:text-white'
+                                                    }`}>
                                                     {formatCommunityType(comm.type)}
                                                 </span>
                                             </div>
@@ -12075,7 +11908,7 @@ export default function AdminConsole() {
                                             <h3 className="font-extrabold text-base text-slate-900 dark:text-white leading-snug line-clamp-1">
                                                 <HighlightText text={comm.name} query={communityApprovalSearchTerm} />
                                             </h3>
-                                            
+
                                             <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 mb-3">
                                                 <HighlightText text={comm.description || 'No description provided.'} query={communityApprovalSearchTerm} />
                                             </p>
@@ -12131,8 +11964,8 @@ export default function AdminConsole() {
                                 <span className="material-symbols-outlined text-[32px]">task_alt</span>
                             </div>
                             <h3 className="text-base font-black text-slate-800 dark:text-slate-200">
-                                {communityApprovalSearchTerm || communityApprovalTypeFilter !== 'All' 
-                                    ? 'No Matching Community Requests' 
+                                {communityApprovalSearchTerm || communityApprovalTypeFilter !== 'All'
+                                    ? 'No Matching Community Requests'
                                     : 'All Caught Up!'}
                             </h3>
                             <p className="text-xs text-slate-500 max-w-sm mt-1">
@@ -12170,7 +12003,7 @@ export default function AdminConsole() {
                                 </h3>
                             </div>
                             <p className="text-xs text-slate-400 mt-0.5">
-                                Review new user registrations and assign governance roles. Approval instantly syncs across Knome & EmployeeHub.
+                                Review new user registrations and assign governance roles. Approval instantly syncs across TechnoSocial & EmployeeHub.
                             </p>
                         </div>
 
@@ -12206,11 +12039,11 @@ export default function AdminConsole() {
                         const term = (roleRequestSearchTerm || searchQuery || '').trim().toLowerCase();
                         if (!term) return matchesStatus;
                         const matchesTerm = (r.fullName || '').toLowerCase().includes(term) ||
-                               (r.employeeId || '').toLowerCase().includes(term) ||
-                               (r.email || '').toLowerCase().includes(term) ||
-                               (r.departmentName || '').toLowerCase().includes(term) ||
-                               (r.requestedRoleCode || '').toLowerCase().includes(term) ||
-                               (r.assignedRoleName || '').toLowerCase().includes(term);
+                            (r.employeeId || '').toLowerCase().includes(term) ||
+                            (r.email || '').toLowerCase().includes(term) ||
+                            (r.departmentName || '').toLowerCase().includes(term) ||
+                            (r.requestedRoleCode || '').toLowerCase().includes(term) ||
+                            (r.assignedRoleName || '').toLowerCase().includes(term);
                         return matchesStatus && matchesTerm;
                     }).length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -12220,11 +12053,11 @@ export default function AdminConsole() {
                                     const term = (roleRequestSearchTerm || searchQuery || '').trim().toLowerCase();
                                     if (!term) return matchesStatus;
                                     const matchesTerm = (r.fullName || '').toLowerCase().includes(term) ||
-                                           (r.employeeId || '').toLowerCase().includes(term) ||
-                                           (r.email || '').toLowerCase().includes(term) ||
-                                           (r.departmentName || '').toLowerCase().includes(term) ||
-                                           (r.requestedRoleCode || '').toLowerCase().includes(term) ||
-                                           (r.assignedRoleName || '').toLowerCase().includes(term);
+                                        (r.employeeId || '').toLowerCase().includes(term) ||
+                                        (r.email || '').toLowerCase().includes(term) ||
+                                        (r.departmentName || '').toLowerCase().includes(term) ||
+                                        (r.requestedRoleCode || '').toLowerCase().includes(term) ||
+                                        (r.assignedRoleName || '').toLowerCase().includes(term);
                                     return matchesStatus && matchesTerm;
                                 })
                                 .map((req) => {
@@ -12234,11 +12067,10 @@ export default function AdminConsole() {
                                     return (
                                         <div
                                             key={req.requestId}
-                                            className={`p-4 rounded-2xl border transition-all space-y-3 ${
-                                                isPending
+                                            className={`p-4 rounded-2xl border transition-all space-y-3 ${isPending
                                                     ? 'border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/5 shadow-xs'
                                                     : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30'
-                                            }`}
+                                                }`}
                                         >
                                             {/* Header */}
                                             <div className="flex items-center justify-between">
@@ -12251,13 +12083,12 @@ export default function AdminConsole() {
                                                     </span>
                                                 </div>
 
-                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                                    isPending
+                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${isPending
                                                         ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse'
                                                         : req.status === 'Approved'
                                                             ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
                                                             : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
-                                                }`}>
+                                                    }`}>
                                                     {req.status}
                                                 </span>
                                             </div>
@@ -12506,8 +12337,8 @@ export default function AdminConsole() {
                                         const rawRole = selectedRoles[0] || 'Employee';
                                         const currentNormalized = (rawRole === 'HR Administrator' || rawRole === 'HR Admin' || rawRole === 'HRAdmin') ? 'HR Admin'
                                             : (rawRole === 'System Administrator' || rawRole === 'System Admin' || rawRole === 'SystemAdmin') ? 'System Admin'
-                                            : (rawRole === 'Moderator' || rawRole === 'MOD') ? 'Moderator'
-                                            : 'Employee';
+                                                : (rawRole === 'Moderator' || rawRole === 'MOD') ? 'Moderator'
+                                                    : 'Employee';
                                         const isSelected = currentNormalized === roleItem.name;
                                         return (
                                             <div
@@ -12519,11 +12350,10 @@ export default function AdminConsole() {
                                                     }
                                                     setSelectedRoles([roleItem.name]);
                                                 }}
-                                                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                                                    isSelected
+                                                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${isSelected
                                                         ? 'border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/30 ring-1 ring-indigo-600'
                                                         : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-800/40'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${roleItem.badge}`}>
@@ -12536,11 +12366,10 @@ export default function AdminConsole() {
                                                         <p className="text-[11px] text-slate-400 mt-0.5">{roleItem.desc}</p>
                                                     </div>
                                                 </div>
-                                                <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
-                                                    isSelected
+                                                <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${isSelected
                                                         ? 'bg-indigo-600 border-indigo-600 text-white ring-2 ring-indigo-200 dark:ring-indigo-900 shadow-xs'
                                                         : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
-                                                }`}>
+                                                    }`}>
                                                     {isSelected && (
                                                         <div className="w-2 h-2 rounded-full bg-white" />
                                                     )}
@@ -12589,7 +12418,7 @@ export default function AdminConsole() {
             {isPreviewOpen && previewReport && createPortal(
                 <div className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in">
                     <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh] my-auto animate-in zoom-in-95">
-                        
+
                         {/* Modal Header (Pinned) */}
                         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-sm shrink-0 sticky top-0 z-20">
                             <div className="flex items-center gap-3">
@@ -12615,7 +12444,7 @@ export default function AdminConsole() {
                                     </p>
                                 </div>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setIsPreviewOpen(false)}
                                 className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition-all cursor-pointer shrink-0"
                                 title="Close Preview"
@@ -12667,11 +12496,11 @@ export default function AdminConsole() {
                                 <div>
                                     <p className="text-slate-400 font-semibold text-[11px]">Reason Flagged</p>
                                     {(() => {
-                                        const rawReason = previewReport.reasonCode 
-                                            || previewReport.reason 
-                                            || previewReport.category 
-                                            || previewReport.fullReason 
-                                            || (previewReport.reporters && previewReport.reporters[0]?.reasonCode) 
+                                        const rawReason = previewReport.reasonCode
+                                            || previewReport.reason
+                                            || previewReport.category
+                                            || previewReport.fullReason
+                                            || (previewReport.reporters && previewReport.reporters[0]?.reasonCode)
                                             || 'Violation of Community Guidelines';
                                         const cleanReason = String(rawReason).replace(/^[—\-\s]+|[—\-\s]+$/g, '').trim() || 'Community Guidelines Violation';
                                         return (
@@ -12778,7 +12607,7 @@ export default function AdminConsole() {
                                                     const rawUrl = previewPost.videoUrl || previewPost.sourceUrl || '';
                                                     const isYT = rawUrl && (rawUrl.includes('youtube.com') || rawUrl.includes('youtu.be'));
                                                     const finalVideoUrl = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
-                                                        ? rawUrl 
+                                                        ? rawUrl
                                                         : (resolveMediaUrl(rawUrl) || 'https://vjs.zencdn.net/v/oceans.mp4');
 
                                                     if (isYT) {
@@ -12809,7 +12638,7 @@ export default function AdminConsole() {
                                                                 onError={(e) => {
                                                                     if (e.target && !e.target.src.includes('oceans.mp4')) {
                                                                         e.target.src = 'https://vjs.zencdn.net/v/oceans.mp4';
-                                                                        e.target.play().catch(() => {});
+                                                                        e.target.play().catch(() => { });
                                                                     }
                                                                 }}
                                                             />
@@ -12822,7 +12651,7 @@ export default function AdminConsole() {
                                                     onClick={() => {
                                                         const el = document.getElementById('admin_modal_video_player');
                                                         if (el) {
-                                                            if (el.paused) el.play().catch(() => {});
+                                                            if (el.paused) el.play().catch(() => { });
                                                             else el.pause();
                                                         }
                                                     }}
@@ -12913,7 +12742,7 @@ export default function AdminConsole() {
                                                 />
                                             )}
                                             {previewPost.contentHtml && (
-                                                <div 
+                                                <div
                                                     className="text-xs text-slate-600 dark:text-slate-300 line-clamp-4 leading-relaxed bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800"
                                                     dangerouslySetInnerHTML={{ __html: previewPost.contentHtml }}
                                                 />
@@ -12952,7 +12781,7 @@ export default function AdminConsole() {
                                                 />
                                             )}
                                             {previewPost.contentHtml && (
-                                                <div 
+                                                <div
                                                     className="text-xs text-slate-600 dark:text-slate-300 line-clamp-4 leading-relaxed bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800"
                                                     dangerouslySetInnerHTML={{ __html: previewPost.contentHtml }}
                                                 />
@@ -12965,14 +12794,14 @@ export default function AdminConsole() {
                                         const rawList = (previewPost.attachments && previewPost.attachments.length > 0)
                                             ? previewPost.attachments
                                             : (previewPost.attachmentUrls || []);
-                                        
+
                                         if (!rawList || rawList.length === 0) return null;
 
                                         const parsedList = rawList.map((att, i) => {
                                             const rawUrl = typeof att === 'string' ? att : (att.fileUrl || att.url || '');
                                             const resolvedUrl = resolveMediaUrl(rawUrl) || rawUrl;
                                             let fileType = typeof att === 'object' && (att.fileType || att.type) ? (att.fileType || att.type).toLowerCase() : '';
-                                            
+
                                             if (!fileType) {
                                                 if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(rawUrl)) fileType = 'image';
                                                 else if (/\.(mp4|mov|avi|webm|mkv)(\?.*)?$/i.test(rawUrl)) fileType = 'video';
@@ -12985,8 +12814,8 @@ export default function AdminConsole() {
                                                 else fileType = 'doc';
                                             }
 
-                                            const fileName = (typeof att === 'object' && att.name && att.name !== 'attachment') 
-                                                ? att.name 
+                                            const fileName = (typeof att === 'object' && att.name && att.name !== 'attachment')
+                                                ? att.name
                                                 : (rawUrl.split('/').pop()?.split('?')[0] || `Attachment_${i + 1}`);
 
                                             return { rawUrl, resolvedUrl, fileType, fileName };
@@ -13011,19 +12840,19 @@ export default function AdminConsole() {
                                                     <div className={`grid gap-2.5 ${imageAtts.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                                                         {imageAtts.map((att, idx) => (
                                                             <div key={idx} className="relative group overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 shadow-xs">
-                                                                <img 
-                                                                    src={att.resolvedUrl} 
-                                                                    alt={att.fileName} 
+                                                                <img
+                                                                    src={att.resolvedUrl}
+                                                                    alt={att.fileName}
                                                                     className="w-full h-36 sm:h-40 object-cover group-hover:scale-105 transition-transform duration-300"
                                                                     onError={(e) => {
                                                                         e.target.onerror = null;
                                                                         e.target.src = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="350" viewBox="0 0 600 350"><rect width="600" height="350" fill="%231e293b"/><text x="300" y="175" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="%2394a3b8" text-anchor="middle">Attachment Preview</text></svg>`;
                                                                     }}
                                                                 />
-                                                                <a 
-                                                                    href={att.resolvedUrl} 
-                                                                    target="_blank" 
-                                                                    rel="noopener noreferrer" 
+                                                                <a
+                                                                    href={att.resolvedUrl}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
                                                                     className="absolute bottom-2.5 right-2.5 px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-900 text-white text-xs font-bold backdrop-blur-md transition-all flex items-center gap-1.5 shadow-md opacity-0 group-hover:opacity-100 cursor-pointer"
                                                                 >
                                                                     <span className="material-symbols-outlined text-[15px]">open_in_new</span>
@@ -13048,11 +12877,11 @@ export default function AdminConsole() {
                                                                         <span className="material-symbols-outlined text-[13px]">open_in_new</span> Fullscreen
                                                                     </a>
                                                                 </div>
-                                                                <video 
-                                                                    src={att.resolvedUrl} 
-                                                                    controls 
-                                                                    preload="metadata" 
-                                                                    className="w-full max-h-48 object-contain bg-black" 
+                                                                <video
+                                                                    src={att.resolvedUrl}
+                                                                    controls
+                                                                    preload="metadata"
+                                                                    className="w-full max-h-48 object-contain bg-black"
                                                                 />
                                                             </div>
                                                         ))}
@@ -13071,10 +12900,10 @@ export default function AdminConsole() {
                                                                         </div>
                                                                         <span className="truncate">{att.fileName}</span>
                                                                     </span>
-                                                                    <a 
-                                                                        href={att.resolvedUrl} 
-                                                                        target="_blank" 
-                                                                        rel="noopener noreferrer" 
+                                                                    <a
+                                                                        href={att.resolvedUrl}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
                                                                         download={att.fileName}
                                                                         className="text-indigo-600 dark:text-indigo-400 hover:underline shrink-0 text-[11px] font-semibold flex items-center gap-0.5"
                                                                     >
@@ -13101,10 +12930,10 @@ export default function AdminConsole() {
                                                                         <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Document Attachment</p>
                                                                     </div>
                                                                 </div>
-                                                                <a 
-                                                                    href={att.resolvedUrl} 
-                                                                    target="_blank" 
-                                                                    rel="noopener noreferrer" 
+                                                                <a
+                                                                    href={att.resolvedUrl}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
                                                                     download={att.fileName}
                                                                     className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 transition-all shadow-sm cursor-pointer"
                                                                 >
@@ -13476,9 +13305,9 @@ export default function AdminConsole() {
 
             {/* ─── MODAL 4B: CREATE COMMUNITY CHANNEL MODAL ─── */}
             {isCreateChannelModalOpen && createPortal(
-                <CreateCommunityModal 
-                    isOpen={isCreateChannelModalOpen} 
-                    onClose={() => setIsCreateChannelModalOpen(false)} 
+                <CreateCommunityModal
+                    isOpen={isCreateChannelModalOpen}
+                    onClose={() => setIsCreateChannelModalOpen(false)}
                     onCommunityCreated={(res) => {
                         setIsCreateChannelModalOpen(false);
                         fetchCommunities();
@@ -13501,12 +13330,11 @@ export default function AdminConsole() {
                         {/* Modal Header */}
                         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
-                                    previewingMedia.mediaType === 'Video' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20' : 
-                                    previewingMedia.mediaType === 'Podcast' ? 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20' :
-                                    previewingMedia.mediaType === 'Article' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20' :
-                                    'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                                }`}>
+                                <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${previewingMedia.mediaType === 'Video' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20' :
+                                        previewingMedia.mediaType === 'Podcast' ? 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20' :
+                                            previewingMedia.mediaType === 'Article' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20' :
+                                                'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                    }`}>
                                     {previewingMedia.mediaType} Preview
                                 </span>
                                 <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-md">{previewingMedia.title}</h3>
@@ -13578,9 +13406,9 @@ export default function AdminConsole() {
                                     </div>
                                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 max-h-72 overflow-y-auto">
                                         {previewingMedia.contentHtml ? (
-                                            <div 
+                                            <div
                                                 className="text-xs text-slate-700 dark:text-slate-300 space-y-2 leading-relaxed"
-                                                dangerouslySetInnerHTML={{ __html: previewingMedia.contentHtml }} 
+                                                dangerouslySetInnerHTML={{ __html: previewingMedia.contentHtml }}
                                             />
                                         ) : (
                                             <p className="text-xs text-slate-600 dark:text-slate-400">{previewingMedia.description || 'No content provided.'}</p>
@@ -13605,9 +13433,9 @@ export default function AdminConsole() {
                                     </div>
                                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 max-h-72 overflow-y-auto">
                                         {previewingMedia.contentHtml ? (
-                                            <div 
+                                            <div
                                                 className="text-xs text-slate-700 dark:text-slate-300 space-y-2 leading-relaxed"
-                                                dangerouslySetInnerHTML={{ __html: previewingMedia.contentHtml }} 
+                                                dangerouslySetInnerHTML={{ __html: previewingMedia.contentHtml }}
                                             />
                                         ) : (
                                             <p className="text-xs text-slate-600 dark:text-slate-400">{previewingMedia.description || 'No content provided.'}</p>
@@ -13663,7 +13491,7 @@ export default function AdminConsole() {
             )}
             {/* ─── MODAL: COMPREHENSIVE USER DETAILS MODAL ─── */}
             {isUserDetailsModalOpen && selectedUserDetailsUser && createPortal(
-                <div 
+                <div
                     onClick={(e) => {
                         if (e.target === e.currentTarget) setIsUserDetailsModalOpen(false);
                     }}
@@ -13711,7 +13539,7 @@ export default function AdminConsole() {
                         <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto custom-scrollbar">
                             {/* KPI Strip */}
                             <div className="grid grid-cols-3 gap-3">
-                                <div 
+                                <div
                                     onClick={() => {
                                         if (isSysAdmin || isHrAdmin) {
                                             const role = getUserAssignedRole(selectedUserDetailsUser);
@@ -13745,10 +13573,10 @@ export default function AdminConsole() {
                                 </div>
                                 {(() => {
                                     const statusCfg = getUserStatusConfig(selectedUserDetailsUser);
-                                    const textClass = statusCfg.status === 'Active' 
-                                        ? 'text-emerald-600 dark:text-emerald-400' 
-                                        : statusCfg.status === 'Suspended' 
-                                            ? 'text-rose-600 dark:text-rose-400' 
+                                    const textClass = statusCfg.status === 'Active'
+                                        ? 'text-emerald-600 dark:text-emerald-400'
+                                        : statusCfg.status === 'Suspended'
+                                            ? 'text-rose-600 dark:text-rose-400'
                                             : 'text-slate-600 dark:text-slate-400';
                                     return (
                                         <div className="p-3.5 rounded-2xl bg-slate-50/50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 text-center">
@@ -13809,10 +13637,10 @@ export default function AdminConsole() {
                                     {(selectedUserDetailsUser.roleName || getUserAssignedRole(selectedUserDetailsUser)).includes('System')
                                         ? '🛡️ Full System Admin: Complete governance authority over user accounts, audit trails, community moderation, and platform parameters.'
                                         : (selectedUserDetailsUser.roleName || getUserAssignedRole(selectedUserDetailsUser)).includes('HR')
-                                        ? '🪪 HR Admin: Authorized for organization-wide Org community assignments, analytics dashboards, and job postings.'
-                                        : (selectedUserDetailsUser.roleName || getUserAssignedRole(selectedUserDetailsUser)).includes('Community')
-                                        ? '👥 Community Admin: Authorized for content moderation, pinned discussions, user approvals, and channel safety enforcement.'
-                                        : '👤 Standard Employee: Access to feed posting, media channels, communities collaboration, and karma rewards.'}
+                                            ? '🪪 HR Admin: Authorized for organization-wide Org community assignments, analytics dashboards, and job postings.'
+                                            : (selectedUserDetailsUser.roleName || getUserAssignedRole(selectedUserDetailsUser)).includes('Community')
+                                                ? '👥 Community Admin: Authorized for content moderation, pinned discussions, user approvals, and channel safety enforcement.'
+                                                : '👤 Standard Employee: Access to feed posting, media channels, communities collaboration, and karma rewards.'}
                                 </p>
                             </div>
 
@@ -13837,11 +13665,10 @@ export default function AdminConsole() {
                                     <button
                                         type="button"
                                         onClick={() => handleToggleEmployeeNotice(selectedUserDetailsUser)}
-                                        className={`px-3.5 py-1.5 rounded-xl font-bold text-xs inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
-                                            isEmployeeMarkedInNotice(selectedUserDetailsUser)
+                                        className={`px-3.5 py-1.5 rounded-xl font-bold text-xs inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${isEmployeeMarkedInNotice(selectedUserDetailsUser)
                                                 ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-300 border border-rose-300'
                                                 : 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="material-symbols-outlined text-[15px]">
                                             {isEmployeeMarkedInNotice(selectedUserDetailsUser) ? 'person_remove' : 'event_busy'}
@@ -13889,11 +13716,11 @@ export default function AdminConsole() {
 
             {/* ─── CONFIRMATION MODAL: SAVE & COMMIT GOVERNANCE CHANGES ─── */}
             {isConfirmSaveModalOpen && createPortal(
-                <div 
+                <div
                     className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in"
                     onClick={() => !isSavingConfig && setIsConfirmSaveModalOpen(false)}
                 >
-                    <div 
+                    <div
                         className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-scale-up"
                         onClick={e => e.stopPropagation()}
                     >
@@ -13907,7 +13734,7 @@ export default function AdminConsole() {
                                         Changes Successfully Saved & Applied! ✨
                                     </h3>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-                                        All platform governance policies, module access controls, and database records have been committed and broadcasted across Knome.
+                                        All platform governance policies, module access controls, and database records have been committed and broadcasted across TechnoSocial.
                                     </p>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 max-w-sm mx-auto text-left space-y-2">
@@ -13955,177 +13782,175 @@ export default function AdminConsole() {
                             </div>
                         ) : (
                             <>
-                        {/* Modal Header */}
-                        <div className="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-4 bg-gradient-to-r from-slate-50 to-indigo-50/40 dark:from-slate-900 dark:to-indigo-950/20">
-                            <div className="flex items-center gap-3.5">
-                                <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 shrink-0">
-                                    <span className="material-symbols-outlined text-[24px]">cloud_sync</span>
-                                </div>
-                                <div>
-                                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                                        {pendingChanges.length > 0 ? 'Confirm Governance Changes' : 'Platform Configuration Overview'}
-                                    </h3>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                        {pendingChanges.length > 0 ? 'Review summary of pending modifications before saving to the database.' : 'All platform modules and governance policies are currently synchronized with the database.'}
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => !isSavingConfig && setIsConfirmSaveModalOpen(false)}
-                                disabled={isSavingConfig}
-                                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer disabled:opacity-50"
-                                title="Close"
-                            >
-                                <span className="material-symbols-outlined text-[20px]">close</span>
-                            </button>
-                        </div>
-
-                        {/* Modal Body / Summary List */}
-                        <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
-                            {pendingChanges.length > 0 ? (
-                                <>
-                                    <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300 px-1">
-                                <span>Settings to be Updated ({pendingChanges.length})</span>
-                                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Previous → New</span>
-                            </div>
-
-                            <div className="space-y-2.5">
-                                {pendingChanges.map((change) => (
-                                    <div 
-                                        key={change.key}
-                                        className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 hover:border-indigo-300 dark:hover:border-indigo-800/60 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                                    >
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${change.color}`}>
-                                                <span className="material-symbols-outlined text-[20px]">{change.icon}</span>
-                                            </div>
-                                            <div className="min-w-0">
-                                                <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
-                                                    {change.name}
-                                                </h4>
-                                                <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate">
-                                                    {change.description}
-                                                </p>
-                                            </div>
+                                {/* Modal Header */}
+                                <div className="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-4 bg-gradient-to-r from-slate-50 to-indigo-50/40 dark:from-slate-900 dark:to-indigo-950/20">
+                                    <div className="flex items-center gap-3.5">
+                                        <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 shrink-0">
+                                            <span className="material-symbols-outlined text-[24px]">cloud_sync</span>
                                         </div>
-
-                                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                                            {/* Previous Value Badge */}
-                                            <div className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 ${
-                                                change.prev === 'ON'
-                                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50'
-                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-                                            }`}>
-                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold">Prev:</span>
-                                                <span className={`w-1.5 h-1.5 rounded-full ${change.prev === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
-                                                <span className="font-black">{change.prev}</span>
-                                            </div>
-
-                                            <span className="material-symbols-outlined text-slate-400 text-sm">arrow_forward</span>
-
-                                            {/* New Value Badge */}
-                                            <div className={`px-3 py-1 rounded-xl text-[11px] font-black border flex items-center gap-1.5 shadow-xs ${
-                                                change.new === 'ON'
-                                                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-emerald-500/20'
-                                                    : 'bg-rose-600 text-white border-rose-700 shadow-rose-500/20'
-                                            }`}>
-                                                <span className="text-[10px] text-white/80 uppercase font-semibold">New:</span>
-                                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-                                                <span>{change.new}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-200">
-                                <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-[18px] shrink-0 mt-0.5">info</span>
-                                <span>
-                                    Confirming will apply these policies immediately across the platform and record a permanent audit entry.
-                                </span>
-                            </div>
-                                </>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-3">
-                                        <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl shrink-0">verified</span>
                                         <div>
-                                            <h4 className="text-xs font-black text-emerald-900 dark:text-emerald-200">Database Synchronized</h4>
-                                            <p className="text-[11px] text-emerald-700 dark:text-emerald-300">All 12 platform governance settings and feature modules are active and aligned with the database. You can re-sync to ensure all clients and workers have the latest policies.</p>
+                                            <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                                                {pendingChanges.length > 0 ? 'Confirm Governance Changes' : 'Platform Configuration Overview'}
+                                            </h3>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                                {pendingChanges.length > 0 ? 'Review summary of pending modifications before saving to the database.' : 'All platform modules and governance policies are currently synchronized with the database.'}
+                                            </p>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Posts</span>
-                                            <span className={`font-black ${configState.enablePosts !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
-                                                {configState.enablePosts !== false ? '● ACTIVE' : '○ DISABLED'}
-                                            </span>
-                                        </div>
-                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Articles</span>
-                                            <span className={`font-black ${configState.enableArticles !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
-                                                {configState.enableArticles !== false ? '● ACTIVE' : '○ DISABLED'}
-                                            </span>
-                                        </div>
-                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Clips</span>
-                                            <span className={`font-black ${configState.enableClips !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
-                                                {configState.enableClips !== false ? '● ACTIVE' : '○ DISABLED'}
-                                            </span>
-                                        </div>
-                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Wiki</span>
-                                            <span className={`font-black ${configState.enableWiki !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
-                                                {configState.enableWiki !== false ? '● ACTIVE' : '○ DISABLED'}
-                                            </span>
-                                        </div>
-                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Videos</span>
-                                            <span className={`font-black ${configState.enableVideos !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
-                                                {configState.enableVideos !== false ? '● ACTIVE' : '○ DISABLED'}
-                                            </span>
-                                        </div>
-                                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Podcasts</span>
-                                            <span className={`font-black ${configState.enablePodcasts !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
-                                                {configState.enablePodcasts !== false ? '● ACTIVE' : '○ DISABLED'}
-                                            </span>
-                                        </div>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => !isSavingConfig && setIsConfirmSaveModalOpen(false)}
+                                        disabled={isSavingConfig}
+                                        className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer disabled:opacity-50"
+                                        title="Close"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">close</span>
+                                    </button>
                                 </div>
-                            )}
-                        </div>
 
-                        {/* Modal Footer */}
-                        <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
-                            <button
-                                type="button"
-                                onClick={() => !isSavingConfig && setIsConfirmSaveModalOpen(false)}
-                                disabled={isSavingConfig}
-                                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer disabled:opacity-50"
-                            >
-                                {pendingChanges.length > 0 ? 'Cancel' : 'Close'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleConfirmAndSave}
-                                disabled={isSavingConfig}
-                                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer disabled:opacity-50"
-                            >
-                                {isSavingConfig ? (
-                                    <>
-                                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                                        <span>Saving & Applying...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="material-symbols-outlined text-[18px]">done_all</span>
-                                        <span>{pendingChanges.length > 0 ? `Confirm & Save (${pendingChanges.length})` : 'Re-Sync & Save All'}</span>
-                                    </>
-                                )}
-                            </button>
-                        </div>
+                                {/* Modal Body / Summary List */}
+                                <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
+                                    {pendingChanges.length > 0 ? (
+                                        <>
+                                            <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300 px-1">
+                                                <span>Settings to be Updated ({pendingChanges.length})</span>
+                                                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Previous → New</span>
+                                            </div>
+
+                                            <div className="space-y-2.5">
+                                                {pendingChanges.map((change) => (
+                                                    <div
+                                                        key={change.key}
+                                                        className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 hover:border-indigo-300 dark:hover:border-indigo-800/60 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                                                    >
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${change.color}`}>
+                                                                <span className="material-symbols-outlined text-[20px]">{change.icon}</span>
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+                                                                    {change.name}
+                                                                </h4>
+                                                                <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate">
+                                                                    {change.description}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                                            {/* Previous Value Badge */}
+                                                            <div className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 ${change.prev === 'ON'
+                                                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50'
+                                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                                                                }`}>
+                                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold">Prev:</span>
+                                                                <span className={`w-1.5 h-1.5 rounded-full ${change.prev === 'ON' ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                                                                <span className="font-black">{change.prev}</span>
+                                                            </div>
+
+                                                            <span className="material-symbols-outlined text-slate-400 text-sm">arrow_forward</span>
+
+                                                            {/* New Value Badge */}
+                                                            <div className={`px-3 py-1 rounded-xl text-[11px] font-black border flex items-center gap-1.5 shadow-xs ${change.new === 'ON'
+                                                                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-emerald-500/20'
+                                                                    : 'bg-rose-600 text-white border-rose-700 shadow-rose-500/20'
+                                                                }`}>
+                                                                <span className="text-[10px] text-white/80 uppercase font-semibold">New:</span>
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                                                                <span>{change.new}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-200">
+                                                <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-[18px] shrink-0 mt-0.5">info</span>
+                                                <span>
+                                                    Confirming will apply these policies immediately across the platform and record a permanent audit entry.
+                                                </span>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-3">
+                                                <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl shrink-0">verified</span>
+                                                <div>
+                                                    <h4 className="text-xs font-black text-emerald-900 dark:text-emerald-200">Database Synchronized</h4>
+                                                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300">All 12 platform governance settings and feature modules are active and aligned with the database. You can re-sync to ensure all clients and workers have the latest policies.</p>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                                    <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Posts</span>
+                                                    <span className={`font-black ${configState.enablePosts !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                        {configState.enablePosts !== false ? '● ACTIVE' : '○ DISABLED'}
+                                                    </span>
+                                                </div>
+                                                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                                    <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Articles</span>
+                                                    <span className={`font-black ${configState.enableArticles !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                        {configState.enableArticles !== false ? '● ACTIVE' : '○ DISABLED'}
+                                                    </span>
+                                                </div>
+                                                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                                    <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Clips</span>
+                                                    <span className={`font-black ${configState.enableClips !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                        {configState.enableClips !== false ? '● ACTIVE' : '○ DISABLED'}
+                                                    </span>
+                                                </div>
+                                                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                                    <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Wiki</span>
+                                                    <span className={`font-black ${configState.enableWiki !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                        {configState.enableWiki !== false ? '● ACTIVE' : '○ DISABLED'}
+                                                    </span>
+                                                </div>
+                                                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                                    <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Videos</span>
+                                                    <span className={`font-black ${configState.enableVideos !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                        {configState.enableVideos !== false ? '● ACTIVE' : '○ DISABLED'}
+                                                    </span>
+                                                </div>
+                                                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                                                    <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 block mb-1">Podcasts</span>
+                                                    <span className={`font-black ${configState.enablePodcasts !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                                        {configState.enablePodcasts !== false ? '● ACTIVE' : '○ DISABLED'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Modal Footer */}
+                                <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => !isSavingConfig && setIsConfirmSaveModalOpen(false)}
+                                        disabled={isSavingConfig}
+                                        className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer disabled:opacity-50"
+                                    >
+                                        {pendingChanges.length > 0 ? 'Cancel' : 'Close'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleConfirmAndSave}
+                                        disabled={isSavingConfig}
+                                        className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        {isSavingConfig ? (
+                                            <>
+                                                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                                <span>Saving & Applying...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="material-symbols-outlined text-[18px]">done_all</span>
+                                                <span>{pendingChanges.length > 0 ? `Confirm & Save (${pendingChanges.length})` : 'Re-Sync & Save All'}</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
                             </>
                         )}
                     </div>

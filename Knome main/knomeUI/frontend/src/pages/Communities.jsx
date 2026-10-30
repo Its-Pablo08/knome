@@ -42,7 +42,7 @@ export default function Communities() {
             const params = new URLSearchParams(window.location.search);
             params.set('tab', tab);
             window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-        } catch (_) {}
+        } catch (_) { }
     };
 
     const [communities, setCommunities] = useState(() => getInitialCommunities(currentUser?.id));
@@ -83,20 +83,20 @@ export default function Communities() {
                     setAvailableCategories(filtered);
                 }
             })
-            .catch(() => {});
+            .catch(() => { });
     }, [EXCLUDED_CATEGORIES]);
 
-    const isHRorAdmin = ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'MODERATOR', 'MOD'].includes(String(currentUser?.role || '').toUpperCase()) || 
+    const isHRorAdmin = ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'MODERATOR', 'MOD'].includes(String(currentUser?.role || '').toUpperCase()) ||
         ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'HR MANAGER', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN', 'MODERATOR'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
         ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'HR MANAGER', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => 
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r =>
             ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'MODERATOR', 'MOD'].includes(String(r || '').toUpperCase())
         ));
 
-    const isAuthorizedAdmin = ['SYSADM', 'HRADM', 'CADM', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
+    const isAuthorizedAdmin = ['SYSADM', 'HRADM', 'CADM', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
         ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'HR MANAGER', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
         ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'HR MANAGER', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => 
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r =>
             ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(r || '').toUpperCase())
         )) ||
         (currentUser?.name || '').toLowerCase().includes('loveneesh');
@@ -104,12 +104,12 @@ export default function Communities() {
     const loadPendingApprovals = async () => {
         try {
             const res = await communitiesApi.getPending({ noCache: true });
-            const apiPending = Array.isArray(res) 
-                ? res 
-                : (Array.isArray(res?.data) 
-                    ? res.data 
-                    : (Array.isArray(res?.data?.data) 
-                        ? res.data.data 
+            const apiPending = Array.isArray(res)
+                ? res
+                : (Array.isArray(res?.data)
+                    ? res.data
+                    : (Array.isArray(res?.data?.data)
+                        ? res.data.data
                         : []));
             if (Array.isArray(apiPending)) {
                 const mapped = apiPending.map(c => ({
@@ -137,19 +137,19 @@ export default function Communities() {
                     const approvedDbIds = new Set(approvedDbComms.filter(c => c.status === 'Approved' || c.isApproved).map(c => String(c.id)));
                     const approvedDbNames = new Set(approvedDbComms.filter(c => c.status === 'Approved' || c.isApproved).map(c => (c.name || '').toLowerCase().trim()));
 
-                    const preservedLocal = localList.filter(l => 
+                    const preservedLocal = localList.filter(l =>
                         !approvedDbIds.has(String(l.id)) &&
                         !approvedDbNames.has((l.name || '').toLowerCase().trim()) &&
                         l.status !== 'Approved' &&
                         l.status !== 'Rejected' &&
-                        !activeApiIds.has(String(l.id)) && 
+                        !activeApiIds.has(String(l.id)) &&
                         !activeApiNames.has((l.name || '').toLowerCase().trim())
                     );
                     const merged = [...mapped, ...preservedLocal];
                     localStorage.setItem('knome_pending_community_approvals', JSON.stringify(merged));
                     setPendingApprovals(merged);
                     return;
-                } catch (_) {}
+                } catch (_) { }
 
                 setPendingApprovals(mapped);
                 return;
@@ -186,11 +186,11 @@ export default function Communities() {
                         const sEmpId = (s.employeeId || '').toUpperCase();
                         const sEmail = (s.email || '').toLowerCase();
                         return (currentUid && String(sUid) === String(currentUid)) ||
-                               (currentEmpId && sEmpId && sEmpId === currentEmpId) ||
-                               (currentEmail && sEmail && sEmail === currentEmail);
+                            (currentEmpId && sEmpId && sEmpId === currentEmpId) ||
+                            (currentEmail && sEmail && sEmail === currentEmail);
                     });
                     if (isSusp) return 'Banned';
-                } catch (_) {}
+                } catch (_) { }
 
                 // Check if user was removed from this community
                 try {
@@ -198,12 +198,12 @@ export default function Communities() {
                     const isRemoved = commRemoved.some(r => {
                         const strR = String(r).toLowerCase();
                         return (currentUid && String(currentUid).toLowerCase() === strR) ||
-                               (currentEmpId && currentEmpId.toLowerCase() === strR) ||
-                               (currentEmail && currentEmail === strR) ||
-                               (currentUser?.name && currentUser.name.toLowerCase() === strR);
+                            (currentEmpId && currentEmpId.toLowerCase() === strR) ||
+                            (currentEmail && currentEmail === strR) ||
+                            (currentUser?.name && currentUser.name.toLowerCase() === strR);
                     });
                     if (isRemoved) return 'none';
-                } catch (_) {}
+                } catch (_) { }
 
                 // If user is creator or admin of this community, they are Approved!
                 if (isCurrentUserAdmin) return 'Approved';
@@ -217,8 +217,8 @@ export default function Communities() {
 
                 // Check local members first
                 const localMembers = JSON.parse(localStorage.getItem(`knome_community_members_${id}`) || '[]');
-                const isLocalApprovedMember = currentUser && localMembers.some(m => 
-                    (currentUid && String(m.userId || m.id) === String(currentUid) && (m.status === 'Approved' || m.status === 'Active' || !m.status)) || 
+                const isLocalApprovedMember = currentUser && localMembers.some(m =>
+                    (currentUid && String(m.userId || m.id) === String(currentUid) && (m.status === 'Approved' || m.status === 'Active' || !m.status)) ||
                     (currentUser.name && (m.fullName || m.name || '').toLowerCase() === currentUser.name.toLowerCase() && (m.status === 'Approved' || m.status === 'Active' || !m.status))
                 );
                 if (isLocalApprovedMember) {
@@ -227,7 +227,7 @@ export default function Communities() {
                         const savedRequests = JSON.parse(localStorage.getItem(`knome_join_requests_${id}`) || '[]');
                         const cleaned = savedRequests.filter(r => String(r.userId || r.id) !== currentUid);
                         if (cleaned.length !== savedRequests.length) localStorage.setItem(`knome_join_requests_${id}`, JSON.stringify(cleaned));
-                    } catch (_) {}
+                    } catch (_) { }
                     return 'Approved';
                 }
 
@@ -244,7 +244,7 @@ export default function Communities() {
                 try {
                     const savedRequests = JSON.parse(localStorage.getItem(`knome_join_requests_${id}`) || '[]');
                     if (savedRequests.some(r => String(r.userId || r.id) === currentUid)) return 'Pending';
-                } catch (_) {}
+                } catch (_) { }
 
                 if (entry && (entry.status === 'pending_approval' || entry.status === 'pending')) {
                     return 'Pending';
@@ -277,8 +277,8 @@ export default function Communities() {
                     const approvedCustomNames = new Set(approvedCustomComms.filter(c => c.status === 'Approved' || c.isApproved).map(c => (c.name || '').toLowerCase().trim()));
 
                     // Keep any community that is waiting for approval
-                    const cleanedPending = localPendingComms.filter(p => 
-                        !approvedCustomIds.has(String(p.id)) && 
+                    const cleanedPending = localPendingComms.filter(p =>
+                        !approvedCustomIds.has(String(p.id)) &&
                         !approvedCustomNames.has((p.name || '').toLowerCase().trim())
                     );
                     if (cleanedPending.length !== localPendingComms.length) {
@@ -327,8 +327,8 @@ export default function Communities() {
 
                 const apiMapped = data
                     .filter(c => (c.isActive === undefined || c.isActive === true || c.isActive === 1) &&
-                                 !pendingIdSet.has(String(c.communityId)) &&
-                                 !pendingNameSet.has((c.name || '').toLowerCase().trim()))
+                        !pendingIdSet.has(String(c.communityId)) &&
+                        !pendingNameSet.has((c.name || '').toLowerCase().trim()))
                     .map(c => {
                         const localMembers = JSON.parse(localStorage.getItem(`knome_community_members_${c.communityId}`) || '[]');
                         const count = localMembers.length > 0 ? deduplicateMembers(localMembers).length : (c.membersCount || 1);
@@ -361,13 +361,13 @@ export default function Communities() {
                 if (pending.length > 0) {
                     const isApprovalExemptAdmin = ['SYSADM', 'HRADM', 'CADM', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
                         ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
-                        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => 
+                        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r =>
                             ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN'].includes(String(r || '').toUpperCase())
                         ));
                     const isModeratorUser = ['MOD', 'MODERATOR'].includes(String(currentUser?.role || '').toUpperCase()) ||
                         ['MODERATOR'].includes(String(currentUser?.roleName || '').toUpperCase());
 
-                    const toAutoApprove = pending.filter(p => 
+                    const toAutoApprove = pending.filter(p =>
                         !isModeratorUser &&
                         (p.creatorDesignation || '').toLowerCase() !== 'moderator' &&
                         (p.creatorRole || '').toUpperCase() !== 'MOD' &&
@@ -518,10 +518,10 @@ export default function Communities() {
         }
     }, [currentUser?.id, currentUser?.role]);
 
-    const isSysAdmin = ['SYSADM', 'CADM', 'HRADM', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) || 
+    const isSysAdmin = ['SYSADM', 'CADM', 'HRADM', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
         ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.roleName || '').toUpperCase()) ||
         ['SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN', 'ADMIN'].includes(String(currentUser?.role || '').toUpperCase()) ||
-        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r => 
+        (Array.isArray(currentUser?.roles) && currentUser.roles.some(r =>
             ['SYSADM', 'CADM', 'HRADM', 'ADMIN', 'SYSTEM ADMINISTRATOR', 'HR ADMINISTRATOR', 'COMMUNITY ADMINISTRATOR', 'SYSTEM ADMIN', 'HR ADMIN', 'COMMUNITY ADMIN'].includes(String(r || '').toUpperCase())
         ));
 
@@ -545,15 +545,15 @@ export default function Communities() {
 
         // 2. Remove from custom list and pending approvals list
         const customList = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
-        const updatedCustom = customList.filter(c => 
-            String(c.id) !== String(community.id) && 
+        const updatedCustom = customList.filter(c =>
+            String(c.id) !== String(community.id) &&
             (c.name || '').toLowerCase().trim() !== (community.name || '').toLowerCase().trim()
         );
         localStorage.setItem('knome_custom_communities', JSON.stringify(updatedCustom));
 
         const pendingList = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
-        const updatedPending = pendingList.filter(c => 
-            String(c.id) !== String(community.id) && 
+        const updatedPending = pendingList.filter(c =>
+            String(c.id) !== String(community.id) &&
             (c.name || '').toLowerCase().trim() !== (community.name || '').toLowerCase().trim()
         );
         localStorage.setItem('knome_pending_community_approvals', JSON.stringify(updatedPending));
@@ -593,27 +593,27 @@ export default function Communities() {
 
         // 2. Remove from pending approvals storage
         const pendingList = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
-        const updatedPending = pendingList.filter(c => 
-            String(c.id) !== String(commId) && 
+        const updatedPending = pendingList.filter(c =>
+            String(c.id) !== String(commId) &&
             (c.name || '').toLowerCase().trim() !== commName.toLowerCase().trim()
         );
         localStorage.setItem('knome_pending_community_approvals', JSON.stringify(updatedPending));
 
         // 3. Remove from custom communities
         const customList = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
-        const updatedCustom = customList.filter(c => 
-            String(c.id) !== String(commId) && 
+        const updatedCustom = customList.filter(c =>
+            String(c.id) !== String(commId) &&
             (c.name || '').toLowerCase().trim() !== commName.toLowerCase().trim()
         );
         localStorage.setItem('knome_custom_communities', JSON.stringify(updatedCustom));
 
         // 4. Update component state immediately
-        setPendingApprovals(prev => prev.filter(p => 
-            String(p.id) !== String(commId) && 
+        setPendingApprovals(prev => prev.filter(p =>
+            String(p.id) !== String(commId) &&
             (p.name || '').toLowerCase().trim() !== commName.toLowerCase().trim()
         ));
-        setCommunities(prev => prev.filter(c => 
-            String(c.id) !== String(commId) && 
+        setCommunities(prev => prev.filter(c =>
+            String(c.id) !== String(commId) &&
             (c.name || '').toLowerCase().trim() !== commName.toLowerCase().trim()
         ));
 
@@ -702,7 +702,7 @@ export default function Communities() {
         try {
             await communitiesApi.approve(comm.id);
             if (Array.isArray(comm.invitedUserIds) && comm.invitedUserIds.length > 0) {
-                await communitiesApi.addMembers(comm.id, comm.invitedUserIds).catch(() => {});
+                await communitiesApi.addMembers(comm.id, comm.invitedUserIds).catch(() => { });
             }
         } catch (apiErr) {
             console.warn('Backend community approve failed, continuing with fallback:', apiErr);
@@ -738,7 +738,7 @@ export default function Communities() {
         try {
             const customUsers = JSON.parse(localStorage.getItem('knome_custom_users') || '[]');
             if (Array.isArray(customUsers)) allUsersPool.push(...customUsers);
-        } catch (err) {}
+        } catch (err) { }
 
         if (Array.isArray(comm.invitedUserIds) && comm.invitedUserIds.length > 0) {
             comm.invitedUserIds.forEach(tId => {
@@ -762,7 +762,7 @@ export default function Communities() {
                             { id: comm.id, name: comm.name, status: 'joined', joinedAt: new Date().toISOString() },
                             ...targetUserJoined.filter(c => String(c.id) !== String(comm.id))
                         ]));
-                    } catch (err) {}
+                    } catch (err) { }
                 }
             });
         }
@@ -908,7 +908,7 @@ export default function Communities() {
             const currentRemoved = JSON.parse(localStorage.getItem(removedKey) || '[]');
             const cleanedRemoved = currentRemoved.filter(x => String(x).toLowerCase() !== currentUid.toLowerCase());
             localStorage.setItem(removedKey, JSON.stringify(cleanedRemoved));
-        } catch (_) {}
+        } catch (_) { }
 
         try {
             await communitiesApi.join(targetId).catch(() => null);
@@ -979,7 +979,7 @@ export default function Communities() {
                 window.dispatchEvent(new CustomEvent('notification-updated'));
                 window.dispatchEvent(new CustomEvent('knome_new_notification'));
                 window.dispatchEvent(new CustomEvent('knome_notification_received', { detail: adminNotif }));
-            } catch (_) {}
+            } catch (_) { }
 
             setCommunities(prev => prev.map(c => String(c.id) === String(targetId) ? { ...c, membershipStatus: 'Pending' } : c));
             window.dispatchEvent(new CustomEvent('community-joined-change', { detail: { communityId: targetId } }));
@@ -1017,8 +1017,8 @@ export default function Communities() {
                 localStorage.setItem(`knome_community_members_${targetId}`, JSON.stringify(localMembers));
             }
 
-            setCommunities(prev => prev.map(c => String(c.id) === String(targetId) ? { 
-                ...c, 
+            setCommunities(prev => prev.map(c => String(c.id) === String(targetId) ? {
+                ...c,
                 membershipStatus: 'Approved',
                 members: `${(parseInt(c.members) || 1) + 1} members`
             } : c));
@@ -1037,7 +1037,7 @@ export default function Communities() {
         });
         if (!ok) return;
 
-        try { await communitiesApi.leave(community.id).catch(() => null); } catch (_) {}
+        try { await communitiesApi.leave(community.id).catch(() => null); } catch (_) { }
         const targetId = community.id;
         const currentUid = String(currentUser?.userId || currentUser?.id || '');
 
@@ -1089,7 +1089,7 @@ export default function Communities() {
         if (filterCategory !== 'All') {
             const commCat = (c.category || c.categoryName || '').toLowerCase().trim();
             const targetCat = filterCategory.toLowerCase().trim();
-            const matches = commCat === targetCat || 
+            const matches = commCat === targetCat ||
                 (targetCat.includes('design') && commCat.includes('design')) ||
                 (targetCat.includes('product') && commCat.includes('product')) ||
                 (targetCat.includes('finance') && commCat.includes('finance')) ||
@@ -1119,18 +1119,18 @@ export default function Communities() {
     // Creator's own pending communities for "My Communities" tab (exclude any that are already active/approved)
     const currentUid = String(currentUser?.userId || currentUser?.id || '');
     const currentName = (currentUser?.name || currentUser?.fullName || '').toLowerCase().trim();
-    const myPendingCommunities = pendingApprovals.filter(p => 
-        (String(p.creatorUserId) === currentUid || 
-         (p.creatorEmployeeId && currentUser?.employeeId && p.creatorEmployeeId.toUpperCase() === currentUser.employeeId.toUpperCase()) ||
-         (currentName && p.creatorName && p.creatorName.toLowerCase().trim() === currentName) ||
-         (currentName && p.createdBy && p.createdBy.toLowerCase().trim() === currentName)) &&
+    const myPendingCommunities = pendingApprovals.filter(p =>
+        (String(p.creatorUserId) === currentUid ||
+            (p.creatorEmployeeId && currentUser?.employeeId && p.creatorEmployeeId.toUpperCase() === currentUser.employeeId.toUpperCase()) ||
+            (currentName && p.creatorName && p.creatorName.toLowerCase().trim() === currentName) ||
+            (currentName && p.createdBy && p.createdBy.toLowerCase().trim() === currentName)) &&
         !communities.some(c => String(c.id) === String(p.id) || (c.name || '').toLowerCase().trim() === (p.name || '').toLowerCase().trim())
     );
 
     return (
         <>
             <main className="flex-1 flex flex-col gap-8 pb-6">
-                
+
                 {/* Hero Header */}
                 <div className="relative rounded-2xl overflow-hidden mb-4 shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between text-left px-6 py-8 md:px-10 md:py-8 gap-6">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,_var(--tw-gradient-stops))] from-indigo-100/50 dark:from-indigo-900/20 via-transparent to-transparent pointer-events-none"></div>
@@ -1150,7 +1150,7 @@ export default function Communities() {
                     </div>
                     <div className="relative z-10 shrink-0 flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
                         {(Boolean(currentUser) || ['SYSADM', 'HRADM', 'CADM', 'ADMIN', 'MODERATOR', 'MOD', 'EMP', 'EMPLOYEE'].includes(String(currentUser?.role || currentUser?.roleName || 'EMP').toUpperCase())) && (
-                            <button 
+                            <button
                                 onClick={() => setIsCreateOpen(true)}
                                 className="w-full sm:w-auto px-6 py-3 bg-indigo-500 text-white font-bold rounded-xl hover:bg-indigo-600 transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2 cursor-pointer"
                             >
@@ -1172,7 +1172,7 @@ export default function Communities() {
                 {/* Tabs */}
                 <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1">
                     {['Discover', 'My Communities'].map(tab => (
-                        <button 
+                        <button
                             key={tab}
                             onClick={() => handleTabChange(tab)}
                             className={`px-6 py-4 font-bold text-[14px] transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === tab ? 'text-indigo-500' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}
@@ -1189,7 +1189,7 @@ export default function Communities() {
 
                     {/* HR Administrator Approval Tab */}
                     {isHRorAdmin && (
-                        <button 
+                        <button
                             onClick={() => handleTabChange('Pending Approvals')}
                             className={`px-6 py-4 font-bold text-[14px] transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'Pending Approvals' ? 'text-amber-500' : 'text-slate-500 hover:text-amber-600 dark:hover:text-amber-400'}`}
                         >
@@ -1255,19 +1255,19 @@ export default function Communities() {
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {pendingApprovals.map(comm => (
                                     <div key={comm.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-md transition-all group">
-                                        <div 
+                                        <div
                                             onClick={() => navigate(`/community/view?id=${comm.id}&preview=true`)}
                                             className="h-28 relative overflow-hidden bg-slate-200 dark:bg-slate-800 cursor-pointer"
                                             title="Click to view and preview community before approval"
                                         >
-                                            <img 
-                                                src={comm.banner || getCommunityImages(comm.name, comm.category).banner} 
-                                                alt={comm.name} 
+                                            <img
+                                                src={comm.banner || getCommunityImages(comm.name, comm.category).banner}
+                                                alt={comm.name}
                                                 onError={(e) => {
                                                     e.currentTarget.onerror = null;
                                                     e.currentTarget.src = getCommunityImages(comm.name, comm.category).banner;
                                                 }}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                             />
                                             <div className="absolute inset-0 bg-slate-900/20 group-hover:bg-slate-900/10 transition-colors"></div>
                                             <div className="absolute top-3 left-3">
@@ -1297,7 +1297,7 @@ export default function Communities() {
                                                 </span>
                                             </div>
 
-                                            <h3 
+                                            <h3
                                                 onClick={() => navigate(`/community/view?id=${comm.id}&preview=true`)}
                                                 className="font-extrabold text-base text-slate-900 dark:text-white mt-1 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center justify-between group/title"
                                                 title="Click to view and preview community before approval"
@@ -1399,11 +1399,10 @@ export default function Communities() {
                                     <button
                                         key={t}
                                         onClick={() => setFilterType(t)}
-                                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap cursor-pointer ${
-                                            filterType === t
+                                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap cursor-pointer ${filterType === t
                                                 ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
                                                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-indigo-300'
-                                        }`}
+                                            }`}
                                     >
                                         {t === 'Org' ? '🏢 Org' : t === 'Public' ? '🌐 Public' : t === 'Private' ? '🔒 Private' : '✨ All'}
                                     </button>
@@ -1451,14 +1450,14 @@ export default function Communities() {
                                     {myPendingCommunities.map(c => (
                                         <div key={c.id} className="bg-white dark:bg-slate-900 border-2 border-dashed border-amber-300 dark:border-amber-700/60 rounded-xl overflow-hidden shadow-xs flex flex-col opacity-90 min-h-[230px]">
                                             <div className="h-24 sm:h-26 relative overflow-hidden bg-slate-200 dark:bg-slate-800 shrink-0">
-                                                <img 
-                                                    src={c.banner || getCommunityImages(c.name, c.category).banner} 
-                                                    alt={c.name} 
+                                                <img
+                                                    src={c.banner || getCommunityImages(c.name, c.category).banner}
+                                                    alt={c.name}
                                                     onError={(e) => {
                                                         e.currentTarget.onerror = null;
                                                         e.currentTarget.src = getCommunityImages(c.name, c.category).banner;
                                                     }}
-                                                    className="w-full h-full object-cover" 
+                                                    className="w-full h-full object-cover"
                                                 />
                                                 <div className="absolute inset-0 bg-slate-900/40"></div>
                                                 <div className="absolute top-2 left-2">
@@ -1511,181 +1510,179 @@ export default function Communities() {
                                         const sEmail = (s.email || '').toLowerCase();
                                         const sName = (s.fullName || s.name || '').toLowerCase();
                                         return (currentUid && String(sUid) === String(currentUid)) ||
-                                               (currentEmpId && sEmpId && sEmpId === currentEmpId) ||
-                                               (currentEmail && sEmail && sEmail === currentEmail) ||
-                                               (currentName && sName && (sName === currentName || sName.includes(currentName) || currentName.includes(sName)));
+                                            (currentEmpId && sEmpId && sEmpId === currentEmpId) ||
+                                            (currentEmail && sEmail && sEmail === currentEmail) ||
+                                            (currentName && sName && (sName === currentName || sName.includes(currentName) || currentName.includes(sName)));
                                     }) || community.membershipStatus === 'Banned' || community.membershipStatus === 'Suspended';
-                                } catch (_) {}
+                                } catch (_) { }
 
                                 return (
-                                <div 
-                                    key={community.id} 
-                                    onClick={() => {
-                                        if (isSuspendedInThisComm) {
-                                            addToast('You are suspended from this community.', 'error');
-                                        }
-                                        navigate(`/community/view?id=${community.id}`);
-                                    }} 
-                                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group flex flex-col h-full min-h-[230px]"
-                                >
-                                    {/* Compact Header Banner */}
-                                    <div className="h-24 sm:h-26 relative overflow-hidden bg-slate-200 dark:bg-slate-800 shrink-0">
-                                        <img 
-                                            src={community.banner || community.thumbnail || community.avatar || getCommunityImages(community.name, community.category).banner} 
-                                            alt={community.name} 
-                                            onError={(e) => {
-                                                e.currentTarget.onerror = null;
-                                                e.currentTarget.src = getCommunityImages(community.name, community.category).banner;
-                                            }}
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                        />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-slate-900/20 to-transparent"></div>
-                                        {(community.thumbnail || community.avatar) && (
-                                            <div className="absolute bottom-2 left-2.5 w-7 h-7 sm:w-8 sm:h-8 rounded-lg overflow-hidden border-2 border-white dark:border-slate-900 shadow-xs bg-white shrink-0 z-10">
-                                                <img 
-                                                    src={community.thumbnail || community.avatar} 
-                                                    alt={community.name} 
-                                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                                    className="w-full h-full object-cover" 
-                                                />
-                                            </div>
-                                        )}
-                                        {/* Quick Photo Upload Button (clean on banner) */}
-                                        {isSysAdmin && (
-                                            <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
-                                                <label 
-                                                    className="w-6 h-6 rounded-md bg-slate-900/70 hover:bg-indigo-600 text-white flex items-center justify-center shadow-xs backdrop-blur-md transition-all hover:scale-105 cursor-pointer"
-                                                    title="Change Photo / Banner"
-                                                >
-                                                    <span className="material-symbols-outlined text-[13px]">photo_camera</span>
-                                                    <input 
-                                                        type="file" 
-                                                        accept="image/*" 
-                                                        className="hidden" 
-                                                        onChange={(e) => handleQuickPhotoChange(e, community.id)} 
+                                    <div
+                                        key={community.id}
+                                        onClick={() => {
+                                            if (isSuspendedInThisComm) {
+                                                addToast('You are suspended from this community.', 'error');
+                                            }
+                                            navigate(`/community/view?id=${community.id}`);
+                                        }}
+                                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group flex flex-col h-full min-h-[230px]"
+                                    >
+                                        {/* Compact Header Banner */}
+                                        <div className="h-24 sm:h-26 relative overflow-hidden bg-slate-200 dark:bg-slate-800 shrink-0">
+                                            <img
+                                                src={community.banner || community.thumbnail || community.avatar || getCommunityImages(community.name, community.category).banner}
+                                                alt={community.name}
+                                                onError={(e) => {
+                                                    e.currentTarget.onerror = null;
+                                                    e.currentTarget.src = getCommunityImages(community.name, community.category).banner;
+                                                }}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-slate-900/20 to-transparent"></div>
+                                            {(community.thumbnail || community.avatar) && (
+                                                <div className="absolute bottom-2 left-2.5 w-7 h-7 sm:w-8 sm:h-8 rounded-lg overflow-hidden border-2 border-white dark:border-slate-900 shadow-xs bg-white shrink-0 z-10">
+                                                    <img
+                                                        src={community.thumbnail || community.avatar}
+                                                        alt={community.name}
+                                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                                        className="w-full h-full object-cover"
                                                     />
-                                                </label>
-                                            </div>
-                                        )}
-                                        {/* Type Pill */}
-                                        <div className="absolute top-2 right-2">
-                                            <span className={`px-2 py-0.5 backdrop-blur-md rounded-md text-[9px] font-black uppercase tracking-wider border shadow-xs ${
-                                                formatCommunityType(community.type) === 'Private' ? 'bg-amber-500/90 text-white border-amber-400' :
-                                                formatCommunityType(community.type) === 'Public' ? 'bg-white/95 text-indigo-600 border-white/60 dark:bg-slate-900/90 dark:text-indigo-400' :
-                                                'bg-purple-500/90 text-white border-purple-400'
-                                            }`}>
-                                                {formatCommunityType(community.type)}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Compact Body Content */}
-                                    <div className="p-3 sm:p-3.5 flex flex-col flex-1">
-                                        <div className="flex justify-between items-start gap-1.5 mb-1.5">
-                                            <h3 className="font-bold text-[13px] sm:text-[14px] text-slate-900 dark:text-white group-hover:text-indigo-500 transition-colors leading-snug line-clamp-1 flex-1" title={community.name}>
-                                                <HighlightText text={community.name} query={searchQuery} />
-                                            </h3>
-                                            <div className="flex items-center gap-1 shrink-0">
-                                                {/* FR-CM-01/FR-CM-09: Card action buttons */}
-                                                {(() => {
-                                                    if (isSuspendedInThisComm) {
-                                                        return (
-                                                            <span className="px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-md font-bold text-[10px] flex items-center gap-0.5">
-                                                                <span className="material-symbols-outlined text-[11px]">person_off</span>
-                                                                Suspended
-                                                            </span>
-                                                        );
-                                                    }
-
-                                                    if (community.type?.toLowerCase().includes('default') || community.type?.toLowerCase().includes('org')) {
-                                                        return community.membershipStatus === 'Approved' ? (
-                                                            <button onClick={(e) => e.stopPropagation()} className="px-2 py-0.5 bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-md font-bold text-[10px] cursor-default">Joined</button>
-                                                        ) : (
-                                                            <button onClick={(e) => e.stopPropagation()} className="px-2 py-0.5 bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 rounded-md font-bold text-[10px] cursor-default flex items-center gap-0.5">
-                                                                <span className="material-symbols-outlined text-[11px]">corporate_fare</span>
-                                                                Subscribed
-                                                            </button>
-                                                        );
-                                                    }
-
-                                                    if (community.type === 'Public') {
-                                                        return (
-                                                            <button onClick={(e) => { 
-                                                                e.stopPropagation(); 
-                                                                if (community.membershipStatus !== 'Approved') {
-                                                                    saveJoinedCommunity(community);
-                                                                }
-                                                            }} className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] transition-colors ${community.membershipStatus === 'Approved' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 cursor-default' : community.membershipStatus === 'Subscribed' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-indigo-100 cursor-pointer' : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 cursor-pointer'}`}>
-                                                                {community.membershipStatus === 'Approved' ? 'Joined' : community.membershipStatus === 'Subscribed' ? 'Upgrade →' : 'Join'}
-                                                            </button>
-                                                        );
-                                                    }
-
-                                                    if (community.type === 'Private') {
-                                                        return (
-                                                            <button 
-                                                                onClick={(e) => { 
-                                                                    e.stopPropagation(); 
-                                                                    if (community.membershipStatus === 'Pending') {
-                                                                        handleCancelRequestOnCard(community);
-                                                                    } else if (community.membershipStatus !== 'Approved') {
-                                                                        saveJoinedCommunity(community);
-                                                                    } else {
-                                                                        navigate(`/community/view?id=${community.id}`);
-                                                                    }
-                                                                }} 
-                                                                className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] transition-colors cursor-pointer ${
-                                                                    community.membershipStatus === 'Pending' 
-                                                                        ? 'bg-amber-100 hover:bg-rose-100 text-amber-700 hover:text-rose-700 dark:bg-amber-900/30 dark:hover:bg-rose-950/40 dark:text-amber-400 dark:hover:text-rose-400 border border-amber-300 dark:border-amber-700' 
-                                                                        : community.membershipStatus === 'Approved' 
-                                                                            ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' 
-                                                                            : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
-                                                                }`}
-                                                                title={community.membershipStatus === 'Pending' ? 'Click to cancel request' : community.membershipStatus === 'Approved' ? 'Joined Member' : 'Request to join'}
-                                                            >
-                                                                {community.membershipStatus === 'Pending' ? 'Requested' : community.membershipStatus === 'Approved' ? 'Joined' : 'Request'}
-                                                            </button>
-                                                        );
-                                                    }
-
-                                                    return (
-                                                        <button onClick={(e) => { e.stopPropagation(); }} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-md font-bold text-[10px] cursor-default">Subscribed</button>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-
-                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-2 flex-1">
-                                            <HighlightText text={community.description || 'No description provided.'} query={searchQuery} />
-                                        </p>
-
-                                        {/* Footer Metadata & DELETE BUTTON IN BOTTOM RIGHT OF BOX */}
-                                        <div className="flex items-center justify-between gap-1.5 pt-2 mt-auto border-t border-slate-100 dark:border-slate-800/80 text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                                            <div className="flex items-center gap-1 shrink-0 whitespace-nowrap">
-                                                <span className="material-symbols-outlined text-[13px] text-indigo-500">group</span>
-                                                <span>{parseInt(community.members) || community.membersCount || 1}</span>
-                                            </div>
-                                            <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                                                {community.category && (
-                                                    <span className="text-[9px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded-full truncate max-w-[120px]" title={community.category}>
-                                                        <HighlightText text={community.category} query={searchQuery} />
-                                                    </span>
-                                                )}
-                                                {/* Delete Button located in bottom right of box */}
-                                                {isSysAdmin && (
-                                                    <button 
-                                                        onClick={(e) => handleDeleteCommunityCard(e, community)}
-                                                        className="w-5.5 h-5.5 rounded-md bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500 dark:hover:text-white flex items-center justify-center transition-all hover:scale-105 cursor-pointer ml-1"
-                                                        title="Remove Community"
+                                                </div>
+                                            )}
+                                            {/* Quick Photo Upload Button (clean on banner) */}
+                                            {isSysAdmin && (
+                                                <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
+                                                    <label
+                                                        className="w-6 h-6 rounded-md bg-slate-900/70 hover:bg-indigo-600 text-white flex items-center justify-center shadow-xs backdrop-blur-md transition-all hover:scale-105 cursor-pointer"
+                                                        title="Change Photo / Banner"
                                                     >
-                                                        <span className="material-symbols-outlined text-[13px]">delete</span>
-                                                    </button>
-                                                )}
+                                                        <span className="material-symbols-outlined text-[13px]">photo_camera</span>
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            className="hidden"
+                                                            onChange={(e) => handleQuickPhotoChange(e, community.id)}
+                                                        />
+                                                    </label>
+                                                </div>
+                                            )}
+                                            {/* Type Pill */}
+                                            <div className="absolute top-2 right-2">
+                                                <span className={`px-2 py-0.5 backdrop-blur-md rounded-md text-[9px] font-black uppercase tracking-wider border shadow-xs ${formatCommunityType(community.type) === 'Private' ? 'bg-amber-500/90 text-white border-amber-400' :
+                                                        formatCommunityType(community.type) === 'Public' ? 'bg-white/95 text-indigo-600 border-white/60 dark:bg-slate-900/90 dark:text-indigo-400' :
+                                                            'bg-purple-500/90 text-white border-purple-400'
+                                                    }`}>
+                                                    {formatCommunityType(community.type)}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Compact Body Content */}
+                                        <div className="p-3 sm:p-3.5 flex flex-col flex-1">
+                                            <div className="flex justify-between items-start gap-1.5 mb-1.5">
+                                                <h3 className="font-bold text-[13px] sm:text-[14px] text-slate-900 dark:text-white group-hover:text-indigo-500 transition-colors leading-snug line-clamp-1 flex-1" title={community.name}>
+                                                    <HighlightText text={community.name} query={searchQuery} />
+                                                </h3>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    {/* FR-CM-01/FR-CM-09: Card action buttons */}
+                                                    {(() => {
+                                                        if (isSuspendedInThisComm) {
+                                                            return (
+                                                                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-md font-bold text-[10px] flex items-center gap-0.5">
+                                                                    <span className="material-symbols-outlined text-[11px]">person_off</span>
+                                                                    Suspended
+                                                                </span>
+                                                            );
+                                                        }
+
+                                                        if (community.type?.toLowerCase().includes('default') || community.type?.toLowerCase().includes('org')) {
+                                                            return community.membershipStatus === 'Approved' ? (
+                                                                <button onClick={(e) => e.stopPropagation()} className="px-2 py-0.5 bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-md font-bold text-[10px] cursor-default">Joined</button>
+                                                            ) : (
+                                                                <button onClick={(e) => e.stopPropagation()} className="px-2 py-0.5 bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 rounded-md font-bold text-[10px] cursor-default flex items-center gap-0.5">
+                                                                    <span className="material-symbols-outlined text-[11px]">corporate_fare</span>
+                                                                    Subscribed
+                                                                </button>
+                                                            );
+                                                        }
+
+                                                        if (community.type === 'Public') {
+                                                            return (
+                                                                <button onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (community.membershipStatus !== 'Approved') {
+                                                                        saveJoinedCommunity(community);
+                                                                    }
+                                                                }} className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] transition-colors ${community.membershipStatus === 'Approved' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 cursor-default' : community.membershipStatus === 'Subscribed' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-indigo-100 cursor-pointer' : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 cursor-pointer'}`}>
+                                                                    {community.membershipStatus === 'Approved' ? 'Joined' : community.membershipStatus === 'Subscribed' ? 'Upgrade →' : 'Join'}
+                                                                </button>
+                                                            );
+                                                        }
+
+                                                        if (community.type === 'Private') {
+                                                            return (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (community.membershipStatus === 'Pending') {
+                                                                            handleCancelRequestOnCard(community);
+                                                                        } else if (community.membershipStatus !== 'Approved') {
+                                                                            saveJoinedCommunity(community);
+                                                                        } else {
+                                                                            navigate(`/community/view?id=${community.id}`);
+                                                                        }
+                                                                    }}
+                                                                    className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] transition-colors cursor-pointer ${community.membershipStatus === 'Pending'
+                                                                            ? 'bg-amber-100 hover:bg-rose-100 text-amber-700 hover:text-rose-700 dark:bg-amber-900/30 dark:hover:bg-rose-950/40 dark:text-amber-400 dark:hover:text-rose-400 border border-amber-300 dark:border-amber-700'
+                                                                            : community.membershipStatus === 'Approved'
+                                                                                ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                                                                : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
+                                                                        }`}
+                                                                    title={community.membershipStatus === 'Pending' ? 'Click to cancel request' : community.membershipStatus === 'Approved' ? 'Joined Member' : 'Request to join'}
+                                                                >
+                                                                    {community.membershipStatus === 'Pending' ? 'Requested' : community.membershipStatus === 'Approved' ? 'Joined' : 'Request'}
+                                                                </button>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <button onClick={(e) => { e.stopPropagation(); }} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-md font-bold text-[10px] cursor-default">Subscribed</button>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            </div>
+
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-2 flex-1">
+                                                <HighlightText text={community.description || 'No description provided.'} query={searchQuery} />
+                                            </p>
+
+                                            {/* Footer Metadata & DELETE BUTTON IN BOTTOM RIGHT OF BOX */}
+                                            <div className="flex items-center justify-between gap-1.5 pt-2 mt-auto border-t border-slate-100 dark:border-slate-800/80 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                                <div className="flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                                    <span className="material-symbols-outlined text-[13px] text-indigo-500">group</span>
+                                                    <span>{parseInt(community.members) || community.membersCount || 1}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                                                    {community.category && (
+                                                        <span className="text-[9px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded-full truncate max-w-[120px]" title={community.category}>
+                                                            <HighlightText text={community.category} query={searchQuery} />
+                                                        </span>
+                                                    )}
+                                                    {/* Delete Button located in bottom right of box */}
+                                                    {isSysAdmin && (
+                                                        <button
+                                                            onClick={(e) => handleDeleteCommunityCard(e, community)}
+                                                            className="w-5.5 h-5.5 rounded-md bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500 dark:hover:text-white flex items-center justify-center transition-all hover:scale-105 cursor-pointer ml-1"
+                                                            title="Remove Community"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[13px]">delete</span>
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            );
+                                );
                             })}
                             <ScrollLoadingIndicator isVisible={activeTab !== 'Discover' && visibleCount < filteredCommunities.length} text="Loading more communities on scroll..." />
                         </div>
@@ -1694,9 +1691,9 @@ export default function Communities() {
 
             </main>
 
-            <CreateCommunityModal 
-                isOpen={isCreateOpen} 
-                onClose={() => setIsCreateOpen(false)} 
+            <CreateCommunityModal
+                isOpen={isCreateOpen}
+                onClose={() => setIsCreateOpen(false)}
                 onCommunityCreated={handleCommunityCreated}
                 existingCommunities={communities}
             />
@@ -1705,9 +1702,9 @@ export default function Communities() {
             {successPopup && (
                 <div className="fixed inset-0 z-[120] p-4 sm:p-6 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="fixed inset-0" onClick={() => setSuccessPopup(null)}></div>
-                    
+
                     <div className="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto custom-scrollbar p-6 sm:p-7 border border-slate-200 dark:border-slate-800 text-center z-10 animate-in zoom-in-95 duration-200">
-                        <button 
+                        <button
                             onClick={() => setSuccessPopup(null)}
                             className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                         >
@@ -1729,7 +1726,7 @@ export default function Communities() {
                                 </h3>
 
                                 <p className="text-sm text-slate-600 dark:text-slate-300 max-w-sm mb-5 leading-relaxed">
-                                    <strong className="text-indigo-600 dark:text-indigo-400 font-extrabold">"{successPopup.communityName}"</strong> has been created and is now live across MPOnline Knome.
+                                    <strong className="text-indigo-600 dark:text-indigo-400 font-extrabold">"{successPopup.communityName}"</strong> has been created and is now live across MPOnline TechnoSocial.
                                 </p>
 
                                 {successPopup.link && (
@@ -1738,13 +1735,13 @@ export default function Communities() {
                                             🔗 Shareable Community Link
                                         </label>
                                         <div className="flex items-center gap-2">
-                                            <input 
-                                                type="text" 
-                                                readOnly 
-                                                value={successPopup.link} 
+                                            <input
+                                                type="text"
+                                                readOnly
+                                                value={successPopup.link}
                                                 className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 dark:text-slate-200 outline-none select-all"
                                             />
-                                            <button 
+                                            <button
                                                 onClick={() => {
                                                     navigator.clipboard.writeText(successPopup.link);
                                                     addToast('Invite link copied to clipboard!', 'success');
@@ -1771,7 +1768,7 @@ export default function Communities() {
                                             Visit Community
                                         </button>
                                     )}
-                                    <button 
+                                    <button
                                         onClick={() => setSuccessPopup(null)}
                                         className="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl text-sm transition-colors shadow-md shadow-indigo-500/20 cursor-pointer"
                                     >
@@ -1828,7 +1825,7 @@ export default function Communities() {
                                     >
                                         View My Communities
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => setSuccessPopup(null)}
                                         className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-sm transition-colors shadow-md shadow-amber-600/20 cursor-pointer"
                                     >

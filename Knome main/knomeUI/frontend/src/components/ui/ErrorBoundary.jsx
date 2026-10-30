@@ -16,7 +16,7 @@ export default class ErrorBoundary extends Component {
 
     componentDidCatch(error, errorInfo) {
         console.warn('ErrorBoundary captured render error:', error, errorInfo);
-        
+
         // If an error occurred during an in-flight logout, complete the redirection smoothly
         const isLoggingOut = typeof window !== 'undefined' && sessionStorage.getItem('knome_logging_out') === 'true';
         if (isLoggingOut) {
@@ -47,7 +47,7 @@ export default class ErrorBoundary extends Component {
                                 <span className="material-symbols-outlined text-white text-[30px]">logout</span>
                             </div>
                             <p className="text-base font-bold text-slate-200">
-                                Logging out of Knome...
+                                Logging out of TechnoSocial...
                             </p>
                             <p className="text-xs text-slate-400">
                                 Redirecting to MPO Employee Hub.

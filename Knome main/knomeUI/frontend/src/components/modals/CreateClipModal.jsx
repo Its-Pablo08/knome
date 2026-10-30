@@ -419,7 +419,7 @@ export default function CreateClipModal({ isOpen, onClose, onClipCreated }) {
                     if (info.title && !title.trim()) {
                         setTitle(info.title.slice(0, 200));
                         if (!description) {
-                            setDescription(`${info.title}\n\nShared via Knome Clips.`.slice(0, 1000));
+                            setDescription(`${info.title}\n\nShared via TechnoSocial Clips.`.slice(0, 1000));
                         }
                     }
                 }
@@ -447,7 +447,7 @@ export default function CreateClipModal({ isOpen, onClose, onClipCreated }) {
                     if (data.title && !title.trim()) {
                         setTitle(data.title.slice(0, 200));
                         if (!description) {
-                            setDescription(`${data.title}\n\nShared via Knome Clips. Channel: ${data.author_name || 'YouTube'}`.slice(0, 1000));
+                            setDescription(`${data.title}\n\nShared via TechnoSocial Clips. Channel: ${data.author_name || 'YouTube'}`.slice(0, 1000));
                         }
                     }
                     if (data.thumbnail_url && !thumbnailPreview) {

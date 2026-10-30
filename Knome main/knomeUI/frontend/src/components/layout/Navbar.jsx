@@ -1706,7 +1706,7 @@ export default function Navbar() {
                                     isSearchingSuggestions ? (
                                         <div className="px-4 py-6 text-center text-slate-400 flex items-center justify-center gap-2">
                                             <div className="w-4 h-4 border-2 border-slate-300 border-t-indigo-500 rounded-full animate-spin"></div>
-                                            <span className="text-[12px] font-medium">Searching across Knome...</span>
+                                            <span className="text-[12px] font-medium">Searching across TechnoSocial...</span>
                                         </div>
                                     ) : suggestions.length > 0 ? (
                                         <div className="flex flex-col">
@@ -1834,7 +1834,7 @@ export default function Navbar() {
                                             <div className="px-4 py-2 border-t" style={{ borderColor: 'var(--border-mid)' }}>
                                                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 flex items-center gap-1">
                                                     <span className="material-symbols-outlined text-[13px] text-amber-500">trending_up</span>
-                                                    Trending on Knome
+                                                    Trending on TechnoSocial
                                                 </div>
                                                 <div className="flex flex-wrap gap-1.5">
                                                     {trendingSearches.map((trend, idx) => {
@@ -1895,7 +1895,7 @@ export default function Navbar() {
                     {/* ─── Role & Platform FAQ Guide Button ─── */}
                     <button
                         onClick={() => setIsFaqModalOpen(true)}
-                        title="Knome Role & Platform FAQs (How to use Knome properly)"
+                        title="TechnoSocial Role & Platform FAQs (How to use TechnoSocial properly)"
                         className="relative flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer group shrink-0"
                         style={{
                             background: isDark ? 'rgba(15, 23, 42, 0.8)' : 'rgba(241, 245, 249, 0.9)',
@@ -2332,7 +2332,7 @@ export default function Navbar() {
                                             setIsUserMenuOpen(false);
                                             const ok = await confirm({
                                                 title: 'Confirm Logout',
-                                                message: "Are you sure you want to log out of Knome? You will be redirected to the central login portal.",
+                                                message: "Are you sure you want to log out of TechnoSocial? You will be redirected to the central login portal.",
                                                 confirmText: 'Yes, Log Out',
                                                 cancelText: 'Cancel',
                                                 variant: 'danger'

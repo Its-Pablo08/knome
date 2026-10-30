@@ -230,7 +230,7 @@ export default function Login() {
 
                 {/* Footer Info */}
                 <div className="mt-6 text-center text-xs text-slate-500">
-                    Knome Knowledge Sharing, Group & Technical Post Platform • MPOnline Limited
+                    TechnoSocial Knowledge Sharing, Group & Technical Post Platform • MPOnline Limited
                 </div>
             </div>
         </div>

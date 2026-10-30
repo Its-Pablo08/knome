@@ -29,7 +29,7 @@ export default function AuthGuard({ children }) {
                     </div>
                     <div className="flex flex-col items-center gap-1">
                         <p className="text-[14px] font-bold" style={{ color: 'var(--text-secondary)' }}>
-                            Loading Knome...
+                            Loading TechnoSocial...
                         </p>
                         <div className="flex gap-1 mt-1">
                             {[0, 1, 2].map(i => (
@@ -56,7 +56,7 @@ export default function AuthGuard({ children }) {
                 if (savedEmpId && suspendedMap[savedEmpId]) {
                     return true;
                 }
-            } catch {}
+            } catch { }
             return false;
         }
         if (
@@ -75,7 +75,7 @@ export default function AuthGuard({ children }) {
             if ((uid && suspendedMap[uid]) || (empId && suspendedMap[empId])) {
                 return true;
             }
-        } catch {}
+        } catch { }
         return false;
     };
 
@@ -103,7 +103,7 @@ export default function AuthGuard({ children }) {
                         <span className="material-symbols-outlined text-white text-[32px]">logout</span>
                     </div>
                     <p className="text-base font-bold text-slate-200">
-                        Logging out of Knome...
+                        Logging out of TechnoSocial...
                     </p>
                     <p className="text-xs text-slate-400">
                         Redirecting to login portal...
@@ -119,7 +119,7 @@ export default function AuthGuard({ children }) {
             if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/sso') {
                 sessionStorage.setItem('knome_return_url', window.location.pathname + window.location.search);
             }
-        } catch (_) {}
+        } catch (_) { }
 
         // Enforce MPO Employee Hub Login: Route unauthenticated visits through /login with client registration
         try {
@@ -137,7 +137,7 @@ export default function AuthGuard({ children }) {
                         Redirecting to MPO Employee Hub Login...
                     </p>
                     <p className="text-xs text-slate-400">
-                        Please authenticate via official MPO Employee Hub to access Knome.
+                        Please authenticate via official MPO Employee Hub to access TechnoSocial.
                     </p>
                 </div>
             </div>

@@ -281,7 +281,7 @@ export default function Search() {
                         </span>
                     </h1>
                     <p className="text-slate-600 dark:text-slate-400 text-sm md:text-[15px] font-medium leading-relaxed max-w-2xl">
-                        Instantly find people, articles, posts, videos, audio, and communities across Knome.
+                        Instantly find people, articles, posts, videos, audio, and communities across TechnoSocial.
                     </p>
                 </div>
             </div>

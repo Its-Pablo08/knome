@@ -147,7 +147,7 @@ export default function SsoPage() {
 
                 const returnTarget = sessionStorage.getItem('knome_return_url') || '/';
                 sessionStorage.removeItem('knome_return_url');
-                setStatusMessage('Welcome to Knome! Redirecting...');
+                setStatusMessage('Welcome to TechnoSocial! Redirecting...');
                 setTimeout(() => {
                     window.location.href = returnTarget;
                 }, 300);
@@ -208,7 +208,7 @@ export default function SsoPage() {
             </div>
 
             <h2 className="text-xl font-bold text-slate-100 mb-2">
-                Knome Knowledge Platform
+                TechnoSocial Knowledge Platform
             </h2>
             
             <p className="text-sm text-slate-400 mb-6 text-center max-w-sm">

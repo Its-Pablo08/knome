@@ -87,6 +87,7 @@ export default function Dashboard() {
                     msg.includes('reviewed by moderation') ||
                     msg.includes('first-time login') ||
                     msg.includes('joined knome with default') ||
+                    msg.includes('joined technosocial with default') ||
                     msg.includes('has successfully gone live') ||
                     msg.includes('your scheduled')
                 ) {
@@ -653,7 +654,7 @@ export default function Dashboard() {
                         <div className="flex flex-col gap-4">
                             <BackgroundPaths 
                                 title="Discover Excellence" 
-                                subtitle="Welcome to Knome — the enterprise knowledge & collaboration hub for MPOnline Limited"
+                                subtitle="Welcome to TechnoSocial — the enterprise knowledge & collaboration hub for MPOnline Limited"
                                 buttonText="Create New Post"
                                 onButtonClick={() => setIsCreatePostOpen(true)}
                             />
@@ -661,7 +662,7 @@ export default function Dashboard() {
                                 mediaType="image"
                                 mediaSrc="https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=1280&auto=format&fit=crop"
                                 bgImageSrc="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1920&auto=format&fit=crop"
-                                title="Knome Knowledge Hub"
+                                title="TechnoSocial Knowledge Hub"
                                 date="MPOnline Enterprise Platform"
                                 scrollToExpand="Scroll to Expand Interactive View"
                                 textBlend={true}

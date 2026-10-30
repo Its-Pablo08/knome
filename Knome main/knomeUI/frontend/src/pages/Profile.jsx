@@ -305,7 +305,7 @@ export default function Profile() {
 
     const handleOpenBioModal = () => {
         const currentBio = displayUser?.bio;
-        setBioInput((currentBio && currentBio !== 'Professional team member at Knome.') ? currentBio : '');
+        setBioInput((currentBio && currentBio !== 'Professional team member at Knome.' && currentBio !== 'Professional team member at TechnoSocial.') ? currentBio : '');
         setIsBioModalOpen(true);
     };
 
@@ -550,7 +550,7 @@ export default function Profile() {
 
     const handleOpenEdit = () => {
         setEditForm({
-            bio: (displayUser?.bio && displayUser.bio !== 'Professional team member at Knome.') ? displayUser.bio : '',
+            bio: (displayUser?.bio && displayUser.bio !== 'Professional team member at Knome.' && displayUser.bio !== 'Professional team member at TechnoSocial.') ? displayUser.bio : '',
             skills: Array.isArray(displayUser?.skills) ? displayUser.skills.join(', ') : (displayUser?.skills || ''),
             interests: Array.isArray(displayUser?.interests) ? displayUser.interests.join(', ') : (displayUser?.interests || ''),
             location: displayUser?.location || '',
@@ -977,7 +977,7 @@ export default function Profile() {
                             <div className="absolute right-6 sm:right-10 top-1/2 -translate-y-1/2 hidden sm:flex flex-col items-start select-none pointer-events-none opacity-90 pr-4">
                                 <div className="flex items-center gap-2 text-white font-black text-xl tracking-wide drop-shadow-md">
                                     <span className="material-symbols-outlined text-[26px]">hub</span>
-                                    <span>MPOnline Knome</span>
+                                    <span>MPOnline TechnoSocial</span>
                                 </div>
                                 <p className="text-white/85 text-xs font-semibold mt-1 drop-shadow-sm">
                                     Enterprise Knowledge & Collaboration Platform
@@ -1371,7 +1371,7 @@ export default function Profile() {
                                         </button>
                                     )}
                                 </div>
-                                {displayUser?.bio && displayUser.bio.trim() !== '' && displayUser.bio !== 'Professional team member at Knome.' ? (
+                                {displayUser?.bio && displayUser.bio.trim() !== '' && displayUser.bio !== 'Professional team member at Knome.' && displayUser.bio !== 'Professional team member at TechnoSocial.' ? (
                                     <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm whitespace-pre-line">
                                         {displayUser.bio}
                                     </p>
@@ -1477,7 +1477,7 @@ export default function Profile() {
                                         System Admin
                                     </h3>
                                     <p className="text-slate-600 dark:text-slate-300 text-xs leading-relaxed mb-4 font-medium">
-                                        Full platform governance access, user management, audit logs, and security controls active across Knome.
+                                        Full platform governance access, user management, audit logs, and security controls active across TechnoSocial.
                                     </p>
                                     <div className="flex items-center gap-2 px-3.5 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold border border-indigo-200 dark:border-indigo-800/50">
                                         <span className="material-symbols-outlined text-[18px] text-indigo-500">verified_user</span>
@@ -1818,7 +1818,7 @@ export default function Profile() {
                                                         {article.title}
                                                     </h4>
                                                     <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4 line-clamp-2">
-                                                        {article.subtitle || article.description || article.summary || 'Read this article on Knome.'}
+                                                        {article.subtitle || article.description || article.summary || 'Read this article on TechnoSocial.'}
                                                     </p>
                                                 </div>
                                                 <div>
@@ -2676,7 +2676,7 @@ export default function Profile() {
                                     <span className="material-symbols-outlined text-[20px]">link</span>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Your Knome Profile</p>
+                                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Your TechnoSocial Profile</p>
                                     <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 truncate mt-0.5">
                                         {window.location.origin}/profile{displayUser?.id ? `?id=${displayUser.id}` : ''}
                                     </p>
@@ -2849,7 +2849,7 @@ export default function Profile() {
                                         {connectionSearchQuery ? 'No matching connections found' : 'No connections to display'}
                                     </p>
                                     <p className="text-xs text-slate-500 max-w-xs mt-1">
-                                        {connectionSearchQuery ? 'Try searching with a different name or title.' : 'Grow your network by connecting with colleagues on Knome.'}
+                                        {connectionSearchQuery ? 'Try searching with a different name or title.' : 'Grow your network by connecting with colleagues on TechnoSocial.'}
                                     </p>
                                     <button
                                         type="button"

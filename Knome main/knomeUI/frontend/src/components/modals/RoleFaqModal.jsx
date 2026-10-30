@@ -107,7 +107,7 @@ const DEFAULT_FAQ_DATA = {
             id: 2,
             category: 'Scheduling',
             question: 'How do I schedule a post or article for later?',
-            answer: `You can write content now and have Knome publish it automatically later:
+            answer: `You can write content now and have TechnoSocial publish it automatically later:
 - While writing your post or article, click the clock icon (Schedule).
 - Pick a future date and time, or choose a quick shortcut like "+1 Min", "Tonight 8 PM", or "Tomorrow 9 AM".
 - Click "Schedule".
@@ -168,7 +168,7 @@ const DEFAULT_FAQ_DATA = {
             id: 7,
             category: 'Privacy & Safety',
             question: 'How do I protect my privacy or report inappropriate content?',
-            answer: `Knome is designed to be a safe, positive, and respectful workplace:
+            answer: `TechnoSocial is designed to be a safe, positive, and respectful workplace:
 - Report a post: If you see any rude, offensive, or inappropriate content, click the three dots menu on that post and choose "Report Content". Our admin team will review it immediately.
 - Profile Privacy: Go to Profile, select Edit Profile, and choose whether your bio and photo are visible to everyone or kept private.`
         }
@@ -1175,7 +1175,7 @@ export default function RoleFaqModal({ isOpen, onClose }) {
                         <span>
                             {isSysAdmin 
                                 ? 'System Governance Mode • Rules & FAQ Editor Active' 
-                                : `MPOnline Knome Knowledge System • ${currentRoleMeta.title} FAQs`}
+                                : `MPOnline TechnoSocial Knowledge System • ${currentRoleMeta.title} FAQs`}
                         </span>
                     </div>
                 </div>

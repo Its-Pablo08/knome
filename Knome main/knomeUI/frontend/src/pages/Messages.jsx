@@ -203,7 +203,7 @@ function MessageClipCard({ clipId, isMe, navigate }) {
         navigate(`/clips?id=${clipId}`);
     };
 
-    const title = clipData?.title || `Knome Clip #${clipId}`;
+    const title = clipData?.title || `TechnoSocial Clip #${clipId}`;
     const rawThumb = clipData?.thumbnailUrl || clipData?.videoUrl;
     const thumb = resolveMediaUrl(rawThumb) || rawThumb;
     const author = clipData?.creatorName || 'Colleague';
@@ -248,7 +248,7 @@ function MessageClipCard({ clipId, isMe, navigate }) {
                     <div className="flex items-center gap-1.5 mb-1">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-pink-500/20 text-pink-300 border border-pink-500/30">
                             <span className="material-symbols-outlined text-[11px]">movie</span>
-                            Knome Clip
+                            TechnoSocial Clip
                         </span>
                         <span className={`text-[10.5px] truncate ${isMe ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>
                             • {author}
@@ -1914,7 +1914,7 @@ export default function Messages() {
                                     {searchQuery ? 'No matching conversations' : 'No conversations yet'}
                                 </p>
                                 <p className="text-[11px] text-slate-400 max-w-xs mb-4">
-                                    {searchQuery ? 'Try searching another colleague name.' : 'Start messaging colleagues on Knome.'}
+                                    {searchQuery ? 'Try searching another colleague name.' : 'Start messaging colleagues on TechnoSocial.'}
                                 </p>
                                 {!searchQuery && (
                                     <button
@@ -1992,7 +1992,7 @@ export default function Messages() {
                         {isReconnecting && !isNetworkOffline && (
                             <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-blue-500/10 border-b border-blue-500/20 text-blue-600 dark:text-blue-400 text-[11px] font-semibold animate-in fade-in duration-150">
                                 <span className="material-symbols-outlined text-[15px] animate-spin">sync</span>
-                                <span>Reconnecting to Knome messenger...</span>
+                                <span>Reconnecting to TechnoSocial messenger...</span>
                             </div>
                         )}
 
@@ -2777,7 +2777,7 @@ export default function Messages() {
                             Your Messages
                         </h2>
                         <p className="text-xs text-slate-400 max-w-sm mb-6">
-                            Send direct private messages, documents, and notes to your Knome colleagues. Pick a conversation or start a new message.
+                            Send direct private messages, documents, and notes to your TechnoSocial colleagues. Pick a conversation or start a new message.
                         </p>
                         <button
                             onClick={() => {
@@ -2833,7 +2833,7 @@ export default function Messages() {
                             {isSearchingUsers ? (
                                 <div className="p-8 text-center text-slate-400 text-xs flex flex-col items-center">
                                     <span className="material-symbols-outlined animate-spin text-2xl text-cyan-600 mb-2">progress_activity</span>
-                                    <span>Searching Knome colleagues...</span>
+                                    <span>Searching TechnoSocial colleagues...</span>
                                 </div>
                             ) : searchedUsers.length > 0 ? (
                                 searchedUsers.map(colleague => {
@@ -2914,7 +2914,7 @@ export default function Messages() {
                                         {colleagueSearch ? `No colleagues found matching "${colleagueSearch}"` : 'Search for a Colleague'}
                                     </p>
                                     <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
-                                        Type a name, employee ID, role, or department to find anyone at Knome.
+                                        Type a name, employee ID, role, or department to find anyone at TechnoSocial.
                                     </p>
                                 </div>
                             )}
