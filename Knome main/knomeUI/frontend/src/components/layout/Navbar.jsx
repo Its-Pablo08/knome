@@ -1586,17 +1586,14 @@ export default function Navbar() {
                         <div className="flex flex-col justify-center">
                             <img 
                                 src={knomeLogo} 
-                                alt="KNOME" 
-                                className="h-9 sm:h-10 md:h-11 w-auto max-w-[200px] sm:max-w-[280px] object-contain block dark:hidden drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
+                                alt="TechnoSocial" 
+                                className="h-12 sm:h-13 md:h-[54px] lg:h-[58px] w-auto max-w-[240px] sm:max-w-[300px] md:max-w-[340px] object-contain block dark:hidden drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
                             />
                             <img 
                                 src={knomeLogoDark} 
-                                alt="KNOME" 
-                                className="h-9 sm:h-10 md:h-11 w-auto max-w-[200px] sm:max-w-[280px] object-contain hidden dark:block drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
+                                alt="TechnoSocial" 
+                                className="h-12 sm:h-13 md:h-[54px] lg:h-[58px] w-auto max-w-[240px] sm:max-w-[300px] md:max-w-[340px] object-contain hidden dark:block drop-shadow-xs group-hover:scale-105 transition-transform duration-300" 
                             />
-                            <span className="hidden xl:inline-block text-[10px] md:text-[10.5px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 leading-none tracking-tight pl-0.5 whitespace-nowrap">
-                                Knowledge Sharing, Group & Technical Post
-                            </span>
                         </div>
                     </Link>
                 </div>

@@ -410,7 +410,7 @@ export default function DocumentViewerModal({ document: docFile, onClose }) {
                 <div className="px-5 py-2.5 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-[12px] text-slate-400 shrink-0">
                     <span className="flex items-center gap-1.5 font-medium">
                         <span className="material-symbols-outlined text-[16px] text-indigo-400">verified_user</span>
-                        <span>Knome Enterprise Document Viewer</span>
+                        <span>TechnoSocial Document Viewer</span>
                         <span className="text-slate-600">•</span>
                         <span className="text-emerald-400 font-semibold text-[11px]">In-Site View Only</span>
                     </span>

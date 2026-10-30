@@ -368,7 +368,7 @@ export default function HRAnalytics() {
                 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
                 <head><meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8"/>
                 <style>th { background-color: #2563eb; color: #ffffff; font-weight: bold; border: 0.5pt solid #cbd5e1; padding: 8px; } td { border: 0.5pt solid #cbd5e1; padding: 6px; }</style>
-                </head><body><h2>Knome Enterprise Portal — ${activeReport} Report</h2><p>Export Date: ${new Date().toLocaleString()}</p><table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></body></html>
+                </head><body><h2>TechnoSocial Portal — ${activeReport} Report</h2><p>Export Date: ${new Date().toLocaleString()}</p><table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></body></html>
             `;
             const blob = new Blob([excelXml], { type: 'application/vnd.ms-excel;charset=utf-8' });
             const url = URL.createObjectURL(blob);
@@ -384,7 +384,7 @@ export default function HRAnalytics() {
             <div className="relative rounded-2xl mb-8 shadow-sm border border-border-subtle dark:border-outline-variant bg-white dark:bg-charcoal-dark flex flex-col md:flex-row items-start md:items-center justify-between text-left px-6 py-8 md:px-10 md:py-8 gap-6 z-20">
                 <div className="relative z-10 flex flex-col items-start max-w-3xl">
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-electric-blue/30 bg-blue-50 dark:bg-blue-900/30 text-electric-blue dark:text-blue-400 text-[11px] font-bold mb-3 uppercase tracking-wider">
-                        ✨ Live Knome Enterprise Workforce Metrics
+                        ✨ Live TechnoSocial Workforce Metrics
                     </div>
                     <h1 className="text-3xl md:text-4xl lg:text-[40px] font-black tracking-tight mb-3 text-on-surface dark:text-white" style={{ lineHeight: '1.2' }}>
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-electric-blue via-teal-accent to-cyan-500">
