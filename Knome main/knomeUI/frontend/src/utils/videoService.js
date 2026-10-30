@@ -138,12 +138,32 @@ let inFlightPlaylistsPromise = null;
 const PLAYLISTS_CACHE_TTL = 30000; // 30 seconds fresh cache TTL
 
 export function getCachedVideos() {
-    return cachedVideos;
+    if (cachedVideos && Array.isArray(cachedVideos) && cachedVideos.length > 0) {
+        return cachedVideos;
+    }
+    try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+            const raw = window.sessionStorage.getItem('knome_cached_videos_v3');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    cachedVideos = parsed;
+                    return parsed;
+                }
+            }
+        }
+    } catch (_) {}
+    return null;
 }
 
 export function invalidateVideosCache() {
     cachedVideos = null;
     cachedVideosTimestamp = 0;
+    try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+            window.sessionStorage.removeItem('knome_cached_videos_v3');
+        }
+    } catch (_) {}
 }
 
 if (typeof window !== 'undefined') {
@@ -157,12 +177,32 @@ if (typeof window !== 'undefined') {
 }
 
 export function getCachedPlaylists() {
-    return cachedPlaylists;
+    if (cachedPlaylists && Array.isArray(cachedPlaylists) && cachedPlaylists.length > 0) {
+        return cachedPlaylists;
+    }
+    try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+            const raw = window.sessionStorage.getItem('knome_cached_playlists_v3');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    cachedPlaylists = parsed;
+                    return parsed;
+                }
+            }
+        }
+    } catch (_) {}
+    return getPlaylists();
 }
 
 export function invalidatePlaylistsCache() {
     cachedPlaylists = null;
     cachedPlaylistsTimestamp = 0;
+    try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+            window.sessionStorage.removeItem('knome_cached_playlists_v3');
+        }
+    } catch (_) {}
 }
 
 export async function getVideos(forceFresh = false) {
@@ -395,8 +435,31 @@ export async function getVideos(forceFresh = false) {
             // Background sync for shared imported videos without blocking UI
             syncSharedImportedVideos().catch(() => {});
 
+            // Deterministic stable sorting to prevent card shifting / rearrangement
+            videoList.sort((a, b) => {
+                // 1. Direct uploads first, then series
+                const sourceWeight = (v) => v.sourceType === 'LocalUpload' ? 2 : (v.sourceType === 'YouTube' ? 1 : 0);
+                const weightDiff = sourceWeight(b) - sourceWeight(a);
+                if (weightDiff !== 0) return weightDiff;
+
+                // 2. Newest date/timestamp first
+                const timeA = a.uploadedDate ? new Date(a.uploadedDate).getTime() : (a.date ? new Date(a.date).getTime() : 0);
+                const timeB = b.uploadedDate ? new Date(b.uploadedDate).getTime() : (b.date ? new Date(b.date).getTime() : 0);
+                if (!isNaN(timeA) && !isNaN(timeB) && timeB !== timeA) {
+                    return timeB - timeA;
+                }
+
+                // 3. Stable tie-breaker by ID
+                return String(a.id || '').localeCompare(String(b.id || ''));
+            });
+
             cachedVideos = videoList;
             cachedVideosTimestamp = Date.now();
+            try {
+                if (typeof window !== 'undefined' && window.sessionStorage) {
+                    window.sessionStorage.setItem('knome_cached_videos_v3', JSON.stringify(videoList));
+                }
+            } catch (_) {}
             return videoList;
         } catch (error) {
             console.error('Failed to fetch aggregated videos:', error);
@@ -947,6 +1010,11 @@ export async function fetchPlaylists(forceFresh = false) {
                     localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(normalized));
                     cachedPlaylists = normalized;
                     cachedPlaylistsTimestamp = Date.now();
+                    try {
+                        if (typeof window !== 'undefined' && window.sessionStorage) {
+                            window.sessionStorage.setItem('knome_cached_playlists_v3', JSON.stringify(normalized));
+                        }
+                    } catch (_) {}
                     return normalized;
                 }
             }
@@ -957,6 +1025,11 @@ export async function fetchPlaylists(forceFresh = false) {
         const fallback = getPlaylists();
         cachedPlaylists = fallback;
         cachedPlaylistsTimestamp = Date.now();
+        try {
+            if (typeof window !== 'undefined' && window.sessionStorage) {
+                window.sessionStorage.setItem('knome_cached_playlists_v3', JSON.stringify(fallback));
+            }
+        } catch (_) {}
         return fallback;
     })().finally(() => {
         inFlightPlaylistsPromise = null;
