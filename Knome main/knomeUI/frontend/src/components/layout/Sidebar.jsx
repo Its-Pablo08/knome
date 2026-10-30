@@ -353,7 +353,7 @@ export default function Sidebar() {
                                 <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
                                     <span className="material-symbols-outlined text-[16px]">hub</span>
                                 </div>
-                                <span className="font-extrabold text-sm text-slate-900 dark:text-white tracking-tight">Knome Menu</span>
+                                <span className="font-extrabold text-sm text-slate-900 dark:text-white tracking-tight">TechnoSocial Menu</span>
                             </div>
                             <button
                                 onClick={() => setIsMobileOpen(false)}

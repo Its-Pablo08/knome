@@ -115,7 +115,7 @@ export default function Login() {
             <div className="w-full max-w-xl relative z-10 flex flex-col items-center">
                 {/* Header Branding */}
                 <div className="flex flex-col items-center gap-3 text-center mb-8">
-                    <img src={knomeLogoDark} alt="KNOME" className="h-16 w-auto object-contain drop-shadow-2xl" />
+                    <img src={knomeLogoDark} alt="TechnoSocial" className="h-16 w-auto object-contain drop-shadow-2xl" />
                     <p className="text-sm text-slate-300 font-medium tracking-wide">
                         MPOnline Enterprise Knowledge & Collaboration Platform
                     </p>

@@ -277,7 +277,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
 
         try {
             await interactionsApi.createPost({
-                contentText: `Check out ${userName}'s profile on Knome enterprise portal! 🚀`,
+                contentText: `Check out ${userName}'s profile on TechnoSocial portal! 🚀`,
                 audience: 'Everyone',
                 tags: ['ProfileShare', 'Network']
             });
@@ -290,7 +290,7 @@ export default function ShareProfileModal({ isOpen, onClose, user }) {
             author: 'Current User',
             role: 'Employee',
             time: 'Just now',
-            content: `Check out ${userName}'s profile on Knome enterprise portal!`,
+            content: `Check out ${userName}'s profile on TechnoSocial portal!`,
             isProfileShare: true,
             sharedProfile: sharedProfileObj,
             likes: 0,
