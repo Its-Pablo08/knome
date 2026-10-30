@@ -2,21 +2,20 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * Custom hook to enable high-performance progressive scroll loading (infinite scroll).
- * - Avoids layout shifts and screen flickering by smoothly revealing batches via requestAnimationFrame.
- * - Throttles trigger invocations with a cooldown to prevent rapid multi-batch thrashing.
- * - Uses a single stable IntersectionObserver with a gentle margin, and a fallback scroll listener only if needed.
+ * - Zero flickering: reveals batches synchronously in a single state pass without thrashing layout.
+ * - Dynamic Callback Ref: automatically attaches IntersectionObserver the moment the sentinel element mounts.
+ * - Dual-layer support: IntersectionObserver for sentinel elements + passive scroll listener fallback for lists without sentinels.
  * - Prevents unneeded component re-renders through stable refs.
  *
  * @param {number} totalItemsCount - Total count of available filtered items.
- * @param {number} initialCount - Number of items to render initially (default: 8).
- * @param {number} batchSize - Number of items to reveal per scroll trigger (default: 8).
- * @param {number} offset - Distance from bottom in px to trigger next batch (default: 300).
+ * @param {number} initialCount - Number of items to render initially (default: 12).
+ * @param {number} batchSize - Number of items to reveal per scroll trigger (default: 12).
+ * @param {number} offset - Distance from bottom in px to trigger next batch (default: 350).
  * @param {React.RefObject} containerRef - Optional container ref for overflow scrollable elements (default: null for window).
  */
-export function useScrollLoading(totalItemsCount, initialCount = 8, batchSize = 8, offset = 300, containerRef = null) {
+export function useScrollLoading(totalItemsCount, initialCount = 12, batchSize = 12, offset = 350, containerRef = null) {
     const [visibleCount, setVisibleCount] = useState(initialCount);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
-    const sentinelRef = useRef(null);
 
     const isFetchingMoreRef = useRef(false);
     const visibleCountRef = useRef(initialCount);
@@ -24,6 +23,8 @@ export function useScrollLoading(totalItemsCount, initialCount = 8, batchSize = 
     const initialCountRef = useRef(initialCount);
     const batchSizeRef = useRef(batchSize);
     const lastTriggerTimeRef = useRef(0);
+    const observerRef = useRef(null);
+    const sentinelNodeRef = useRef(null);
 
     // Keep refs in sync with incoming props
     isFetchingMoreRef.current = isFetchingMore;
@@ -32,36 +33,32 @@ export function useScrollLoading(totalItemsCount, initialCount = 8, batchSize = 
     initialCountRef.current = initialCount;
     batchSizeRef.current = batchSize;
 
-    // Load next batch progressively with cooldown and animation frame
+    // Load next batch progressively without multi-frame thrashing
     const loadMore = useCallback(() => {
         const now = Date.now();
-        // Cooldown: prevent successive triggers within 200ms to avoid freezing and stutter
-        if (now - lastTriggerTimeRef.current < 200) return;
-        if (isFetchingMoreRef.current) return;
+        // Cooldown: prevent successive triggers within 150ms
+        if (now - lastTriggerTimeRef.current < 150) return;
         if (visibleCountRef.current >= totalItemsCountRef.current) return;
 
         lastTriggerTimeRef.current = now;
-        isFetchingMoreRef.current = true;
-        setIsFetchingMore(true);
-
-        requestAnimationFrame(() => {
-            setVisibleCount(prev => {
-                const next = Math.min(prev + batchSizeRef.current, totalItemsCountRef.current);
-                visibleCountRef.current = next;
-                return next;
-            });
-            // Reset fetching lock after frame renders
-            requestAnimationFrame(() => {
-                isFetchingMoreRef.current = false;
-                setIsFetchingMore(false);
-            });
+        setVisibleCount(prev => {
+            const next = Math.min(prev + batchSizeRef.current, totalItemsCountRef.current);
+            visibleCountRef.current = next;
+            return next;
         });
     }, []);
 
-    // 1. IntersectionObserver (Primary, modern, zero-jank)
-    useEffect(() => {
-        const sentinelEl = sentinelRef.current;
-        if (!sentinelEl || typeof IntersectionObserver === 'undefined') return;
+    // Stable callback ref for <div ref={sentinelRef} />
+    const sentinelRefCallback = useCallback((node) => {
+        if (observerRef.current) {
+            observerRef.current.disconnect();
+            observerRef.current = null;
+        }
+
+        sentinelNodeRef.current = node;
+        sentinelRefCallback.current = node;
+
+        if (!node || typeof IntersectionObserver === 'undefined') return;
 
         const observer = new IntersectionObserver((entries) => {
             const entry = entries[0];
@@ -73,19 +70,28 @@ export function useScrollLoading(totalItemsCount, initialCount = 8, batchSize = 
         }, {
             root: containerRef?.current || null,
             rootMargin: `${offset}px 0px`,
-            threshold: 0.05
+            threshold: 0.01
         });
 
-        observer.observe(sentinelEl);
-        return () => observer.disconnect();
+        observer.observe(node);
+        observerRef.current = observer;
     }, [containerRef, offset, loadMore]);
 
-    // 2. Scroll listener (Only as fallback if IntersectionObserver is unsupported)
-    useEffect(() => {
-        if (typeof IntersectionObserver !== 'undefined') {
-            return; // IntersectionObserver handles everything smoothly without scroll listeners
-        }
+    // Attach .current for compatibility with callers reading sentinelRef.current
+    sentinelRefCallback.current = sentinelNodeRef.current;
 
+    // Cleanup observer on unmount
+    useEffect(() => {
+        return () => {
+            if (observerRef.current) {
+                observerRef.current.disconnect();
+                observerRef.current = null;
+            }
+        };
+    }, []);
+
+    // Passive throttled scroll listener fallback (for lists without sentinels or as secondary trigger)
+    useEffect(() => {
         const target = containerRef?.current;
         let rafId = null;
 
@@ -151,8 +157,9 @@ export function useScrollLoading(totalItemsCount, initialCount = 8, batchSize = 
         reset,
         resetVisibleCount: reset,
         setVisibleCount,
-        sentinelRef
+        sentinelRef: sentinelRefCallback
     };
 }
 
 export default useScrollLoading;
+

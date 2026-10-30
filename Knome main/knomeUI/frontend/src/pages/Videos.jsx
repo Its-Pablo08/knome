@@ -11,7 +11,6 @@ import sharedPlaylistsData from '../data/shared_playlists.json';
 
 import { savedContentApi, getPersonalizedRecommendations, resolveMediaUrl, videosApi, interactionsApi, getInitialsAvatar } from '../utils/apiService';
 import { useScrollLoading } from '../hooks/useScrollLoading';
-import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
 
 const VIDEO_PLACEHOLDER_THUMBNAIL = `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -109,20 +108,27 @@ const VideoCard = React.memo(function VideoCard({
     viewsText,
     likesCount
 }) {
+    const [isImgReady, setIsImgReady] = useState(false);
+
     return (
         <div
             onClick={() => onSelect(video)}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 group cursor-pointer flex flex-col relative"
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-200 group cursor-pointer flex flex-col relative contain-paint"
+            style={{ contentVisibility: 'auto', containIntrinsicSize: '300px 260px' }}
         >
             {/* Thumbnail */}
             <div className="relative aspect-video bg-slate-900 overflow-hidden shrink-0">
+                {!isImgReady && (
+                    <div className="absolute inset-0 bg-slate-800/80 animate-pulse pointer-events-none" />
+                )}
                 <img
                     src={video.thumbnail}
                     alt={video.title}
                     loading="lazy"
                     decoding="async"
-                    onError={(e) => { e.target.onerror = null; e.target.src = VIDEO_PLACEHOLDER_THUMBNAIL; }}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onLoad={() => setIsImgReady(true)}
+                    onError={(e) => { e.target.onerror = null; e.target.src = VIDEO_PLACEHOLDER_THUMBNAIL; setIsImgReady(true); }}
+                    className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-300 transform-gpu ${isImgReady ? 'opacity-100' : 'opacity-0'}`}
                 />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors pointer-events-none" />
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -144,21 +150,19 @@ const VideoCard = React.memo(function VideoCard({
                 >
                     <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: isSaved ? "'FILL' 1" : "'FILL' 0" }}>bookmark</span>
                 </button>
-
-
             </div>
 
             {/* Info */}
-            <div className="p-3 flex-1 flex flex-col justify-between">
+            <div className="p-3 flex-1 flex flex-col justify-between min-h-[96px]">
                 <div>
-                    <h3 className="font-bold text-[13px] text-slate-900 dark:text-white line-clamp-2 group-hover:text-cyan-500 transition-colors leading-snug mb-1.5">
+                    <h3 className="font-bold text-[13px] text-slate-900 dark:text-white line-clamp-2 group-hover:text-cyan-500 transition-colors leading-snug mb-1 min-h-[36px]">
                         <HighlightText text={video.title} query={searchQuery} />
                     </h3>
                     <p className="text-[12px] text-slate-500 dark:text-slate-400 font-semibold truncate">
                         <HighlightText text={video.author || 'Creator'} query={searchQuery} />
                     </p>
                 </div>
-                <div className="flex items-center justify-between gap-2 mt-1">
+                <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-slate-100 dark:border-slate-800/60">
                     <p className="text-[11px] text-slate-400 truncate">
                         {viewsText} views · {likesCount} likes · {video.date}
                     </p>
@@ -284,7 +288,7 @@ export default function Videos() {
     };
 
     // Helper: get display view count for a video (Strictly Knome platform views only)
-    const getDisplayViews = (video) => {
+    const getDisplayViews = useCallback((video) => {
         if (!video?.id) return '0';
         const saved = viewsMap[video.id];
         if (saved !== undefined && saved !== null) {
@@ -297,7 +301,7 @@ export default function Videos() {
         if (str.includes('M') || str.includes('m')) return '0';
         const parsed = parseInt(str, 10);
         return isNaN(parsed) ? '0' : String(parsed);
-    };
+    }, [viewsMap]);
 
     // Helper: get display like count for a video (Strictly Knome platform likes only, instant in-memory lookup)
     const getDisplayLikes = useCallback((video) => {
@@ -325,9 +329,22 @@ export default function Videos() {
             if (data && Array.isArray(data)) {
                 const deletedVideoIds = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]').map(String);
                 const filteredVideos = data.filter(v => !deletedVideoIds.includes(String(v.id)) && !deletedVideoIds.includes(String(v.contentId)));
-                setVideos(filteredVideos);
+                setVideos(prev => {
+                    // Skip state update if list is identical to avoid layout shifts or DOM rebuilding
+                    if (prev && prev.length === filteredVideos.length && prev.every((p, i) => p.id === filteredVideos[i]?.id)) {
+                        return prev;
+                    }
+                    return filteredVideos;
+                });
             }
-            if (plData && Array.isArray(plData)) setPlaylists(plData);
+            if (plData && Array.isArray(plData)) {
+                setPlaylists(prev => {
+                    if (prev && prev.length === plData.length && prev.every((p, i) => p.id === plData[i]?.id)) {
+                        return prev;
+                    }
+                    return plData;
+                });
+            }
         } catch (err) {
             console.error('Error fetching videos:', err);
         } finally {
@@ -373,8 +390,8 @@ export default function Videos() {
     }, []);
 
     useEffect(() => {
-        invalidateVideosCache();
-        fetchVideos(true);
+        // Instant render from cache + silent background revalidation (SWR)
+        fetchVideos(false);
         loadViewsMap();
         loadLikesMap();
         loadAllSavedVideos();
@@ -1289,7 +1306,7 @@ export default function Videos() {
         };
     }, []);
 
-    const handleSelectVideo = (v) => {
+    const handleSelectVideo = useCallback((v) => {
         if (!v) return;
         setActiveVideo(v);
         try {
@@ -1298,7 +1315,7 @@ export default function Videos() {
             window.history.replaceState(null, '', `/videos?id=${encodeURIComponent(v.id)}`);
         } catch (_) {}
         window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
+    }, []);
 
     const handleCloseVideo = (nextTab = null, nextFilter = null) => {
         setActiveVideo(null);
@@ -1581,13 +1598,9 @@ export default function Videos() {
     };
 
 
-    const rawFiltered = videos.filter(v =>
-        (activeFilter === 'All' || v.category === activeFilter) &&
-        (!searchQuery || v.title?.toLowerCase().includes(searchQuery.toLowerCase()) || (v.tags || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase())))
-    );
     const filteredVideos = useMemo(() => videos.filter(v => (activeFilter === 'All' || v.category === activeFilter) && (!searchQuery || v.title?.toLowerCase().includes(searchQuery.toLowerCase()) || (v.tags || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase())))), [videos, activeFilter, searchQuery]);
 
-    const filteredPlaylists = playlists.filter(pl => {
+    const filteredPlaylists = useMemo(() => playlists.filter(pl => {
         const matchesFilter = activeFilter === 'All' || pl.category === activeFilter;
         const q = (searchQuery || '').trim().toLowerCase();
         const matchesSearch = !q ||
@@ -1597,26 +1610,30 @@ export default function Videos() {
             (pl.channelName || '').toLowerCase().includes(q) ||
             (pl.category || '').toLowerCase().includes(q);
         return matchesFilter && matchesSearch;
-    });
+    }), [playlists, activeFilter, searchQuery]);
 
-    const { visibleCount, isFetchingMore, hasMore, sentinelRef, reset: resetScrollLoading } = useScrollLoading(filteredVideos.length, 8, 8, 300);
+    const { visibleCount, isFetchingMore, hasMore, sentinelRef, reset: resetScrollLoading } = useScrollLoading(filteredVideos.length, 16, 12, 400);
 
     useEffect(() => {
         resetScrollLoading();
     }, [activeFilter, viewTab, searchQuery, resetScrollLoading]);
 
-    const sideVideos = activeVideo
-        ? videos.filter(v => v.id !== activeVideo.id)
-        : filteredVideos;
+    const sideVideos = useMemo(() => {
+        return activeVideo
+            ? videos.filter(v => v.id !== activeVideo.id)
+            : filteredVideos;
+    }, [activeVideo, videos, filteredVideos]);
 
-    const activeUsersList = (users && users.length > 0 ? users : (INITIAL_USERS || [])).filter(u => {
-        if (!isPlatformActiveUser(u)) return false;
-        const uId = u.id || u.userId;
-        if (String(uId) === String(currentUser?.id || currentUser?.userId)) return false;
-        if (!userSearchQuery) return true;
-        const q = userSearchQuery.toLowerCase();
-        return (u.name || u.fullName || '').toLowerCase().includes(q) || (u.department || '').toLowerCase().includes(q);
-    });
+    const activeUsersList = useMemo(() => {
+        return (users && users.length > 0 ? users : (INITIAL_USERS || [])).filter(u => {
+            if (!isPlatformActiveUser(u)) return false;
+            const uId = u.id || u.userId;
+            if (String(uId) === String(currentUser?.id || currentUser?.userId)) return false;
+            if (!userSearchQuery) return true;
+            const q = userSearchQuery.toLowerCase();
+            return (u.name || u.fullName || '').toLowerCase().includes(q) || (u.department || '').toLowerCase().includes(q);
+        });
+    }, [users, currentUser, userSearchQuery]);
 
 const handleCardSaveToggle = useCallback((v) => {
         if (!v) return;
@@ -2387,21 +2404,16 @@ const handleCardSaveToggle = useCallback((v) => {
                                 ))}
 
                                 {/* Stable Bottom Sentinel & Scroll Status Container (Zero Layout Shift) */}
-                                <div className="col-span-full flex flex-col items-center justify-center min-h-[56px] py-4 text-center">
+                                <div className="col-span-full flex flex-col items-center justify-center min-h-[48px] py-4 text-center">
                                     {hasMore && (
                                         <div ref={sentinelRef} className="h-4 w-full pointer-events-none opacity-0" aria-hidden="true" />
                                     )}
-                                    {isFetchingMore ? (
-                                        <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 text-xs font-semibold animate-in fade-in duration-200">
-                                            <span className="material-symbols-outlined text-[18px] animate-spin text-cyan-500">progress_activity</span>
-                                            <span>Loading more videos...</span>
-                                        </div>
-                                    ) : !hasMore && filteredVideos.length > 8 ? (
+                                    {!hasMore && filteredVideos.length > 12 && (
                                         <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 text-xs font-semibold">
                                             <span className="material-symbols-outlined text-[16px] text-emerald-500">check_circle</span>
                                             <span>All {filteredVideos.length} videos loaded</span>
                                         </div>
-                                    ) : null}
+                                    )}
                                 </div>
                             </div>
                         )}
