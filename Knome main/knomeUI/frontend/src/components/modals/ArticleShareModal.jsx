@@ -65,13 +65,14 @@ export default function ArticleShareModal({ isOpen, onClose, article, post, item
                     const rawList = Array.isArray(data) ? data : (data?.data || []);
 
                     const deletedIds = new Set(JSON.parse(localStorage.getItem('knome_deleted_community_ids') || '[]').map(String));
+                    const deletedNames = new Set(JSON.parse(localStorage.getItem('knome_deleted_community_names') || '[]').map(n => String(n).toLowerCase().trim()));
                     const existingIds = new Set();
                     const existingNames = new Set();
                     const combinedList = [];
 
                     // 1. Process API communities
                     rawList
-                        .filter(c => !deletedIds.has(String(c.communityId || c.id)) && (c.isActive === undefined || c.isActive === true || c.isActive === 1))
+                        .filter(c => !deletedIds.has(String(c.communityId || c.id)) && !deletedNames.has((c.name || c.title || '').toLowerCase().trim()) && (c.isActive === undefined || c.isActive === true || c.isActive === 1))
                         .forEach(c => {
                             const cId = String(c.communityId || c.id);
                             const name = c.name || c.title || 'Community';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUser, resolveEmployeeName, deduplicateMembers, KNOWN_ROSTER_NAMES, INITIAL_USERS } from '../components/contexts/UserContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
@@ -283,6 +283,50 @@ export default function CommunityView() {
     // Community Category & Metadata Settings State
     const [selectedCategory, setSelectedCategory] = useState('Technology');
     const [isSavingCategory, setIsSavingCategory] = useState(false);
+    const bannerFileInputRef = useRef(null);
+
+    const handleBannerUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) {
+            showToast('Banner image must be under 10MB.', 'warning');
+            return;
+        }
+        try {
+            let newBannerUrl = null;
+            try {
+                const uploadRes = await mediaApi.uploadFile(file, 'image');
+                if (uploadRes?.url || uploadRes?.data?.url) {
+                    newBannerUrl = resolveMediaUrl(uploadRes.url || uploadRes.data.url);
+                }
+            } catch (upErr) {
+                console.warn('Backend banner upload fallback to local preview:', upErr);
+            }
+
+            if (!newBannerUrl) {
+                newBannerUrl = await new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.onload = ev => resolve(ev.target.result);
+                    reader.onerror = () => resolve(null);
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            if (newBannerUrl) {
+                setCommunity(prev => prev ? { ...prev, banner: newBannerUrl } : prev);
+                const targetId = community?.id || communityId;
+                const customList = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
+                const updated = customList.map(c => String(c.id) === String(targetId) ? { ...c, banner: newBannerUrl, bannerUrl: newBannerUrl } : c);
+                localStorage.setItem('knome_custom_communities', JSON.stringify(updated));
+                showToast('Community banner updated successfully!', 'success');
+            }
+        } catch (err) {
+            console.error('Failed to upload banner:', err);
+            showToast('Failed to update banner image.', 'error');
+        } finally {
+            if (e.target) e.target.value = '';
+        }
+    };
     const [availableCategories, setAvailableCategories] = useState([
         { id: 8, name: 'Design' },
         { id: 7, name: 'Engineering' },
@@ -1811,6 +1855,12 @@ export default function CommunityView() {
                 const resolvedCategory = commData.categoryName || localMatch?.category || 'Technology';
                 setSelectedCategory(resolvedCategory);
 
+                const rawBanner = commData.bannerUrl || commData.bannerImageUrl || localMatch?.banner || localMatch?.bannerUrl;
+                const resolvedBanner = resolveMediaUrl(rawBanner) || rawBanner || imgs.banner;
+
+                const rawThumb = commData.thumbnailUrl || localMatch?.thumbnail || localMatch?.avatar || localMatch?.thumbnailUrl;
+                const resolvedThumb = resolveMediaUrl(rawThumb) || rawThumb || imgs.thumbnail;
+
                 setCommunity({
                     id: commData.communityId,
                     name: commData.name,
@@ -1818,8 +1868,8 @@ export default function CommunityView() {
                     category: resolvedCategory,
                     membersCount: rawList.length > 0 ? rawList.length : (commData.membersCount || 1),
                     adminContact: commData.createdByUserName || 'Admin',
-                    banner: localMatch?.banner || localMatch?.bannerUrl || resolveMediaUrl(commData.bannerUrl || commData.bannerImageUrl) || imgs.banner,
-                    thumbnail: localMatch?.thumbnail || localMatch?.avatar || localMatch?.thumbnailUrl || resolveMediaUrl(commData.thumbnailUrl) || imgs.thumbnail,
+                    banner: resolvedBanner,
+                    thumbnail: resolvedThumb,
                     description: commData.description || 'Community for MPOnline team members.',
                     rules: resolvedRules,
                     faq: resolvedFaq,
@@ -2262,6 +2312,12 @@ export default function CommunityView() {
 
                     const isPending = found.approvalStatus === 'Pending' || found.status === 'Pending' || found.isActive === false;
 
+                    const rawFoundBanner = found.banner || found.bannerUrl || found.thumbnail || found.avatar;
+                    const resolvedFoundBanner = resolveMediaUrl(rawFoundBanner) || rawFoundBanner || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=1200&h=400';
+
+                    const rawFoundThumb = found.thumbnail || found.avatar || found.thumbnailUrl || found.banner;
+                    const resolvedFoundThumb = resolveMediaUrl(rawFoundThumb) || rawFoundThumb || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=200&h=200';
+
                     setCommunity({
                         id: found.id,
                         name: found.name,
@@ -2269,8 +2325,8 @@ export default function CommunityView() {
                         category: found.category || 'Technology',
                         membersCount: resolvedMembers.length,
                         adminContact: found.creatorName || found.createdBy || creatorName,
-                        banner: found.banner || found.bannerUrl || found.thumbnail || found.avatar || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=1200&h=400',
-                        thumbnail: found.thumbnail || found.avatar || found.thumbnailUrl || found.banner || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=200&h=200',
+                        banner: resolvedFoundBanner,
+                        thumbnail: resolvedFoundThumb,
                         description: found.description || 'A community for collaboration.',
                         rules: resolvedRules,
                         faq: resolvedFaq,
@@ -4297,6 +4353,8 @@ export default function CommunityView() {
         }
 
         const targetId = communityId || community?.id;
+        const commName = community?.name || '';
+        const cleanName = commName.toLowerCase().trim();
 
         // 1. Immediately track as deleted in localStorage so refresh never restores it
         const deletedIds = JSON.parse(localStorage.getItem('knome_deleted_community_ids') || '[]');
@@ -4305,25 +4363,45 @@ export default function CommunityView() {
             localStorage.setItem('knome_deleted_community_ids', JSON.stringify(deletedIds));
         }
 
+        const deletedNames = JSON.parse(localStorage.getItem('knome_deleted_community_names') || '[]');
+        if (cleanName && !deletedNames.includes(cleanName)) {
+            deletedNames.push(cleanName);
+            localStorage.setItem('knome_deleted_community_names', JSON.stringify(deletedNames));
+        }
+
         // 2. Remove from custom list and pending approvals list
         const customList = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
         const updatedCustom = customList.filter(c => 
             String(c.id) !== String(targetId) && 
-            (c.name || '').toLowerCase().trim() !== (community?.name || '').toLowerCase().trim()
+            (c.name || '').toLowerCase().trim() !== cleanName
         );
         localStorage.setItem('knome_custom_communities', JSON.stringify(updatedCustom));
 
         const pendingList = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
         const updatedPending = pendingList.filter(c => 
             String(c.id) !== String(targetId) && 
-            (c.name || '').toLowerCase().trim() !== (community?.name || '').toLowerCase().trim()
+            (c.name || '').toLowerCase().trim() !== cleanName
         );
         localStorage.setItem('knome_pending_community_approvals', JSON.stringify(updatedPending));
 
-        showToast(`Community "${community?.name}" has been removed.`, 'info');
-        navigate('/community');
+        // 3. Remove from user joined communities
+        try {
+            const uid = currentUser?.userId || currentUser?.id;
+            const keysToClean = [
+                `knome_joined_communities_${uid || 'guest'}`,
+                `knome_joined_communities_guest`
+            ];
+            keysToClean.forEach(k => {
+                const joined = JSON.parse(localStorage.getItem(k) || '[]');
+                const filtered = joined.filter(c => 
+                    String(c.id || c.communityId) !== String(targetId) &&
+                    (c.name || '').toLowerCase().trim() !== cleanName
+                );
+                localStorage.setItem(k, JSON.stringify(filtered));
+            });
+        } catch (_) {}
 
-        // 3. Send delete to backend to set IsActive = 0 in database
+        // 4. Send delete to backend to set IsActive = 0 in database BEFORE navigating
         try {
             if (targetId) {
                 await communitiesApi.delete(targetId);
@@ -4331,11 +4409,24 @@ export default function CommunityView() {
         } catch (err) {
             console.warn('Backend delete notification error:', err);
         }
+
+        // 5. Invalidate client caches
+        try {
+            apiClient.clearCache();
+        } catch (_) {}
+
+        // 6. Broadcast events
+        window.dispatchEvent(new CustomEvent('community-created'));
+        window.dispatchEvent(new CustomEvent('community-joined-change'));
+
+        showToast(`Community "${commName}" has been removed.`, 'info');
+        navigate('/community');
     };
 
     const handleCancelCommunityRequest = async () => {
         const targetId = communityId || community?.id;
         const commName = community?.name || 'this community';
+        const cleanName = commName.toLowerCase().trim();
         const ok = await confirm({
             title: 'Cancel Community Request',
             message: `Are you sure you want to cancel and revert your request for "${commName}"? This community creation proposal will be withdrawn and removed.`,
@@ -4352,25 +4443,45 @@ export default function CommunityView() {
             localStorage.setItem('knome_deleted_community_ids', JSON.stringify(deletedIds));
         }
 
+        const deletedNames = JSON.parse(localStorage.getItem('knome_deleted_community_names') || '[]');
+        if (cleanName && !deletedNames.includes(cleanName)) {
+            deletedNames.push(cleanName);
+            localStorage.setItem('knome_deleted_community_names', JSON.stringify(deletedNames));
+        }
+
         // 2. Remove from custom list and pending approvals list
         const customList = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
         const updatedCustom = customList.filter(c => 
             String(c.id) !== String(targetId) && 
-            (c.name || '').toLowerCase().trim() !== commName.toLowerCase().trim()
+            (c.name || '').toLowerCase().trim() !== cleanName
         );
         localStorage.setItem('knome_custom_communities', JSON.stringify(updatedCustom));
 
         const pendingList = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
         const updatedPending = pendingList.filter(c => 
             String(c.id) !== String(targetId) && 
-            (c.name || '').toLowerCase().trim() !== commName.toLowerCase().trim()
+            (c.name || '').toLowerCase().trim() !== cleanName
         );
         localStorage.setItem('knome_pending_community_approvals', JSON.stringify(updatedPending));
 
-        showToast(`Community request for "${commName}" has been cancelled.`, 'info');
-        navigate('/community');
+        // 3. Remove from user joined communities
+        try {
+            const uid = currentUser?.userId || currentUser?.id;
+            const keysToClean = [
+                `knome_joined_communities_${uid || 'guest'}`,
+                `knome_joined_communities_guest`
+            ];
+            keysToClean.forEach(k => {
+                const joined = JSON.parse(localStorage.getItem(k) || '[]');
+                const filtered = joined.filter(c => 
+                    String(c.id || c.communityId) !== String(targetId) &&
+                    (c.name || '').toLowerCase().trim() !== cleanName
+                );
+                localStorage.setItem(k, JSON.stringify(filtered));
+            });
+        } catch (_) {}
 
-        // 3. Send delete to backend to set IsActive = 0 in database
+        // 4. Send delete to backend to set IsActive = 0 in database BEFORE navigating
         try {
             if (targetId) {
                 await communitiesApi.delete(targetId);
@@ -4379,8 +4490,17 @@ export default function CommunityView() {
             console.warn('Backend delete notification error:', err);
         }
 
+        // 5. Invalidate client caches
+        try {
+            apiClient.clearCache();
+        } catch (_) {}
+
         window.dispatchEvent(new CustomEvent('community-created'));
+        window.dispatchEvent(new CustomEvent('community-joined-change'));
         window.dispatchEvent(new CustomEvent('community-approval-requested'));
+
+        showToast(`Community request for "${commName}" has been cancelled.`, 'info');
+        navigate('/community');
     };
 
     // ─────────────────────────────────────────
@@ -4768,9 +4888,9 @@ export default function CommunityView() {
 
             {/* Hero Section (FR-CM-08: Banner, Thumbnail, Member Count) */}
 
-            <section className="relative min-h-[300px] md:min-h-[340px] w-full rounded-b-3xl overflow-hidden -mt-8 shadow-xl border-b border-slate-800">
+            <section className="relative min-h-[280px] md:min-h-[320px] lg:min-h-[340px] w-full rounded-b-3xl overflow-hidden -mt-8 shadow-xl border-b border-slate-800 flex flex-col justify-end">
                 <img 
-                    src={community.banner || getCommunityImages(community.name, community.category).banner} 
+                    src={resolveMediaUrl(community.banner || community.bannerUrl || community.bannerImageUrl) || community.banner || getCommunityImages(community.name, community.category).banner} 
                     alt={community.name} 
                     onError={(e) => {
                         e.currentTarget.onerror = null;
@@ -4778,67 +4898,111 @@ export default function CommunityView() {
                     }}
                     className="w-full h-full object-cover absolute inset-0" 
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-900/50"></div>
+                {/* Gentle bottom gradient scrim: full image vibrancy with crisp text contrast */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/5 pointer-events-none"></div>
+
+                {/* Admin Quick Banner Change Button */}
+                {(isAdmin || isSysAdmin) && (
+                    <div className="absolute top-4 right-4 z-20">
+                        <button 
+                            type="button"
+                            onClick={() => bannerFileInputRef.current?.click()}
+                            className="px-3 py-1.5 rounded-xl bg-black/40 hover:bg-black/70 text-white/90 hover:text-white backdrop-blur-md border border-white/20 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-lg transition-all hover:scale-105 active:scale-95"
+                            title="Upload new banner image for this community"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">photo_camera</span>
+                            <span className="hidden sm:inline">Change Banner</span>
+                        </button>
+                        <input 
+                            type="file" 
+                            ref={bannerFileInputRef} 
+                            accept="image/jpeg,image/png,image/webp,image/jpg" 
+                            className="hidden" 
+                            onChange={handleBannerUpload} 
+                        />
+                    </div>
+                )}
                 
-                <div className="relative z-10 bottom-0 left-0 w-full p-6 md:p-8 flex flex-col md:flex-row items-start md:items-end gap-6 max-w-7xl mx-auto pt-16">
-                    <img 
-                        src={community.thumbnail || getCommunityImages(community.name, community.category).thumbnail} 
-                        alt={community.name} 
-                        onError={(e) => {
-                            e.currentTarget.onerror = null;
-                            e.currentTarget.src = getCommunityImages(community.name, community.category).thumbnail;
-                        }}
-                        className="w-24 h-24 md:w-32 md:h-32 rounded-2xl border-4 border-slate-900 object-cover shadow-2xl bg-white shrink-0" 
-                    />
-                    
-                    <div className="flex-1 text-white">
-                        <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            <span className="px-2.5 py-0.5 bg-indigo-500/90 backdrop-blur-md text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-md">{community.type}</span>
-                            <span className="px-2.5 py-0.5 bg-white/20 backdrop-blur-md text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-md">{community.category}</span>
-                            {(community.approvalStatus === 'Pending' || community.isActive === false) && (
-                                <span className="px-2.5 py-0.5 bg-amber-500 text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md">
-                                    <span className="material-symbols-outlined text-[12px]">hourglass_top</span> Pending Review
+                <div className="relative z-10 w-full p-6 md:p-8 flex flex-col lg:flex-row items-start lg:items-end justify-between gap-6 max-w-7xl mx-auto pb-6 md:pb-8 pt-16">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-end gap-5 flex-1 min-w-0">
+                        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border-2 border-white/20 bg-white dark:bg-slate-900 p-2 shadow-2xl shrink-0 backdrop-blur-md flex items-center justify-center overflow-hidden">
+                            <img 
+                                src={resolveMediaUrl(community.thumbnail || community.avatar || community.thumbnailUrl) || community.thumbnail || getCommunityImages(community.name, community.category).thumbnail} 
+                                alt={community.name} 
+                                onError={(e) => {
+                                    e.currentTarget.onerror = null;
+                                    e.currentTarget.src = getCommunityImages(community.name, community.category).thumbnail;
+                                }}
+                                className="w-full h-full object-contain rounded-xl" 
+                            />
+                        </div>
+                        
+                        <div className="flex-1 min-w-0 text-white">
+                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase border backdrop-blur-md shadow-xs ${
+                                    (community.type || '').toLowerCase() === 'private'
+                                        ? 'bg-amber-500/20 text-amber-200 border-amber-400/30'
+                                        : 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30'
+                                }`}>
+                                    <span className="material-symbols-outlined text-[13px]">
+                                        {(community.type || '').toLowerCase() === 'private' ? 'lock' : 'public'}
+                                    </span>
+                                    {community.type || 'Public'}
                                 </span>
-                            )}
-                            {membershipStatus === 'banned' && (
-                                <span className="px-2.5 py-0.5 bg-amber-500/90 backdrop-blur-md text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md">
-                                    <span className="material-symbols-outlined text-[12px]">person_off</span> Suspended
-                                </span>
-                            )}
-                            {membershipStatus === 'joined' && (
-                                <span className="px-2.5 py-0.5 bg-emerald-500/90 backdrop-blur-md text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md">
-                                    <span className="material-symbols-outlined text-[12px]">edit</span> Member (Can Post)
-                                </span>
-                            )}
-                            {membershipStatus === 'subscribed' && (
-                                <span className="px-2.5 py-0.5 bg-blue-500/90 backdrop-blur-md text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md">
-                                    <span className="material-symbols-outlined text-[12px]">visibility</span> Subscriber (View Only)
-                                </span>
+
+                                {community.category && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase bg-white/10 text-slate-100 border border-white/20 backdrop-blur-md shadow-xs">
+                                        <span className="material-symbols-outlined text-[13px]">category</span>
+                                        {community.category}
+                                    </span>
+                                )}
+
+                                {membersList?.length > 0 && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-slate-200 bg-black/40 border border-white/10 backdrop-blur-md">
+                                        <span className="material-symbols-outlined text-[13px] text-indigo-300">group</span>
+                                        {membersList.length} {membersList.length === 1 ? 'member' : 'members'}
+                                    </span>
+                                )}
+
+                                {(community.approvalStatus === 'Pending' || community.isActive === false) && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-500/20 text-amber-200 border border-amber-400/30 rounded-full text-[11px] font-bold tracking-wide uppercase backdrop-blur-md shadow-xs">
+                                        <span className="material-symbols-outlined text-[13px]">hourglass_top</span> Pending Review
+                                    </span>
+                                )}
+                                {membershipStatus === 'banned' && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-rose-500/20 text-rose-200 border border-rose-400/30 rounded-full text-[11px] font-bold tracking-wide uppercase backdrop-blur-md shadow-xs">
+                                        <span className="material-symbols-outlined text-[13px]">person_off</span> Suspended
+                                    </span>
+                                )}
+                                {membershipStatus === 'joined' && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 rounded-full text-[11px] font-bold tracking-wide uppercase backdrop-blur-md shadow-xs">
+                                        <span className="material-symbols-outlined text-[13px]">verified</span> Joined
+                                    </span>
+                                )}
+                                {membershipStatus === 'subscribed' && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-blue-500/20 text-blue-200 border border-blue-400/30 rounded-full text-[11px] font-bold tracking-wide uppercase backdrop-blur-md shadow-xs">
+                                        <span className="material-symbols-outlined text-[13px]">visibility</span> Subscribed (View Only)
+                                    </span>
+                                )}
+                            </div>
+
+                            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight leading-tight drop-shadow-md">
+                                {community.name}
+                            </h1>
+
+                            {community.description && (
+                                <p className="text-slate-200/90 text-xs sm:text-sm md:text-base font-normal max-w-2xl leading-relaxed mt-2 drop-shadow-sm">
+                                    {community.description}
+                                </p>
                             )}
                         </div>
-                        <h1 
-                            className="text-2xl md:text-3xl lg:text-4xl font-black tracking-tight mb-2 drop-shadow-2xl"
-                        >
-                            <span 
-                                className="px-4 py-2 rounded-2xl bg-slate-950/85 backdrop-blur-md border border-amber-400/50 shadow-2xl inline-block text-amber-300"
-                                style={{ color: '#FCD34D', textShadow: '0 2px 12px rgba(0,0,0,0.95)' }}
-                            >
-                                {community.name}
-                            </span>
-                        </h1>
-                        <p 
-                            className="text-slate-100 font-medium text-xs md:text-sm max-w-3xl leading-relaxed bg-slate-950/75 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-800/80 shadow-lg"
-                            style={{ color: '#F8FAFC' }}
-                        >
-                            {community.description}
-                        </p>
                     </div>
 
                     {(() => {
                         const isPendingApproval = community?.approvalStatus === 'Pending' || community?.isActive === false;
                         if (isPendingApproval) {
                             return (
-                                <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                                <div className="flex items-center gap-2.5 shrink-0 flex-wrap self-end lg:self-end mt-auto">
                                     <div 
                                         className="h-10 px-4 bg-amber-500/20 text-amber-300 font-bold rounded-xl flex items-center justify-center gap-2 text-xs border border-amber-500/40 backdrop-blur-md shadow-lg"
                                         title="Community awaiting administrative approval"
@@ -4861,7 +5025,7 @@ export default function CommunityView() {
                         }
                         const isDefaultOrg = community?.type?.toLowerCase().includes('default') || community?.type?.toLowerCase().includes('org');
                         return (
-                            <div className="flex items-center gap-4 shrink-0">
+                            <div className="flex items-center gap-2.5 shrink-0 flex-wrap self-end lg:self-end mt-auto">
                                 {membershipStatus === 'banned' ? (
                                     <div 
                                         className="h-10 px-4 bg-amber-500/20 text-amber-300 font-bold rounded-xl flex items-center justify-center gap-2 text-xs border border-amber-500/40 backdrop-blur-md shadow-lg"
@@ -4907,26 +5071,26 @@ export default function CommunityView() {
                                         return (
                                             <button 
                                                 onClick={handleLeaveAction} 
-                                                className="h-10 px-4 bg-slate-900/90 hover:bg-red-600/90 text-white font-bold rounded-xl transition-all backdrop-blur-md border border-slate-700/60 hover:border-red-500/60 flex items-center justify-center gap-2 text-xs cursor-pointer shrink-0 shadow-lg group"
+                                                className="h-10 px-4 bg-white/10 hover:bg-rose-600/90 text-white font-bold rounded-xl transition-all backdrop-blur-md border border-white/20 hover:border-rose-500/60 flex items-center justify-center gap-2 text-xs cursor-pointer shrink-0 shadow-sm group active:scale-[0.98]"
                                                 title="Leave Community"
                                             >
-                                                <span className="material-symbols-outlined text-[18px] text-red-400 group-hover:text-white shrink-0">logout</span>
+                                                <span className="material-symbols-outlined text-[18px] text-rose-300 group-hover:text-white shrink-0">logout</span>
                                                 <span className="truncate font-bold">Leave Community</span>
                                             </button>
                                         );
                                     })()
                                 ) : membershipStatus === 'subscribed' ? (
-                                    <div className="flex gap-2 shrink-0">
+                                    <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
                                         <button 
                                             onClick={handleJoinAction} 
-                                            className="w-44 h-10 px-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
+                                            className="h-10 px-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-500/25 flex items-center justify-center gap-2 text-xs cursor-pointer active:scale-[0.98]"
                                         >
                                             <span className="material-symbols-outlined text-[16px] shrink-0">upgrade</span>
-                                            <span className="truncate">Upgrade to Member</span>
+                                            <span className="truncate font-bold">Upgrade to Member</span>
                                         </button>
                                         <button 
                                             onClick={handleUnsubscribeAction} 
-                                            className="h-10 px-3.5 bg-white/10 hover:bg-red-500/80 text-white font-bold rounded-xl transition-colors backdrop-blur-md border border-white/20 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
+                                            className="h-10 px-4 bg-white/10 hover:bg-rose-600/80 text-white font-semibold rounded-xl transition-all backdrop-blur-md border border-white/20 flex items-center justify-center gap-1.5 text-xs cursor-pointer shadow-sm active:scale-[0.98]"
                                         >
                                             <span className="truncate">Unsubscribe</span>
                                         </button>
@@ -4934,7 +5098,7 @@ export default function CommunityView() {
                                 ) : membershipStatus === 'requested' ? (
                                     <button 
                                         onClick={handleCancelRequest} 
-                                        className="w-44 h-10 px-3 bg-white/10 text-white font-bold rounded-xl transition-colors backdrop-blur-md border border-white/20 flex items-center justify-center gap-2 opacity-80 hover:bg-red-500/80 hover:opacity-100 group cursor-pointer shrink-0"
+                                        className="h-10 px-4 bg-white/10 text-white font-bold rounded-xl transition-all backdrop-blur-md border border-white/20 flex items-center justify-center gap-2 opacity-80 hover:bg-red-500/80 hover:opacity-100 group cursor-pointer shrink-0"
                                     >
                                         <span className="material-symbols-outlined text-[18px] group-hover:hidden shrink-0">schedule</span>
                                         <span className="material-symbols-outlined text-[18px] hidden group-hover:block shrink-0">close</span>
@@ -4942,20 +5106,20 @@ export default function CommunityView() {
                                         <span className="hidden group-hover:block font-bold truncate">Cancel Request</span>
                                     </button>
                                 ) : (
-                                    <div className="flex items-center gap-2 shrink-0">
+                                    <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
                                         {community.type !== 'Private' && (
                                             <button 
                                                 onClick={handleSubscribeAction} 
-                                                className="h-10 px-3.5 bg-white/20 hover:bg-white/30 text-white font-bold rounded-xl transition-colors backdrop-blur-md border border-white/20 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
+                                                className="h-10 px-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition-all backdrop-blur-md border border-white/20 flex items-center justify-center gap-1.5 text-xs cursor-pointer shadow-sm active:scale-[0.98]"
                                                 title="Subscribe as View-Only (FR-CM-06)"
                                             >
-                                                <span className="material-symbols-outlined text-[18px] shrink-0">visibility</span>
+                                                <span className="material-symbols-outlined text-[17px] shrink-0">visibility</span>
                                                 <span className="truncate">Subscribe (View Only)</span>
                                             </button>
                                         )}
                                         <button 
                                             onClick={handleJoinAction} 
-                                            className="w-44 h-10 px-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-1.5 text-xs cursor-pointer shrink-0"
+                                            className="h-10 px-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-500/25 flex items-center justify-center gap-2 text-xs cursor-pointer active:scale-[0.98]"
                                         >
                                             <span className="material-symbols-outlined text-[18px] shrink-0">group_add</span>
                                             <span className="truncate font-bold">{community.type === 'Private' ? 'Request to Join' : 'Join Community'}</span>
@@ -4967,7 +5131,7 @@ export default function CommunityView() {
                         {/* Share Button (FR-CM-09) */}
                         <button
                             onClick={handleShareCommunity}
-                            className="w-10 h-10 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-colors backdrop-blur-md border border-white/20 flex items-center justify-center text-xs cursor-pointer shrink-0"
+                            className="w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all backdrop-blur-md border border-white/20 flex items-center justify-center text-xs cursor-pointer shrink-0 shadow-sm active:scale-[0.98]"
                             title="Share Community Link"
                         >
                             <span className="material-symbols-outlined text-[18px]">share</span>
@@ -4976,7 +5140,7 @@ export default function CommunityView() {
                         {isSysAdmin && (
                             <button 
                                 onClick={handleDeleteCommunity}
-                                className="h-10 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-600/30 flex items-center justify-center gap-2 text-xs ml-2 cursor-pointer shrink-0"
+                                className="h-10 px-3.5 bg-rose-500/20 hover:bg-rose-600 text-rose-200 hover:text-white font-bold rounded-xl transition-all backdrop-blur-md border border-rose-500/30 hover:border-rose-600 flex items-center justify-center gap-1.5 text-xs cursor-pointer shadow-sm active:scale-[0.98]"
                                 title="Delete / Remove Community (System Admin)"
                             >
                                 <span className="material-symbols-outlined text-[18px] shrink-0">delete_forever</span>
@@ -6035,73 +6199,73 @@ export default function CommunityView() {
                                                         </div>
                                                     </div>
 
-                                                    {/* Action Buttons - reduced compact size */}
-                                                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                                                    {/* Action Buttons - compact square icon buttons with hover tooltips */}
+                                                    <div className="flex items-center gap-1.5 shrink-0">
                                                          {isAdmin && String(m.userId || m.id) !== String(currentUser?.id) && (
                                                              <>
                                                                  {!m.isCommAdmin ? (
                                                                      <button 
                                                                          onClick={() => handleToggleRole(m.userId || m.id, m.memberType, 'Admin')}
-                                                                         className="px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
-                                                                         title="Change role to Community Admin"
+                                                                         className="w-8 h-8 rounded-lg border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-all flex items-center justify-center cursor-pointer shadow-2xs hover:scale-105 active:scale-95 shrink-0"
+                                                                         title="Make Admin"
+                                                                         aria-label="Make Admin"
                                                                      >
-                                                                         <span className="material-symbols-outlined text-[14px]">manage_accounts</span>
-                                                                         <span>Make Admin</span>
+                                                                         <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
                                                                      </button>
                                                                  ) : (
                                                                      <button 
                                                                          disabled={isSoloAdmin}
                                                                          onClick={() => !isSoloAdmin && handleToggleRole(m.userId || m.id, m.memberType, 'Employee')}
-                                                                         className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap shadow-2xs ${
+                                                                         className={`w-8 h-8 rounded-lg border transition-all flex items-center justify-center shadow-2xs shrink-0 ${
                                                                              isSoloAdmin 
                                                                                  ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-800 pointer-events-auto' 
-                                                                                 : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 cursor-pointer'
+                                                                                 : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 cursor-pointer hover:scale-105 active:scale-95'
                                                                          }`}
-                                                                         title={isSoloAdmin ? "Solo Admin Community Rule: You cannot make a solo admin an employee until there are multiple admins." : "Change role to Employee / Member"}
+                                                                         title={isSoloAdmin ? "Solo Admin Community Rule: You cannot make a solo admin an employee until there are multiple admins." : "Make Employee"}
+                                                                         aria-label="Make Employee"
                                                                      >
-                                                                         <span className="material-symbols-outlined text-[14px]">badge</span>
-                                                                         <span>Make Employee</span>
+                                                                         <span className="material-symbols-outlined text-[16px]">badge</span>
                                                                      </button>
                                                                  )}
                                                                  <button 
                                                                      disabled={isSoloAdmin}
                                                                      onClick={() => !isSoloAdmin && handleInitiateRemoveMember(m)}
-                                                                     className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap shadow-2xs ${
+                                                                     className={`w-8 h-8 rounded-lg border transition-all flex items-center justify-center shadow-2xs shrink-0 ${
                                                                          isSoloAdmin 
                                                                              ? 'opacity-40 cursor-not-allowed bg-red-50/40 dark:bg-red-950/20 text-red-300 dark:text-red-900/50 border-red-200/50 dark:border-red-900/30 pointer-events-auto' 
-                                                                             : 'border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer'
+                                                                             : 'border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer hover:scale-105 active:scale-95'
                                                                      }`}
-                                                                     title={isSoloAdmin ? "Solo Admin Community Rule: You cannot remove a solo admin until there are multiple admins." : "Remove Member from Community"}
+                                                                     title={isSoloAdmin ? "Solo Admin Community Rule: You cannot remove a solo admin until there are multiple admins." : "Remove"}
+                                                                     aria-label="Remove"
                                                                  >
-                                                                     <span className="material-symbols-outlined text-[14px]">person_remove</span>
-                                                                     <span>Remove</span>
+                                                                     <span className="material-symbols-outlined text-[16px]">person_remove</span>
                                                                  </button>
                                                                  <button 
                                                                      disabled={isSoloAdmin}
                                                                      onClick={() => !isSoloAdmin && handleInitiateSuspendMember(m)}
-                                                                     className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap shadow-2xs ${
+                                                                     className={`w-8 h-8 rounded-lg border transition-all flex items-center justify-center shadow-2xs shrink-0 ${
                                                                          isSoloAdmin 
                                                                              ? 'opacity-40 cursor-not-allowed bg-amber-50/40 dark:bg-amber-950/20 text-amber-300 dark:text-amber-900/50 border-amber-200/50 dark:border-amber-900/30 pointer-events-auto' 
-                                                                             : 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer'
+                                                                             : 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer hover:scale-105 active:scale-95'
                                                                      }`}
-                                                                     title={isSoloAdmin ? "Solo Admin Community Rule: You cannot suspend a solo admin until there are multiple admins." : "Suspend Member"}
+                                                                     title={isSoloAdmin ? "Solo Admin Community Rule: You cannot suspend a solo admin until there are multiple admins." : "Suspend"}
+                                                                     aria-label="Suspend"
                                                                  >
-                                                                     <span className="material-symbols-outlined text-[14px]">person_off</span>
-                                                                     <span>Suspend</span>
+                                                                     <span className="material-symbols-outlined text-[16px]">person_off</span>
                                                                  </button>
                                                              </>
                                                          )}
                                                          {isMessagingEnabled && String(m.userId || m.id) !== String(currentUser?.userId || currentUser?.id) && connectedUserIds.has(Number(m.userId || m.id)) && (
                                                              <button 
                                                                  onClick={() => navigate(`/messages?userId=${m.userId || m.id}&name=${encodeURIComponent(m.displayName || '')}`)}
-                                                                 className="px-2.5 py-1 rounded-lg border border-cyan-200 dark:border-cyan-800/60 bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 text-[11px] font-semibold transition-all shrink-0 flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
+                                                                 className="w-8 h-8 rounded-lg border border-cyan-200 dark:border-cyan-800/60 bg-cyan-50 dark:cyan-950/40 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 transition-all shrink-0 flex items-center justify-center cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
                                                                  title={`Message ${m.displayName || 'member'}`}
+                                                                 aria-label={`Message ${m.displayName || 'member'}`}
                                                              >
-                                                                 <span className="material-symbols-outlined text-[14px]">chat</span>
-                                                                 <span>Message</span>
+                                                                 <span className="material-symbols-outlined text-[16px]">chat</span>
                                                              </button>
                                                          )}
-                                                     </div>
+                                                    </div>
                                                 </div>
                                             );
                                         })}
@@ -6549,10 +6713,11 @@ export default function CommunityView() {
                                                     </div>
                                                     <button
                                                         onClick={() => handleReinstate(m, norm)}
-                                                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 hover:bg-emerald-100 transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                                                        className="w-8 h-8 rounded-lg text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/20 hover:bg-emerald-100 dark:hover:bg-emerald-500/30 border border-emerald-200 dark:border-emerald-800/50 transition-all cursor-pointer flex items-center justify-center shrink-0 shadow-2xs hover:scale-105 active:scale-95"
+                                                        title={`Reinstate ${norm.displayName || 'member'}`}
+                                                        aria-label={`Reinstate ${norm.displayName || 'member'}`}
                                                     >
-                                                        <span className="material-symbols-outlined text-[14px]">person_add</span>
-                                                        Reinstate
+                                                        <span className="material-symbols-outlined text-[16px]">person_add</span>
                                                     </button>
                                                 </div>
                                             );

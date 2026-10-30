@@ -523,11 +523,11 @@ export default function Dashboard() {
                                                         setEditingBroadcastData(broadcast);
                                                         setIsBroadcastModalOpen(true);
                                                     }}
-                                                    className="px-2.5 py-1 rounded-lg text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 transition-all flex items-center gap-1 cursor-pointer"
+                                                    className="p-1.5 rounded-lg text-amber-800 dark:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 transition-all flex items-center justify-center cursor-pointer"
                                                     title="Edit this broadcast announcement"
+                                                    aria-label="Edit announcement"
                                                 >
                                                     <span className="material-symbols-outlined text-[15px]">edit</span>
-                                                    <span>Edit</span>
                                                 </button>
                                                 <button
                                                     onClick={async () => {

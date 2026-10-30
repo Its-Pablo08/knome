@@ -5,6 +5,7 @@ import { useToast } from '../components/contexts/ToastContext';
 import { useConfirm } from '../components/contexts/ConfirmDialogContext';
 import CreateCommunityModal from '../components/modals/CreateCommunityModal';
 import { communitiesApi, getCommunityImages, resolveMediaUrl, DEFAULT_ENTERPRISE_COMMUNITIES } from '../utils/apiService';
+import { apiClient } from '../utils/apiClient';
 import { useScrollLoading } from '../hooks/useScrollLoading';
 import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
@@ -257,18 +258,9 @@ export default function Communities() {
             const existingNames = new Set();
             const existingIds = new Set();
             const deletedIds = new Set(JSON.parse(localStorage.getItem('knome_deleted_community_ids') || '[]').map(String));
+            const deletedNames = new Set(JSON.parse(localStorage.getItem('knome_deleted_community_names') || '[]').map(n => String(n).toLowerCase().trim()));
 
             if (data && Array.isArray(data) && data.length > 0) {
-                // Remove any active database community IDs from stale local deletion tombstone
-                const activeDbIds = new Set(data.filter(c => c.isActive === undefined || c.isActive === true || c.isActive === 1).map(c => String(c.communityId)));
-                const activeDbNames = new Set(data.filter(c => c.isActive === undefined || c.isActive === true || c.isActive === 1).map(c => (c.name || '').toLowerCase().trim()));
-                const remainingDeleted = Array.from(deletedIds).filter(id => !activeDbIds.has(id));
-                if (remainingDeleted.length !== deletedIds.size) {
-                    localStorage.setItem('knome_deleted_community_ids', JSON.stringify(remainingDeleted));
-                    deletedIds.clear();
-                    remainingDeleted.forEach(id => deletedIds.add(id));
-                }
-
                 // Prune only officially approved communities from pending approvals & promote in joined communities
                 try {
                     const localPendingComms = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
@@ -320,13 +312,15 @@ export default function Communities() {
                     console.warn('Community pending approval sync error:', syncErr);
                 }
 
-                // Active communities from DB — exclude any that are still pending admin clearance
+                // Active communities from DB — exclude any that are deleted or still pending admin clearance
                 const pendingList = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
                 const pendingIdSet = new Set(pendingList.map(p => String(p.id)));
                 const pendingNameSet = new Set(pendingList.map(p => (p.name || '').toLowerCase().trim()));
 
                 const apiMapped = data
                     .filter(c => (c.isActive === undefined || c.isActive === true || c.isActive === 1) &&
+                                 !deletedIds.has(String(c.communityId || c.id)) &&
+                                 !deletedNames.has((c.name || '').toLowerCase().trim()) &&
                                  !pendingIdSet.has(String(c.communityId)) &&
                                  !pendingNameSet.has((c.name || '').toLowerCase().trim()))
                     .map(c => {
@@ -402,7 +396,7 @@ export default function Communities() {
                 if (c.status === 'Pending' || c.status === 'Pending Approval' || c.isApproved === false || pendingIds.has(String(c.id)) || pendingNames.has(cleanName)) {
                     return;
                 }
-                if (!deletedIds.has(String(c.id)) && !existingIds.has(String(c.id)) && !existingNames.has(cleanName)) {
+                if (!deletedIds.has(String(c.id)) && !deletedNames.has(cleanName) && !existingIds.has(String(c.id)) && !existingNames.has(cleanName)) {
                     const localMembers = JSON.parse(localStorage.getItem(`knome_community_members_${c.id}`) || '[]');
                     const count = localMembers.length > 0 ? deduplicateMembers(localMembers).length : (parseInt(c.members) || 1);
                     const imgs = getCommunityImages(c.name, c.category);
@@ -536,44 +530,86 @@ export default function Communities() {
         });
         if (!ok) return;
 
+        const commId = community.id || community.communityId;
+        const commName = community.name || '';
+        const cleanName = commName.toLowerCase().trim();
+
         // 1. Immediately track as deleted in localStorage so refresh never restores it
         const deletedIds = JSON.parse(localStorage.getItem('knome_deleted_community_ids') || '[]');
-        if (!deletedIds.includes(String(community.id))) {
-            deletedIds.push(String(community.id));
+        if (commId && !deletedIds.includes(String(commId))) {
+            deletedIds.push(String(commId));
             localStorage.setItem('knome_deleted_community_ids', JSON.stringify(deletedIds));
+        }
+
+        const deletedNames = JSON.parse(localStorage.getItem('knome_deleted_community_names') || '[]');
+        if (cleanName && !deletedNames.includes(cleanName)) {
+            deletedNames.push(cleanName);
+            localStorage.setItem('knome_deleted_community_names', JSON.stringify(deletedNames));
         }
 
         // 2. Remove from custom list and pending approvals list
         const customList = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
         const updatedCustom = customList.filter(c => 
-            String(c.id) !== String(community.id) && 
-            (c.name || '').toLowerCase().trim() !== (community.name || '').toLowerCase().trim()
+            String(c.id) !== String(commId) && 
+            (c.name || '').toLowerCase().trim() !== cleanName
         );
         localStorage.setItem('knome_custom_communities', JSON.stringify(updatedCustom));
 
         const pendingList = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
         const updatedPending = pendingList.filter(c => 
-            String(c.id) !== String(community.id) && 
-            (c.name || '').toLowerCase().trim() !== (community.name || '').toLowerCase().trim()
+            String(c.id) !== String(commId) && 
+            (c.name || '').toLowerCase().trim() !== cleanName
         );
         localStorage.setItem('knome_pending_community_approvals', JSON.stringify(updatedPending));
 
-        // 3. Immediately remove from frontend UI state
-        setCommunities(prev => prev.filter(c => c.id !== community.id && String(c.id) !== String(community.id)));
+        // 3. Remove from user joined communities across keys
+        try {
+            const uid = currentUser?.userId || currentUser?.id;
+            const keysToClean = [
+                `knome_joined_communities_${uid || 'guest'}`,
+                `knome_joined_communities_guest`
+            ];
+            keysToClean.forEach(k => {
+                const joined = JSON.parse(localStorage.getItem(k) || '[]');
+                const filtered = joined.filter(c => 
+                    String(c.id || c.communityId) !== String(commId) &&
+                    (c.name || '').toLowerCase().trim() !== cleanName
+                );
+                localStorage.setItem(k, JSON.stringify(filtered));
+            });
+        } catch (_) {}
+
+        // 4. Immediately remove from frontend UI state
+        setCommunities(prev => prev.filter(c => 
+            String(c.id || c.communityId) !== String(commId) && 
+            (c.name || '').toLowerCase().trim() !== cleanName
+        ));
         addToast(`Community "${community.name}" has been removed.`, 'info');
 
-        // 4. Send delete to backend to set IsActive = 0 in database
+        // 5. Send delete to backend to set IsActive = 0 in database
         try {
-            await communitiesApi.delete(community.id);
+            if (commId) {
+                await communitiesApi.delete(commId);
+            }
         } catch (err) {
             console.warn('Backend delete notification error:', err);
         }
+
+        // 6. Invalidate client caches
+        try {
+            apiClient.clearCache();
+        } catch (_) {}
+
+        // 7. Broadcast events
+        window.dispatchEvent(new CustomEvent('community-created'));
+        window.dispatchEvent(new CustomEvent('community-joined-change'));
     };
 
     const handleCancelPendingCommunity = async (e, community) => {
         if (e && e.stopPropagation) e.stopPropagation();
         const commName = community?.name || community?.communityName || 'this community';
         const commId = community?.id || community?.communityId;
+        const cleanName = commName.toLowerCase().trim();
 
         const ok = await confirm({
             title: 'Cancel Community Request',
@@ -591,11 +627,17 @@ export default function Communities() {
             localStorage.setItem('knome_deleted_community_ids', JSON.stringify(deletedIds));
         }
 
+        const deletedNames = JSON.parse(localStorage.getItem('knome_deleted_community_names') || '[]');
+        if (cleanName && !deletedNames.includes(cleanName)) {
+            deletedNames.push(cleanName);
+            localStorage.setItem('knome_deleted_community_names', JSON.stringify(deletedNames));
+        }
+
         // 2. Remove from pending approvals storage
         const pendingList = JSON.parse(localStorage.getItem('knome_pending_community_approvals') || '[]');
         const updatedPending = pendingList.filter(c => 
             String(c.id) !== String(commId) && 
-            (c.name || '').toLowerCase().trim() !== commName.toLowerCase().trim()
+            (c.name || '').toLowerCase().trim() !== cleanName
         );
         localStorage.setItem('knome_pending_community_approvals', JSON.stringify(updatedPending));
 
@@ -603,18 +645,35 @@ export default function Communities() {
         const customList = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
         const updatedCustom = customList.filter(c => 
             String(c.id) !== String(commId) && 
-            (c.name || '').toLowerCase().trim() !== commName.toLowerCase().trim()
+            (c.name || '').toLowerCase().trim() !== cleanName
         );
         localStorage.setItem('knome_custom_communities', JSON.stringify(updatedCustom));
 
-        // 4. Update component state immediately
+        // 4. Remove from user joined communities across keys
+        try {
+            const uid = currentUser?.userId || currentUser?.id;
+            const keysToClean = [
+                `knome_joined_communities_${uid || 'guest'}`,
+                `knome_joined_communities_guest`
+            ];
+            keysToClean.forEach(k => {
+                const joined = JSON.parse(localStorage.getItem(k) || '[]');
+                const filtered = joined.filter(c => 
+                    String(c.id || c.communityId) !== String(commId) &&
+                    (c.name || '').toLowerCase().trim() !== cleanName
+                );
+                localStorage.setItem(k, JSON.stringify(filtered));
+            });
+        } catch (_) {}
+
+        // 5. Update component state immediately
         setPendingApprovals(prev => prev.filter(p => 
             String(p.id) !== String(commId) && 
-            (p.name || '').toLowerCase().trim() !== commName.toLowerCase().trim()
+            (p.name || '').toLowerCase().trim() !== cleanName
         ));
         setCommunities(prev => prev.filter(c => 
             String(c.id) !== String(commId) && 
-            (c.name || '').toLowerCase().trim() !== commName.toLowerCase().trim()
+            (c.name || '').toLowerCase().trim() !== cleanName
         ));
 
         // Close successPopup if it matches
@@ -622,7 +681,7 @@ export default function Communities() {
 
         addToast(`Community request for "${commName}" has been cancelled.`, 'info');
 
-        // 5. Notify backend to deactivate / mark as deleted in database
+        // 6. Notify backend to deactivate / mark as deleted in database
         if (commId) {
             try {
                 await communitiesApi.delete(commId);
@@ -631,8 +690,14 @@ export default function Communities() {
             }
         }
 
-        // 6. Broadcast event across tabs/windows
+        // 7. Invalidate client caches
+        try {
+            apiClient.clearCache();
+        } catch (_) {}
+
+        // 8. Broadcast event across tabs/windows
         window.dispatchEvent(new CustomEvent('community-created'));
+        window.dispatchEvent(new CustomEvent('community-joined-change'));
         window.dispatchEvent(new CustomEvent('community-approval-requested'));
     };
 
@@ -1261,7 +1326,7 @@ export default function Communities() {
                                             title="Click to view and preview community before approval"
                                         >
                                             <img 
-                                                src={comm.banner || getCommunityImages(comm.name, comm.category).banner} 
+                                                src={resolveMediaUrl(comm.banner || comm.bannerUrl) || comm.banner || getCommunityImages(comm.name, comm.category).banner} 
                                                 alt={comm.name} 
                                                 onError={(e) => {
                                                     e.currentTarget.onerror = null;
@@ -1452,7 +1517,7 @@ export default function Communities() {
                                         <div key={c.id} className="bg-white dark:bg-slate-900 border-2 border-dashed border-amber-300 dark:border-amber-700/60 rounded-xl overflow-hidden shadow-xs flex flex-col opacity-90 min-h-[230px]">
                                             <div className="h-24 sm:h-26 relative overflow-hidden bg-slate-200 dark:bg-slate-800 shrink-0">
                                                 <img 
-                                                    src={c.banner || getCommunityImages(c.name, c.category).banner} 
+                                                    src={resolveMediaUrl(c.banner || c.bannerUrl) || c.banner || getCommunityImages(c.name, c.category).banner} 
                                                     alt={c.name} 
                                                     onError={(e) => {
                                                         e.currentTarget.onerror = null;
@@ -1531,7 +1596,7 @@ export default function Communities() {
                                     {/* Compact Header Banner */}
                                     <div className="h-24 sm:h-26 relative overflow-hidden bg-slate-200 dark:bg-slate-800 shrink-0">
                                         <img 
-                                            src={community.banner || community.thumbnail || community.avatar || getCommunityImages(community.name, community.category).banner} 
+                                            src={resolveMediaUrl(community.banner || community.bannerUrl || community.thumbnail || community.avatar) || getCommunityImages(community.name, community.category).banner} 
                                             alt={community.name} 
                                             onError={(e) => {
                                                 e.currentTarget.onerror = null;
@@ -1543,7 +1608,7 @@ export default function Communities() {
                                         {(community.thumbnail || community.avatar) && (
                                             <div className="absolute bottom-2 left-2.5 w-7 h-7 sm:w-8 sm:h-8 rounded-lg overflow-hidden border-2 border-white dark:border-slate-900 shadow-xs bg-white shrink-0 z-10">
                                                 <img 
-                                                    src={community.thumbnail || community.avatar} 
+                                                    src={resolveMediaUrl(community.thumbnail || community.avatar) || community.thumbnail || community.avatar} 
                                                     alt={community.name} 
                                                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                                     className="w-full h-full object-cover" 

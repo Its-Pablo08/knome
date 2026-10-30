@@ -23,13 +23,14 @@ export default function MyCommunitiesWidget() {
             const userKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
             const userJoinedList = JSON.parse(localStorage.getItem(userKey) || '[]');
             const deletedIds = new Set(JSON.parse(localStorage.getItem('knome_deleted_community_ids') || '[]').map(String));
+            const deletedNames = new Set(JSON.parse(localStorage.getItem('knome_deleted_community_names') || '[]').map(n => String(n).toLowerCase().trim()));
 
             let list = [];
             if (res && Array.isArray(res) && res.length > 0) {
-                list = res.filter(c => !deletedIds.has(String(c.communityId)) && (c.isActive === undefined || c.isActive === true || c.isActive === 1));
+                list = res.filter(c => !deletedIds.has(String(c.communityId || c.id)) && !deletedNames.has((c.name || '').toLowerCase().trim()) && (c.isActive === undefined || c.isActive === true || c.isActive === 1));
             } else {
                 const custom = JSON.parse(localStorage.getItem('knome_custom_communities') || '[]');
-                list = custom.filter(c => !deletedIds.has(String(c.id)));
+                list = custom.filter(c => !deletedIds.has(String(c.id)) && !deletedNames.has((c.name || '').toLowerCase().trim()));
             }
 
             const currentUid = currentUser?.id || currentUser?.userId;
@@ -209,12 +210,12 @@ export default function MyCommunitiesWidget() {
                             </div>
                         ))}
 
-                        {communities.length > 7 && (
+                        {communities.length > 0 && (
                             <Link
                                 to="/communities"
-                                className="w-full py-2.5 px-3 mt-1 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900/40"
+                                className="w-full py-2.5 px-4 mt-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm shadow-blue-500/25 hover:shadow-md hover:shadow-blue-500/35 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.99]"
                             >
-                                <span>View All {communities.length} Communities</span>
+                                <span>View More</span>
                                 <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
                             </Link>
                         )}

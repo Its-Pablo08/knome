@@ -91,7 +91,7 @@ public class CommunityService : ICommunityService
 
     private async Task CheckIsAdminOrSysAdminAsync(int communityId, int currentUserId)
     {
-        var community = await _db.Communities.FirstOrDefaultAsync(c => c.CommunityId == communityId);
+        var community = await _db.Communities.AsNoTracking().FirstOrDefaultAsync(c => c.CommunityId == communityId);
         if (community == null)
             throw new NotFoundException($"Community ID {communityId} not found.");
 
@@ -110,7 +110,7 @@ public class CommunityService : ICommunityService
             return;
 
         // 4. Global platform administrators (System Admin, HR Admin, Community Admin)
-        var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
+        var user = await _db.Users.AsNoTracking().Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
         if (user != null && user.Roles.Any(IsPrivilegedAdminRole))
             return;
 
@@ -519,19 +519,22 @@ public class CommunityService : ICommunityService
 
     public async Task DeleteCommunityAsync(int communityId, int currentUserId)
     {
-        var community = await _repo.GetCommunityByIdAnyStatusAsync(communityId);
+        var community = await _db.Communities.FirstOrDefaultAsync(c => c.CommunityId == communityId);
         if (community == null)
             throw new NotFoundException($"Community ID {communityId} not found.");
 
-        var isCreator = community.CreatedByUserId == currentUserId;
-        if (!isCreator)
+        if (currentUserId > 0)
         {
-            await CheckIsAdminOrSysAdminAsync(communityId, currentUserId);
+            var isCreator = community.CreatedByUserId == currentUserId;
+            if (!isCreator)
+            {
+                await CheckIsAdminOrSysAdminAsync(communityId, currentUserId);
+            }
         }
 
         community.IsActive = false;
         community.ApprovalStatus = "Deleted";
-        await _repo.UpdateCommunityAsync(community);
+        await _db.SaveChangesAsync();
     }
 
     public async Task<bool> CheckCommunityNameExistsAsync(string? name, int? excludeCommunityId = null)
