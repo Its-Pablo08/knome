@@ -22,6 +22,7 @@ public class PostRepository : IPostRepository
     public async Task<Post?> GetPostByIdAsync(long postId)
     {
         return await _db.Posts
+            .AsNoTracking()
             .Include(p => p.AuthorUser)
             .Include(p => p.PostAttachments)
             .Include(p => p.MentionedUsers)
@@ -41,6 +42,7 @@ public class PostRepository : IPostRepository
         catch { /* best-effort non-blocking */ }
 
         var query = _db.Posts
+            .AsNoTracking()
             .Include(p => p.AuthorUser)
             .Include(p => p.PostAttachments)
             .Include(p => p.MentionedUsers)
@@ -102,6 +104,7 @@ public class PostRepository : IPostRepository
     public async Task<List<Post>> GetMyPostsAsync(int authorUserId, int pageNumber = 1, int pageSize = 20)
     {
         return await _db.Posts
+            .AsNoTracking()
             .Include(p => p.AuthorUser)
             .Include(p => p.PostAttachments)
             .Include(p => p.MentionedUsers)

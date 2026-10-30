@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUser } from '../components/contexts/UserContext';
 import { useToast } from '../components/contexts/ToastContext';
-import { resolveMediaUrl, userApi, messagesApi, mediaApi, clipsApi } from '../utils/apiService';
+import { resolveMediaUrl, userApi, messagesApi, mediaApi, clipsApi, parseLaptopDate, formatMessageTime } from '../utils/apiService';
 import { apiClient } from '../utils/apiClient';
 import { useSystemConfig } from '../utils/systemConfig';
 import DeleteMessageModal from '../components/modals/DeleteMessageModal';
@@ -479,7 +479,7 @@ export default function Messages() {
                 parsedAttachments = JSON.parse(m.attachmentsJson);
             } catch {}
         }
-        const msgDate = m.createdDate ? new Date(m.createdDate) : new Date();
+        const msgDate = parseLaptopDate(m.createdDate) || (m.timestamp ? new Date(m.timestamp) : new Date());
         const rawContent = m.content || m.text || '';
         const cleanContent = (rawContent === '\u200B' || rawContent === ' ') ? '' : rawContent;
         return {
@@ -499,7 +499,7 @@ export default function Messages() {
             parentContent: m.parentContent,
             parentSenderName: m.parentSenderName,
             reactions: Array.isArray(m.reactions) ? m.reactions : [],
-            time: msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time: formatMessageTime(msgDate),
             timestamp: msgDate.getTime(),
             createdDate: m.createdDate || msgDate.toISOString(),
             status: 'sent'
@@ -509,7 +509,7 @@ export default function Messages() {
     // ── Helper to check if a message can be edited (within 15 minutes of sending) ──
     const canEditMessage = useCallback((msg) => {
         if (!msg || msg.status === 'sending' || msg.isDeleted) return false;
-        const msgTime = msg.timestamp || (msg.createdDate ? new Date(msg.createdDate).getTime() : 0);
+        const msgTime = msg.timestamp || (msg.createdDate ? (parseLaptopDate(msg.createdDate)?.getTime() || 0) : 0);
         if (!msgTime) return false;
         const diffMinutes = (Date.now() - msgTime) / (1000 * 60);
         return diffMinutes <= 15;
@@ -942,7 +942,7 @@ export default function Messages() {
                 // If conversation summary has a preview, create initial preview message so conversation is usable
                 const convSummary = conversationsRef.current.find(c => c.partnerId === partnerId);
                 if (convSummary && (convSummary.lastMessageText || convSummary.lastMessagePreview)) {
-                    const fallbackDate = convSummary.lastMessageDate ? new Date(convSummary.lastMessageDate) : new Date();
+                    const fallbackDate = convSummary.lastMessageTimestamp ? new Date(convSummary.lastMessageTimestamp) : (convSummary.lastMessageDate ? (parseLaptopDate(convSummary.lastMessageDate) || new Date()) : new Date());
                     const syntheticMsg = {
                         id: convSummary.lastMessageId || `preview_${partnerId}`,
                         messageId: convSummary.lastMessageId || `preview_${partnerId}`,
@@ -953,7 +953,7 @@ export default function Messages() {
                         text: convSummary.lastMessageText || convSummary.lastMessagePreview,
                         attachments: [],
                         isRead: true,
-                        time: fallbackDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        time: formatMessageTime(fallbackDate),
                         timestamp: fallbackDate.getTime(),
                         createdDate: fallbackDate.toISOString(),
                         status: 'sent'
@@ -1443,7 +1443,7 @@ export default function Messages() {
         isSendingRef.current = true;
         setIsSending(true);
         const now = new Date();
-        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const timeStr = formatMessageTime(now);
         const targetPartnerId = Number(activePartner.userId || activePartner.id);
 
         // Stop typing indicator
@@ -1483,6 +1483,7 @@ export default function Messages() {
             parentSenderName: replyingTo?.senderName || null,
             time: timeStr,
             timestamp: now.getTime(),
+            createdDate: now.toISOString(),
             status: 'sending'
         };
 
@@ -1858,11 +1859,6 @@ export default function Messages() {
                                                 alt={conv.partnerName || 'Colleague'}
                                                 className="w-11 h-11 rounded-full object-cover border border-slate-200 dark:border-slate-700"
                                             />
-                                            {isOnline ? (
-                                                <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" title="Online" />
-                                            ) : (
-                                                <span className="absolute bottom-0 right-0 w-3 h-3 bg-slate-300 dark:bg-slate-600 border-2 border-white dark:border-slate-900 rounded-full" title="Offline" />
-                                            )}
                                         </div>
 
                                         {/* Text Info */}
@@ -1877,7 +1873,7 @@ export default function Messages() {
                                                     )}
                                                 </div>
                                                 <span className="text-[10px] font-semibold text-slate-400 shrink-0">
-                                                    {conv.lastMessageTime}
+                                                    {conv.lastMessageTimestamp ? formatMessageTime(conv.lastMessageTimestamp) : (conv.lastMessageTime || '')}
                                                 </span>
                                             </div>
                                             <p className="text-[10.5px] text-slate-400 dark:text-slate-500 truncate mb-1">
@@ -1960,11 +1956,6 @@ export default function Messages() {
                                         alt={activePartner.fullName}
                                         className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700"
                                     />
-                                    {isPartnerOnline ? (
-                                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
-                                    ) : (
-                                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-slate-400 border-2 border-white dark:border-slate-900 rounded-full" />
-                                    )}
                                 </div>
 
                                 <div className="min-w-0">
@@ -1986,18 +1977,6 @@ export default function Messages() {
                                     </div>
                                     <div className="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 truncate">
                                         <span>{activePartner.designation}</span>
-                                        <span>•</span>
-                                        {isPartnerOnline ? (
-                                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                                <span>Online</span>
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-1 text-slate-400 font-medium">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
-                                                <span>{formatLastSeen(userLastSeenMap[activePartner?.userId] || activePartnerSummary?.partnerLastSeen) || 'Offline'}</span>
-                                            </span>
-                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -2890,11 +2869,6 @@ export default function Messages() {
                                                     alt={colleague.fullName}
                                                     className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700"
                                                 />
-                                                {isOnline ? (
-                                                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
-                                                ) : (
-                                                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-slate-300 dark:bg-slate-600 border-2 border-white dark:border-slate-900 rounded-full" />
-                                                )}
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-1.5">

@@ -205,7 +205,17 @@ export async function getVideos(forceFresh = false) {
                 }
             };
 
+            let deletedSet = new Set();
+            try {
+                const rawDel = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]');
+                if (Array.isArray(rawDel)) deletedSet = new Set(rawDel.map(String));
+            } catch {}
+
             const addIfUnique = (vid) => {
+                if (!vid) return false;
+                const checkId = vid.id ? String(vid.id).trim() : '';
+                const checkVidId = vid.videoId ? String(vid.videoId).trim() : '';
+                if ((checkId && deletedSet.has(checkId)) || (checkVidId && deletedSet.has(checkVidId))) return false;
                 if (!vid) return false;
                 const ytId = extractYtId(vid.sourceUrl || vid.url, vid.videoId);
                 const normUrl = normalizeUrl(vid.sourceUrl || vid.url);
@@ -266,6 +276,8 @@ export async function getVideos(forceFresh = false) {
                         author: resolvedAuthor.author,
                         authorId: resolvedAuthor.authorId,
                         uploaderUserId: v.uploaderUserId,
+                        uploaderFullName: v.uploaderFullName,
+                        uploaderEmployeeId: v.uploaderEmployeeId,
                         authorAvatar: resolvedAuthor.authorAvatar,
                         authorDesignation: resolvedAuthor.authorDesignation,
                         tags: v.tags || ['Video'],
@@ -399,7 +411,28 @@ export async function getVideos(forceFresh = false) {
 
 export async function deleteVideo(videoId) {
     try {
-        await apiClient.delete(`/videos/${videoId}`);
+        const idStr = String(videoId || '').trim();
+        if (idStr) {
+            try {
+                const deletedIds = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]').map(String);
+                if (!deletedIds.includes(idStr)) {
+                    deletedIds.push(idStr);
+                    localStorage.setItem('knome_deleted_video_ids', JSON.stringify(deletedIds));
+                }
+            } catch {}
+            try {
+                const imported = JSON.parse(localStorage.getItem('knome_imported_yt_videos') || '[]');
+                if (Array.isArray(imported) && imported.length > 0) {
+                    const nextImported = imported.filter(v => String(v.id) !== idStr && String(v.videoId) !== idStr);
+                    if (nextImported.length !== imported.length) {
+                        localStorage.setItem('knome_imported_yt_videos', JSON.stringify(nextImported));
+                    }
+                }
+            } catch {}
+        }
+        if (/^\d+$/.test(idStr)) {
+            await apiClient.delete(`/videos/${idStr}`);
+        }
         invalidateVideosCache();
         return true;
     } catch (error) {

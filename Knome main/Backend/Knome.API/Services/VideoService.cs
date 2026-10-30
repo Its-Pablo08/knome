@@ -41,20 +41,21 @@ public class VideoService : IVideoService
         _systemSettingService = systemSettingService;
     }
 
-    private async Task CheckIsUploaderOrAdminAsync(Video video, int currentUserId)
+    private async Task CheckIsUploaderOrAdminAsync(Video video, int currentUserId, bool isCallerAdminOrMod = false)
     {
-        if (video.UploaderUserId == currentUserId) return;
+        if (isCallerAdminOrMod) return;
+        if (video.UploaderUserId == currentUserId && currentUserId > 0) return;
 
         var user = await _db.Users.Include(u => u.Roles).FirstOrDefaultAsync(u => u.UserId == currentUserId);
         if (user == null || !user.Roles.Any(r => 
             r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" ||
             r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" ||
-            r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM" ||
+            string.Equals(r.RoleName, "System Admin", StringComparison.OrdinalIgnoreCase) || string.Equals(r.RoleName, "ADMIN", StringComparison.OrdinalIgnoreCase) ||
             r.RoleName == Roles.Moderator || r.RoleCode == "MOD" ||
-            (r.RoleName != null && (r.RoleName.Contains("Admin") || r.RoleName.Contains("Mod"))) ||
+            string.Equals(r.RoleName, "HR Admin", StringComparison.OrdinalIgnoreCase) || string.Equals(r.RoleName, "Moderator", StringComparison.OrdinalIgnoreCase) ||
             (r.RoleCode != null && (r.RoleCode.Contains("ADM") || r.RoleCode.Contains("MOD")))))
         {
-            throw new UnauthorizedException("You must be the uploader of this video or an Administrator/Moderator to modify/delete it.");
+            throw new ForbiddenException("Only the video uploader, Moderator, HR Admin, and System Admin are permitted to modify or delete this video.");
         }
     }
 
@@ -126,7 +127,7 @@ public class VideoService : IVideoService
         var isCallerAdmin = caller != null && caller.Roles.Any(r => 
             r.RoleName == Roles.SystemAdmin || r.RoleCode == "SYSADM" ||
             r.RoleName == Roles.HRAdmin || r.RoleCode == "HRADM" ||
-            r.RoleName == Roles.CommunityAdmin || r.RoleCode == "CADM" ||
+            string.Equals(r.RoleName, "System Admin", StringComparison.OrdinalIgnoreCase) || string.Equals(r.RoleName, "ADMIN", StringComparison.OrdinalIgnoreCase) ||
             r.RoleName == Roles.Moderator || r.RoleCode == "MOD" ||
             (r.RoleName != null && (r.RoleName.Contains("Admin") || r.RoleName.Contains("Moderator") || r.RoleName.Contains("Mod"))) ||
             (r.RoleCode != null && (r.RoleCode.Contains("ADM") || r.RoleCode.Contains("MOD"))));
@@ -243,13 +244,13 @@ public class VideoService : IVideoService
         return resDto;
     }
 
-    public async Task DeleteVideoAsync(long videoId, int currentUserId)
+    public async Task DeleteVideoAsync(long videoId, int currentUserId, bool isCallerAdminOrMod = false)
     {
         var video = await _repo.GetVideoByIdAsync(videoId);
         if (video == null)
             throw new NotFoundException($"Video ID {videoId} not found.");
 
-        await CheckIsUploaderOrAdminAsync(video, currentUserId);
+        await CheckIsUploaderOrAdminAsync(video, currentUserId, isCallerAdminOrMod);
         await _repo.DeleteVideoAsync(video);
     }
 

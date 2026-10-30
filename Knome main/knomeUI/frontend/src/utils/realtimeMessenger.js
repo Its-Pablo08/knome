@@ -1,5 +1,5 @@
 import * as signalR from '@microsoft/signalr';
-import { notificationsApi, messagesApi } from './apiService';
+import { notificationsApi, messagesApi, parseLaptopDate, formatMessageTime } from './apiService';
 import { getHubUrl } from './apiClient';
 
 // Storage key for master messenger conversations
@@ -420,8 +420,8 @@ export const initMessengerSignalR = (userId, forceReconnect = false) => {
                 text: rawText,
                 attachments: parsedAttachments,
                 createdDate: notif.createdDate || new Date().toISOString(),
-                time: new Date(notif.createdDate || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                timestamp: new Date(notif.createdDate || Date.now()).getTime(),
+                time: formatMessageTime(notif.createdDate || Date.now()),
+                timestamp: (parseLaptopDate(notif.createdDate) || new Date()).getTime(),
                 status: 'sent'
             };
 

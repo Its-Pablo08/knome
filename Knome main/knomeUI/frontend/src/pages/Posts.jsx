@@ -11,6 +11,7 @@ import TrendingTagsWidget from '../components/widgets/TrendingTagsWidget';
 import { postsApi, mapPost, getPersonalizedRecommendations } from '../utils/apiService';
 import { deleteDraft, clearUserDraft, getUserDraft, removeDraftFromLocalPosts } from '../utils/draftManager';
 import { useToast } from '../components/contexts/ToastContext';
+import { isUserInNoticePeriod, NOTICE_PERIOD_EVENT } from '../utils/noticePeriodManager';
 
 export default function Posts() {
     const { currentUser } = useUser();
@@ -29,6 +30,19 @@ export default function Posts() {
     const [selectedTag, setSelectedTag] = useState(initialTag ? initialTag.replace('#', '') : 'All');
     const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
     const [draftToEdit, setDraftToEdit] = useState(null);
+    const [, setNoticePeriodTick] = useState(0);
+
+    useEffect(() => {
+        const handleNoticeChange = () => setNoticePeriodTick(prev => prev + 1);
+        window.addEventListener(NOTICE_PERIOD_EVENT, handleNoticeChange);
+        window.addEventListener('storage', handleNoticeChange);
+        return () => {
+            window.removeEventListener(NOTICE_PERIOD_EVENT, handleNoticeChange);
+            window.removeEventListener('storage', handleNoticeChange);
+        };
+    }, []);
+
+    const isNoticePeriodActive = isUserInNoticePeriod(currentUser);
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -601,10 +615,17 @@ export default function Posts() {
                                     setDraftToEdit(null);
                                     setIsCreatePostOpen(true);
                                 }}
-                                className="mt-2 px-5 py-2 font-bold text-xs rounded-xl bg-indigo-500 text-white hover:bg-indigo-600 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                                disabled={selectedTag === '⏰ Scheduled' && isNoticePeriodActive}
+                                className={`mt-2 px-5 py-2 font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 ${
+                                    selectedTag === '⏰ Scheduled' && isNoticePeriodActive
+                                        ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                                        : 'bg-indigo-500 text-white hover:bg-indigo-600 cursor-pointer'
+                                }`}
                             >
                                 <span className="material-symbols-outlined text-[16px]">add</span>
-                                {selectedTag === '⏰ Scheduled' ? 'Schedule a Post' : 'Create First Post'}
+                                {selectedTag === '⏰ Scheduled'
+                                    ? (isNoticePeriodActive ? 'Post Scheduling Disabled (Notice Period)' : 'Schedule a Post')
+                                    : 'Create First Post'}
                             </button>
                         </div>
                     )}

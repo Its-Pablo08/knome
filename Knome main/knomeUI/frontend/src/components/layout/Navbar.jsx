@@ -17,7 +17,7 @@ import { subscribeToLiveMessages, initMessengerSignalR, userLoggingOut } from '.
 import { getKarmaLevelInfo } from '../../utils/karmaEngine';
 import { KarmaLevelMedal } from '../ui/KarmaBadge';
 import { isMessagingEnabled, saveSystemConfig, useSystemConfig, loadSystemApprovalSettingFromBackend } from '../../utils/systemConfig';
-import { saveNoticePeriodConfig } from '../../utils/noticePeriodManager';
+import { saveNoticePeriodConfig, syncNoticePeriodFromBackend } from '../../utils/noticePeriodManager';
 
 const DISCOVER_CATEGORIES = [
     { id: 'All', label: 'All', icon: 'grid_view' },
@@ -1115,7 +1115,10 @@ export default function Navbar() {
         // 3. Notice Period Real-time Update
         const handleNoticePeriod = (e) => {
             if (e?.detail && typeof e.detail === 'object') {
-                saveNoticePeriodConfig(e.detail);
+                saveNoticePeriodConfig({
+                    isEnabled: e.detail.isEnabled !== false && e.detail.IsEnabled !== false,
+                    employees: e.detail.employees || e.detail.Employees || {}
+                });
             }
         };
 
@@ -1171,6 +1174,7 @@ export default function Navbar() {
         const handleReconnected = () => {
             fetchNotifications();
             loadSystemApprovalSettingFromBackend(true).catch(() => {});
+            syncNoticePeriodFromBackend().catch(() => {});
         };
 
         const handleLogoutEvent = () => {
@@ -1180,6 +1184,7 @@ export default function Navbar() {
         window.addEventListener('knome_notification_received', handleLiveNotification);
         window.addEventListener('knome_receive_direct_message', handleDirectMessageToast);
         window.addEventListener('knome:system-config-updated', handleSystemConfig);
+        window.addEventListener('knome:notice-period-updated', handleNoticePeriod);
         window.addEventListener('knome_messenger_reconnected', handleReconnected);
         window.addEventListener('knome:logout', handleLogoutEvent);
 
@@ -1205,6 +1210,7 @@ export default function Navbar() {
             window.removeEventListener('knome_notification_received', handleLiveNotification);
             window.removeEventListener('knome_receive_direct_message', handleDirectMessageToast);
             window.removeEventListener('knome:system-config-updated', handleSystemConfig);
+            window.removeEventListener('knome:notice-period-updated', handleNoticePeriod);
             window.removeEventListener('knome_messenger_reconnected', handleReconnected);
             window.removeEventListener('notification-updated', handleStorageChange);
             window.removeEventListener('knome_new_notification', handleStorageChange);

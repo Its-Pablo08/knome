@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUser, INITIAL_USERS, isPlatformActiveUser } from '../components/contexts/UserContext';
 import UploadVideoModal from '../components/modals/UploadVideoModal';
@@ -6,7 +6,7 @@ import ReportModal from '../components/modals/ReportModal';
 import SaveToCategoryModal from '../components/modals/SaveToCategoryModal';
 import CommentsSection from '../components/video/CommentsSection';
 import ArticleShareModal from '../components/modals/ArticleShareModal';
-import { getVideos, getPlaylists, fetchPlaylists, savePlaylist, deletePlaylist, importYouTubePlaylist, fetchYouTubePlaylistDetails, getCachedVideos, getCachedPlaylists, invalidateVideosCache } from '../utils/videoService';
+import { getVideos, getPlaylists, fetchPlaylists, savePlaylist, deletePlaylist, deleteVideo, importYouTubePlaylist, fetchYouTubePlaylistDetails, getCachedVideos, getCachedPlaylists, invalidateVideosCache } from '../utils/videoService';
 import sharedPlaylistsData from '../data/shared_playlists.json';
 
 import { savedContentApi, getPersonalizedRecommendations, resolveMediaUrl, videosApi, interactionsApi, getInitialsAvatar } from '../utils/apiService';
@@ -35,7 +35,7 @@ const ENTERPRISE_COMMUNITIES = [
     { id: 8, name: 'General Discussion', icon: 'forum' }
 ];
 
-function VideoPlayer({ video }) {
+function VideoPlayerBase({ video }) {
     const url = video?.sourceUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const isVimeo = url.includes('vimeo.com');
@@ -80,7 +80,8 @@ function VideoPlayer({ video }) {
             autoPlay
             controlsList="nodownload"
             onContextMenu={(e) => e.preventDefault()}
-            preload="auto"
+            preload="metadata"
+            playsInline
             poster={video?.thumbnail || 'https://images.unsplash.com/photo-1540317580384-e5d43616b9aa?auto=format&fit=crop&q=90&w=1600&h=900'}
             onError={(e) => {
                 console.warn('Media load fallback:', url);
@@ -94,6 +95,92 @@ function VideoPlayer({ video }) {
         </video>
     );
 }
+
+const VideoPlayer = React.memo(VideoPlayerBase);
+
+const VideoCard = React.memo(function VideoCard({
+    video,
+    searchQuery,
+    isSaved,
+    canDelete,
+    onSelect,
+    onSaveToggle,
+    onDelete,
+    viewsText,
+    likesCount
+}) {
+    return (
+        <div
+            onClick={() => onSelect(video)}
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 group cursor-pointer flex flex-col relative"
+        >
+            {/* Thumbnail */}
+            <div className="relative aspect-video bg-slate-900 overflow-hidden shrink-0">
+                <img
+                    src={video.thumbnail}
+                    alt={video.title}
+                    loading="lazy"
+                    decoding="async"
+                    onError={(e) => { e.target.onerror = null; e.target.src = VIDEO_PLACEHOLDER_THUMBNAIL; }}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors pointer-events-none" />
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    <span className="material-symbols-outlined text-white text-[36px]">play_circle</span>
+                </div>
+                <span className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-md backdrop-blur-md pointer-events-none">
+                    {video.duration}
+                </span>
+
+                {/* Bookmark Button */}
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onSaveToggle(video);
+                    }}
+                    className={`absolute top-2 right-2 w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer z-10 ${isSaved ? 'bg-amber-400 text-slate-900 opacity-100' : 'bg-black/60 text-white hover:bg-amber-500 opacity-0 group-hover:opacity-100'}`}
+                    title={isSaved ? 'Remove bookmark' : 'Save video'}
+                >
+                    <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: isSaved ? "'FILL' 1" : "'FILL' 0" }}>bookmark</span>
+                </button>
+
+
+            </div>
+
+            {/* Info */}
+            <div className="p-3 flex-1 flex flex-col justify-between">
+                <div>
+                    <h3 className="font-bold text-[13px] text-slate-900 dark:text-white line-clamp-2 group-hover:text-cyan-500 transition-colors leading-snug mb-1.5">
+                        <HighlightText text={video.title} query={searchQuery} />
+                    </h3>
+                    <p className="text-[12px] text-slate-500 dark:text-slate-400 font-semibold truncate">
+                        <HighlightText text={video.author || 'Creator'} query={searchQuery} />
+                    </p>
+                </div>
+                <div className="flex items-center justify-between gap-2 mt-1">
+                    <p className="text-[11px] text-slate-400 truncate">
+                        {viewsText} views · {likesCount} likes · {video.date}
+                    </p>
+                    {canDelete && (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(video);
+                            }}
+                            className="text-[11px] font-bold text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-0.5 cursor-pointer transition-colors shrink-0 px-1.5 py-0.5 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                            title="Delete Video"
+                        >
+                            <span className="material-symbols-outlined text-[14px]">delete</span>
+                            <span>Delete</span>
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+});
 
 export default function Videos() {
     const { currentUser, users, awardRuleKarma } = useUser();
@@ -141,6 +228,23 @@ export default function Videos() {
     const [isLoading, setIsLoading] = useState(() => !getCachedVideos() || getCachedVideos().length === 0);
     // Real-time views map: { [videoId]: count } read from localStorage
     const [viewsMap, setViewsMap] = useState({});
+    const [likesMap, setLikesMap] = useState({});
+
+    // Load all saved like counts from localStorage into likesMap
+    const loadLikesMap = useCallback(() => {
+        const map = {};
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('knome_video_likes_')) {
+                    const videoId = key.replace('knome_video_likes_', '');
+                    const count = parseInt(localStorage.getItem(key) || '0', 10);
+                    if (!isNaN(count)) map[videoId] = count;
+                }
+            }
+        } catch (e) {}
+        setLikesMap(map);
+    }, []);
 
     // Engagement State
     const [liked, setLiked] = useState(false);
@@ -195,20 +299,17 @@ export default function Videos() {
         return isNaN(parsed) ? '0' : String(parsed);
     };
 
-    // Helper: get display like count for a video (Strictly Knome platform likes only)
-    const getDisplayLikes = (video) => {
+    // Helper: get display like count for a video (Strictly Knome platform likes only, instant in-memory lookup)
+    const getDisplayLikes = useCallback((video) => {
         if (!video?.id) return 0;
-        const savedLikes = localStorage.getItem(`knome_video_likes_${video.id}`);
-        if (savedLikes !== null) {
-            const p = parseInt(savedLikes, 10);
-            if (!isNaN(p)) return p;
-        }
+        const saved = likesMap[video.id];
+        if (saved !== undefined && saved !== null) return saved;
         if (typeof video.likes === 'number') {
             if (video.likes > 10000 && video.sourceType === 'YouTube') return 0;
             return video.likes;
         }
         return 0;
-    };
+    }, [likesMap]);
 
     const filters = ['All', 'Training & Tutorials', 'Townhalls', 'Engineering Tech Talks', 'Leadership Updates'];
 
@@ -275,8 +376,9 @@ export default function Videos() {
         invalidateVideosCache();
         fetchVideos(true);
         loadViewsMap();
+        loadLikesMap();
         loadAllSavedVideos();
-    }, [loadAllSavedVideos]);
+    }, [loadAllSavedVideos, loadLikesMap]);
 
     // Automatic cross-window & background synchronization for playlists and videos
     useEffect(() => {
@@ -400,6 +502,103 @@ export default function Videos() {
         if (currentId && pl.authorId && String(pl.authorId) === String(currentId)) return true;
         if (currentName && pl.author && pl.author.trim().toLowerCase() === currentName) return true;
         return false;
+    };
+
+    // Permission check: Only the video uploader, Moderator, HR Admin, and System Admin can delete videos
+    const canDeleteVideo = useCallback((video) => {
+        if (!video || !currentUser) return false;
+
+        const rawRole = String(currentUser.roleName || currentUser.role || '').trim().toLowerCase();
+        const roleList = Array.isArray(currentUser.roles)
+            ? currentUser.roles.map(r => String(typeof r === 'string' ? r : (r?.roleName || r?.name || r?.roleCode || '')).trim().toLowerCase())
+            : [];
+
+        const allowedAdminOrModRoles = new Set([
+            'moderator', 'mod',
+            'hr admin', 'hr administrator', 'hradm',
+            'system admin', 'system administrator', 'sysadm', 'admin'
+        ]);
+
+        if (allowedAdminOrModRoles.has(rawRole) || roleList.some(r => allowedAdminOrModRoles.has(r))) {
+            return true;
+        }
+
+        const currentUid = String(currentUser.userId || currentUser.id || '').trim();
+        const currentEmpId = String(currentUser.employeeId || '').trim().toUpperCase().replace(/^MP0/, 'MPO');
+        const currentName = String(currentUser.fullName || currentUser.name || '').trim().toLowerCase();
+
+        const uploaderUid = String(video.uploaderUserId || video.authorId || '').trim();
+        if (currentUid && uploaderUid && currentUid === uploaderUid) return true;
+
+        const uploaderEmpId = String(video.uploaderEmployeeId || video.authorEmployeeId || '').trim().toUpperCase().replace(/^MP0/, 'MPO');
+        if (currentEmpId && uploaderEmpId && currentEmpId === uploaderEmpId) return true;
+
+        const uploaderName = String(video.uploaderFullName || video.author || '').trim().toLowerCase();
+        if (currentName && uploaderName && currentName === uploaderName) return true;
+
+        return false;
+    }, [currentUser]);
+
+    const [deletingVideoModal, setDeletingVideoModal] = useState(null);
+    const [isDeletingVideo, setIsDeletingVideo] = useState(false);
+
+    const handleDeleteVideo = useCallback((video) => {
+        if (!video) return;
+        if (!canDeleteVideo(video)) {
+            showToast('Access Denied: Only the video uploader, Moderator, HR Admin, or System Admin can delete this video.');
+            return;
+        }
+        setDeletingVideoModal(video);
+    }, [canDeleteVideo]);
+
+    const confirmDeleteVideo = async () => {
+        if (!deletingVideoModal || isDeletingVideo) return;
+        if (!canDeleteVideo(deletingVideoModal)) {
+            setDeletingVideoModal(null);
+            showToast('Access Denied: Only the video uploader, Moderator, HR Admin, or System Admin can delete this video.');
+            return;
+        }
+
+        const targetVideo = deletingVideoModal;
+        const targetId = String(targetVideo.videoId || targetVideo.id || '').trim();
+        const cardId = String(targetVideo.id || '').trim();
+        const title = targetVideo.title || 'Video';
+
+        setIsDeletingVideo(true);
+        try {
+            await deleteVideo(targetId || cardId);
+        } catch (err) {
+            console.warn('Backend video delete note:', err?.message || err);
+        } finally {
+            setIsDeletingVideo(false);
+        }
+
+        // Persist in knome_deleted_video_ids for both cardId and targetId
+        try {
+            const deletedIds = JSON.parse(localStorage.getItem('knome_deleted_video_ids') || '[]').map(String);
+            if (cardId && !deletedIds.includes(cardId)) deletedIds.push(cardId);
+            if (targetId && !deletedIds.includes(targetId)) deletedIds.push(targetId);
+            localStorage.setItem('knome_deleted_video_ids', JSON.stringify(deletedIds));
+        } catch {}
+
+        setVideos(prev => prev.filter(v =>
+            String(v.id) !== cardId &&
+            String(v.id) !== targetId &&
+            String(v.videoId || '') !== targetId &&
+            String(v.contentId || '') !== cardId
+        ));
+
+        if (activeVideo && (String(activeVideo.id) === cardId || String(activeVideo.id) === targetId || String(activeVideo.videoId || '') === targetId)) {
+            handleCloseVideo();
+        }
+
+        window.dispatchEvent(new CustomEvent('video-deleted', { detail: { id: cardId, videoId: targetId } }));
+        try {
+            window.dispatchEvent(new StorageEvent('storage', { key: 'knome_deleted_video_ids' }));
+        } catch {}
+
+        setDeletingVideoModal(null);
+        showToast(`🗑️ Video "${title}" deleted successfully!`);
     };
 
     const [deletingPlaylistModal, setDeletingPlaylistModal] = useState(null);
@@ -721,7 +920,8 @@ export default function Videos() {
         if (!videoOrId) return false;
         const targetId = String(typeof videoOrId === 'object' ? (videoOrId.contentId || videoOrId.id) : videoOrId);
         if (!targetId) return false;
-        if (savedMap[targetId]) return true;
+        return Boolean(savedMap[targetId]);
+        if (false && savedMap[targetId]) return true;
         try {
             const bIds = JSON.parse(localStorage.getItem('knome_bookmarked_ids') || '[]');
             if (bIds.map(String).includes(targetId)) return true;
@@ -1385,7 +1585,7 @@ export default function Videos() {
         (activeFilter === 'All' || v.category === activeFilter) &&
         (!searchQuery || v.title?.toLowerCase().includes(searchQuery.toLowerCase()) || (v.tags || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase())))
     );
-    const filteredVideos = rawFiltered;
+    const filteredVideos = useMemo(() => videos.filter(v => (activeFilter === 'All' || v.category === activeFilter) && (!searchQuery || v.title?.toLowerCase().includes(searchQuery.toLowerCase()) || (v.tags || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase())))), [videos, activeFilter, searchQuery]);
 
     const filteredPlaylists = playlists.filter(pl => {
         const matchesFilter = activeFilter === 'All' || pl.category === activeFilter;
@@ -1418,6 +1618,29 @@ export default function Videos() {
         return (u.name || u.fullName || '').toLowerCase().includes(q) || (u.department || '').toLowerCase().includes(q);
     });
 
+const handleCardSaveToggle = useCallback((v) => {
+        if (!v) return;
+        if (isVideoSaved(v)) {
+            handleUnsaveVideo(v);
+        } else {
+            setSavingVideoModal({
+                id: v.id,
+                contentId: v.id,
+                contentType: 'Video',
+                title: v.title,
+                text: v.description || v.title,
+                description: v.description || v.title,
+                image: v.thumbnail,
+                thumbnail: v.thumbnail,
+                author: v.author || 'MPOnline Creator',
+                tags: v.tags || ['Video'],
+                sourceUrl: v.sourceUrl,
+                category: v.category || 'Training & Tutorials'
+            });
+        }
+    }, [isVideoSaved, handleUnsaveVideo]);
+
+    
     return (
         <>
             {/* Upload Video Modal */}
@@ -1786,6 +2009,16 @@ export default function Videos() {
                                             <span>{isVideoSaved(activeVideo) ? 'Saved' : 'Save'}</span>
                                         </button>
 
+                                        {/* Delete Video (Uploader, Moderator, HR Admin, System Admin only) */}
+                                        {canDeleteVideo(activeVideo) && (
+                                            <button onClick={() => handleDeleteVideo(activeVideo)}
+                                                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white transition-all cursor-pointer"
+                                                title="Delete video">
+                                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                                                <span>Delete</span>
+                                            </button>
+                                        )}
+
                                         {/* Report */}
                                         <button onClick={() => setReportingVideo(activeVideo)}
                                             className="flex items-center gap-1 px-3 py-2 rounded-full text-[13px] font-bold bg-slate-100 dark:bg-slate-800 text-rose-500 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
@@ -2139,76 +2372,37 @@ export default function Videos() {
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                                 {filteredVideos.slice(0, visibleCount).map(video => (
-                                    <div key={video.id} onClick={() => handleSelectVideo(video)}
-                                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group cursor-pointer flex flex-col">
-                                        {/* Thumbnail */}
-                                        <div className="relative aspect-video bg-slate-900 overflow-hidden">
-                                            <img src={video.thumbnail} alt={video.title}
-                                                onError={(e) => { e.target.onerror = null; e.target.src = VIDEO_PLACEHOLDER_THUMBNAIL; }}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
-                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <span className="material-symbols-outlined text-white text-[36px]">play_circle</span>
-                                            </div>
-                                            <span className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-md backdrop-blur-md">
-                                                {video.duration}
-                                            </span>
-                                            <button onClick={e => { 
-                                                e.stopPropagation(); 
-                                                if (isVideoSaved(video)) {
-                                                    handleUnsaveVideo(video);
-                                                } else {
-                                                    setSavingVideoModal({ 
-                                                        id: video.id,
-                                                        contentId: video.id,
-                                                        contentType: 'Video', 
-                                                        title: video.title,
-                                                        text: video.description || video.title,
-                                                        description: video.description || video.title,
-                                                        image: video.thumbnail,
-                                                        thumbnail: video.thumbnail,
-                                                        author: video.author || 'MPOnline Creator',
-                                                        tags: video.tags || ['Video'],
-                                                        sourceUrl: video.sourceUrl,
-                                                        category: video.category || 'Training & Tutorials'
-                                                    }); 
-                                                }
-                                            }}
-                                                className={`absolute top-2 right-2 w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer ${isVideoSaved(video) ? 'bg-amber-400 text-slate-900 opacity-100' : 'bg-black/60 text-white hover:bg-amber-500 opacity-0 group-hover:opacity-100'}`}
-                                                title={isVideoSaved(video) ? 'Remove bookmark' : 'Save video'}>
-                                                <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: isVideoSaved(video) ? "'FILL' 1" : "'FILL' 0" }}>bookmark</span>
-                                            </button>
-                                        </div>
-                                        {/* Info */}
-                                        <div className="p-3">
-                                            <h3 className="font-bold text-[13px] text-slate-900 dark:text-white line-clamp-2 group-hover:text-cyan-500 transition-colors leading-snug mb-1.5">
-                                                <HighlightText text={video.title} query={searchQuery} />
-                                            </h3>
-                                            <p className="text-[12px] text-slate-500 dark:text-slate-400 font-semibold">
-                                                <HighlightText text={video.author || 'Creator'} query={searchQuery} />
-                                            </p>
-                                            <p className="text-[11px] text-slate-400 mt-0.5">{getDisplayViews(video)} views · {getDisplayLikes(video)} likes · {video.date}</p>
-                                        </div>
-                                    </div>
+                                    <VideoCard
+                                        key={video.id}
+                                        video={video}
+                                        searchQuery={searchQuery}
+                                        isSaved={isVideoSaved(video)}
+                                        canDelete={canDeleteVideo(video)}
+                                        onSelect={handleSelectVideo}
+                                        onSaveToggle={handleCardSaveToggle}
+                                        onDelete={handleDeleteVideo}
+                                        viewsText={getDisplayViews(video)}
+                                        likesCount={getDisplayLikes(video)}
+                                    />
                                 ))}
 
-                                {/* Sentinel for progressive infinite scroll auto-triggering */}
-                                {hasMore && (
-                                    <div ref={sentinelRef} className="col-span-full h-10 w-full pointer-events-none opacity-0" aria-hidden="true" />
-                                )}
-
-                                {/* Progressive Loading Indicator when actively loading more videos on scroll */}
-                                {isFetchingMore && (
-                                    <ScrollLoadingIndicator isVisible={true} text="Loading more videos on scroll..." />
-                                )}
-
-                                {/* End-of-catalog status when all available videos have been progressively revealed */}
-                                {!hasMore && filteredVideos.length > 8 && (
-                                    <div className="col-span-full py-8 text-center flex items-center justify-center gap-2 text-slate-400 dark:text-slate-500 text-xs font-semibold animate-in fade-in duration-300">
-                                        <span className="material-symbols-outlined text-[18px] text-emerald-500">check_circle</span>
-                                        <span>All {filteredVideos.length} videos loaded</span>
-                                    </div>
-                                )}
+                                {/* Stable Bottom Sentinel & Scroll Status Container (Zero Layout Shift) */}
+                                <div className="col-span-full flex flex-col items-center justify-center min-h-[56px] py-4 text-center">
+                                    {hasMore && (
+                                        <div ref={sentinelRef} className="h-4 w-full pointer-events-none opacity-0" aria-hidden="true" />
+                                    )}
+                                    {isFetchingMore ? (
+                                        <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 text-xs font-semibold animate-in fade-in duration-200">
+                                            <span className="material-symbols-outlined text-[18px] animate-spin text-cyan-500">progress_activity</span>
+                                            <span>Loading more videos...</span>
+                                        </div>
+                                    ) : !hasMore && filteredVideos.length > 8 ? (
+                                        <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 text-xs font-semibold">
+                                            <span className="material-symbols-outlined text-[16px] text-emerald-500">check_circle</span>
+                                            <span>All {filteredVideos.length} videos loaded</span>
+                                        </div>
+                                    ) : null}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -2341,6 +2535,42 @@ export default function Videos() {
                 </div>
             )}
 
+            {/* Delete Video Confirmation Modal */}
+            {deletingVideoModal && (
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                    onClick={() => !isDeletingVideo && setDeletingVideoModal(null)}>
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl"
+                        onClick={e => e.stopPropagation()}>
+                        <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-500 flex items-center justify-center mx-auto">
+                            <span className="material-symbols-outlined text-2xl">delete_forever</span>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-black text-slate-900 dark:text-white">Delete Video?</h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                Are you sure you want to delete <span className="text-slate-900 dark:text-white font-bold">"{deletingVideoModal.title}"</span>? This action cannot be undone.
+                            </p>
+                        </div>
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                type="button"
+                                disabled={isDeletingVideo}
+                                onClick={() => setDeletingVideoModal(null)}
+                                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition-all cursor-pointer disabled:opacity-50">
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isDeletingVideo}
+                                onClick={confirmDeleteVideo}
+                                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all cursor-pointer shadow-lg shadow-rose-600/30 disabled:opacity-50 flex items-center justify-center gap-1.5">
+                                <span className="material-symbols-outlined text-[16px]">delete</span>
+                                <span>{isDeletingVideo ? 'Deleting...' : 'Yes, Delete Video'}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Delete Series Confirmation Modal */}
             {deletingPlaylistModal && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -2376,3 +2606,4 @@ export default function Videos() {
         </>
     );
 }
+

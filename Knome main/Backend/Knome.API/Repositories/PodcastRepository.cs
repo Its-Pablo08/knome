@@ -22,6 +22,7 @@ public class PodcastRepository : IPodcastRepository
     public async Task<PodcastSeries?> GetSeriesByIdAsync(int seriesId)
     {
         return await _db.PodcastSeries
+            .AsNoTracking()
             .Include(s => s.Podcasts.Where(p => p.IsActive))
             .FirstOrDefaultAsync(s => s.SeriesId == seriesId);
     }
@@ -29,6 +30,7 @@ public class PodcastRepository : IPodcastRepository
     public async Task<List<PodcastSeries>> GetAllSeriesAsync()
     {
         return await _db.PodcastSeries
+            .AsNoTracking()
             .Include(s => s.Podcasts.Where(p => p.IsActive))
             .OrderBy(s => s.Title)
             .ToListAsync();
@@ -65,6 +67,7 @@ public class PodcastRepository : IPodcastRepository
     public async Task<Podcast?> GetPodcastByIdAsync(long podcastId)
     {
         return await _db.Podcasts
+            .AsNoTracking()
             .Include(p => p.UploaderUser)
             .Include(p => p.Category)
             .Include(p => p.Series)
@@ -74,6 +77,7 @@ public class PodcastRepository : IPodcastRepository
     public async Task<List<Podcast>> GetPodcastsAsync(int? seriesId, int? categoryId, string? search, int pageNumber, int pageSize)
     {
         var query = _db.Podcasts
+            .AsNoTracking()
             .Include(p => p.UploaderUser)
             .Include(p => p.Category)
             .Include(p => p.Series)
@@ -99,6 +103,7 @@ public class PodcastRepository : IPodcastRepository
     public async Task<List<Podcast>> GetMyPodcastsAsync(int uploaderUserId, int pageNumber = 1, int pageSize = 20)
     {
         return await _db.Podcasts
+            .AsNoTracking()
             .Include(p => p.UploaderUser)
             .Include(p => p.Category)
             .Include(p => p.Series)

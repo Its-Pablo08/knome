@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useCallback } fr
 import { apiClient } from '../../utils/apiClient';
 import { authApi, profileApi, karmaApi } from '../../utils/apiService';
 import { loadSystemApprovalSettingFromBackend } from '../../utils/systemConfig';
-import { syncNoticePeriodFromBackend } from '../../utils/noticePeriodManager';
+import { syncNoticePeriodFromBackend, syncUserNoticeStatus } from '../../utils/noticePeriodManager';
 
 /**
  * Maps a human-readable roleName (from Admin UI dropdown) to the short role code
@@ -191,7 +191,7 @@ export const resolveEmployeeName = (rawName, empId, uId, dept) => {
     }
 
     // 7. Check INITIAL_USERS
-    const initialMatch = INITIAL_USERS.find(iu => 
+    const initialMatch = INITIAL_USERS.find(iu =>
         (uidKey && String(iu.userId || iu.id) === uidKey) ||
         (idKey && iu.employeeId && String(iu.employeeId).toUpperCase() === idKey)
     );
@@ -217,8 +217,8 @@ export const deduplicateMembers = (members = [], contextUsers = []) => {
         if (!m) continue;
 
         const rawEmpId = (m.employeeId || m.empId || m.displayEmpId || '').toString().trim().toUpperCase();
-        const rawUid = (m.userId !== undefined && m.userId !== null && m.userId !== '') 
-            ? String(m.userId) 
+        const rawUid = (m.userId !== undefined && m.userId !== null && m.userId !== '')
+            ? String(m.userId)
             : ((m.id !== undefined && m.id !== null && m.id !== '' && !isNaN(m.id)) ? String(m.id) : '');
         const rawName = (m.fullName || m.name || m.displayName || '').toString().trim();
         const normName = rawName.toLowerCase();
@@ -336,13 +336,13 @@ export const resolveUserStatus = (user) => {
             if (o.isActive === true && !o.isSuspended && (o.status || '').toLowerCase() !== 'suspended') return 'Active';
             if (o.isActive === false || o.isSuspended === true || (o.status && o.status.toLowerCase() === 'suspended')) return 'Suspended';
         }
-    } catch {}
+    } catch { }
     try {
         const savedSusp = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
         if ((uidStr && savedSusp[uidStr]) || (empStr && savedSusp[empStr])) return 'Suspended';
-    } catch {}
-    const isSuspended = user.isSuspended === true 
-        || user.isPermanentlySuspended === true 
+    } catch { }
+    const isSuspended = user.isSuspended === true
+        || user.isPermanentlySuspended === true
         || (user.suspendedUntil && new Date(user.suspendedUntil) > new Date())
         || (typeof user.status === 'string' && user.status.trim().toLowerCase() === 'suspended')
         || user.isActive === false;
@@ -406,16 +406,16 @@ export const users = INITIAL_USERS;
 
 const UserContext = createContext({
     currentUser: null,
-    setCurrentUser: () => {},
+    setCurrentUser: () => { },
     users: INITIAL_USERS,
     isAuthLoading: false,
     isAuthenticated: false,
-    login: async () => {},
-    logout: async () => {},
-    refreshCurrentUser: async () => {},
-    refreshKarma: async () => {},
-    updateCurrentUserRole: () => {},
-    updateUserRoleInList: () => {},
+    login: async () => { },
+    logout: async () => { },
+    refreshCurrentUser: async () => { },
+    refreshKarma: async () => { },
+    updateCurrentUserRole: () => { },
+    updateUserRoleInList: () => { },
 });
 
 export const UserProvider = ({ children }) => {
@@ -432,9 +432,9 @@ export const UserProvider = ({ children }) => {
                     const primary = customRoles.find(r => r !== 'Employee' && r !== 'EMP') || customRoles[0] || 'Employee';
                     const cleanPrimary = (primary === 'System Administrator' || primary === 'SYSADM') ? 'System Admin'
                         : (primary === 'HR Administrator' || primary === 'HRADM') ? 'HR Admin'
-                        : (primary === 'Community Administrator' || primary === 'CADM') ? 'Community Admin'
-                        : (primary === 'Moderator' || primary === 'MOD') ? 'Moderator'
-                        : primary;
+                            : (primary === 'Community Administrator' || primary === 'CADM') ? 'Community Admin'
+                                : (primary === 'Moderator' || primary === 'MOD') ? 'Moderator'
+                                    : primary;
                     const code = roleNameToCode[cleanPrimary] || roleNameToCode[primary] || 'EMP';
                     return { ...mergedU, role: code, roleName: cleanPrimary, roles: expandRoles(customRoles) };
                 }
@@ -450,7 +450,7 @@ export const UserProvider = ({ children }) => {
     const defaultAdminUser = initialUsersList.find(u => u.employeeId === 'MP0108') || initialUsersList[0];
     const savedEmpId = typeof window !== 'undefined' ? localStorage.getItem('knome_employeeId') : null;
     const hasSavedSession = typeof window !== 'undefined' && Boolean(localStorage.getItem('knome_employeeId') || localStorage.getItem('knome_jwt'));
-    const initialUser = (savedEmpId && initialUsersList.find(u => 
+    const initialUser = (savedEmpId && initialUsersList.find(u =>
         u.employeeId?.toUpperCase() === savedEmpId.toUpperCase() ||
         (u.email && u.email.toLowerCase() === savedEmpId.toLowerCase()) ||
         String(u.userId) === String(savedEmpId) ||
@@ -458,11 +458,11 @@ export const UserProvider = ({ children }) => {
     )) || defaultAdminUser;
 
     if (typeof window !== 'undefined' && !savedEmpId && initialUser?.employeeId) {
-        try { localStorage.setItem('knome_employeeId', initialUser.employeeId); } catch (_) {}
+        try { localStorage.setItem('knome_employeeId', initialUser.employeeId); } catch (_) { }
     }
 
     const [currentUser, setCurrentUser] = useState(initialUser);
-    const [isAuthLoading, setIsAuthLoading] = useState(hasSavedSession);
+    const [isAuthLoading, setIsAuthLoading] = useState(!initialUser && hasSavedSession);
     const [isAuthenticated, setIsAuthenticated] = useState(true);
     const [isLoggingOut, setIsLoggingOut] = useState(() => (typeof window !== 'undefined' && sessionStorage.getItem('knome_logging_out') === 'true'));
 
@@ -507,35 +507,44 @@ export const UserProvider = ({ children }) => {
                     }
                 }
             }
-        } catch {}
+        } catch { }
 
         // Backend profile is authoritative source of truth if available
-        if (Array.isArray(profile.roles) && profile.roles.length > 0) {
+        if (customOverride && customOverride.length > 0) {
+            const primary = customOverride.find(r => r !== 'Employee' && r !== 'EMP') || customOverride[0];
+            const cleanPrimary = (primary === 'System Administrator' || primary === 'SYSADM') ? 'System Admin'
+                : (primary === 'HR Administrator' || primary === 'HRADM') ? 'HR Admin'
+                    : (primary === 'Community Administrator' || primary === 'CADM') ? 'Community Admin'
+                        : (primary === 'Moderator' || primary === 'MOD') ? 'Moderator'
+                            : primary;
+            derivedRoleName = cleanPrimary;
+            derivedRole = roleCodeMap[cleanPrimary] || roleCodeMap[primary] || 'EMP';
+        } else if (Array.isArray(profile.roles) && profile.roles.length > 0) {
             const rolePriority = ['Moderator', 'System Admin', 'System Administrator', 'HR Admin', 'HR Administrator', 'Community Admin', 'Community Administrator', 'Employee'];
             const highestRole = rolePriority.find(r => profile.roles.includes(r) || (r === 'System Admin' && profile.roles.includes('System Administrator')) || (r === 'HR Admin' && profile.roles.includes('HR Administrator'))) || profile.roles[0];
             const cleanRole = (highestRole === 'System Administrator' || highestRole === 'System Admin') ? 'System Admin'
                 : (highestRole === 'HR Administrator' || highestRole === 'HR Admin') ? 'HR Admin'
-                : (highestRole === 'Community Administrator' || highestRole === 'Community Admin') ? 'Community Admin'
-                : (highestRole === 'Moderator' || highestRole === 'MOD') ? 'Moderator'
-                : highestRole;
+                    : (highestRole === 'Community Administrator' || highestRole === 'Community Admin') ? 'Community Admin'
+                        : (highestRole === 'Moderator' || highestRole === 'MOD') ? 'Moderator'
+                            : highestRole;
             derivedRoleName = cleanRole;
             derivedRole = roleCodeMap[highestRole] || roleCodeMap[cleanRole] || 'EMP';
         } else if (profile.roleName || profile.role) {
             const rName = profile.roleName || profile.role;
             const cleanRole = (rName === 'System Administrator' || rName === 'SYSADM') ? 'System Admin'
                 : (rName === 'HR Administrator' || rName === 'HRADM') ? 'HR Admin'
-                : (rName === 'Community Administrator' || rName === 'CADM') ? 'Community Admin'
-                : (rName === 'Moderator' || rName === 'MOD') ? 'Moderator'
-                : rName;
+                    : (rName === 'Community Administrator' || rName === 'CADM') ? 'Community Admin'
+                        : (rName === 'Moderator' || rName === 'MOD') ? 'Moderator'
+                            : rName;
             derivedRoleName = cleanRole;
             derivedRole = roleCodeMap[cleanRole] || roleCodeMap[rName] || 'EMP';
         } else if (customOverride && customOverride.length > 0) {
             const primary = customOverride.find(r => r !== 'Employee' && r !== 'EMP') || customOverride[0];
             const cleanPrimary = (primary === 'System Administrator' || primary === 'SYSADM') ? 'System Admin'
                 : (primary === 'HR Administrator' || primary === 'HRADM') ? 'HR Admin'
-                : (primary === 'Community Administrator' || primary === 'CADM') ? 'Community Admin'
-                : (primary === 'Moderator' || primary === 'MOD') ? 'Moderator'
-                : primary;
+                    : (primary === 'Community Administrator' || primary === 'CADM') ? 'Community Admin'
+                        : (primary === 'Moderator' || primary === 'MOD') ? 'Moderator'
+                            : primary;
             derivedRoleName = cleanPrimary;
             derivedRole = roleCodeMap[cleanPrimary] || roleCodeMap[primary] || 'EMP';
         } else {
@@ -563,15 +572,15 @@ export const UserProvider = ({ children }) => {
             if (localUser.email) overrides[localUser.email.toLowerCase()] = singleRoleList;
             if (profile.email) overrides[profile.email.toLowerCase()] = singleRoleList;
             localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
-        } catch {}
+        } catch { }
 
         setUsersList(prev => {
-            const exists = prev.some(u => 
-                (resolvedEmpId && u.employeeId?.toUpperCase() === resolvedEmpId?.toUpperCase()) || 
+            const exists = prev.some(u =>
+                (resolvedEmpId && u.employeeId?.toUpperCase() === resolvedEmpId?.toUpperCase()) ||
                 (profile.userId && String(u.userId) === String(profile.userId))
             );
             if (exists) {
-                return prev.map(u => 
+                return prev.map(u =>
                     ((resolvedEmpId && u.employeeId?.toUpperCase() === resolvedEmpId?.toUpperCase()) || (profile.userId && String(u.userId) === String(profile.userId)))
                         ? { ...u, role: derivedRole, roleName: derivedRoleName, roles: singleRoleList, name: resolvedName, fullName: resolvedName, status: derivedStatus, isActive: isActive && !isSuspended, isSuspended }
                         : u
@@ -695,7 +704,9 @@ export const UserProvider = ({ children }) => {
             setCurrentUser(finalUser);
             setIsAuthenticated(true);
             loadSystemApprovalSettingFromBackend(true).catch(() => {});
-            syncNoticePeriodFromBackend().catch(() => {});
+            syncNoticePeriodFromBackend().then(() => {
+                if (finalUser) syncUserNoticeStatus(finalUser).catch(() => {});
+            }).catch(() => {});
         } catch (error) {
             const errMsg = (error?.message || '').toLowerCase();
             const isSuspendedError = error?.isSuspended || errMsg.includes('suspended') || errMsg.includes('inactive') || errMsg.includes('forbidden') || error?.status === 403;
@@ -731,9 +742,10 @@ export const UserProvider = ({ children }) => {
         const restoreSession = async () => {
             // Helper: sync users list from backend (only called after token is confirmed present)
             const syncUsersList = async (userRoles = null) => {
+            syncNoticePeriodFromBackend().catch(() => {});
                 try {
-                    const rolesToCheck = userRoles 
-                        ? (Array.isArray(userRoles) ? userRoles : [userRoles]) 
+                    const rolesToCheck = userRoles
+                        ? (Array.isArray(userRoles) ? userRoles : [userRoles])
                         : (currentUser?.roles || [currentUser?.role, currentUser?.roleName].filter(Boolean));
                     // Always fetch full platform directory for all authenticated users
                     let res = await apiClient.get('/users?pageNumber=1&pageSize=100').catch(() => null);
@@ -756,14 +768,14 @@ export const UserProvider = ({ children }) => {
                                 const rawDept = u.departmentName || u.DepartmentName || u.department || u.Department || '';
 
                                 const matchedDetails = (uId && KNOWN_ROSTER_DETAILS[String(uId)]) || (empId && KNOWN_ROSTER_DETAILS[empId.toUpperCase()]);
-                                const matchedInitial = (INITIAL_USERS || []).find(iu => 
+                                const matchedInitial = (INITIAL_USERS || []).find(iu =>
                                     (uId && String(iu.userId || iu.id) === String(uId)) ||
                                     (empId && iu.employeeId && String(iu.employeeId).toUpperCase() === String(empId).toUpperCase())
                                 );
 
                                 const resolved = resolveEmployeeName(rawName, empId, uId, rawDept);
-                                const name = (resolved && resolved !== 'Employee') 
-                                    ? resolved 
+                                const name = (resolved && resolved !== 'Employee')
+                                    ? resolved
                                     : (matchedInitial?.name || matchedInitial?.fullName || (rawName && rawName !== 'Employee' ? rawName : (KNOWN_ROSTER_NAMES[empId?.toUpperCase()] || KNOWN_ROSTER_NAMES[String(uId)] || 'Colleague')));
 
                                 let customOverride = null;
@@ -776,18 +788,18 @@ export const UserProvider = ({ children }) => {
                                             if (candidate.length > 0) { customOverride = candidate; break; }
                                         }
                                     }
-                                } catch {}
+                                } catch { }
 
                                 const rawRoles = (Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : null) || (u.roleName ? [u.roleName] : null) || customOverride;
-                                const roles = rawRoles 
-                                    ? rawRoles 
+                                const roles = rawRoles
+                                    ? rawRoles
                                     : [u.roleName || u.role || matchedDetails?.roleName || matchedInitial?.roleName || 'Employee'];
                                 const rawPrimary = roles.find(r => r !== 'Employee' && r !== 'EMP') || roles[0] || matchedDetails?.roleName || matchedInitial?.roleName || 'Employee';
                                 const primaryRole = (rawPrimary === 'System Administrator' || rawPrimary === 'SYSADM') ? 'System Admin'
                                     : (rawPrimary === 'HR Administrator' || rawPrimary === 'HRADM') ? 'HR Admin'
-                                    : (rawPrimary === 'Community Administrator' || rawPrimary === 'CADM') ? 'Community Admin'
-                                    : (rawPrimary === 'Moderator' || rawPrimary === 'MOD') ? 'Moderator'
-                                    : rawPrimary;
+                                        : (rawPrimary === 'Community Administrator' || rawPrimary === 'CADM') ? 'Community Admin'
+                                            : (rawPrimary === 'Moderator' || rawPrimary === 'MOD') ? 'Moderator'
+                                                : rawPrimary;
                                 const roleCode = roleNameToCode[primaryRole] || matchedInitial?.role || 'EMP';
                                 const designation = (matchedDetails?.designation) || u.designation || u.Designation || matchedInitial?.designation || (u.summary ? u.summary.split('|')[0].trim() : '') || 'Staff Member';
                                 const department = rawDept || matchedDetails?.department || matchedInitial?.department || 'General';
@@ -819,7 +831,7 @@ export const UserProvider = ({ children }) => {
                             // Guarantee all predefined team members from INITIAL_USERS remain in roster and override any generic Employee placeholders
                             const mergedRoster = [...mappedApiUsers];
                             (INITIAL_USERS || []).forEach(iu => {
-                                const existing = mergedRoster.find(m => 
+                                const existing = mergedRoster.find(m =>
                                     String(m.userId || m.id) === String(iu.userId || iu.id) ||
                                     (m.employeeId && iu.employeeId && m.employeeId.toUpperCase() === iu.employeeId.toUpperCase())
                                 );
@@ -872,18 +884,18 @@ export const UserProvider = ({ children }) => {
                         console.info('[SSO] Decoded JWT Claims:', payload);
 
                         // Priority 1: Specific employee ID claims
-                        const extractedEmpId = payload.employeeId || 
-                                               payload.employee_id || 
-                                               payload.empId;
+                        const extractedEmpId = payload.employeeId ||
+                            payload.employee_id ||
+                            payload.empId;
 
                         // Priority 2: Specific email / username claims (including XML namespaces from Employee Hub / OpenIddict)
-                        const extractedEmail = payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] || 
-                                               payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] || 
-                                               payload.email || 
-                                               payload.preferred_username || 
-                                               payload.unique_name || 
-                                               payload.upn || 
-                                               payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn'];
+                        const extractedEmail = payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] ||
+                            payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ||
+                            payload.email ||
+                            payload.preferred_username ||
+                            payload.unique_name ||
+                            payload.upn ||
+                            payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn'];
 
                         // Priority 3: Meaningful sub (ignore raw GUIDs if email is available)
                         const isGuid = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
@@ -901,7 +913,7 @@ export const UserProvider = ({ children }) => {
                 localStorage.setItem('knome_jwt', tokenToStore);
                 localStorage.setItem('accessToken', tokenToStore);
                 if (ssoEmpId) localStorage.setItem('knome_employeeId', ssoEmpId);
-                
+
                 // Restore the page user was trying to visit before SSO redirect (or default to '/')
                 const ssoReturnUrl = sessionStorage.getItem('knome_return_url') || sessionStorage.getItem('knome_sso_return_url') || sessionStorage.getItem('knome_last_route') || '/';
                 sessionStorage.removeItem('knome_sso_return_url');
@@ -912,7 +924,7 @@ export const UserProvider = ({ children }) => {
 
                 // SSO token from Employee Hub: authenticate with Knome backend using resolved identity
                 if (ssoEmpId) {
-                    let localUser = INITIAL_USERS.find(u => 
+                    let localUser = INITIAL_USERS.find(u =>
                         (u.employeeId && u.employeeId.toUpperCase() === ssoEmpId.toUpperCase()) ||
                         (u.email && u.email.toLowerCase() === ssoEmpId.toLowerCase()) ||
                         String(u.userId || u.id) === String(ssoEmpId)
@@ -971,7 +983,7 @@ export const UserProvider = ({ children }) => {
                             if (suspendedMap[empKey] || (uidKey && suspendedMap[uidKey])) {
                                 isSuspendedUser = true;
                             }
-                        } catch {}
+                        } catch { }
 
                         if (localUser.isSuspended || localUser.isActive === false || isSuspendedUser) {
                             setIsAuthLoading(false);
@@ -1027,7 +1039,7 @@ export const UserProvider = ({ children }) => {
             }
 
             if (savedEmployeeId) {
-                let localUser = usersList.find(u => 
+                let localUser = usersList.find(u =>
                     (u.employeeId && u.employeeId.toUpperCase() === savedEmployeeId.toUpperCase()) ||
                     (u.email && u.email.toLowerCase() === savedEmployeeId.toLowerCase()) ||
                     String(u.userId) === String(savedEmployeeId) ||
@@ -1056,7 +1068,7 @@ export const UserProvider = ({ children }) => {
                     if ((uidStr && suspendedMap[uidStr]) || (empStr && suspendedMap[empStr])) {
                         isSuspendedMapHit = true;
                     }
-                } catch {}
+                } catch { }
 
                 const isLocalSuspended = isSuspendedMapHit || resolveUserStatus(localUser) === 'Suspended' || localUser.isActive === false || localUser.isSuspended === true || localUser.isPermanentlySuspended === true || localUser.status === 'Suspended';
                 if (isLocalSuspended) {
@@ -1105,6 +1117,9 @@ export const UserProvider = ({ children }) => {
                             setIsAuthLoading(false);
                             const resolvedRoles = profile.roles && profile.roles.length > 0 ? profile.roles : [profile.roleName || localUser.roleName];
                             syncUsersList(resolvedRoles); // background sync after session confirmed
+                            syncNoticePeriodFromBackend().then(() => {
+                                if (localUser) syncUserNoticeStatus(localUser).catch(() => {});
+                            }).catch(() => {});
                             return;
                         }
                     } catch {
@@ -1138,7 +1153,7 @@ export const UserProvider = ({ children }) => {
                     setCurrentUser(localUser);
                     setIsAuthenticated(true);
                     loadSystemApprovalSettingFromBackend(true).catch(() => {});
-                    syncNoticePeriodFromBackend().catch(() => {});
+                syncNoticePeriodFromBackend().catch(() => {});
                     setIsAuthLoading(false);
 
                     // If backend was offline during boot, automatically re-authenticate once backend finishes initializing
@@ -1207,13 +1222,13 @@ export const UserProvider = ({ children }) => {
      * Login with a specific local user (used from Login page or user-switcher).
      */
     const login = useCallback(async (employeeId) => {
-        try { apiClient.clearCache(); } catch {}
+        try { apiClient.clearCache(); } catch { }
         let normalizedId = employeeId?.trim()?.toUpperCase() || 'MP0108';
         if (normalizedId === 'EMP001') {
             sessionStorage.setItem('knome_intended_emp001', 'true');
         }
 
-        let localUser = usersList.find(u => 
+        let localUser = usersList.find(u =>
             (u.employeeId && u.employeeId.toUpperCase() === normalizedId) ||
             (u.email && employeeId && u.email.toLowerCase() === employeeId.trim().toLowerCase()) ||
             String(u.userId) === String(employeeId) ||
@@ -1284,7 +1299,7 @@ export const UserProvider = ({ children }) => {
             sessionStorage.setItem('knome_logging_out', 'true');
             try {
                 window.dispatchEvent(new CustomEvent('knome:logout'));
-            } catch {}
+            } catch { }
         }
 
         const refreshToken = localStorage.getItem('knome_refresh');
@@ -1314,7 +1329,7 @@ export const UserProvider = ({ children }) => {
             'user'
         ];
         authKeysToRemove.forEach(k => {
-            try { localStorage.removeItem(k); } catch {}
+            try { localStorage.removeItem(k); } catch { }
         });
 
         const sessionKeysToRemove = [
@@ -1325,7 +1340,7 @@ export const UserProvider = ({ children }) => {
             'knome_user_session'
         ];
         sessionKeysToRemove.forEach(k => {
-            try { sessionStorage.removeItem(k); } catch {}
+            try { sessionStorage.removeItem(k); } catch { }
         });
 
         // Expire any residual auth session cookies
@@ -1339,7 +1354,7 @@ export const UserProvider = ({ children }) => {
                     }
                 });
             }
-        } catch {}
+        } catch { }
 
         apiClient.clearCache();
         setCurrentUser(null);
@@ -1371,7 +1386,7 @@ export const UserProvider = ({ children }) => {
      * Switch user (dev/demo shortcut — kept for the user switcher in Navbar).
      */
     const switchUser = useCallback(async (user) => {
-        try { apiClient.clearCache(); } catch {}
+        try { apiClient.clearCache(); } catch { }
         let isSuspended = user.isActive === false || user.isSuspended === true || user.isPermanentlySuspended === true || user.status === 'Suspended';
         try {
             const suspendedMap = JSON.parse(localStorage.getItem('knome_suspended_accounts') || '{}');
@@ -1380,7 +1395,7 @@ export const UserProvider = ({ children }) => {
             if ((uidStr && suspendedMap[uidStr]) || (empStr && suspendedMap[empStr])) {
                 isSuspended = true;
             }
-        } catch {}
+        } catch { }
         if (isSuspended) {
             localStorage.removeItem('knome_jwt');
             localStorage.removeItem('knome_refresh');
@@ -1440,14 +1455,14 @@ export const UserProvider = ({ children }) => {
         const primaryRoleName = rolesArray.find(r => r !== 'Employee') || rolesArray[0] || 'Employee';
         const cleanPrimary = (primaryRoleName === 'System Administrator' || primaryRoleName === 'SYSADM') ? 'System Admin'
             : (primaryRoleName === 'HR Administrator' || primaryRoleName === 'HRADM') ? 'HR Admin'
-            : (primaryRoleName === 'Community Administrator' || primaryRoleName === 'CADM') ? 'Community Admin'
-            : (primaryRoleName === 'Moderator' || primaryRoleName === 'MOD') ? 'Moderator'
-            : primaryRoleName;
+                : (primaryRoleName === 'Community Administrator' || primaryRoleName === 'CADM') ? 'Community Admin'
+                    : (primaryRoleName === 'Moderator' || primaryRoleName === 'MOD') ? 'Moderator'
+                        : primaryRoleName;
         const newRoleCode = roleNameToCode[cleanPrimary] || roleNameToCode[primaryRoleName] || (primaryRoleName === 'Pending Role Assignment' ? 'PENDING' : 'EMP');
         const singleRoleList = [cleanPrimary];
 
         // Find target user in current usersList
-        const targetUser = usersList.find(u => 
+        const targetUser = usersList.find(u =>
             (u.userId && String(u.userId) === String(targetIdentifier)) ||
             (u.id && String(u.id) === String(targetIdentifier)) ||
             (u.employeeId && u.employeeId.toUpperCase() === String(targetIdentifier).toUpperCase()) ||
@@ -1465,9 +1480,9 @@ export const UserProvider = ({ children }) => {
                 if (targetUser.email) overrides[targetUser.email.toLowerCase()] = singleRoleList;
             }
             localStorage.setItem('knome_role_overrides', JSON.stringify(overrides));
-        } catch {}
+        } catch { }
 
-        try { apiClient.clearCache(); } catch {}
+        try { apiClient.clearCache(); } catch { }
 
         // 1. Update the reactive usersList (Navbar Switch User list)
         setUsersList(prev => prev.map(u => {
@@ -1501,12 +1516,12 @@ export const UserProvider = ({ children }) => {
      */
     const updateUserDetailsInList = useCallback((targetIdentifier, updatedData) => {
         if (!targetIdentifier || !updatedData) return;
-        
+
         const rawRole = updatedData.roleName || updatedData.role || 'Employee';
         const cleanRole = (rawRole === 'System Administrator' || rawRole === 'SYSADM') ? 'System Admin'
             : (rawRole === 'HR Administrator' || rawRole === 'HRADM') ? 'HR Admin'
-            : (rawRole === 'Community Administrator' || rawRole === 'CADM') ? 'Community Admin'
-            : rawRole;
+                : (rawRole === 'Community Administrator' || rawRole === 'CADM') ? 'Community Admin'
+                    : rawRole;
         const newRoleCode = roleNameToCode[cleanRole] || 'EMP';
         const rolesList = [cleanRole];
 
@@ -1514,7 +1529,7 @@ export const UserProvider = ({ children }) => {
         try {
             const userOverrides = JSON.parse(localStorage.getItem('knome_user_overrides') || '{}');
             const roleOverrides = JSON.parse(localStorage.getItem('knome_role_overrides') || '{}');
-            
+
             const prevUserOverride = userOverrides[String(targetIdentifier)] || {};
             const mergedOverride = {
                 ...prevUserOverride,
@@ -1546,16 +1561,16 @@ export const UserProvider = ({ children }) => {
             console.warn('[UserContext] Failed to persist user overrides:', e);
         }
 
-        try { apiClient.clearCache(); } catch {}
+        try { apiClient.clearCache(); } catch { }
 
         // Update reactive usersList
         setUsersList(prev => prev.map(u => {
             const matchById = u.userId && String(u.userId) === String(targetIdentifier);
             const matchBySeedId = u.id && String(u.id) === String(targetIdentifier);
             const matchByEmpId = (u.employeeId && updatedData.employeeId && u.employeeId.toUpperCase() === updatedData.employeeId.toUpperCase()) ||
-                                 (u.employeeId && u.employeeId.toUpperCase() === String(targetIdentifier).toUpperCase());
+                (u.employeeId && u.employeeId.toUpperCase() === String(targetIdentifier).toUpperCase());
             const matchByEmail = (u.email && updatedData.email && u.email.toLowerCase() === updatedData.email.toLowerCase()) ||
-                                 (u.email && u.email.toLowerCase() === String(targetIdentifier).toLowerCase());
+                (u.email && u.email.toLowerCase() === String(targetIdentifier).toLowerCase());
 
             if (matchById || matchBySeedId || matchByEmpId || matchByEmail) {
                 return {
@@ -1585,9 +1600,9 @@ export const UserProvider = ({ children }) => {
             const matchById = prev.userId && String(prev.userId) === String(targetIdentifier);
             const matchBySeedId = prev.id && String(prev.id) === String(targetIdentifier);
             const matchByEmpId = (prev.employeeId && updatedData.employeeId && prev.employeeId.toUpperCase() === updatedData.employeeId.toUpperCase()) ||
-                                 (prev.employeeId && prev.employeeId.toUpperCase() === String(targetIdentifier).toUpperCase());
+                (prev.employeeId && prev.employeeId.toUpperCase() === String(targetIdentifier).toUpperCase());
             const matchByEmail = (prev.email && updatedData.email && prev.email.toLowerCase() === updatedData.email.toLowerCase()) ||
-                                 (prev.email && prev.email.toLowerCase() === String(targetIdentifier).toLowerCase());
+                (prev.email && prev.email.toLowerCase() === String(targetIdentifier).toLowerCase());
 
             if (matchById || matchBySeedId || matchByEmpId || matchByEmail) {
                 return {
@@ -1614,7 +1629,7 @@ export const UserProvider = ({ children }) => {
         // Broadcast event for all components/hooks listening
         try {
             window.dispatchEvent(new CustomEvent('knome-user-updated', { detail: { targetIdentifier, updatedData } }));
-        } catch {}
+        } catch { }
     }, []);
 
     /**
@@ -1625,7 +1640,7 @@ export const UserProvider = ({ children }) => {
      */
     const awardRuleKarma = useCallback((userId, ruleKey, options = {}) => {
         if (!userId) return false;
-        
+
         const ruleMap = {
             POST: { points: 2, maxDailyPoints: 10, title: 'Create and publish a Post', category: 'Post' },
             ARTICLE: { points: 10, maxDailyPoints: 30, title: 'Publish an Article', category: 'Article' },
@@ -1641,7 +1656,7 @@ export const UserProvider = ({ children }) => {
         const todayStr = new Date().toISOString().slice(0, 10);
         const dailyTrackerKey = `knome_karma_daily_${userId}_${todayStr}`;
         let dailyData = {};
-        
+
         try {
             dailyData = JSON.parse(localStorage.getItem(dailyTrackerKey) || '{}');
         } catch { dailyData = {}; }
@@ -1664,7 +1679,7 @@ export const UserProvider = ({ children }) => {
         }
 
         dailyData[ruleKey] = currentEarnedToday + pointsToAward;
-        try { localStorage.setItem(dailyTrackerKey, JSON.stringify(dailyData)); } catch (e) {}
+        try { localStorage.setItem(dailyTrackerKey, JSON.stringify(dailyData)); } catch (e) { }
 
         const actionTitle = options.customTitle || rule.title;
 
@@ -1677,7 +1692,7 @@ export const UserProvider = ({ children }) => {
                 const currentVal = u.karmaPoints || u.karma || 0;
                 const newVal = currentVal + pointsToAward;
                 updatedTotal = newVal;
-                try { localStorage.setItem(`knome_user_karma_${userId}`, String(newVal)); } catch (e) {}
+                try { localStorage.setItem(`knome_user_karma_${userId}`, String(newVal)); } catch (e) { }
                 return { ...u, karmaPoints: newVal, karma: newVal };
             }
             return u;
@@ -1693,7 +1708,7 @@ export const UserProvider = ({ children }) => {
                 const newVal = currentVal + pointsToAward;
                 updatedTotal = newVal;
                 const newPosts = ruleKey === 'POST' ? (prev.postsCount || 0) + 1 : (prev.postsCount || 0);
-                try { localStorage.setItem(`knome_user_karma_${userId}`, String(newVal)); } catch (e) {}
+                try { localStorage.setItem(`knome_user_karma_${userId}`, String(newVal)); } catch (e) { }
                 return { ...prev, karmaPoints: newVal, karma: newVal, postsCount: newPosts };
             }
             return prev;
@@ -1740,7 +1755,7 @@ export const UserProvider = ({ children }) => {
             if (typeof total === 'number') {
                 setCurrentUser(prev => prev ? { ...prev, karma: total, karmaPoints: total } : prev);
                 setUsersList(prev => prev.map(u => (String(u.userId || u.id) === String(targetId) ? { ...u, karma: total, karmaPoints: total } : u)));
-                try { localStorage.setItem(`knome_user_karma_${targetId}`, String(total)); } catch (_) {}
+                try { localStorage.setItem(`knome_user_karma_${targetId}`, String(total)); } catch (_) { }
                 window.dispatchEvent(new CustomEvent('karma-updated', { detail: { userId: targetId, totalKarma: total } }));
                 return total;
             }
@@ -1768,7 +1783,7 @@ export const UserProvider = ({ children }) => {
                 delete savedSuspended[uidStr];
             }
             localStorage.setItem('knome_suspended_accounts', JSON.stringify(savedSuspended));
-        } catch (e) {}
+        } catch (e) { }
 
         // Persist explicit status override in knome_user_overrides
         try {
@@ -1782,7 +1797,7 @@ export const UserProvider = ({ children }) => {
                 status: isActive ? 'Active' : 'Suspended'
             };
             localStorage.setItem('knome_user_overrides', JSON.stringify(userOverrides));
-        } catch (e) {}
+        } catch (e) { }
 
         setUsersList(prev => prev.map(u => {
             const matchById = u.userId && String(u.userId) === uidStr;
@@ -1814,10 +1829,10 @@ export const UserProvider = ({ children }) => {
                             status: isActive ? 'Active' : 'Suspended'
                         };
                         localStorage.setItem('knome_user_overrides', JSON.stringify(userOverrides));
-                    } catch (e) {}
+                    } catch (e) { }
                 }
-                return { 
-                    ...u, 
+                return {
+                    ...u,
                     isActive: isActive,
                     isSuspended: !isActive,
                     isPermanentlySuspended: !isActive,
@@ -1849,13 +1864,13 @@ export const UserProvider = ({ children }) => {
                         status: 'Suspended'
                     };
                 }
-                return { 
-                    ...prev, 
-                    isActive: true, 
-                    isSuspended: false, 
-                    isPermanentlySuspended: false, 
-                    suspendedUntil: null, 
-                    status: 'Active' 
+                return {
+                    ...prev,
+                    isActive: true,
+                    isSuspended: false,
+                    isPermanentlySuspended: false,
+                    suspendedUntil: null,
+                    status: 'Active'
                 };
             }
             return prev;
@@ -1951,19 +1966,19 @@ export const useUser = () => {
     if (!context) {
         return {
             currentUser: null,
-            setCurrentUser: () => {},
+            setCurrentUser: () => { },
             users: [],
             isAuthLoading: false,
             isAuthenticated: false,
             isLoggingOut: false,
-            login: async () => {},
-            logout: async () => {},
-            refreshCurrentUser: async () => {},
-            refreshKarma: async () => {},
-            updateCurrentUserRole: () => {},
-            updateUserRoleInList: () => {},
-            updateUserDetailsInList: () => {},
-            deleteUserFromList: () => {},
+            login: async () => { },
+            logout: async () => { },
+            refreshCurrentUser: async () => { },
+            refreshKarma: async () => { },
+            updateCurrentUserRole: () => { },
+            updateUserRoleInList: () => { },
+            updateUserDetailsInList: () => { },
+            deleteUserFromList: () => { },
         };
     }
     return context;

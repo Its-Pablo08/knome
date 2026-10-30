@@ -22,6 +22,7 @@ public class CommunityRepository : ICommunityRepository
     public async Task<Community?> GetCommunityByIdAsync(int communityId)
     {
         return await _db.Communities
+            .AsNoTracking()
             .Include(c => c.Category)
             .Include(c => c.CreatedByUser)
             .Include(c => c.Users) // Admins
@@ -32,6 +33,7 @@ public class CommunityRepository : ICommunityRepository
     public async Task<Community?> GetCommunityByIdAnyStatusAsync(int communityId)
     {
         return await _db.Communities
+            .AsNoTracking()
             .Include(c => c.Category)
             .Include(c => c.CreatedByUser)
             .Include(c => c.Users) // Admins
@@ -42,6 +44,7 @@ public class CommunityRepository : ICommunityRepository
     public async Task<List<Community>> GetPendingCommunitiesAsync()
     {
         return await _db.Communities
+            .AsNoTracking()
             .Where(c => !c.IsActive && c.ApprovalStatus == "Pending")
             .Include(c => c.Category)
             .Include(c => c.CreatedByUser)
@@ -54,6 +57,7 @@ public class CommunityRepository : ICommunityRepository
     public async Task<List<Community>> GetCommunitiesAsync(int? categoryId, string? type, string? search, int pageNumber, int pageSize)
     {
         var query = _db.Communities
+            .AsNoTracking()
             .Where(c => c.IsActive && (c.ApprovalStatus == null || c.ApprovalStatus == "Approved"))
             .Include(c => c.Category)
             .Include(c => c.CreatedByUser)
@@ -79,6 +83,7 @@ public class CommunityRepository : ICommunityRepository
     public async Task<List<Community>> GetUserCommunitiesAsync(int userId)
     {
         return await _db.Communities
+            .AsNoTracking()
             .Where(c => (c.IsActive && (c.ApprovalStatus == null || c.ApprovalStatus == "Approved")) || 
                         (c.CreatedByUserId == userId && c.ApprovalStatus == "Pending"))
             .Include(c => c.Category)
@@ -218,6 +223,7 @@ public class CommunityRepository : ICommunityRepository
     public async Task<List<CommunityMember>> GetMembersAsync(int communityId, string? status, int pageNumber, int pageSize)
     {
         var query = _db.CommunityMembers
+            .AsNoTracking()
             .Include(m => m.User)
             .Include(m => m.ApprovedByUser)
             .Where(m => m.CommunityId == communityId)
@@ -248,6 +254,7 @@ public class CommunityRepository : ICommunityRepository
     public async Task<CommunityPost?> GetCommunityPostAsync(int communityId, long postId)
     {
         return await _db.CommunityPosts
+            .AsNoTracking()
             .Include(cp => cp.Post)
             .ThenInclude(p => p.AuthorUser)
             .FirstOrDefaultAsync(cp => cp.CommunityId == communityId && cp.PostId == postId);
@@ -275,6 +282,7 @@ public class CommunityRepository : ICommunityRepository
     public async Task<List<CommunityPost>> GetCommunityPostsAsync(int communityId, int pageNumber, int pageSize)
     {
         return await _db.CommunityPosts
+            .AsNoTracking()
             .Include(cp => cp.Post)
             .ThenInclude(p => p.AuthorUser)
             .Where(cp => cp.CommunityId == communityId && cp.Post.Status == "Published")

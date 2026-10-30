@@ -21,6 +21,7 @@ public class VideoRepository : IVideoRepository
     public async Task<Video?> GetVideoByIdAsync(long videoId)
     {
         return await _db.Videos
+            .AsNoTracking()
             .Include(v => v.UploaderUser)
             .Include(v => v.Category)
             .Include(v => v.VideoTags)
@@ -30,6 +31,7 @@ public class VideoRepository : IVideoRepository
     public async Task<List<Video>> GetVideosAsync(int? categoryId, string? tag, string? search, int pageNumber, int pageSize)
     {
         var query = _db.Videos
+            .AsNoTracking()
             .Include(v => v.UploaderUser)
             .Include(v => v.Category)
             .Include(v => v.VideoTags)
@@ -54,6 +56,7 @@ public class VideoRepository : IVideoRepository
     public async Task<List<Video>> GetMyVideosAsync(int uploaderUserId, int pageNumber = 1, int pageSize = 20)
     {
         return await _db.Videos
+            .AsNoTracking()
             .Include(v => v.UploaderUser)
             .Include(v => v.Category)
             .Include(v => v.VideoTags)

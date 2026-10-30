@@ -12,4 +12,5 @@ public interface INoticePeriodService
     Task<bool> IsUserInNoticePeriodAsync(string employeeIdOrEmail);
     Task EnsureCanSchedulePostAsync(int userId);
     Task<NoticePeriodStatusResultDto> CheckUserNoticeStatusAsync(int userId);
+    Task<NoticePeriodStatusResultDto> CheckUserNoticeStatusAsync(string identifier);
 }

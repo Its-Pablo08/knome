@@ -1,4 +1,5 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
+import ReportModal from '../modals/ReportModal';
 import { useAudio } from '../contexts/AudioContext';
 import { useSystemConfig } from '../../utils/systemConfig';
 
@@ -12,6 +13,7 @@ export default function GlobalAudioPlayer() {
     } = audioCtx;
 
     const progressRef = useRef(null);
+    const [showReportModal, setShowReportModal] = useState(false);
 
     useEffect(() => {
         if (!isPodcastsEnabled && currentPodcast && closePlayer) {
@@ -136,6 +138,14 @@ export default function GlobalAudioPlayer() {
                         />
                     </div>
 
+                    <button 
+                        onClick={() => setShowReportModal(true)} 
+                        className="text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                        title="Report Podcast"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">flag</span>
+                    </button>
+
                     <div className="w-px h-8 bg-slate-200 dark:bg-slate-800"></div>
 
                     <button onClick={closePlayer} className="text-slate-400 hover:text-red-500 transition-colors">
@@ -143,6 +153,16 @@ export default function GlobalAudioPlayer() {
                     </button>
                 </div>
             </div>
+
+            <ReportModal
+                isOpen={showReportModal}
+                onClose={() => setShowReportModal(false)}
+                targetType="Podcast"
+                targetId={currentPodcast.id}
+                targetName={currentPodcast.author || 'Podcast Author'}
+                targetContent={currentPodcast.title || currentPodcast.description || 'Podcast Episode'}
+                targetUserId={currentPodcast.authorId}
+            />
         </div>
     );
 }

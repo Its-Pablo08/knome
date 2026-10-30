@@ -16,7 +16,10 @@ export default function MyCommunitiesWidget() {
             setIsLoading(true);
         }
         try {
-            const res = await communitiesApi.getAll(500).catch(() => null);
+            let res = await communitiesApi.getMyCommunities().catch(() => null);
+            if (!res || !Array.isArray(res) || res.length === 0) {
+                res = await communitiesApi.getAll(25).catch(() => null);
+            }
             const userKey = `knome_joined_communities_${currentUser?.id || 'guest'}`;
             const userJoinedList = JSON.parse(localStorage.getItem(userKey) || '[]');
             const deletedIds = new Set(JSON.parse(localStorage.getItem('knome_deleted_community_ids') || '[]').map(String));

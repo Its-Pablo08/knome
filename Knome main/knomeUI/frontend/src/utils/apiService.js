@@ -915,7 +915,7 @@ export const settingsApi = {
 // ─────────────────────────────────────────────
 export const noticePeriodApi = {
     /** GET /api/notice-period */
-    getConfig: () => apiClient.get('/notice-period'),
+    getConfig: () => apiClient.get('/notice-period', { noCache: true }),
 
     /** POST /api/notice-period/toggle-policy */
     togglePolicy: (isEnabled) => apiClient.post('/notice-period/toggle-policy', { isEnabled: !!isEnabled }),
@@ -924,10 +924,14 @@ export const noticePeriodApi = {
     toggleEmployee: (data) => apiClient.post('/notice-period/toggle-employee', data),
 
     /** GET /api/notice-period/check/{userId} */
-    checkUser: (userId) => apiClient.get(`/notice-period/check/${userId}`),
+    checkUser: (identifier) => {
+        const isNum = /^\d+$/.test(String(identifier));
+        const endpoint = isNum ? `/notice-period/check/${identifier}` : `/notice-period/check-user/${encodeURIComponent(identifier)}`;
+        return apiClient.get(endpoint, { noCache: true });
+    },
 
     /** GET /api/notice-period/me */
-    checkMe: () => apiClient.get('/notice-period/me'),
+    checkMe: () => apiClient.get('/notice-period/me', { noCache: true }),
 };
 
 
@@ -1100,8 +1104,23 @@ export const parseLaptopDate = (dateInput) => {
     if (/^\d{4}-\d{2}-\d{2}[ ]\d{2}:\d{2}/.test(s)) {
         s = s.replace(' ', 'T');
     }
+    // If date string contains a time component (has 'T') but lacks any timezone specifier ('Z', '+HH:mm', '-HH:mm'),
+    // force UTC interpretation by appending 'Z'. This guarantees browsers accurately convert SQL Server UTC datetimes to user's laptop local time.
+    if (s.includes('T') && !/([zZ]|[+-]\d{2}(?::?\d{2})?)$/.test(s)) {
+        s += 'Z';
+    }
+
     const d = new Date(s);
     return isNaN(d.getTime()) ? null : d;
+};
+
+/**
+ * Formats any date, ISO string, or timestamp into the user's local 12-hour time (hh:mm AM/PM).
+ */
+export const formatMessageTime = (dateInput) => {
+    const d = parseLaptopDate(dateInput);
+    if (!d || isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
 export const formatToDDMMYYYY = (dateInput) => {

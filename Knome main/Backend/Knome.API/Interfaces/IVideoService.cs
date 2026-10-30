@@ -12,6 +12,6 @@ public interface IVideoService
     Task<List<VideoDto>> GetUserVideosAsync(int uploaderUserId, int currentUserId, int pageNumber = 1, int pageSize = 20);
     Task<VideoDto> CreateVideoAsync(int currentUserId, CreateVideoDto dto);
     Task<VideoDto> UpdateVideoAsync(long videoId, int currentUserId, UpdateVideoDto dto);
-    Task DeleteVideoAsync(long videoId, int currentUserId);
+    Task DeleteVideoAsync(long videoId, int currentUserId, bool isCallerAdminOrMod = false);
     Task<int> IncrementViewCountAsync(long videoId, int currentUserId = 0);
 }

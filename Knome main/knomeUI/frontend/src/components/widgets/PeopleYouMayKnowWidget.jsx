@@ -116,11 +116,10 @@ export default function PeopleYouMayKnowWidget() {
             const localSent = JSON.parse(localStorage.getItem('knome_sent_connection_requests') || '[]');
 
             // Fetch live network connections and requests from backend in parallel
-            const [sugRes, reqRes, connRes, searchRes] = await Promise.all([
+            const [sugRes, reqRes, connRes] = await Promise.all([
                 userApi.getSuggestions().catch(() => []),
                 userApi.getPendingRequests().catch(() => ({})),
-                effectiveUserId ? userApi.getConnections(effectiveUserId).catch(() => []) : Promise.resolve([]),
-                searchApi.searchUsers('', 50).catch(() => [])
+                effectiveUserId ? userApi.getConnections(effectiveUserId).catch(() => []) : Promise.resolve([])
             ]);
 
             const sugList = Array.isArray(sugRes) ? sugRes : (sugRes?.data || []);
@@ -128,7 +127,6 @@ export default function PeopleYouMayKnowWidget() {
             const receivedArray = reqData.received || [];
             const sentArray = [...(reqData.sent || []), ...localSent];
             const connArray = Array.isArray(connRes) ? connRes : (connRes?.data || []);
-            const searchArray = Array.isArray(searchRes) ? searchRes : (searchRes?.data || searchRes?.items || []);
 
             // 1. Build authoritative Exclusion Sets for Connected users
             const connKeys = new Set();
@@ -256,7 +254,6 @@ export default function PeopleYouMayKnowWidget() {
             // STRICT POOL: Only the 7 active users are considered (from INITIAL_USERS & live queries)
             (INITIAL_USERS || []).forEach(addCandidate);
             sugList.forEach(addCandidate);
-            searchArray.forEach(addCandidate);
 
             setPeople(candidates);
         } catch (err) {

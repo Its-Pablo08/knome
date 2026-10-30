@@ -22,6 +22,7 @@ public class ArticleRepository : IArticleRepository
     public async Task<Article?> GetArticleByIdAsync(long articleId)
     {
         return await _db.Articles
+            .AsNoTracking()
             .Include(a => a.AuthorUser)
             .Include(a => a.Category)
             .Include(a => a.ArticleTags)
@@ -43,11 +44,11 @@ public class ArticleRepository : IArticleRepository
         catch { }
 
         var query = _db.Articles
+            .AsNoTracking()
             .Include(a => a.AuthorUser)
             .Include(a => a.Category)
             .Include(a => a.ArticleTags)
             .Include(a => a.ArticleAttachments)
-            .Include(a => a.ArticleVersions)
             .Where(a => a.Status != "Removed" && a.Status != "Deleted")
             .AsQueryable();
 
@@ -112,11 +113,11 @@ public class ArticleRepository : IArticleRepository
     public async Task<List<Article>> GetMyArticlesAsync(int authorUserId, int pageNumber = 1, int pageSize = 20)
     {
         return await _db.Articles
+            .AsNoTracking()
             .Include(a => a.AuthorUser)
             .Include(a => a.Category)
             .Include(a => a.ArticleTags)
             .Include(a => a.ArticleAttachments)
-            .Include(a => a.ArticleVersions)
             .Where(a => a.AuthorUserId == authorUserId)
             .OrderByDescending(a => a.CreatedDate)
             .Skip((pageNumber - 1) * pageSize)

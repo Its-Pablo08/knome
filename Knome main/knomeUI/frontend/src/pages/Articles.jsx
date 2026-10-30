@@ -15,6 +15,7 @@ import ScrollLoadingIndicator from '../components/ui/ScrollLoadingIndicator';
 import HighlightText from '../components/ui/HighlightText';
 import CustomDateTimePicker from '../components/widgets/CustomDateTimePicker';
 import { isArticleApprovalRequired } from '../utils/systemConfig';
+import { isUserInNoticePeriod, NOTICE_PERIOD_EVENT } from '../utils/noticePeriodManager';
 
 export default function Articles() {
     const { currentUser } = useUser();
@@ -196,6 +197,26 @@ export default function Articles() {
     const [scheduledTime, setScheduledTime] = useState('');
     const [tempScheduleTime, setTempScheduleTime] = useState('');
     const schedulePopoverRef = useRef(null);
+    const [, setNoticePeriodTick] = useState(0);
+
+    useEffect(() => {
+        const handleNoticeChange = () => setNoticePeriodTick(prev => prev + 1);
+        window.addEventListener(NOTICE_PERIOD_EVENT, handleNoticeChange);
+        window.addEventListener('storage', handleNoticeChange);
+        return () => {
+            window.removeEventListener(NOTICE_PERIOD_EVENT, handleNoticeChange);
+            window.removeEventListener('storage', handleNoticeChange);
+        };
+    }, []);
+
+    const isNoticePeriodActive = isUserInNoticePeriod(currentUser);
+
+    useEffect(() => {
+        if (isNoticePeriodActive) {
+            setIsScheduling(false);
+            setScheduledTime('');
+        }
+    }, [isNoticePeriodActive]);
 
     // Format display string cleanly
     const formatScheduleDisplay = (isoStr) => {
@@ -285,7 +306,7 @@ export default function Articles() {
             name: a.name || 'Attachment'
         }));
         setAttachments(atts);
-        setScheduledTime(art.scheduledDate ? getLocalDatetimeInputValue(0) : '');
+        setScheduledTime((art.scheduledDate && !isUserInNoticePeriod(currentUser)) ? getLocalDatetimeInputValue(0) : '');
         setIsScheduling(false);
 
         const htmlContent = art.rawHtml || (art.content && art.content[0]?.text) || '';
@@ -594,7 +615,11 @@ export default function Articles() {
             return;
         }
         
-        let finalStatus = (typeof actionStatus === 'string') ? actionStatus : (scheduledTime ? 'Scheduled' : 'Published');
+        let finalStatus = (typeof actionStatus === 'string') ? actionStatus : ((scheduledTime && !isNoticePeriodActive) ? 'Scheduled' : 'Published');
+        if (finalStatus === 'Scheduled' && isNoticePeriodActive) {
+            addToast('Scheduling is disabled while in Notice Period.', 'warning');
+            return;
+        }
         let isoScheduledDate = null;
 
         if (finalStatus === 'Scheduled') {

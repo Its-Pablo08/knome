@@ -27,7 +27,10 @@ import {
     toggleEmployeeNoticeStatus, 
     getMarkedEmployeesList,
     NOTICE_PERIOD_CONFIG_KEY,
-    NOTICE_PERIOD_EVENT 
+    NOTICE_PERIOD_EVENT,
+    syncNoticePeriodFromBackend,
+    bulkUpdateEmployeesNotice,
+    normalizeKey
 } from '../utils/noticePeriodManager';
 
 const localRoleMap = {
@@ -391,6 +394,18 @@ export default function AdminConsole() {
     const [lastUpdatedTime, setLastUpdatedTime] = useState(new Date().toLocaleTimeString());
     const [isRefreshing, setIsRefreshing] = useState(false);
 
+    useEffect(() => {
+        if (queryTab) {
+            if (queryTab === 'notice_period' && isHrAdmin && !isSysAdmin) {
+                setActiveTab('notice_period');
+            } else if (!['role_requests'].includes(queryTab)) {
+                setActiveTab(queryTab);
+            }
+        } else if (queryDomain === 'governance' && isHrAdmin && !isSysAdmin && !['users', 'suspension_requests', 'notice_period', 'approval_policy'].includes(activeTab)) {
+            setActiveTab('users');
+        }
+    }, [queryTab, queryDomain, isHrAdmin, isSysAdmin]);
+
     // Hierarchical Domain Derived from Active Tab
     const activeDomain = useMemo(() => {
         if (isSysAdmin && ['users', 'role_requests', 'suspension_requests', 'notice_period'].includes(activeTab)) return 'moderation';
@@ -492,13 +507,40 @@ export default function AdminConsole() {
         const handleNoticeConfigChange = () => {
             setNoticePeriodConfig(getNoticePeriodConfig());
         };
+        syncNoticePeriodFromBackend().catch(() => {});
+        const handleFocusNoticeSync = () => syncNoticePeriodFromBackend().catch(() => {});
+        window.addEventListener('knome:notice-period-updated', handleNoticeConfigChange);
+        window.addEventListener('focus', handleFocusNoticeSync);
         window.addEventListener(NOTICE_PERIOD_EVENT, handleNoticeConfigChange);
         window.addEventListener('storage', handleNoticeConfigChange);
         return () => {
+            window.removeEventListener('knome:notice-period-updated', handleNoticeConfigChange);
+            window.removeEventListener('focus', handleFocusNoticeSync);
             window.removeEventListener(NOTICE_PERIOD_EVENT, handleNoticeConfigChange);
             window.removeEventListener('storage', handleNoticeConfigChange);
         };
     }, []);
+
+    const filteredNoticeUsers = useMemo(() => {
+        const query = noticePeriodSearch.trim().toLowerCase();
+        return usersList.filter(u => {
+            const isMarked = isEmployeeMarkedInNotice(u);
+            if (noticePeriodFilter === 'InNotice' && !isMarked) return false;
+            if (noticePeriodFilter === 'Standard' && isMarked) return false;
+            if (query) {
+                const name = String(u.fullName || u.name || '').toLowerCase();
+                const empId = String(u.employeeId || '').toLowerCase();
+                const email = String(u.email || '').toLowerCase();
+                const dept = String(u.department || u.departmentName || '').toLowerCase();
+                const desig = String(u.designation || '').toLowerCase();
+                const role = String(u.roleName || u.role || '').toLowerCase();
+                if (!name.includes(query) && !empId.includes(query) && !email.includes(query) && !dept.includes(query) && !desig.includes(query) && !role.includes(query)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    }, [usersList, noticePeriodConfig, noticePeriodFilter, noticePeriodSearch]);
 
     const markedNoticeCount = useMemo(() => {
         return usersList.filter(u => isEmployeeMarkedInNotice(u)).length;
@@ -544,18 +586,24 @@ export default function AdminConsole() {
             return;
         }
 
+        const targetUsers = [];
         selectedNoticeUserKeys.forEach(key => {
-            const user = usersList.find(u => String(u.userId || u.id) === String(key) || (u.employeeId && u.employeeId === key));
+            const user = usersList.find(u => String(u.userId || u.id || u.employeeId) === String(key) || String(u.userId || u.id) === String(key) || (u.employeeId && normalizeKey(u.employeeId) === normalizeKey(key)));
+            if (user) targetUsers.push(user);
             if (user) {
                 if (markAsInNotice) {
-                    markEmployeeInNotice(user, currentUser);
+                    if (false) markEmployeeInNotice(user, currentUser);
                 } else {
-                    unmarkEmployeeFromNotice(user);
+                    if (false) unmarkEmployeeFromNotice(user);
                 }
             }
         });
 
         setNoticePeriodConfig(getNoticePeriodConfig());
+        if (targetUsers.length > 0) {
+            const updatedCfg = bulkUpdateEmployeesNotice(targetUsers, markAsInNotice, currentUser);
+            setNoticePeriodConfig(updatedCfg);
+        }
         setSelectedNoticeUserKeys([]);
         showToast(
             markAsInNotice 
@@ -3563,6 +3611,36 @@ export default function AdminConsole() {
                     setPreviewPost(getFallbackPostContent(report));
                 }
             } else if (report.contentType === 'Podcast') {
+                let pod = null;
+                try {
+                    const res = await podcastsApi.getById(report.contentId).catch(() => null);
+                    pod = res?.data || res;
+                } catch (e) {}
+
+                if (!pod) {
+                    const allPodcasts = JSON.parse(localStorage.getItem('knome_custom_podcasts') || '[]');
+                    pod = allPodcasts.find(p => String(p.id || p.podcastId) === String(report.contentId));
+                }
+
+                const authorName = pod?.uploaderFullName || pod?.author || report.reportedUserName || 'Podcast Host';
+                const audioUrl = pod?.audioUrl ? resolveMediaUrl(pod.audioUrl) : (report.audioUrl || 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3');
+                const title = pod?.title || report.postContentSnippet || `Podcast #${report.contentId}`;
+                const cover = pod?.coverImageUrl ? resolveMediaUrl(pod.coverImageUrl) : (pod?.thumbnail || null);
+
+                setPreviewPost({
+                    authorName: authorName,
+                    authorFullName: authorName,
+                    authorUserId: pod?.uploaderUserId || pod?.authorId || report.reportedUserId || null,
+                    content: `🎙️ Podcast Episode #${report.contentId}: "${title}"`,
+                    audioUrl: audioUrl,
+                    title: title,
+                    description: pod?.description || report.postContentSnippet || '',
+                    thumbnail: cover,
+                    coverImageUrl: cover,
+                    isPodcast: true,
+                    createdDate: pod?.uploadedDate || report.reportedDate
+                });
+                return;
                 const allPodcasts = JSON.parse(localStorage.getItem('knome_custom_podcasts') || '[]');
                 const foundPod = allPodcasts.find(p => String(p.id) === String(report.contentId));
                 setPreviewPost({
@@ -8474,11 +8552,11 @@ export default function AdminConsole() {
                                                 type="checkbox"
                                                 checked={
                                                     usersList.length > 0 && 
-                                                    selectedNoticeUserKeys.length === usersList.length
+                                                    filteredNoticeUsers.length > 0 && filteredNoticeUsers.every(u => selectedNoticeUserKeys.includes(String(u.userId || u.id || u.employeeId)))
                                                 }
                                                 onChange={(e) => {
                                                     if (e.target.checked) {
-                                                        setSelectedNoticeUserKeys(usersList.map(u => String(u.userId || u.id || u.employeeId)));
+                                                        setSelectedNoticeUserKeys(filteredNoticeUsers.map(u => String(u.userId || u.id || u.employeeId)));
                                                     } else {
                                                         setSelectedNoticeUserKeys([]);
                                                     }
@@ -12775,7 +12853,23 @@ export default function AdminConsole() {
                                     {/* Audio Player Preview if Content is Podcast */}
                                     {(previewPost.audioUrl || previewPost.isPodcast || previewReport.contentType === 'Podcast') && (
                                         <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
-                                            <span className="text-[11px] font-black text-pink-400 uppercase tracking-wider flex items-center gap-1">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[11px] font-black text-pink-400 uppercase tracking-wider flex items-center gap-1">
+                                                    <span className="material-symbols-outlined text-[14px]">podcasts</span>
+                                                    Podcast Audio Preview
+                                                </span>
+                                                <button
+                                                    onClick={() => {
+                                                        setIsPreviewOpen(false);
+                                                        navigate(`/podcasts?id=${previewReport.contentId}`);
+                                                    }}
+                                                    className="text-xs text-pink-400 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                                                >
+                                                    <span>Open in Podcasts Hub</span>
+                                                    <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                                                </button>
+                                            </div>
+                                            <span style={{ display: 'none' }}>
                                                 <span className="material-symbols-outlined text-[14px]">podcasts</span>
                                                 Podcast Audio Preview
                                             </span>

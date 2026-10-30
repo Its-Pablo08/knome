@@ -19,7 +19,7 @@ import {
 import ImageCropModal from './ImageCropModal';
 import CustomDateTimePicker from '../widgets/CustomDateTimePicker';
 import HighlightText from '../ui/HighlightText';
-import { isUserInNoticePeriod, NOTICE_PERIOD_EVENT } from '../../utils/noticePeriodManager';
+import { isUserInNoticePeriod, syncNoticePeriodFromBackend, syncUserNoticeStatus, NOTICE_PERIOD_EVENT } from '../../utils/noticePeriodManager';
 
 const PREDEFINED_HASHTAGS = ['Announcement', 'Development', 'Design', 'Marketing', 'Help', 'Kudos', 'Team', 'Project'];
 
@@ -107,7 +107,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, draftT
                     audience: newAudience,
                     selectedCommunity: newCommunity,
                     selectedConnections: newConnections,
-                    scheduledTime: newSchedTime
+                    scheduledTime: isNoticePeriodActive ? null : newSchedTime
                 });
 
                 if (saved) {
@@ -123,7 +123,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, draftT
                     audience: newAudience,
                     selectedCommunity: newCommunity,
                     selectedConnections: newConnections,
-                    scheduledTime: newSchedTime
+                    scheduledTime: isNoticePeriodActive ? null : newSchedTime
                 });
 
                 if (saved) {
@@ -165,6 +165,40 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, draftT
 
     // Compute dynamically on every render so it is NEVER stale regardless of when modal opens
     const isNoticePeriodActive = isUserInNoticePeriod(currentUser);
+
+    useEffect(() => {
+        const handleFocusOrSignalR = () => {
+            syncNoticePeriodFromBackend().then(() => {
+                setNoticePeriodRevision(v => v + 1);
+            }).catch(() => {});
+        };
+        window.addEventListener('knome:notice-period-updated', handleFocusOrSignalR);
+        window.addEventListener('focus', handleFocusOrSignalR);
+        return () => {
+            window.removeEventListener('knome:notice-period-updated', handleFocusOrSignalR);
+            window.removeEventListener('focus', handleFocusOrSignalR);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        let isMounted = true;
+        const syncNow = () => {
+            syncNoticePeriodFromBackend().then(() => {
+                if (currentUser) {
+                    return syncUserNoticeStatus(currentUser);
+                }
+            }).then(() => {
+                if (isMounted) setNoticePeriodRevision(v => v + 1);
+            }).catch(() => {});
+        };
+        syncNow();
+        const pollId = setInterval(syncNow, 4000);
+        return () => {
+            isMounted = false;
+            clearInterval(pollId);
+        };
+    }, [isOpen, currentUserId, currentUser]);
 
     useEffect(() => {
         const handleNoticeUpdate = () => {
@@ -412,7 +446,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, draftT
             setAudience(draftToEdit.audience || draftToEdit.audienceType || 'Everyone');
             setSelectedCommunity(draftToEdit.selectedCommunity || (draftToEdit.communityId ? { id: draftToEdit.communityId, name: draftToEdit.communityName } : null));
             setSelectedConnections(draftToEdit.selectedConnections || draftToEdit.sharedUsers || []);
-            setScheduledTime(draftToEdit.scheduledTime || draftToEdit.scheduledDate || '');
+            setScheduledTime(isUserInNoticePeriod(currentUser) ? '' : (draftToEdit.scheduledTime || draftToEdit.scheduledDate || ''));
             setActiveDraftId(draftToEdit.id || draftToEdit.postId || null);
             setIsDraftMode(true);
             setLastSavedTime(draftToEdit.updatedAt || draftToEdit.savedAt || draftToEdit.createdDate || new Date().toISOString());
@@ -427,7 +461,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, draftT
                 setAudience(scratchpad.audience || 'Everyone');
                 setSelectedCommunity(scratchpad.selectedCommunity || null);
                 setSelectedConnections(scratchpad.selectedConnections || []);
-                setScheduledTime(scratchpad.scheduledTime || '');
+                setScheduledTime(isUserInNoticePeriod(currentUser) ? '' : (scratchpad.scheduledTime || ''));
                 setActiveDraftId(null);
                 setIsDraftMode(false);
                 setLastSavedTime(scratchpad.savedAt || new Date().toISOString());
@@ -464,7 +498,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, draftT
                     audience,
                     selectedCommunity,
                     selectedConnections,
-                    scheduledTime
+                    scheduledTime: isNoticePeriodActive ? null : scheduledTime
                 });
             } else {
                 // Save on Create Post ONLY - do NOT save inside official Drafts!
@@ -474,7 +508,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, draftT
                     audience,
                     selectedCommunity,
                     selectedConnections,
-                    scheduledTime
+                    scheduledTime: isNoticePeriodActive ? null : scheduledTime
                 });
             }
         } else if (!hasContent) {
@@ -775,7 +809,7 @@ const FILE_LIMITS = {
                     audience,
                     selectedCommunity,
                     selectedConnections,
-                    scheduledTime
+                    scheduledTime: isNoticePeriodActive ? null : scheduledTime
                 });
 
                 addToast('Draft saved successfully. 📝', 'success');
@@ -1888,7 +1922,7 @@ const FILE_LIMITS = {
                                         title={
                                             isNoticePeriodActive
                                                 ? "Post scheduling is disabled while in Notice Period"
-                                                : (scheduledTime ? "Schedule active - click to edit" : (isScheduling ? "Close scheduler" : "Schedule publication"))
+                                                : ((scheduledTime && !isNoticePeriodActive) ? "Schedule active - click to edit" : (isScheduling ? "Close scheduler" : "Schedule publication"))
                                         }
                                     >
                                         <span className="material-symbols-outlined text-[18px]">
@@ -1905,7 +1939,7 @@ const FILE_LIMITS = {
                                         className={`px-5 py-2 rounded-xl text-[13px] font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap active:scale-95
                                             ${(!text.trim() || securityWarning || isPublishing)
                                                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' 
-                                                : (scheduledTime 
+                                                : ((scheduledTime && !isNoticePeriodActive) 
                                                     ? 'bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white shadow-md hover:scale-105' 
                                                     : 'bg-indigo-500 text-white hover:bg-indigo-600 hover:shadow-md hover:scale-105'
                                                   )
@@ -1915,10 +1949,10 @@ const FILE_LIMITS = {
                                         {isPublishing ? (
                                             <>
                                                 <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span>
-                                                <span>{scheduledTime ? 'Scheduling...' : 'Publishing...'}</span>
+                                                <span>{(scheduledTime && !isNoticePeriodActive) ? 'Scheduling...' : 'Publishing...'}</span>
                                             </>
                                         ) : (
-                                            scheduledTime ? (
+                                            (scheduledTime && !isNoticePeriodActive) ? (
                                                 <>
                                                     <span className="material-symbols-outlined text-[17px]">event_available</span>
                                                     <span>{isDraftMode ? 'Schedule Draft' : 'Schedule Post'}</span>

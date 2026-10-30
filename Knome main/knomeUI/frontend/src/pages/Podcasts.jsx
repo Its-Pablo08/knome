@@ -7,6 +7,7 @@ import { useConfirm } from '../components/contexts/ConfirmDialogContext';
 import UploadPodcastModal from '../components/modals/UploadPodcastModal';
 import SaveToCategoryModal from '../components/modals/SaveToCategoryModal';
 import ArticleShareModal from '../components/modals/ArticleShareModal';
+import ReportModal from '../components/modals/ReportModal';
 import { podcastsApi, savedContentApi, interactionsApi, resolveMediaUrl, getPersonalizedRecommendations } from '../utils/apiService';
 import { checkRestrictedContent } from '../utils/restrictedWords';
 import { useScrollLoading } from '../hooks/useScrollLoading';
@@ -153,6 +154,7 @@ export default function Podcasts() {
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [savingPodcastModal, setSavingPodcastModal] = useState(null);
     const [sharingPodcast, setSharingPodcast] = useState(null);
+    const [reportingPodcast, setReportingPodcast] = useState(null);
     const [activeCommentsPodcastId, setActiveCommentsPodcastId] = useState(null);
     const [commentsMap, setCommentsMap] = useState({});
     const [newCommentInput, setNewCommentInput] = useState({});
@@ -729,6 +731,7 @@ export default function Podcasts() {
                                                         <span className="material-symbols-outlined text-[32px] text-white">
                                                             {isThisPlaying ? 'pause_circle' : 'play_circle'}
                                                         </span>
+
                                                     </button>
                                                     {isThisPlaying && (
                                                         <div className="absolute bottom-1 right-1 flex items-end gap-0.5 h-3">
@@ -744,6 +747,7 @@ export default function Podcasts() {
                                                         <span className="text-[10px] font-black text-pink-500 bg-pink-50 dark:bg-pink-900/20 px-2 py-0.5 rounded uppercase tracking-wider">
                                                             <HighlightText text={ep.series} query={filterKeyword} />
                                                         </span>
+
                                                         <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider border ${
                                                             ep.category === 'Tech' ? 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/30 border-cyan-200 dark:border-cyan-800' :
                                                             ep.category === 'Leadership' ? 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800' :
@@ -752,6 +756,7 @@ export default function Podcasts() {
                                                         }`}>
                                                             {ep.category}
                                                         </span>
+
                                                         <span className="text-[12px] font-bold text-slate-400">{ep.date}</span>
                                                     </div>
                                                     <h3 className="font-bold text-[15px] text-slate-900 dark:text-white truncate mb-1">
@@ -763,6 +768,7 @@ export default function Podcasts() {
                                                             <span className="material-symbols-outlined text-[14px]">person</span>
                                                             <HighlightText text={ep.author} query={filterKeyword} />
                                                         </span>
+
                                                         <span className="flex items-center gap-1 text-cyan-600 dark:text-cyan-400 font-bold" title="Views / Listens"><span className="material-symbols-outlined text-[14px]">visibility</span> {ep.views || 0}</span>
                                                         <span className="flex items-center gap-1 text-rose-500/90 dark:text-rose-400"><span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: ep.isLiked ? "'FILL' 1" : "'FILL' 0" }}>favorite</span> {ep.likes || 0}</span>
                                                         <span className="flex items-center gap-1 text-indigo-500/90 dark:text-indigo-400"><span className="material-symbols-outlined text-[14px]">chat_bubble</span> {ep.comments || 0}</span>
@@ -796,11 +802,21 @@ export default function Podcasts() {
                                                                 : 'border-slate-200 dark:border-slate-800 text-slate-400 hover:text-amber-500 hover:bg-slate-50 dark:hover:bg-slate-800'
                                                         }`}
                                                         title={savedMap[ep.id] ? "Saved in Personal Library" : "Save Podcast to Category"}
+
                                                     >
                                                         <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: savedMap[ep.id] ? "'FILL' 1" : "'FILL' 0" }}>
                                                             bookmark
                                                         </span>
+
                                                     </button>
+                                                    <button 
+                                                        onClick={() => setReportingPodcast(ep)}
+                                                        className="w-10 h-10 rounded-full border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-rose-500 hover:border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                                                        title="Report Podcast"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[18px]">flag</span>
+                                                    </button>
+                                                    
                                                     <button 
                                                         onClick={() => playPodcast(ep)}
                                                         className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold text-[13px] rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
@@ -846,6 +862,16 @@ export default function Podcasts() {
                                                     <span className="material-symbols-outlined text-[16px]">share</span>
                                                     <span>{ep.shares || 0} Shares</span>
                                                 </button>
+
+                                                <button
+                                                    onClick={() => setReportingPodcast(ep)}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700/60 hover:text-rose-500 hover:border-rose-500/30 transition-all cursor-pointer"
+                                                    title="Report Podcast"
+                                                >
+                                                    <span className="material-symbols-outlined text-[16px]">flag</span>
+                                                    <span>Report</span>
+                                                </button>
+                                                
 
                                                 <div
                                                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-slate-50 dark:bg-slate-800/50 text-cyan-700 dark:text-cyan-400 border-slate-200 dark:border-slate-700/60 font-bold select-none ml-auto"
@@ -903,6 +929,7 @@ export default function Podcasts() {
                                                                     <span className="text-rose-500 text-xs font-semibold px-2.5 py-1 bg-rose-50 dark:bg-rose-950/40 rounded border border-rose-200 dark:border-rose-900/50 shrink-0">
                                                                         ⚠️ Restricted word ("{restrictedInComment}")
                                                                     </span>
+            
                                                                 );
                                                             }
                                                             return (
@@ -926,7 +953,7 @@ export default function Podcasts() {
                                 )}
                             </div>
                         </section>
-                    </>
+                        </>
                 )}
 
             </main>
@@ -960,6 +987,15 @@ export default function Podcasts() {
                     }
                     setSharingPodcast(null);
                 }}
+            />
+            <ReportModal 
+                isOpen={!!reportingPodcast}
+                onClose={() => setReportingPodcast(null)}
+                targetType="Podcast"
+                targetId={reportingPodcast?.id}
+                targetName={reportingPodcast?.author || 'Podcast Author'}
+                targetContent={reportingPodcast?.title || reportingPodcast?.description || 'Podcast Episode'}
+                targetUserId={reportingPodcast?.authorId}
             />
         </>
     );

@@ -21,6 +21,7 @@ public class FeedRepository : IFeedRepository
     public async Task<List<int>> GetFollowedUserIdsAsync(int userId)
     {
         return await _db.Followers
+            .AsNoTracking()
             .Where(f => f.FollowerUserId == userId)
             .Select(f => f.FollowingUserId)
             .ToListAsync();
@@ -29,6 +30,7 @@ public class FeedRepository : IFeedRepository
     public async Task<List<int>> GetMyCommunityIdsAsync(int userId)
     {
         return await _db.CommunityMembers
+            .AsNoTracking()
             .Where(m => m.UserId == userId)
             .Select(m => m.CommunityId)
             .ToListAsync();
@@ -36,14 +38,10 @@ public class FeedRepository : IFeedRepository
 
     public async Task<List<Post>> GetCandidatePostsAsync(List<int> followedUserIds, List<int> myCommunityIds, int currentUserId, int limit)
     {
-        var communityPostIds = await _db.CommunityPosts
-            .Where(cp => myCommunityIds.Contains(cp.CommunityId))
-            .Select(cp => cp.PostId)
-            .ToListAsync();
-
         var retentionCutoff = Knome.API.Common.KnomeTime.Now.AddMonths(-6);
 
         return await _db.Posts
+            .AsNoTracking()
             .Include(p => p.AuthorUser)
             .Include(p => p.PostAttachments)
             .Include(p => p.MentionedUsers)
@@ -64,6 +62,7 @@ public class FeedRepository : IFeedRepository
     public async Task<List<Article>> GetCandidateArticlesAsync(List<int> followedUserIds, int currentUserId, int limit)
     {
         return await _db.Articles
+            .AsNoTracking()
             .Include(a => a.AuthorUser)
             .Include(a => a.ArticleAttachments)
             .Where(a => a.Status != "Removed" && a.Status != "Deleted" && (a.Status == ArticleStatuses.Published || (a.Status == ArticleStatuses.Scheduled && a.AuthorUserId == currentUserId)) &&
@@ -78,6 +77,7 @@ public class FeedRepository : IFeedRepository
     public async Task<List<Video>> GetCandidateVideosAsync(List<int> followedUserIds, int currentUserId, int limit)
     {
         return await _db.Videos
+            .AsNoTracking()
             .Include(v => v.UploaderUser)
             .Where(v => followedUserIds.Contains(v.UploaderUserId) ||
                         v.UploaderUserId == currentUserId ||
@@ -90,6 +90,7 @@ public class FeedRepository : IFeedRepository
     public async Task<List<Podcast>> GetCandidatePodcastsAsync(List<int> followedUserIds, int currentUserId, int limit)
     {
         return await _db.Podcasts
+            .AsNoTracking()
             .Include(p => p.UploaderUser)
             .Where(p => p.IsActive && (followedUserIds.Contains(p.UploaderUserId) ||
                         p.UploaderUserId == currentUserId ||
@@ -120,6 +121,7 @@ public class FeedRepository : IFeedRepository
     public async Task<List<HotPostsScoreCache>> GetCachedHotScoresAsync(string window, int limit)
     {
         return await _db.HotPostsScoreCaches
+            .AsNoTracking()
             .Where(c => c.Window == window)
             .OrderByDescending(c => c.Score)
             .Take(limit)

@@ -90,7 +90,15 @@ public class VideoController : KnomeControllerBase, Microsoft.AspNetCore.Mvc.Fil
     public async Task<IActionResult> DeleteVideo(long videoId)
     {
         await _settingService.EnsureFeatureEnabledAsync(Knome.API.Services.SystemSettingService.EnableVideosKey, "Videos");
-        await _videoService.DeleteVideoAsync(videoId, GetCurrentUserId());
+        int currentUserId = 0;
+        try { currentUserId = GetCurrentUserId(); } catch { }
+
+        var isCallerAdminOrMod = User.IsInRole(Knome.API.Constants.Roles.SystemAdmin) || User.IsInRole("System Admin") || User.IsInRole("SYSADM")
+            || User.IsInRole(Knome.API.Constants.Roles.HRAdmin) || User.IsInRole("HR Admin") || User.IsInRole("HRADM")
+            || User.IsInRole(Knome.API.Constants.Roles.Moderator) || User.IsInRole("Moderator") || User.IsInRole("MOD")
+            || User.IsInRole("ADMIN");
+
+        await _videoService.DeleteVideoAsync(videoId, currentUserId, isCallerAdminOrMod);
         return Ok(ApiResponse.SuccessResponse(200, "Video deleted successfully."));
     }
 

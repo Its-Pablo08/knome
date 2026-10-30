@@ -78,7 +78,8 @@ public class UserMessageService : IUserMessageService
             var isConnected = await _messageRepo.AreUsersConnectedAsync(currentUserId, partner.UserId);
 
             var epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-            var timestampMs = (long)(msg.CreatedDate.ToUniversalTime() - epoch).TotalMilliseconds;
+            var utcCreated = DateTime.SpecifyKind(msg.CreatedDate, DateTimeKind.Utc);
+            var timestampMs = (long)(utcCreated - epoch).TotalMilliseconds;
 
             result.Add(new ConversationDto
             {
@@ -89,7 +90,7 @@ public class UserMessageService : IUserMessageService
                 PartnerDepartment = partner.Department?.Name ?? partner.Location,
                 PartnerAvatarUrl = partner.ProfilePhotoUrl,
                 LastMessage = previewText,
-                LastMessageTime = msg.CreatedDate.ToLocalTime().ToString("hh:mm tt"),
+                LastMessageTime = utcCreated.ToLocalTime().ToString("hh:mm tt"),
                 LastMessageTimestamp = timestampMs,
                 UnreadCount = unreadCount,
                 IsConnected = isConnected,
@@ -122,11 +123,11 @@ public class UserMessageService : IUserMessageService
                     AttachmentsJson = msg.AttachmentsJson,
                     IsRead = msg.IsRead,
                     IsDelivered = msg.IsRead || NotificationHub.IsUserOnline(msg.ReceiverId),
-                    ReadDate = msg.ReadDate,
-                    CreatedDate = msg.CreatedDate,
+                    ReadDate = msg.ReadDate.HasValue ? DateTime.SpecifyKind(msg.ReadDate.Value, DateTimeKind.Utc) : null,
+                    CreatedDate = DateTime.SpecifyKind(msg.CreatedDate, DateTimeKind.Utc),
                     ParentMessageId = msg.ParentMessageId,
                     IsEdited = msg.IsEdited,
-                    EditedDate = msg.EditedDate,
+                    EditedDate = msg.EditedDate.HasValue ? DateTime.SpecifyKind(msg.EditedDate.Value, DateTimeKind.Utc) : null,
                     IsDeleted = msg.IsDeleted,
                     Reactions = new List<MessageReactionDto>()
                 };
@@ -294,6 +295,7 @@ public class UserMessageService : IUserMessageService
         // Fetch full entity with navigation properties for return
         var fullMessage = await _messageRepo.GetByIdWithDetailsAsync(saved.MessageId) ?? saved;
         var resultDto = _mapper.Map<UserMessageDto>(fullMessage);
+        resultDto.CreatedDate = DateTime.SpecifyKind(saved.CreatedDate, DateTimeKind.Utc);
         resultDto.Content = trimmedText;
         resultDto.ParentMessageId = validParentMessageId;
         resultDto.ParentContent = parentPreviewContent;
@@ -378,7 +380,8 @@ public class UserMessageService : IUserMessageService
         var resultDto = _mapper.Map<UserMessageDto>(message);
         resultDto.Content = trimmedText;
         resultDto.IsEdited = true;
-        resultDto.EditedDate = message.EditedDate;
+        resultDto.CreatedDate = DateTime.SpecifyKind(message.CreatedDate, DateTimeKind.Utc);
+        resultDto.EditedDate = message.EditedDate.HasValue ? DateTime.SpecifyKind(message.EditedDate.Value, DateTimeKind.Utc) : null;
 
         // Broadcast real-time SignalR event
         try

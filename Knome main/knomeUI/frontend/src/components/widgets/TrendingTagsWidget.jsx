@@ -29,14 +29,19 @@ export default function TrendingTagsWidget({ onTagClick }) {
 
         const loadTrendingHashtags = async () => {
             try {
-                // Check short-lived cached tags first for instant load
+                // Check short-lived cached tags (5 minute TTL) for instant load
                 try {
-                    const cached = sessionStorage.getItem('knome_trending_tags_cache');
-                    if (cached) {
-                        const parsed = JSON.parse(cached);
-                        if (Array.isArray(parsed) && parsed.length > 0 && isMounted) {
-                            setTags(parsed);
+                    const cachedStr = sessionStorage.getItem('knome_trending_tags_cache');
+                    if (cachedStr) {
+                        const parsed = JSON.parse(cachedStr);
+                        const cachedList = Array.isArray(parsed) ? parsed : parsed?.data;
+                        const cacheTime = parsed?.timestamp || 0;
+                        if (Array.isArray(cachedList) && cachedList.length > 0 && isMounted) {
+                            setTags(cachedList);
                             setIsLoading(false);
+                            if (Date.now() - cacheTime < 300000) {
+                                return; // Fresh cache hit within 5 minutes, avoid network call
+                            }
                         }
                     }
                 } catch (_) {}
@@ -125,7 +130,10 @@ export default function TrendingTagsWidget({ onTagClick }) {
                     }));
                     setTags(dynamicList);
                     try {
-                        sessionStorage.setItem('knome_trending_tags_cache', JSON.stringify(dynamicList));
+                        sessionStorage.setItem('knome_trending_tags_cache', JSON.stringify({
+                            timestamp: Date.now(),
+                            data: dynamicList
+                        }));
                     } catch (_) {}
                 }
             } catch (err) {
